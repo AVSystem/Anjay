@@ -1013,6 +1013,15 @@ int anjay_notify_changed(anjay_t *anjay,
  */
 int anjay_notify_instances_changed(anjay_t *anjay, anjay_oid_t oid);
 
+#ifdef ANJAY_WITH_OBSERVATION_STATUS
+/**
+ * Maximum number of servers observing a Resource reported in
+ * @ref anjay_resource_observation_status_t structure.
+ */
+#    ifndef ANJAY_MAX_OBSERVATION_SERVERS_REPORTED_NUMBER
+#        define ANJAY_MAX_OBSERVATION_SERVERS_REPORTED_NUMBER 0
+#    endif // ANJAY_MAX_OBSERVATION_SERVERS_REPORTED_NUMBER
+
 /**
  * Structure representing an observation state of a Resource.
  */
@@ -1034,6 +1043,16 @@ typedef struct {
      * <c>is_observed</c> is false.
      */
     int32_t max_eval_period;
+#    if (ANJAY_MAX_OBSERVATION_SERVERS_REPORTED_NUMBER > 0)
+    /**
+     * Number of servers that observe the Resource.
+     */
+    uint16_t servers_number;
+    /**
+     * SSIDs of servers that observe the Resource.
+     */
+    anjay_ssid_t servers[ANJAY_MAX_OBSERVATION_SERVERS_REPORTED_NUMBER];
+#    endif //(ANJAY_MAX_OBSERVATION_SERVERS_REPORTED_NUMBER > 0)
 } anjay_resource_observation_status_t;
 
 /**
@@ -1084,6 +1103,7 @@ typedef struct {
  */
 anjay_resource_observation_status_t anjay_resource_observation_status(
         anjay_t *anjay, anjay_oid_t oid, anjay_iid_t iid, anjay_rid_t rid);
+#endif // ANJAY_WITH_OBSERVATION_STATUS
 
 /**
  * Registers the Object in the data model, making it available for RPC calls.

@@ -7,8 +7,6 @@
 # Licensed under the AVSystem-5-clause License.
 # See the attached LICENSE file for details.
 
-import socket
-
 from framework.lwm2m_test import *
 from suites.default.bootstrap_client import BootstrapTest
 
@@ -159,7 +157,7 @@ class UnregisteringAndRegisteringObjectsDuringBootstrapTransaction(BootstrapTest
         self.communicate('reregister-object %d' % OID.Test, timeout=5)
 
 
-class NotificationDuringBootstrap(BootstrapTest.Test):
+class NotificationDuringBootstrap(BootstrapTest.Test, test_suite.Lwm2mDtlsSingleServerTest):
     def setUp(self):
         super().setUp(num_servers_passed=1)
 
@@ -173,9 +171,12 @@ class NotificationDuringBootstrap(BootstrapTest.Test):
         with self.assertRaises(socket.timeout):
             print(self.serv.recv(timeout_s=5))
 
+        self.serv.reset()
+
         self.perform_bootstrap_finish()
 
-        self.assertDemoRegisters()
+        # demo will resume DTLS session without sending any LwM2M messages
+        self.serv.listen()
 
         notifications = 0
         while True:
@@ -188,11 +189,15 @@ class NotificationDuringBootstrap(BootstrapTest.Test):
         self.assertTrue(4 <= notifications <= 6)
 
 
-class NotificationDuringBootstrapInQueueMode(BootstrapTest.Test):
+class NotificationDuringBootstrapInQueueMode(BootstrapTest.Test,
+                                             test_suite.Lwm2mDtlsSingleServerTest):
     def setUp(self):
         super().setUp(num_servers_passed=1,
                       extra_cmdline_args=['--binding=UQ'],
                       auto_register=False)
+        # demo will perform all DTLS handshakes before sending Register
+        self.serv.listen()
+        self.bootstrap_server.listen()
         self.assertDemoRegisters(binding='UQ')
 
     def runTest(self):
@@ -205,9 +210,12 @@ class NotificationDuringBootstrapInQueueMode(BootstrapTest.Test):
         with self.assertRaises(socket.timeout):
             print(self.serv.recv(timeout_s=5))
 
+        self.serv.reset()
+
         self.perform_bootstrap_finish()
 
-        self.assertDemoRegisters(binding='UQ')
+        # demo will resume DTLS session without sending any LwM2M messages
+        self.serv.listen()
 
         notifications = 0
         while True:

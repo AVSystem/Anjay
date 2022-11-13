@@ -177,7 +177,7 @@ int _anjay_schedule_socket_update(anjay_unlocked_t *anjay,
                 &(anjay_update_parameters_t) {
                     .lifetime_s = -1
                 });
-        return _anjay_disable_server_with_timeout_unlocked(
+        return _anjay_schedule_disable_server_with_explicit_timeout_unlocked(
                 anjay, _anjay_server_ssid(server), AVS_TIME_DURATION_ZERO);
     }
     return 0;

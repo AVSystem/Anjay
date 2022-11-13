@@ -140,6 +140,20 @@ static const dynamic_format_def_t SUPPORTED_COMPOSITE_WRITE_FORMATS[] = {
 };
 #endif // ANJAY_WITH_LWM2M11
 
+#ifdef ANJAY_WITH_SEND
+static const dynamic_format_def_t SUPPORTED_SEND_FORMATS[] = {
+#    ifdef ANJAY_WITH_CBOR
+    { AVS_COAP_FORMAT_SENML_CBOR, _anjay_input_senml_cbor_composite_read_create,
+      spawn_senml_cbor },
+#    endif // ANJAY_WITH_CBOR
+#    ifdef ANJAY_WITH_SENML_JSON
+    { AVS_COAP_FORMAT_SENML_JSON, _anjay_input_json_composite_read_create,
+      spawn_senml_json },
+#    endif // ANJAY_WITH_SENML_JSON
+    { AVS_COAP_FORMAT_NONE, NULL, NULL }
+};
+#endif // ANJAY_WITH_SEND
+
 static const dynamic_format_def_t *
 find_format(const dynamic_format_def_t *supported_formats, uint16_t format) {
     for (const dynamic_format_def_t *candidate = supported_formats;
@@ -151,6 +165,27 @@ find_format(const dynamic_format_def_t *supported_formats, uint16_t format) {
         }
     }
     return NULL;
+}
+
+static int spawn_output_ctx(anjay_unlocked_output_ctx_t **out_ctx,
+                            avs_stream_t *stream,
+                            const anjay_uri_path_t *uri,
+                            uint16_t format,
+                            const dynamic_format_def_t *def) {
+    if (!def || !def->output_ctx_spawn_func) {
+        anjay_log(DEBUG,
+                  _("Could not find an appropriate output context for "
+                    "format: ") "%" PRIu16,
+                  format);
+        return ANJAY_ERR_NOT_ACCEPTABLE;
+    }
+
+    if (!(*out_ctx = def->output_ctx_spawn_func(stream, uri))) {
+        anjay_log(DEBUG, _("Failed to spawn output context"));
+        return ANJAY_ERR_INTERNAL;
+    }
+
+    return 0;
 }
 
 uint16_t _anjay_default_hierarchical_format(anjay_lwm2m_version_t version) {
@@ -214,19 +249,7 @@ int _anjay_output_dynamic_construct(anjay_unlocked_output_ctx_t **out_ctx,
     default:
         break;
     }
-
-    if (!def || !def->output_ctx_spawn_func) {
-        anjay_log(DEBUG,
-                  _("Could not find an appropriate output context for "
-                    "format: ") "%" PRIu16,
-                  format);
-        return ANJAY_ERR_NOT_ACCEPTABLE;
-    }
-
-    if (!(*out_ctx = def->output_ctx_spawn_func(stream, uri))) {
-        return ANJAY_ERR_INTERNAL;
-    }
-    return 0;
+    return spawn_output_ctx(out_ctx, stream, uri, format, def);
 }
 
 /////////////////////////////////////////////////////////////////////// DECODING
@@ -284,6 +307,22 @@ int _anjay_input_dynamic_construct(anjay_unlocked_input_ctx_t **out,
                                               request->content_format,
                                               request->action, &request->uri);
 }
+
+#ifdef ANJAY_WITH_SEND
+int _anjay_output_dynamic_send_construct(anjay_unlocked_output_ctx_t **out_ctx,
+                                         avs_stream_t *stream,
+                                         const anjay_uri_path_t *uri,
+                                         uint16_t format) {
+    if (format == AVS_COAP_FORMAT_NONE) {
+        return -1;
+    }
+
+    const dynamic_format_def_t *def =
+            find_format(SUPPORTED_SEND_FORMATS, format);
+
+    return spawn_output_ctx(out_ctx, stream, uri, format, def);
+}
+#endif // ANJAY_WITH_SEND
 
 #ifdef ANJAY_TEST
 #    include "tests/core/io/dynamic.c"

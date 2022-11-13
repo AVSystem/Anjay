@@ -15,9 +15,6 @@
 #    include <stdlib.h>
 #    include <string.h>
 
-#    include <avsystem/commons/avs_utils.h>
-
-#    include <anjay_modules/anjay_dm_utils.h>
 #    include <anjay_modules/anjay_io_utils.h>
 
 #    include "anjay_mod_security.h"
@@ -825,10 +822,6 @@ bool anjay_security_object_is_modified(anjay_t *anjay_locked) {
     return result;
 }
 
-static const anjay_dm_module_t SECURITY_MODULE = {
-    .deleter = security_delete
-};
-
 static sec_repr_t *security_install_unlocked(anjay_unlocked_t *anjay) {
     AVS_LIST(sec_repr_t) repr = AVS_LIST_NEW_ELEMENT(sec_repr_t);
     if (!repr) {
@@ -838,12 +831,12 @@ static sec_repr_t *security_install_unlocked(anjay_unlocked_t *anjay) {
     int result = -1;
     repr->def = &SECURITY;
     _anjay_dm_installed_object_init_unlocked(&repr->def_ptr, &repr->def);
-    if (!_anjay_dm_module_install(anjay, &SECURITY_MODULE, repr)) {
+    if (!_anjay_dm_module_install(anjay, security_delete, repr)) {
         AVS_STATIC_ASSERT(offsetof(sec_repr_t, def_ptr) == 0,
                           def_ptr_is_first_field);
         AVS_LIST(anjay_dm_installed_object_t) entry = &repr->def_ptr;
         if (_anjay_register_object_unlocked(anjay, &entry)) {
-            result = _anjay_dm_module_uninstall(anjay, &SECURITY_MODULE);
+            result = _anjay_dm_module_uninstall(anjay, security_delete);
             assert(!result);
             result = -1;
         } else {

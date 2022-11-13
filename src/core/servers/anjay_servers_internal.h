@@ -28,6 +28,49 @@ typedef struct {
     anjay_update_parameters_t new_params;
 } anjay_registration_async_exchange_state_t;
 
+typedef enum {
+    /**
+     * Handles connectivity failures, which involves scheduling reconnection,
+     * etc. Scheduled by _anjay_server_on_server_communication_error(), which
+     * is called in a number of error handling paths.
+     */
+    ANJAY_SERVER_NEXT_ACTION_COMMUNICATION_ERROR,
+
+    /**
+     * Disables the server and schedules its reactivation after the delay
+     * specified by the /1/x/5 resource. Scheduled by the anjay_disable_server()
+     * public API.
+     */
+    ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_TIMEOUT_FROM_DM,
+
+    /**
+     * Disables the server and schedules its reactivation after the delay
+     * specified by the anjay_server_info_t::reactivate_time field. Scheduled
+     * by the _anjay_schedule_disable_server_with_explicit_timeout_unlocked()
+     * API.
+     */
+    ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_EXPLICIT_TIMEOUT,
+
+    /**
+     * Updates the registration. Makes sense only for active servers. Scheduled
+     * either immediately (normally via anjay_schedule_registration_update()),
+     * when Update is forced, or delayed by "lifetime minus eta", scheduled
+     * after a successful Register or Update operation.
+     */
+    ANJAY_SERVER_NEXT_ACTION_SEND_UPDATE,
+
+    /**
+     * Scheduled from _anjay_schedule_refresh_server(), calls
+     * _anjay_active_server_refresh(). Used in many places, including
+     * _anjay_server_sched_activate(), _anjay_schedule_reload_servers()
+     * _anjay_schedule_registration_update_unlocked(), as well as in
+     * start_send_exchange() (to force getting out of the queue mode, if
+     * applicable). See the code and documentation for those functions for
+     * details.
+     */
+    ANJAY_SERVER_NEXT_ACTION_REFRESH
+} anjay_server_next_action_t;
+
 /**
  * Information about a known LwM2M server.
  *
@@ -62,21 +105,16 @@ struct anjay_server_info_struct {
 
     /**
      * Scheduler jobs that shall be executed for the given server are scheduled
-     * using this handle. There are currently three actions possible:
-     *
-     * - refresh_server_job() - calls _anjay_schedule_refresh_server(). Used
-     *   during the _anjay_schedule_server_reconnect() execution path (see the
-     *   docs there for details), as well as for reactivating servers - either
-     *   immediately, if we are explicitly attempting to connect to the server,
-     *   or with a delay (scheduled from _anjay_server_deactivate()) when
-     *   time-limited deactivation is ordered.
-     * - send_update_sched_job() - updating the registration. Makes sense only
-     *   for active servers. Scheduled either immediately (normally via
-     *   anjay_schedule_registration_update()), when Update is forced, or
-     *   delayed by "lifetime minus eta", scheduled after a successful Register
-     *   or Update operation.
+     * using this handle. The specific action to perform is controlled by the
+     * <c>next_action</c> field.
      */
     avs_sched_handle_t next_action_handle;
+
+    /**
+     * Action to be performed by the job scheduled in <c>next_action_handle</c>.
+     * See @ref anjay_server_next_action_t for specific actions.
+     */
+    anjay_server_next_action_t next_action;
 
     /**
      * Administratively configured binding mode, cached from the data model.
@@ -108,12 +146,12 @@ struct anjay_server_info_struct {
     anjay_registration_async_exchange_state_t registration_exchange_state;
 
     /**
-     * When a reactivate job is scheduled (and its handle stored in
-     * next_action_handle), this field is filled with the time for which the
-     * reactivate job is (initially) scheduled. If Anjay enters offline mode, we
-     * delete all such jobs (because we don't want servers to be activated
-     * during offline mode) - but thanks to this value, we can reschedule
-     * activation at appropriate time after exiting offline mode.
+     * Specifies the time at which the reactivate job shall be executed.
+     *
+     * If Anjay enters offline mode, we delete all such jobs (because we don't
+     * want servers to be activated during offline mode) - but thanks to this
+     * value, we can reschedule activation at appropriate time even after
+     * exiting offline mode.
      *
      * This logic has been first introduced in internal diff D7056, which
      * limited the number of places in code where Registers and Updates may
@@ -147,6 +185,15 @@ struct anjay_server_info_struct {
      * Number of completely performed Communication Retry Sequences.
      */
     uint32_t registration_sequences_performed;
+
+#ifdef ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
+    /**
+     * Stores the time when the last communication with a given server was done.
+     * Note that some messages don't get any confirmation from the server so the
+     * point in time this variable holds is an approximation.
+     */
+    avs_time_real_t last_communication_time;
+#endif // ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
 };
 
 #ifndef ANJAY_WITHOUT_DEREGISTER
@@ -171,6 +218,11 @@ _anjay_servers_find_insert_ptr(AVS_LIST(anjay_server_info_t) *servers,
 AVS_LIST(anjay_server_info_t) *
 _anjay_servers_find_ptr(AVS_LIST(anjay_server_info_t) *servers,
                         anjay_ssid_t ssid);
+
+int _anjay_server_reschedule_next_action(
+        anjay_server_info_t *server,
+        avs_time_duration_t delay,
+        anjay_server_next_action_t next_action);
 
 VISIBILITY_PRIVATE_HEADER_END
 

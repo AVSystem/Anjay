@@ -81,7 +81,7 @@ int anjay_server_object_add_instance(anjay_t *anjay,
 /**
  * Removes all instances of Server Object leaving it in an empty state.
  *
- * @param anjay Anjay instance with Security Object installed to purge.
+ * @param anjay Anjay instance with Server Object installed to purge.
  */
 void anjay_server_object_purge(anjay_t *anjay);
 

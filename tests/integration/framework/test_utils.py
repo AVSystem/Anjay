@@ -12,6 +12,8 @@ import struct
 import tempfile
 import collections
 import sys
+import time
+import socket
 
 from typing import Optional
 
@@ -135,8 +137,8 @@ class RID:
         BootstrapOnRegistrationFailure = 16
         ServerCommunicationRetryCount = 17
         ServerCommunicationRetryTimer = 18
-        ServerCommunicationSequenceRetryCount = 19
-        ServerCommunicationSequenceDelayTimer = 20
+        ServerCommunicationSequenceDelayTimer = 19
+        ServerCommunicationSequenceRetryCount = 20
         Trigger = 21
         PreferredTransport = 22
         MuteSend = 23
@@ -501,6 +503,30 @@ class TxParams(namedtuple('TxParams',
 
     def last_retransmission_timeout(self):
         return self.first_retransmission_timeout() * 2**self.max_retransmit
+
+
+class ResponseFilter:
+    def __init__(self, *filtered_types):
+        self.filtered_types = filtered_types
+        self.filtered_messages = []
+
+    def add_if_filtered(self, message):
+        if type(message) in self.filtered_types:
+            self.filtered_messages.append(message)
+            return True
+        return False
+
+    def filtered_recv(self, server, timeout_s):
+        begin = time.time()
+        res = server.recv(timeout_s=timeout_s)
+
+        while self.add_if_filtered(res):
+            timeout_left = timeout_s - (time.time() - begin)
+            if timeout_left < 0:
+                raise socket.timeout()
+            res = server.recv(timeout_s=timeout_left)
+
+        return res
 
 
 DEMO_ENDPOINT_NAME = 'urn:dev:os:0023C7-000001'

@@ -7,7 +7,6 @@
 # Licensed under the AVSystem-5-clause License.
 # See the attached LICENSE file for details.
 
-import enum
 import inspect
 import logging
 import os
@@ -15,7 +14,6 @@ import re
 import shutil
 import subprocess
 import threading
-import time
 import unittest
 from typing import TypeVar
 
@@ -121,31 +119,16 @@ class CleanupList(list):
 class Lwm2mDmOperations(Lwm2mAsserts):
     DEFAULT_OPERATION_TIMEOUT_S = 5
 
-    class ResponseFilter:
-        def __init__(self, *filtered_types):
-            self.filtered_types = filtered_types
-            self.filtered_messages = []
-
-        def add_if_filtered(self, message):
-            if type(message) in self.filtered_types:
-                self.filtered_messages.append(message)
-                return True
-            return False
-
-    def _perform_action(self, server, request, expected_response, timeout_s=None, response_filter: ResponseFilter=None):
+    def _perform_action(self, server, request, expected_response, timeout_s=None,
+                        response_filter: ResponseFilter = None):
         server.send(request)
         if timeout_s is None:
             timeout_s = self.DEFAULT_OPERATION_TIMEOUT_S
 
-        begin = time.time()
-        res = server.recv(timeout_s=timeout_s)
-
-        if response_filter is not None:
-            while response_filter.add_if_filtered(res):
-                timeout_left = timeout_s - (time.time() - begin)
-                if timeout_left < 0:
-                    self.fail('No appropriate response to action in %d seconds' % timeout_s)
-                res = server.recv(timeout_s=timeout_left)
+        if response_filter:
+            res = response_filter.filtered_recv(server, timeout_s)
+        else:
+            res = server.recv(timeout_s=timeout_s)
 
         self.assertMsgEqual(expected_response, res)
         return res
@@ -305,12 +288,12 @@ class Lwm2mDmOperations(Lwm2mAsserts):
         return self._perform_action(server, req, expected_res, **kwargs)
 
     def observe(self, server, oid=None, iid=None, rid=None, riid=None, expect_error_code=None,
-                **kwargs):
+                response_filter=None, **kwargs):
         req = Lwm2mObserve(
             Lwm2mDmOperations.make_path(oid, iid, rid, riid), **kwargs)
         expected_res = self._make_expected_res(
             req, Lwm2mContent, expect_error_code)
-        return self._perform_action(server, req, expected_res)
+        return self._perform_action(server, req, expected_res, response_filter=response_filter)
 
     def write_attributes(self, server, oid=None, iid=None, rid=None, query=[],
                          expect_error_code=None, **kwargs):
@@ -331,8 +314,42 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         self.servers = []
         self.bootstrap_server = None
 
-    def setUp(self, *args, **kwargs):
-        self.setup_demo_with_servers(*args, **kwargs)
+    def setUp(self, extra_cmdline_args=None, psk_identity=None, psk_key=None, client_ca_path=None,
+              client_ca_file=None, server_crt_file=None, server_key_file=None,
+              transport=Transport.UDP, *args, **kwargs):
+        assert ((psk_identity is None) == (psk_key is None))
+        extra_args = []
+        tls_server_kwargs = {'transport': transport}
+        if 'ciphersuites' in kwargs:
+            tls_server_kwargs['ciphersuites'] = kwargs['ciphersuites']
+        if psk_identity:
+            extra_args += ['--identity', str(binascii.hexlify(psk_identity), 'ascii'),
+                           '--key', str(binascii.hexlify(psk_key), 'ascii')]
+            coap_server_builder = lambda: coap.TlsServer(psk_identity=psk_identity, psk_key=psk_key,
+                                                         **tls_server_kwargs)
+        elif server_crt_file:
+            coap_server_builder = lambda: coap.TlsServer(ca_path=client_ca_path,
+                                                         ca_file=client_ca_file,
+                                                         crt_file=server_crt_file,
+                                                         key_file=server_key_file,
+                                                         **tls_server_kwargs)
+        else:
+            coap_server_builder = lambda: coap.Server(transport=transport)
+        if extra_cmdline_args is not None:
+            extra_args += extra_cmdline_args
+
+        if 'servers' not in kwargs:
+            kwargs['servers'] = [Lwm2mServer(coap_server_builder())]
+        elif isinstance(kwargs['servers'], int):
+            servers = []
+            for i in range(kwargs['servers']):
+                servers.append(Lwm2mServer(coap_server_builder()))
+            kwargs['servers'] = servers
+
+        if kwargs.get('bootstrap_server', None) is True:
+            kwargs['bootstrap_server'] = Lwm2mServer(coap_server_builder())
+
+        self.setup_demo_with_servers(extra_cmdline_args=extra_args, *args, **kwargs)
 
     @unittest.skip
     def runTest(self):
@@ -609,6 +626,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                                 endpoint_name=DEMO_ENDPOINT_NAME,
                                 lifetime=None,
                                 binding=None,
+                                lwm2m11_queue_mode=False,
                                 fw_updated_marker_path=None,
                                 **kwargs):
         """
@@ -694,14 +712,23 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             self._start_demo(demo_args)
 
             if auto_register:
-                for serv in servers_passed:
+                if self.bootstrap_server is not None and (
+                        len(servers_passed) == 0 or legacy_server_initiated_bootstrap_allowed):
+                    # Bootstrap Server had to be passed first on the command line,
+                    # but Anjay will connect to it last
+                    all_servers_passed = servers_passed + [self.bootstrap_server]
+                else:
+                    all_servers_passed = servers_passed
+
+                for serv in all_servers_passed:
                     if serv.security_mode() != 'nosec':
                         serv.listen()
                 for serv in servers_passed:
                     self.assertDemoRegisters(serv,
                                              version=maximum_version,
                                              lifetime=lifetime,
-                                             binding=binding)
+                                             binding=binding,
+                                             lwm2m11_queue_mode=lwm2m11_queue_mode)
         except Exception:
             try:
                 self.teardown_demo_with_servers(auto_deregister=False)
@@ -971,46 +998,17 @@ class Lwm2mSingleServerTest(Lwm2mTest, SingleServerAccessor):
     def runTest(self):
         pass
 
-    def setUp(self, extra_cmdline_args=None, psk_identity=None, psk_key=None, client_ca_path=None,
-              client_ca_file=None, server_crt_file=None, server_key_file=None,
-              transport=Transport.UDP, binding=None, *args, **kwargs):
-        assert ((psk_identity is None) == (psk_key is None))
-        extra_args = []
-        tls_server_kwargs = {'transport': transport}
-        if 'ciphersuites' in kwargs:
-            tls_server_kwargs['ciphersuites'] = kwargs['ciphersuites']
-        if psk_identity:
-            extra_args += ['--identity', str(binascii.hexlify(psk_identity), 'ascii'),
-                           '--key', str(binascii.hexlify(psk_key), 'ascii')]
-            coap_server = coap.TlsServer(psk_identity=psk_identity, psk_key=psk_key,
-                                         **tls_server_kwargs)
-        elif server_crt_file:
-            coap_server = coap.TlsServer(ca_path=client_ca_path, ca_file=client_ca_file,
-                                         crt_file=server_crt_file, key_file=server_key_file,
-                                         **tls_server_kwargs)
-        else:
-            coap_server = coap.Server(transport=transport)
-        if extra_cmdline_args is not None:
-            extra_args += extra_cmdline_args
-
-        if 'servers' not in kwargs:
-            kwargs['servers'] = [Lwm2mServer(coap_server)]
-
-        self.setup_demo_with_servers(extra_cmdline_args=extra_args,
-                                     binding=binding,
-                                     *args,
-                                     **kwargs)
-
-    def tearDown(self, *args, **kwargs):
-        self.teardown_demo_with_servers(*args, **kwargs)
-
 
 class Lwm2mDtlsSingleServerTest(Lwm2mSingleServerTest):
     PSK_IDENTITY = b'test-identity'
     PSK_KEY = b'test-key'
 
     def setUp(self, *args, **kwargs):
-        super().setUp(psk_identity=self.PSK_IDENTITY, psk_key=self.PSK_KEY, *args, **kwargs)
+        assert (('psk_identity' in kwargs) == ('psk_key' in kwargs))
+        if 'psk_identity' not in kwargs:
+            kwargs['psk_identity'] = self.PSK_IDENTITY
+            kwargs['psk_key'] = self.PSK_KEY
+        super().setUp(*args, **kwargs)
 
 
 class Lwm2mSingleTcpServerTest(Lwm2mSingleServerTest):

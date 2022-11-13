@@ -142,14 +142,6 @@ static int anjay_notify_perform_impl(anjay_unlocked_t *anjay,
 #ifdef ANJAY_WITH_ATTR_STORAGE
     _anjay_update_ret(&ret, _anjay_attr_storage_notify(anjay, *queue_ptr));
 #endif // ANJAY_WITH_ATTR_STORAGE
-    AVS_LIST(anjay_dm_installed_module_t) module;
-    AVS_LIST_FOREACH(module, anjay->dm.modules) {
-        if (module->def->notify_callback) {
-            _anjay_update_ret(&ret,
-                              module->def->notify_callback(anjay, *queue_ptr,
-                                                           module->arg));
-        }
-    }
     return ret;
 }
 
@@ -408,7 +400,10 @@ anjay_resource_observation_status(anjay_t *anjay_locked,
     anjay_resource_observation_status_t retval = {
         .is_observed = false,
         .min_period = 0,
-        .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+        .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
+#    if (ANJAY_MAX_OBSERVATION_SERVERS_REPORTED_NUMBER > 0)
+        .servers_number = 0
+#    endif //(ANJAY_MAX_OBSERVATION_SERVERS_REPORTED_NUMBER > 0)
     };
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     if (oid != ANJAY_ID_INVALID && iid != ANJAY_ID_INVALID

@@ -5,6 +5,11 @@
 # Licensed under the AVSystem-5-clause License.
 # See the attached LICENSE file for details.
 
+import os
+import sys
+
+sys.path = [os.path.dirname(os.path.dirname(os.path.abspath(__file__)))] + sys.path
+
 import powercmd
 import typing
 from lwm2m.messages import EscapedBytes

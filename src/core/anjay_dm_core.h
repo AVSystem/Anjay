@@ -26,7 +26,7 @@
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 typedef struct {
-    const anjay_dm_module_t *def;
+    anjay_dm_module_deleter_t *deleter;
     void *arg;
 } anjay_dm_installed_module_t;
 
@@ -101,7 +101,7 @@ static inline int _anjay_dm_map_present_result(int result) {
 
 AVS_LIST(anjay_dm_installed_module_t) *
 _anjay_dm_module_find_ptr(anjay_unlocked_t *anjay,
-                          const anjay_dm_module_t *module);
+                          anjay_dm_module_deleter_t *module_deleter);
 
 int _anjay_dm_select_free_iid(anjay_unlocked_t *anjay,
                               const anjay_dm_installed_object_t *obj,

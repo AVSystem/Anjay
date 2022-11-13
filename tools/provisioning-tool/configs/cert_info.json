@@ -4,9 +4,8 @@
     "localityName": "Cracow",
     "organizationName": "AVSystem",
     "organizationUnitName": "Embedded",
-    "commonName": "Sample Cert",
-    "serialNumber": 0,
+    "serialNumber": 1,
     "validityOffsetInSeconds": 220752000,
     "digest": "sha512",
-    "RSAKeyLen": 4096
+    "ellipticCurve": "secp384r1"
 }

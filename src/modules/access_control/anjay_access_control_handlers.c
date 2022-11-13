@@ -510,10 +510,6 @@ bool anjay_access_control_is_modified(anjay_t *anjay_locked) {
     return result;
 }
 
-static const anjay_dm_module_t ACCESS_CONTROL_MODULE = {
-    .deleter = ac_delete
-};
-
 static const anjay_unlocked_dm_object_def_t ACCESS_CONTROL = {
     .oid = ANJAY_DM_OID_ACCESS_CONTROL,
     .handlers = {
@@ -546,15 +542,13 @@ int anjay_access_control_install(anjay_t *anjay_locked) {
         access_control->obj_def = &ACCESS_CONTROL;
         _anjay_dm_installed_object_init_unlocked(&access_control->obj_def_ptr,
                                                  &access_control->obj_def);
-        if (!_anjay_dm_module_install(anjay, &ACCESS_CONTROL_MODULE,
-                                      access_control)) {
+        if (!_anjay_dm_module_install(anjay, ac_delete, access_control)) {
             AVS_STATIC_ASSERT(offsetof(access_control_t, obj_def_ptr) == 0,
                               obj_def_ptr_is_first_field);
             AVS_LIST(anjay_dm_installed_object_t) entry =
                     &access_control->obj_def_ptr;
             if (_anjay_register_object_unlocked(anjay, &entry)) {
-                result = _anjay_dm_module_uninstall(anjay,
-                                                    &ACCESS_CONTROL_MODULE);
+                result = _anjay_dm_module_uninstall(anjay, ac_delete);
                 assert(!result);
                 result = -1;
             } else {
@@ -570,8 +564,7 @@ int anjay_access_control_install(anjay_t *anjay_locked) {
 }
 
 access_control_t *_anjay_access_control_get(anjay_unlocked_t *anjay) {
-    return (access_control_t *) _anjay_dm_module_get_arg(
-            anjay, &ACCESS_CONTROL_MODULE);
+    return (access_control_t *) _anjay_dm_module_get_arg(anjay, ac_delete);
 }
 
 #endif // ANJAY_WITH_MODULE_ACCESS_CONTROL

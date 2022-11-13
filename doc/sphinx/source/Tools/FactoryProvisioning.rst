@@ -111,8 +111,8 @@ Let's take a closer look:
   +------------------------+---------+---------------+----------------------------------------+
   | emailAddress           | String  | N/A           | Holds email address.                   |
   +------------------------+---------+---------------+----------------------------------------+
-  | commonName             | String  | N/A           | Represents attribute CN in certificate |
-  |                        |         |               | subject.                               |
+  | commonName             | String  | <endpoint     | Represents attribute CN in certificate |
+  |                        |         | name>         | subject.                               |
   +------------------------+---------+---------------+----------------------------------------+
   | serialNumber           | Integer | N/A           | Holds serial number attribute in the   |
   |                        |         |               | certificate subject.                   |
@@ -120,10 +120,18 @@ Let's take a closer look:
   | validityOffsetInSeconds| Integer | 220752000     | Represents validity of certificate in  |
   |                        |         |               | seconds.                               |
   +------------------------+---------+---------------+----------------------------------------+
-  | RSAKeyLen              | Integer | 4096          | Represents length of the RSA key used  |
-  |                        |         |               | during certificate creation.           |
+  | ellipticCurve          | String  | "secp256r1"   | Elliptic curve on which to base the    |
+  |                        |         |               | key generated during certificate       |
+  |                        |         |               | creation.                              |
   +------------------------+---------+---------------+----------------------------------------+
-  | digest                 | String  | "sha512"      | Represents a digest algorithm used     |
+  | RSAKeyLen              | Integer | N/A           | Represents length of the RSA key used  |
+  |                        |         |               | during certificate creation.           |
+  |                        |         |               |                                        |
+  |                        |         |               | Cannot be specified together with      |
+  |                        |         |               | ``ellipticCurve``. EC-based keys are   |
+  |                        |         |               | used by default.                       |
+  +------------------------+---------+---------------+----------------------------------------+
+  | digest                 | String  | "sha256"      | Represents a digest algorithm used     |
   |                        |         |               | during certificate signing.            |
   +------------------------+---------+---------------+----------------------------------------+
 
@@ -234,7 +242,7 @@ be used:
             if args.cert is not None:
                 fcty.generate_self_signed_cert()
             elif args.pkey is not None and args.pcert is not None:
-                fcty.set_endpoint_cert_and_key(args.pkey, args.pcert)
+                fcty.set_endpoint_cert_and_key(args.pcert, args.pkey)
 
         fcty.provision_device()
 

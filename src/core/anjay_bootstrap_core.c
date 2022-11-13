@@ -158,19 +158,21 @@ typedef int with_instance_on_demand_cb_t(anjay_unlocked_t *anjay,
                                          anjay_iid_t iid,
                                          anjay_unlocked_input_ctx_t *in_ctx);
 
-static int write_resource(anjay_unlocked_t *anjay,
-                          const anjay_dm_installed_object_t *obj,
-                          anjay_iid_t iid,
-                          anjay_unlocked_input_ctx_t *in_ctx) {
+static int
+write_resource_and_move_to_next_entry(anjay_unlocked_t *anjay,
+                                      const anjay_dm_installed_object_t *obj,
+                                      anjay_iid_t iid,
+                                      anjay_unlocked_input_ctx_t *in_ctx) {
     (void) iid;
-    return _anjay_dm_write_resource(anjay, obj, in_ctx,
-                                    &anjay->bootstrap.notification_queue);
+    return _anjay_dm_write_resource_and_move_to_next_entry(
+            anjay, obj, in_ctx, &anjay->bootstrap.notification_queue);
 }
 
-static int write_instance_inner(anjay_unlocked_t *anjay,
-                                const anjay_dm_installed_object_t *obj,
-                                anjay_iid_t iid,
-                                anjay_unlocked_input_ctx_t *in_ctx) {
+static int write_instance_and_move_to_next_entry_inner(
+        anjay_unlocked_t *anjay,
+        const anjay_dm_installed_object_t *obj,
+        anjay_iid_t iid,
+        anjay_unlocked_input_ctx_t *in_ctx) {
     int retval;
     anjay_uri_path_t path;
     while (!(retval = _anjay_input_get_path(in_ctx, &path, NULL))) {
@@ -182,21 +184,22 @@ static int write_instance_inner(anjay_unlocked_t *anjay,
         }
         if (_anjay_uri_path_has(&path, ANJAY_ID_RID)) {
             /* non-empty instance */
-            retval = write_resource(anjay, obj, iid, in_ctx);
-        }
-        if (retval == ANJAY_ERR_NOT_FOUND
-                || retval == ANJAY_ERR_NOT_IMPLEMENTED) {
-            // LwM2M spec, 5.2.7.1 BOOTSTRAP WRITE:
-            // "When the 'Write' operation targets an Object or an Object
-            // Instance, the LwM2M Client MUST ignore optional resources it does
-            // not support in the payload." - so, continue on these errors.
-            anjay_log(WARNING,
-                      _("Ignoring error during BOOTSTRAP WRITE to ") "%s" _(
-                              ": ") "%d",
-                      ANJAY_DEBUG_MAKE_PATH(&path), retval);
-            retval = 0;
-        }
-        if (!retval) {
+            retval = write_resource_and_move_to_next_entry(anjay, obj, iid,
+                                                           in_ctx);
+            if (retval == ANJAY_ERR_NOT_FOUND
+                    || retval == ANJAY_ERR_NOT_IMPLEMENTED) {
+                // LwM2M spec, 5.2.7.1 BOOTSTRAP WRITE:
+                // "When the 'Write' operation targets an Object or an Object
+                // Instance, the LwM2M Client MUST ignore optional resources it
+                // does not support in the payload." - so, continue on these
+                // errors.
+                anjay_log(WARNING,
+                          _("Ignoring error during BOOTSTRAP WRITE to ") "%s" _(
+                                  ": ") "%d",
+                          ANJAY_DEBUG_MAKE_PATH(&path), retval);
+                retval = 0;
+            }
+        } else {
             retval = _anjay_input_next_entry(in_ctx);
         }
         if (retval) {
@@ -235,17 +238,19 @@ static int with_instance_on_demand(anjay_unlocked_t *anjay,
     return result;
 }
 
-static int write_instance(anjay_unlocked_t *anjay,
-                          const anjay_dm_installed_object_t *obj,
-                          anjay_iid_t iid,
-                          anjay_unlocked_input_ctx_t *in_ctx) {
+static int
+write_instance_and_move_to_next_entry(anjay_unlocked_t *anjay,
+                                      const anjay_dm_installed_object_t *obj,
+                                      anjay_iid_t iid,
+                                      anjay_unlocked_input_ctx_t *in_ctx) {
     return with_instance_on_demand(anjay, obj, iid, in_ctx,
-                                   write_instance_inner);
+                                   write_instance_and_move_to_next_entry_inner);
 }
 
-static int write_object(anjay_unlocked_t *anjay,
-                        const anjay_dm_installed_object_t *obj,
-                        anjay_unlocked_input_ctx_t *in_ctx) {
+static int
+write_object_and_move_to_next_entry(anjay_unlocked_t *anjay,
+                                    const anjay_dm_installed_object_t *obj,
+                                    anjay_unlocked_input_ctx_t *in_ctx) {
     // should it remove existing instances?
     int retval;
     do {
@@ -264,7 +269,8 @@ static int write_object(anjay_unlocked_t *anjay,
             /* another object */
             break;
         }
-        retval = write_instance(anjay, obj, path.ids[ANJAY_ID_IID], in_ctx);
+        retval = write_instance_and_move_to_next_entry(
+                anjay, obj, path.ids[ANJAY_ID_IID], in_ctx);
     } while (!retval);
     return retval;
 }
@@ -357,12 +363,14 @@ static int bootstrap_write_impl(anjay_unlocked_t *anjay,
 
     int retval = -1;
     if (_anjay_uri_path_leaf_is(uri, ANJAY_ID_OID)) {
-        retval = write_object(anjay, obj, in_ctx);
+        retval = write_object_and_move_to_next_entry(anjay, obj, in_ctx);
     } else if (_anjay_uri_path_leaf_is(uri, ANJAY_ID_IID)) {
-        retval = write_instance(anjay, obj, uri->ids[ANJAY_ID_IID], in_ctx);
+        retval = write_instance_and_move_to_next_entry(
+                anjay, obj, uri->ids[ANJAY_ID_IID], in_ctx);
     } else if (_anjay_uri_path_leaf_is(uri, ANJAY_ID_RID)) {
         retval = with_instance_on_demand(anjay, obj, uri->ids[ANJAY_ID_IID],
-                                         in_ctx, write_resource);
+                                         in_ctx,
+                                         write_resource_and_move_to_next_entry);
     }
     if (!retval && uri->ids[ANJAY_ID_OID] == ANJAY_DM_OID_SECURITY) {
         if (has_multiple_bootstrap_security_instances(anjay)) {
@@ -714,8 +722,10 @@ static int bootstrap_finish_impl(anjay_unlocked_t *anjay,
             _anjay_servers_find_active(anjay, ANJAY_SSID_BOOTSTRAP);
     if ((flags & BOOTSTRAP_FINISH_DISABLE_SERVER) && !retval) {
         if (!anjay->bootstrap.allow_legacy_server_initiated_bootstrap) {
-            retval = _anjay_disable_server_with_timeout_unlocked(
-                    anjay, ANJAY_SSID_BOOTSTRAP, AVS_TIME_DURATION_INVALID);
+            retval =
+                    _anjay_schedule_disable_server_with_explicit_timeout_unlocked(
+                            anjay, ANJAY_SSID_BOOTSTRAP,
+                            AVS_TIME_DURATION_INVALID);
         }
     }
     if (retval) {

@@ -19,12 +19,10 @@
 #    include <anjay/server.h>
 
 #    include <anjay_modules/anjay_dm_utils.h>
-#    include <anjay_modules/anjay_utils_core.h>
 
 #    include <inttypes.h>
 #    include <string.h>
 
-#    include "anjay_mod_server.h"
 #    include "anjay_server_transaction.h"
 #    include "anjay_server_utils.h"
 
@@ -158,12 +156,14 @@ handle_v2_lwm2m11_sized_fields(avs_persistence_context_t *ctx,
 
     avs_error_t err;
     (void) (avs_is_err((err = avs_persistence_bool(
-                                ctx, &element->present_resources
-                                              [SERV_RES_TLS_DTLS_ALERT_CODE])))
+                                ctx,
+                                &element->present_resources
+                                         [SERV_RES_TLS_DTLS_ALERT_CODE])))
             || avs_is_err((err = avs_persistence_u8(ctx, &element->last_alert)))
             || avs_is_err((err = avs_persistence_bool(
-                                   ctx, &element->present_resources
-                                                 [SERV_RES_LAST_BOOTSTRAPPED])))
+                                   ctx,
+                                   &element->present_resources
+                                            [SERV_RES_LAST_BOOTSTRAPPED])))
             || avs_is_err((err = avs_persistence_i64(
                                    ctx, &element->last_bootstrapped_timestamp)))
             || avs_is_err(
@@ -191,20 +191,20 @@ handle_v2_lwm2m11_sized_fields(avs_persistence_context_t *ctx,
                        err = avs_persistence_bool(
                                ctx,
                                &element->present_resources
-                                        [SERV_RES_SERVER_COMMUNICATION_SEQUENCE_RETRY_COUNT])))
-            || avs_is_err((
-                       err = avs_persistence_u32(
-                               ctx,
-                               &element->server_communication_sequence_retry_count)))
-            || avs_is_err((
-                       err = avs_persistence_bool(
-                               ctx,
-                               &element->present_resources
                                         [SERV_RES_SERVER_COMMUNICATION_SEQUENCE_DELAY_TIMER])))
             || avs_is_err((
                        err = avs_persistence_u32(
                                ctx,
                                &element->server_communication_sequence_delay_timer)))
+            || avs_is_err((
+                       err = avs_persistence_bool(
+                               ctx,
+                               &element->present_resources
+                                        [SERV_RES_SERVER_COMMUNICATION_SEQUENCE_RETRY_COUNT])))
+            || avs_is_err((
+                       err = avs_persistence_u32(
+                               ctx,
+                               &element->server_communication_sequence_retry_count)))
             || avs_is_err((
                        err = avs_persistence_u8(
                                ctx, (uint8_t *) &element->preferred_transport)))
@@ -238,14 +238,14 @@ static avs_error_t handle_v2_sized_fields(avs_persistence_context_t *ctx,
                        err = avs_persistence_bool(
                                ctx,
                                &element->present_resources[SERV_RES_LIFETIME])))
-            || avs_is_err(
-                       (err = avs_persistence_bool(
-                                ctx, &element->present_resources
-                                              [SERV_RES_DEFAULT_MIN_PERIOD])))
-            || avs_is_err(
-                       (err = avs_persistence_bool(
-                                ctx, &element->present_resources
-                                              [SERV_RES_DEFAULT_MAX_PERIOD])))
+            || avs_is_err((err = avs_persistence_bool(
+                                   ctx,
+                                   &element->present_resources
+                                            [SERV_RES_DEFAULT_MIN_PERIOD])))
+            || avs_is_err((err = avs_persistence_bool(
+                                   ctx,
+                                   &element->present_resources
+                                            [SERV_RES_DEFAULT_MAX_PERIOD])))
             || avs_is_err((err = avs_persistence_bool(
                                    ctx,
 #        ifndef ANJAY_WITHOUT_DEREGISTER

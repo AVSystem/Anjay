@@ -10,7 +10,7 @@ on: [push]
 jobs:
   ubuntu1804-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:ubuntu-18.04
+    container: avsystemembedded/anjay-travis:ubuntu-18.04-1.0
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
@@ -37,7 +37,7 @@ jobs:
 
   ubuntu2004-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:ubuntu-20.04
+    container: avsystemembedded/anjay-travis:ubuntu-20.04-1.0
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
@@ -68,7 +68,7 @@ jobs:
 
   ubuntu2204-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:ubuntu-22.04
+    container: avsystemembedded/anjay-travis:ubuntu-22.04-1.0
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
@@ -108,13 +108,12 @@ jobs:
             CXX: clang++-14
             MEM_CHECK_TOOL: --without-memcheck # NOTE: workaround for https://bugzilla.mozilla.org/show_bug.cgi?id=1758782
 
-  fedora36-compilers-test:
+  rockylinux9-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:fedora-36
+    container: avsystemembedded/anjay-travis:rockylinux-9-1.0
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
-      COMPILER_VERSION: ${{ matrix.COMPILER_VERSION }}
     steps:
       # NOTE: workaround for https://github.com/actions/checkout/issues/760
       - run: git config --global safe.directory '*'
@@ -123,7 +122,7 @@ jobs:
         with:
           submodules: recursive
       - run: dnf update -y
-      - run: dnf install -y $COMPILER_VERSION
+      - run: dnf install -y $CC
       - run: ./devconfig --with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF
       - run: env CC=gcc LC_ALL=C.UTF-8 make -j
       - run: env CC=gcc LC_ALL=C.UTF-8 make check
@@ -133,13 +132,8 @@ jobs:
         include:
           - CC: gcc
             CXX: g++
-            COMPILER_VERSION: gcc-12.0.1
-          - CC: gcc
-            CXX: g++
-            COMPILER_VERSION: gcc-12.1.1
           - CC: clang
             CXX: clang++
-            COMPILER_VERSION: clang-14.0.0
 
   macOS-compilers-test:
     runs-on: macos-11

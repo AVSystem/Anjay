@@ -743,6 +743,44 @@
  * allocator.
  */
 #define AVS_COMMONS_UTILS_WITH_STANDARD_ALLOCATOR
+
+/**
+ * Enable the alternate implementation of avs_malloc(), avs_free(), avs_calloc()
+ * and avs_realloc() that uses system malloc(), free() and realloc() calls, but
+ * includes additional fixup code that ensures proper alignment to
+ * <c>AVS_ALIGNOF(avs_max_align_t)</c> (usually 8 bytes on common platforms).
+ *
+ * <c>AVS_COMMONS_UTILS_WITH_STANDARD_ALLOCATOR</c> and
+ * <c>AVS_COMMONS_UTILS_WITH_ALIGNFIX_ALLOCATOR</c> cannot be enabled at the
+ * same time.
+ *
+ * NOTE: This implementation is only intended for platforms where the system
+ * allocator does not properly conform to the alignment requirements.
+ *
+ * It comes with an additional runtime costs:
+ *
+ * - <c>AVS_ALIGNOF(avs_max_align_t)</c> bytes (usually 8) of additional
+ *   overhead for each allocated memory block
+ * - Additional memmove() for every realloc() that returned a block that is not
+ *   properly aligned
+ * - avs_calloc() is implemented as avs_malloc() followed by an explicit
+ *   memset(); this may be suboptimal on some platforms
+ *
+ * If these costs are unacceptable for you, you may want to consider fixing,
+ * replacing or reconfiguring your system allocator for conformance, or
+ * implementing a custom one instead.
+ *
+ * Please note that some code in avs_commons and dependent projects (e.g. Anjay)
+ * may include runtime assertions for proper memory alignment that will be
+ * triggered when using a non-conformant standard allocator. Such allocators are
+ * relatively common in embedded SDKs. This "alignfix" allocator is intended to
+ * work around these issues. On some platforms (e.g. x86) those alignment issues
+ * may not actually cause any problems - so you may want to consider disabling
+ * runtime assertions instead. Please carefully examine your target platform's
+ * alignment requirements and behavior of misaligned memory accesses (including
+ * 64-bit data types such as <c>int64_t</c> and <c>double</c>) before doing so.
+ */
+/* #undef AVS_COMMONS_UTILS_WITH_ALIGNFIX_ALLOCATOR */
 /**@}*/
 
 #endif /* AVS_COMMONS_CONFIG_H */

@@ -38,10 +38,11 @@ int _anjay_dm_write_composite(anjay_unlocked_t *anjay,
  * Apart from that, the function has no more applications and @ref
  * _anjay_dm_write() shall be used instead.
  */
-int _anjay_dm_write_created_instance(anjay_unlocked_t *anjay,
-                                     const anjay_dm_installed_object_t *obj,
-                                     anjay_iid_t iid,
-                                     anjay_unlocked_input_ctx_t *in_ctx);
+int _anjay_dm_write_created_instance_and_move_to_next_entry(
+        anjay_unlocked_t *anjay,
+        const anjay_dm_installed_object_t *obj,
+        anjay_iid_t iid,
+        anjay_unlocked_input_ctx_t *in_ctx);
 
 VISIBILITY_PRIVATE_HEADER_END
 

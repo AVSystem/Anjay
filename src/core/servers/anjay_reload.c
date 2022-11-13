@@ -24,23 +24,6 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-static void refresh_server_job(avs_sched_t *sched, const void *server_ptr) {
-    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
-    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
-    anjay_server_info_t *server = *(anjay_server_info_t *const *) server_ptr;
-
-    if (server->ssid != ANJAY_SSID_BOOTSTRAP
-            && _anjay_bootstrap_in_progress(anjay)) {
-        anjay_log(TRACE,
-                  _("Bootstrap is in progress, not refreshing server "
-                    "SSID ") "%" PRIu16,
-                  server->ssid);
-    } else {
-        _anjay_active_server_refresh(server);
-    }
-    ANJAY_MUTEX_UNLOCK(anjay_locked);
-}
-
 static int reload_server_by_ssid(anjay_unlocked_t *anjay,
                                  AVS_LIST(anjay_server_info_t) *old_servers,
                                  anjay_ssid_t ssid) {
@@ -59,10 +42,7 @@ static int reload_server_by_ssid(anjay_unlocked_t *anjay,
                                                       AVS_TIME_DURATION_ZERO);
             } else if (!server->next_action_handle
                        && avs_time_real_valid(server->reactivate_time)) {
-                return _anjay_server_sched_activate(
-                        server,
-                        avs_time_real_diff(server->reactivate_time,
-                                           avs_time_real_now()));
+                return _anjay_server_sched_activate(server);
             }
         }
         return 0;
@@ -79,8 +59,8 @@ static int reload_server_by_ssid(anjay_unlocked_t *anjay,
     int result = 0;
     if ((ssid != ANJAY_SSID_BOOTSTRAP && !_anjay_bootstrap_in_progress(anjay))
             || _anjay_bootstrap_legacy_server_initiated_allowed(anjay)) {
-        result = _anjay_server_sched_activate(new_server,
-                                              AVS_TIME_DURATION_ZERO);
+        new_server->reactivate_time = avs_time_real_now();
+        result = _anjay_server_sched_activate(new_server);
     }
     return result;
 }
@@ -147,9 +127,8 @@ static void reload_servers_sched_job(avs_sched_t *sched, const void *unused) {
             && !_anjay_server_active(anjay->servers)
             && !anjay->servers->next_action_handle
             && !anjay->servers->refresh_failed) {
-        reload_state.retval =
-                _anjay_server_sched_activate(anjay->servers,
-                                             AVS_TIME_DURATION_ZERO);
+        anjay->servers->reactivate_time = avs_time_real_now();
+        reload_state.retval = _anjay_server_sched_activate(anjay->servers);
     }
 
     if (reload_state.retval) {
@@ -205,9 +184,10 @@ int _anjay_schedule_delayed_reload_servers(anjay_unlocked_t *anjay) {
 
 int _anjay_schedule_refresh_server(anjay_server_info_t *server,
                                    avs_time_duration_t delay) {
-    if (AVS_SCHED_DELAYED(server->anjay->sched, &server->next_action_handle,
-                          delay, refresh_server_job, &server, sizeof(server))) {
-        anjay_log(ERROR, _("could not schedule refresh_server_job"));
+    if (_anjay_server_reschedule_next_action(
+                server, delay, ANJAY_SERVER_NEXT_ACTION_REFRESH)) {
+        anjay_log(ERROR,
+                  _("could not schedule ANJAY_SERVER_NEXT_ACTION_REFRESH"));
         return -1;
     }
     return 0;
@@ -370,12 +350,14 @@ int anjay_transport_set_online(anjay_t *anjay_locked,
 }
 
 /**
- * Schedules reconnection of all servers, and even downloader sockets. This is
+ * Schedules reconnection of all servers, and even downloader sockets. This
  * basically:
  *
- * - The same as _anjay_schedule_server_reconnect() but for all servers at once,
- *   See the docs there for details.
- * - Exits offline mode if it is currently enabled
+ * - Immediately closes (but doesn't clean up - so that the servers are still
+ *   considered active) all relevant sockets
+ * - Exits offline mode if it is currently enabled - this will call
+ *   _anjay_schedule_reload_servers(), which will eventually reconnect all
+ *   servers
  * - Reschedules activation (calls _anjay_server_sched_activate()) for all
  *   servers that have reached the ICMP failure limit
  * - Calls _anjay_downloader_sched_reconnect_all() to reconnect downloader

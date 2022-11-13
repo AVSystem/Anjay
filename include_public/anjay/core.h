@@ -1304,6 +1304,15 @@ avs_time_real_t anjay_registration_expiration_time(anjay_t *anjay,
  *   - Request Bootstrap
  *   - EST Simple Re-enroll
  *
+ * <strong>NOTE:</strong> This function may internally perform conversion
+ * between time values attached to different clocks (real-time clock vs.
+ * monotonic clock), which depends on immediate readings of those clocks. For
+ * this reason, the calculated value may slightly change from call to call, even
+ * if no action was performed in between. This accuracy depends on the accuracy
+ * of the underlying clocks as well as CPU performance. It is generally expected
+ * to be accurate within single-digit milliseconds, but it is recommended to
+ * avoid code that would perform direct comparisons on those values.
+ *
  * @param anjay Anjay object to operate on.
  *
  * @param ssid  Either one of:
@@ -1585,6 +1594,88 @@ anjay_update_coap_exchange_timeout(anjay_t *anjay,
 avs_error_t anjay_update_dtls_handshake_timeouts(
         anjay_t *anjay,
         avs_net_dtls_handshake_timeouts_t dtls_handshake_timeouts);
+
+#ifdef ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
+/*
+ * Gets the time at which the client has registered successfully to a given
+ * LwM2M server for the last time.
+ *
+ * @param anjay         Anjay object to operate on.
+ *
+ * @param ssid          A Short Server ID of a single regular LwM2M Server for
+ *                      which to get the information, or @ref ANJAY_SSID_ANY to
+ *                      get the time of the last successful registration to any
+ *                      known server.
+ *
+ * @param[out] out_time Non-NULL pointer to an @ref avs_time_real_t structure.
+ *                      The structure will be filled with information about a
+ *                      point in time according to the real-time clock at which
+ *                      the last registration happened, or
+ *                      <c>AVS_TIME_REAL_INVALID</c> if there was no successful
+ *                      registration to a given server.
+ *
+ * @returns AVS_OK on success, or an error code.
+ */
+avs_error_t anjay_get_server_last_registration_time(anjay_t *anjay,
+                                                    anjay_ssid_t ssid,
+                                                    avs_time_real_t *out_time);
+
+/*
+ * Gets the time at which next registration update operation with a given
+ * LwM2M Server is scheduled.
+ *
+ * <strong>NOTE:</strong> This function may internally perform conversion
+ * between time values attached to different clocks (real-time clock vs.
+ * monotonic clock), which depends on immediate readings of those clocks. For
+ * this reason, the calculated value may slightly change from call to call, even
+ * if no action was performed in between. This accuracy depends on the accuracy
+ * of the underlying clocks as well as CPU performance. It is generally expected
+ * to be accurate within single-digit milliseconds, but it is recommended to
+ * avoid code that would perform direct comparisons on those values.
+ *
+ * @param anjay         Anjay object to operate on.
+ *
+ * @param ssid          A Short Server ID of a single regular LwM2M Server for
+ *                      which to get the information, or @ref ANJAY_SSID_ANY to
+ *                      get the time of the closes registration update operation
+ *                      to any known server.
+ *
+ * @param[out] out_time Non-NULL pointer to an @ref avs_time_real_t structure.
+ *                      The structure will be filled with information about a
+ *                      point in time according to the real-time clock at which
+ *                      next registration update operation is scheduled, or
+ *                      <c>AVS_TIME_REAL_INVALID</c> if a registration update
+ *                      operation isn't scheduled for a given SSID.
+ *
+ * @returns AVS_OK on success, or an error code.
+ */
+avs_error_t anjay_get_server_next_update_time(anjay_t *anjay,
+                                              anjay_ssid_t ssid,
+                                              avs_time_real_t *out_time);
+/*
+ * Gets the time at which the client has communicated with a given LwM2M Server
+ * for the last time.
+ *
+ * @param anjay         Anjay object to operate on.
+ *
+ * @param ssid          A Short Server ID of a single regular LwM2M Server for
+ *                      which to get the information, or @ref ANJAY_SSID_ANY to
+ *                      get the time of last communication attempt to any known
+ *                      server.
+ *
+ * @param[out] out_time Non-NULL pointer to an @ref avs_time_real_t structure.
+ *                      The structure will be filled with information about a
+ *                      point in time according to the real-time clock at which
+ *                      the last communication happened, or
+ *                      <c>AVS_TIME_REAL_INVALID</c> if there was no
+ *                      communication attempt with a given server.
+ *
+ * @returns AVS_OK on success, or an error code.
+ */
+avs_error_t anjay_get_server_last_communication_time(anjay_t *anjay,
+                                                     anjay_ssid_t ssid,
+                                                     avs_time_real_t *out_time);
+#endif // ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
 
 #ifdef __cplusplus
 } /* extern "C" */

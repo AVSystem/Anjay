@@ -8,7 +8,7 @@
 cmake_minimum_required(VERSION 3.6.0)
 
 project(anjay C)
-set(ANJAY_VERSION "3.1.2" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "3.2.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -96,6 +96,12 @@ set(MAX_URI_QUERY_SEGMENT_SIZE 256 CACHE STRING
 
 set(DTLS_SESSION_BUFFER_SIZE 1024 CACHE STRING
     "Size of the buffer that caches DTLS session information for resumption support.")
+
+set(MAX_OBSERVATION_SERVERS_REPORTED_NUMBER 0 CACHE STRING
+    "Maximum number of servers observing a given Resource listed by anjay_resource_observation_status() function.")
+
+set(ANJAY_DEFAULT_SEND_FORMAT AVS_COAP_FORMAT_NONE CACHE STRING
+    "Default value of Content-Format used in Send messages. Value AVS_COAP_FORMAT_NONE(65535) means no default value.")
 
 ################# FEATURES THAT REQUIRE LIBRARY CONFIGURATION ##################
 
@@ -266,8 +272,6 @@ cmake_dependent_option(WITH_SENML_JSON "Enable support for SenML JSON content fo
 cmake_dependent_option(WITH_CBOR "Enable support for CBOR and SenML CBOR content formats" ON WITH_LWM2M11 OFF)
 cmake_dependent_option(WITH_SEND "Enable support for LwM2M 1.1 Send operation" ON "WITH_CBOR OR WITH_SENML_JSON" OFF)
 
-
-
 cmake_dependent_option(WITH_OBSERVATION_STATUS "Enable support for anjay_resource_observation_status() API" ON "WITH_OBSERVE" OFF)
 cmake_dependent_option(WITH_COAP_DOWNLOAD "Enable support for CoAP(S) downloads" ON WITH_DOWNLOADER OFF)
 
@@ -279,6 +283,8 @@ cmake_dependent_option(WITH_INTERNAL_LOGS "Enable logging from inside AVSystem C
 cmake_dependent_option(WITH_INTERNAL_TRACE "Enable TRACE-level logs inside AVSystem Commons libraries" ON AVS_LOG_WITH_TRACE OFF)
 
 option(WITH_NET_STATS "Enable measuring amount of LwM2M traffic" ON)
+
+option(WITH_COMMUNICATION_TIMESTAMP_API "Enable communication timestamps" ON)
 
 option(WITH_EVENT_LOOP "Enable default implementation of the event loop" "${WITH_POSIX_AVS_SOCKET}")
 
@@ -516,6 +522,7 @@ set(ANJAY_WITH_MODULE_FW_UPDATE "${WITH_MODULE_fw_update}")
 set(ANJAY_WITH_MODULE_SECURITY "${WITH_MODULE_security}")
 set(ANJAY_WITH_MODULE_SERVER "${WITH_MODULE_server}")
 set(ANJAY_WITH_NET_STATS "${WITH_NET_STATS}")
+set(ANJAY_WITH_COMMUNICATION_TIMESTAMP_API "${WITH_COMMUNICATION_TIMESTAMP_API}")
 set(ANJAY_WITH_EVENT_LOOP "${WITH_EVENT_LOOP}")
 set(ANJAY_WITH_OBSERVATION_STATUS "${WITH_OBSERVATION_STATUS}")
 set(ANJAY_WITH_OBSERVE "${WITH_OBSERVE}")
@@ -732,6 +739,10 @@ if(WITH_TEST)
                       COMMAND ! find src -name "'*.[ch]'" | sed -e "'s|^.*/||'" | sort | uniq -c | grep -v "'^ *1 '"
                       WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
     add_dependencies(anjay_check anjay_filename_check)
+
+    add_custom_target(symlink_check COMMAND
+                      "${CMAKE_CURRENT_SOURCE_DIR}/tools/symlink-check.sh")
+    add_dependencies(anjay_check symlink_check)
 
     # Unit tests
     include(ProcessorCount)

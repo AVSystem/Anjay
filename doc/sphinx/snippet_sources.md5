@@ -1,4 +1,4 @@
-344b3ea26c0c0a4406198be45fbee0cc  demo/demo_cmds.c
+07ebc8ace123f26e27ea86dc60f6f08a  demo/demo_cmds.c
 d40d273d5238821ff98b114ed81d4497  demo/objects/ipso_objects.c
 6b207ab1e0b2a2305a41041cf7ff73fe  deps/avs_coap/include_public/avsystem/coap/tcp.h
 b693d5bc29ed86d80597057499cb9663  deps/avs_coap/include_public/avsystem/coap/udp.h
@@ -82,12 +82,12 @@ f971df7872a8f052bb72ae64610a8031  examples/tutorial/firmware-update/basic-implem
 844cd7d9d0ebe80007dc5ae8d6a719b0  examples/tutorial/firmware-update/download-resumption/src/firmware_update.c
 077f6b89dad59ef3b9b58e2abe93aff6  examples/tutorial/firmware-update/secure-downloads/src/firmware_update.c
 d96f464271c94a9aa3691a54e934f913  include_public/anjay/attr_storage.h
-7d65658e3f6a91b2d3e7c87c023b1825  include_public/anjay/core.h
-a0022c4d162342ad6ff10d197c3205ea  include_public/anjay/dm.h
+43e8a78f90c0e40feb5503a398130589  include_public/anjay/core.h
+37879531161c9b6439672224983c1480  include_public/anjay/dm.h
 ebd07be4f2a99e4f88435330b36fc617  include_public/anjay/fw_update.h
 e4153f643dad6a333675748eaabf7852  include_public/anjay/io.h
 b99edd4bfed8952b8125cec0da767b66  include_public/anjay/ipso_objects.h
 9769d3edf9ed026a4314a550bf64faa5  include_public/anjay/security.h
-d19627a56220f65d957404d82d1fe0fd  tests/integration/framework/test_utils.py
-c9de059f2a8d56208249f54b1624d7c8  tools/provisioning-tool/factory_prov/factory_prov.py
-9143bcdc2f751bd5d02cac72c0ba82a8  tools/provisioning-tool/ptool.py
+c1c9b2aaa6752adaeb1a2d5c80e5a367  tests/integration/framework/test_utils.py
+cf1048d2b1fff9e95ebbdd1a365660c8  tools/provisioning-tool/factory_prov/factory_prov.py
+93397353168386b28fea926d00234faf  tools/provisioning-tool/ptool.py

@@ -14,12 +14,9 @@
 #    include <inttypes.h>
 #    include <string.h>
 
-#    include <avsystem/commons/avs_utils.h>
-
 #    include <anjay/server.h>
 
 #    include <anjay_modules/anjay_bootstrap.h>
-#    include <anjay_modules/anjay_dm_utils.h>
 #    include <anjay_modules/anjay_servers.h>
 
 #    include "anjay_mod_server.h"
@@ -94,11 +91,11 @@ static const struct {
         .kind = ANJAY_DM_RES_RW
     },
     {
-        .rid = SERV_RES_SERVER_COMMUNICATION_SEQUENCE_RETRY_COUNT,
+        .rid = SERV_RES_SERVER_COMMUNICATION_SEQUENCE_DELAY_TIMER,
         .kind = ANJAY_DM_RES_RW
     },
     {
-        .rid = SERV_RES_SERVER_COMMUNICATION_SEQUENCE_DELAY_TIMER,
+        .rid = SERV_RES_SERVER_COMMUNICATION_SEQUENCE_RETRY_COUNT,
         .kind = ANJAY_DM_RES_RW
     },
     {
@@ -565,8 +562,8 @@ static int serv_execute(anjay_unlocked_t *anjay,
                         ? inst->disable_timeout
                         : 86400,
                 AVS_TIME_S);
-        return _anjay_disable_server_with_timeout_unlocked(anjay, inst->ssid,
-                                                           disable_timeout);
+        return _anjay_schedule_disable_server_with_explicit_timeout_unlocked(
+                anjay, inst->ssid, disable_timeout);
     }
 #    endif // ANJAY_WITHOUT_DEREGISTER
     case SERV_RES_REGISTRATION_UPDATE_TRIGGER:
@@ -741,10 +738,6 @@ bool anjay_server_object_is_modified(anjay_t *anjay_locked) {
     return result;
 }
 
-static const anjay_dm_module_t SERVER_MODULE = {
-    .deleter = server_delete
-};
-
 int anjay_server_object_install(anjay_t *anjay_locked) {
     assert(anjay_locked);
     int result = -1;
@@ -755,12 +748,12 @@ int anjay_server_object_install(anjay_t *anjay_locked) {
     } else {
         repr->def = &SERVER;
         _anjay_dm_installed_object_init_unlocked(&repr->def_ptr, &repr->def);
-        if (!_anjay_dm_module_install(anjay, &SERVER_MODULE, repr)) {
+        if (!_anjay_dm_module_install(anjay, server_delete, repr)) {
             AVS_STATIC_ASSERT(offsetof(server_repr_t, def_ptr) == 0,
                               def_ptr_is_first_field);
             AVS_LIST(anjay_dm_installed_object_t) entry = &repr->def_ptr;
             if (_anjay_register_object_unlocked(anjay, &entry)) {
-                result = _anjay_dm_module_uninstall(anjay, &SERVER_MODULE);
+                result = _anjay_dm_module_uninstall(anjay, server_delete);
                 assert(!result);
                 result = -1;
             } else {

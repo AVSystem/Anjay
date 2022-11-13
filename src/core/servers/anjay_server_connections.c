@@ -412,8 +412,9 @@ void _anjay_connection_bring_online(anjay_connection_ref_t ref) {
         anjay_log(DEBUG, _("transport is entering offline mode, not bringing "
                            "the socket online"));
     } else {
-        avs_error_t err = _anjay_server_connection_internal_bring_online(
-                ref.server, ref.conn_type, NULL);
+        avs_error_t err =
+                _anjay_server_connection_internal_bring_online(ref.server,
+                                                               ref.conn_type);
         anjay_server_connection_state_t state =
                 _anjay_connection_get(&ref.server->connections,
                                       ANJAY_CONNECTION_PRIMARY)

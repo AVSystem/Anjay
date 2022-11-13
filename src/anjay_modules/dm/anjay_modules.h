@@ -258,33 +258,20 @@ typedef struct {
 } anjay_unlocked_dm_handlers_t;
 #endif // ANJAY_WITH_THREAD_SAFETY
 
+/**
+ * A function to be called when the module is uninstalled, that will clean up
+ * any resources used by it.
+ */
 typedef void anjay_dm_module_deleter_t(void *arg);
 
-typedef struct {
-    /**
-     * A function to be called every time when Anjay is notified of some data
-     * model change - this also includes changes made through LwM2M protocol
-     * itself.
-     */
-    anjay_notify_callback_t *notify_callback;
-
-    /**
-     * A function to be called when the module is uninstalled, that will clean
-     * up any resources used by it.
-     */
-    anjay_dm_module_deleter_t *deleter;
-} anjay_dm_module_t;
-
 /**
- * Installs an Anjay module. See the definition of fields in
- * @ref anjay_dm_module_t for a detailed explanation of what modules can do.
+ * Installs an Anjay module. In practice this just means registering an
+ * arbitrary function to be called during <c>anjay_delete()</c>.
  *
  * @param anjay  Anjay object to operate on
  *
- * @param module Pointer to a module definition structure; this pointer is also
- *               used as a module identifier, so it needs to have at least the
- *               same lifetime as the module itself, and normally it is a
- *               singleton with static lifetime
+ * @param module_deleter Pointer to a module deleter function; this pointer is
+ *                       also used as a module identifier
  *
  * @param arg    Opaque pointer that can be later retrieved using
  *               @ref _anjay_dm_module_get_arg and will also be passed to the
@@ -293,17 +280,17 @@ typedef struct {
  * @returns 0 for success, or a negative value in case of error.
  */
 int _anjay_dm_module_install(anjay_unlocked_t *anjay,
-                             const anjay_dm_module_t *module,
+                             anjay_dm_module_deleter_t *module_deleter,
                              void *arg);
 
 int _anjay_dm_module_uninstall(anjay_unlocked_t *anjay,
-                               const anjay_dm_module_t *module);
+                               anjay_dm_module_deleter_t *module_deleter);
 
 /**
  * Returns the <c>arg</c> previously passed to @ref _anjay_dm_module_install
  */
 void *_anjay_dm_module_get_arg(anjay_unlocked_t *anjay,
-                               const anjay_dm_module_t *module);
+                               anjay_dm_module_deleter_t *module_deleter);
 
 VISIBILITY_PRIVATE_HEADER_END
 

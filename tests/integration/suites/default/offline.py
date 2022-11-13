@@ -7,9 +7,6 @@
 # Licensed under the AVSystem-5-clause License.
 # See the attached LICENSE file for details.
 
-import socket
-import time
-
 from framework.lwm2m_test import *
 from . import retransmissions
 
@@ -279,3 +276,28 @@ class ExternalSetLifetimeWhenOfflineDtls(test_suite.Lwm2mDtlsSingleServerTest):
         self.communicate('exit-offline')
         self.assertDtlsReconnect()
         self.assertDemoUpdatesRegistration(lifetime=8192)
+
+
+class ObservationDroppingAfterNosecReconnect(test_suite.Lwm2mSingleServerTest,
+                                             test_suite.Lwm2mDmOperations):
+    def runTest(self):
+        self.observe(self.serv, OID.Device, 0, RID.Device.CurrentTime)
+        self.communicate('enter-offline')
+        # if we were not fast enough, one more message might have come;
+        # we try to support both cases
+        try:
+            self.serv.recv(timeout_s=1)
+        except socket.timeout:
+            pass
+
+        # now no messages shall arrive
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=OFFLINE_INTERVAL)
+
+        # exit offline mode
+        self.communicate('exit-offline')
+        self.assertDemoRegisters()
+
+        # observation got canceled, no new messages shall arrive
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=OFFLINE_INTERVAL)

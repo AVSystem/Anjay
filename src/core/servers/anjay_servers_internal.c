@@ -40,6 +40,7 @@ void _anjay_server_clean_active_data(anjay_server_info_t *server) {
 void _anjay_server_cleanup(anjay_server_info_t *server) {
     anjay_log(TRACE, _("clear_server SSID ") "%u", server->ssid);
 
+    // defined(ANJAY_WITH_CORE_PERSISTENCE)
     _anjay_server_clean_active_data(server);
     _anjay_registration_info_cleanup(&server->registration_info);
 }
@@ -111,7 +112,8 @@ bool _anjay_connection_ready_for_outgoing_message(anjay_connection_ref_t ref) {
     anjay_unlocked_t *anjay = _anjay_from_server(ref.server);
     return !_anjay_bootstrap_in_progress(anjay)
            && _anjay_server_active(ref.server)
-           && !_anjay_server_registration_expired(ref.server);
+           && !_anjay_server_registration_expired(ref.server)
+           && !_anjay_server_registration_info(ref.server)->update_forced;
 }
 
 static int add_socket_onto_list(AVS_LIST(anjay_socket_entry_t) *tail_ptr,
@@ -211,7 +213,11 @@ bool _anjay_server_active(anjay_server_info_t *server) {
                         .server = server,
                         .conn_type = conn_type
                     }))) {
-            return true;
+            return !server->next_action_handle
+                   || (server->next_action
+                               != ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_TIMEOUT_FROM_DM
+                       && server->next_action
+                                  != ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_EXPLICIT_TIMEOUT);
         }
     }
 
@@ -234,6 +240,18 @@ const anjay_binding_mode_t *
 _anjay_server_binding_mode(anjay_server_info_t *server) {
     return (const anjay_binding_mode_t *) &server->binding_mode;
 }
+
+#ifdef ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
+void _anjay_server_set_last_communication_time(anjay_server_info_t *server) {
+    server->last_communication_time = avs_time_real_now();
+    anjay_log(TRACE,
+              _("Update server (SSID: ") "%d" _(
+                      ") last communication time to ") "%s",
+              server->ssid,
+              AVS_TIME_DURATION_AS_STRING(
+                      server->last_communication_time.since_real_epoch));
+}
+#endif // ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
 
 int _anjay_servers_foreach_ssid(anjay_unlocked_t *anjay,
                                 anjay_servers_foreach_ssid_handler_t *handler,
@@ -290,3 +308,67 @@ bool _anjay_bootstrap_server_exists(anjay_unlocked_t *anjay) {
     return candidate && candidate->ssid == ANJAY_SSID_BOOTSTRAP;
 }
 #endif // defined(ANJAY_WITH_LWM2M11) || defined(ANJAY_WITH_EST)
+
+static void server_next_action_job(avs_sched_t *sched, const void *server_ptr) {
+    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    anjay_server_info_t *server = *(anjay_server_info_t *const *) server_ptr;
+    switch (server->next_action) {
+    case ANJAY_SERVER_NEXT_ACTION_COMMUNICATION_ERROR:
+        _anjay_server_on_failure(server, "not reachable");
+        goto success;
+
+    case ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_TIMEOUT_FROM_DM:
+        _anjay_disable_server_with_timeout_from_dm_sync(server);
+        goto success;
+
+    case ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_EXPLICIT_TIMEOUT:
+        _anjay_disable_server_with_explicit_timeout_sync(server);
+        goto success;
+
+    case ANJAY_SERVER_NEXT_ACTION_SEND_UPDATE:
+        server->registration_info.update_forced = true;
+        _anjay_active_server_refresh(server);
+        goto success;
+
+    case ANJAY_SERVER_NEXT_ACTION_REFRESH:
+        if (server->ssid != ANJAY_SSID_BOOTSTRAP
+                && _anjay_bootstrap_in_progress(anjay)) {
+            anjay_log(TRACE,
+                      _("Bootstrap is in progress, not refreshing server "
+                        "SSID ") "%" PRIu16,
+                      server->ssid);
+            // NOTE: Bootstrap Finish will trigger
+            // _anjay_schedule_reload_servers(), server will be refreshed then.
+        } else {
+            _anjay_active_server_refresh(server);
+        }
+        goto success;
+    }
+    AVS_UNREACHABLE("Invalid next_action enum value");
+success:;
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+}
+
+int _anjay_server_reschedule_next_action(
+        anjay_server_info_t *server,
+        avs_time_duration_t delay,
+        anjay_server_next_action_t next_action) {
+    if (avs_time_duration_less(delay, AVS_TIME_DURATION_ZERO)) {
+        // Ensure that the job won't execute before already scheduled jobs
+        delay = AVS_TIME_DURATION_ZERO;
+    }
+    int result;
+    if (server->next_action_handle) {
+        result = AVS_RESCHED_DELAYED(&server->next_action_handle, delay);
+    } else {
+        result = AVS_SCHED_DELAYED(server->anjay->sched,
+                                   &server->next_action_handle, delay,
+                                   server_next_action_job, &server,
+                                   sizeof(server));
+    }
+    if (!result) {
+        server->next_action = next_action;
+    }
+    return result;
+}

@@ -508,10 +508,11 @@ _anjay_dm_res_kind_bootstrappable(anjay_dm_resource_kind_t kind) {
  * resource is writable - it is enough that it represents a value (i.e. is not
  * an executable resource).
  */
-int _anjay_dm_write_resource(anjay_unlocked_t *anjay,
-                             const anjay_dm_installed_object_t *obj,
-                             anjay_unlocked_input_ctx_t *in_ctx,
-                             anjay_notify_queue_t *notify_queue);
+int _anjay_dm_write_resource_and_move_to_next_entry(
+        anjay_unlocked_t *anjay,
+        const anjay_dm_installed_object_t *obj,
+        anjay_unlocked_input_ctx_t *in_ctx,
+        anjay_notify_queue_t *notify_queue);
 
 #ifdef ANJAY_WITH_LWM2M11
 /**
@@ -812,6 +813,7 @@ int _anjay_dm_verify_instance_present(
 #define ANJAY_DM_RID_SERVER_LIFETIME 1
 #define ANJAY_DM_RID_SERVER_DEFAULT_PMIN 2
 #define ANJAY_DM_RID_SERVER_DEFAULT_PMAX 3
+#define ANJAY_DM_RID_SERVER_DISABLE 4
 #define ANJAY_DM_RID_SERVER_DISABLE_TIMEOUT 5
 #define ANJAY_DM_RID_SERVER_NOTIFICATION_STORING 6
 #define ANJAY_DM_RID_SERVER_BINDING 7
@@ -821,8 +823,8 @@ int _anjay_dm_verify_instance_present(
 #    define ANJAY_DM_RID_SERVER_BOOTSTRAP_ON_REGISTRATION_FAILURE 16
 #    define ANJAY_DM_RID_SERVER_COMMUNICATION_RETRY_COUNT 17
 #    define ANJAY_DM_RID_SERVER_COMMUNICATION_RETRY_TIMER 18
-#    define ANJAY_DM_RID_SERVER_COMMUNICATION_SEQUENCE_RETRY_COUNT 19
-#    define ANJAY_DM_RID_SERVER_COMMUNICATION_SEQUENCE_DELAY_TIMER 20
+#    define ANJAY_DM_RID_SERVER_COMMUNICATION_SEQUENCE_DELAY_TIMER 19
+#    define ANJAY_DM_RID_SERVER_COMMUNICATION_SEQUENCE_RETRY_COUNT 20
 #    define ANJAY_DM_RID_SERVER_PREFERRED_TRANSPORT 22
 #    define ANJAY_DM_RID_SERVER_MUTE_SEND 23
 #endif // ANJAY_WITH_LWM2M11

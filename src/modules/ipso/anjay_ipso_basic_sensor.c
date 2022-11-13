@@ -170,7 +170,8 @@ static int update_curr_value(anjay_unlocked_t *anjay,
 
     if (value != inst->curr_value) {
         inst->curr_value = value;
-        (void) _anjay_notify_changed_unlocked(anjay, oid, iid, RID_SENSOR_VALUE);
+        (void) _anjay_notify_changed_unlocked(anjay, oid, iid,
+                                              RID_SENSOR_VALUE);
     }
 
     return 0;

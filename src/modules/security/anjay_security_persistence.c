@@ -20,7 +20,6 @@
 #    include <inttypes.h>
 #    include <string.h>
 
-#    include "anjay_mod_security.h"
 #    include "anjay_security_transaction.h"
 #    include "anjay_security_utils.h"
 

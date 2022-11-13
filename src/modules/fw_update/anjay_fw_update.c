@@ -1027,6 +1027,23 @@ static void perform_upgrade(avs_sched_t *sched, const void *fw_ptr) {
     ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
+static void schedule_upgrade(avs_sched_t *sched, const void *fw_ptr) {
+    fw_repr_t *fw = *(fw_repr_t *const *) fw_ptr;
+    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    // Let's defer actually performing the upgrade to yet another scheduler run
+    // - the notification for the UPDATING state is probably being scheduled in
+    // the current one.
+    if (fw->state == UPDATE_STATE_UPDATING
+            && fw->user_state.state != UPDATE_STATE_UPDATING
+            && AVS_SCHED_NOW(sched, &fw->update_job, perform_upgrade, &fw,
+                             sizeof(fw))) {
+        update_state_and_update_result(anjay, fw, UPDATE_STATE_DOWNLOADED,
+                                       ANJAY_FW_UPDATE_RESULT_OUT_OF_MEMORY);
+    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+}
+
 static int fw_execute(anjay_unlocked_t *anjay,
                       const anjay_dm_installed_object_t obj_ptr,
                       anjay_iid_t iid,
@@ -1047,7 +1064,18 @@ static int fw_execute(anjay_unlocked_t *anjay,
         }
         update_state_and_update_result(anjay, fw, UPDATE_STATE_UPDATING,
                                        ANJAY_FW_UPDATE_RESULT_INITIAL);
-        // update process will be continued in fw_on_notify
+        // NOTE: This has to be called after update_state_and_update_result(),
+        // to make sure that schedule_upgrade() is called after notify_clb()
+        // and consequently, perform_upgrade() is called after trigger_observe()
+        // (if it's not delayed due to pmin).
+        if (AVS_SCHED_NOW(_anjay_get_scheduler_unlocked(anjay), &fw->update_job,
+                          schedule_upgrade, &fw, sizeof(fw))) {
+            fw_log(WARNING, _("Could not schedule the upgrade job"));
+            update_state_and_update_result(
+                    anjay, fw, UPDATE_STATE_DOWNLOADED,
+                    ANJAY_FW_UPDATE_RESULT_OUT_OF_MEMORY);
+            return ANJAY_ERR_INTERNAL;
+        }
         return 0;
     default:
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
@@ -1077,34 +1105,6 @@ static const anjay_unlocked_dm_object_def_t FIRMWARE_UPDATE = {
     }
 };
 
-static int fw_on_notify(anjay_unlocked_t *anjay,
-                        anjay_notify_queue_t incoming_queue,
-                        void *fw_) {
-    fw_repr_t *fw = (fw_repr_t *) fw_;
-    (void) incoming_queue;
-    // fw->state represents our current internal object state
-    // fw->user_state.state is the state exposed to user handlers
-    //
-    // If fw->state == UPDATING and fw->user_state == DOWNLOADED, that means
-    // firmware was downloaded successfully and we did not call user-defined
-    // perform_upgrade handler yet. After calling the user-defined handler,
-    // fw->user_state.state will be set to UPDATING.
-    if (!fw->update_job && fw->state == UPDATE_STATE_UPDATING
-            && fw->user_state.state != UPDATE_STATE_UPDATING
-            && AVS_SCHED_NOW(_anjay_get_scheduler_unlocked(anjay),
-                             &fw->update_job, perform_upgrade, &fw,
-                             sizeof(fw))) {
-        // we don't need to reschedule notifying,
-        // we're already in the middle of it
-        fw->state = UPDATE_STATE_DOWNLOADED;
-        fw->result = ANJAY_FW_UPDATE_RESULT_OUT_OF_MEMORY;
-#    ifdef ANJAY_WITH_SEND
-        send_state_and_update_result(anjay, fw);
-#    endif // ANJAY_WITH_SEND
-    }
-    return 0;
-}
-
 #    ifdef ANJAY_WITH_SEND
 static void send_result_after_fw_update(anjay_unlocked_t *anjay,
                                         fw_repr_t *fw) {
@@ -1130,11 +1130,6 @@ static void fw_delete(void *fw_) {
     avs_free((void *) (intptr_t) fw->package_uri);
     // NOTE: fw itself will be freed when cleaning the objects list
 }
-
-static const anjay_dm_module_t FIRMWARE_UPDATE_MODULE = {
-    .notify_callback = fw_on_notify,
-    .deleter = fw_delete
-};
 
 static int
 initialize_fw_repr(anjay_unlocked_t *anjay,
@@ -1229,14 +1224,12 @@ int anjay_fw_update_install(
         repr->user_state.arg = user_arg;
 
         if (!initialize_fw_repr(anjay, repr, initial_state)
-                && !_anjay_dm_module_install(anjay, &FIRMWARE_UPDATE_MODULE,
-                                             repr)) {
+                && !_anjay_dm_module_install(anjay, fw_delete, repr)) {
             AVS_STATIC_ASSERT(offsetof(fw_repr_t, def_ptr) == 0,
                               def_ptr_is_first_field);
             AVS_LIST(anjay_dm_installed_object_t) entry = &repr->def_ptr;
             if (_anjay_register_object_unlocked(anjay, &entry)) {
-                result = _anjay_dm_module_uninstall(anjay,
-                                                    &FIRMWARE_UPDATE_MODULE);
+                result = _anjay_dm_module_uninstall(anjay, fw_delete);
                 assert(!result);
                 result = -1;
             } else {

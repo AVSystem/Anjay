@@ -7,9 +7,6 @@
 # Licensed under the AVSystem-5-clause License.
 # See the attached LICENSE file for details.
 
-import socket
-import time
-
 from framework.lwm2m.coap.server import SecurityMode
 from framework.lwm2m_test import *
 
@@ -17,7 +14,8 @@ from framework.lwm2m_test import *
 class BootstrapTest:
     class Test(test_suite.Lwm2mSingleServerTest,
                test_suite.Lwm2mDmOperations):
-        def setUp(self, servers=1, num_servers_passed=0, holdoff_s=None, timeout_s=None, bootstrap_server=True,
+        def setUp(self, servers=1, num_servers_passed=0, holdoff_s=None, timeout_s=None,
+                  bootstrap_server=True,
                   extra_cmdline_args=None, **kwargs):
             assert bootstrap_server
             extra_args = extra_cmdline_args or []
@@ -28,7 +26,8 @@ class BootstrapTest:
 
             self.holdoff_s = holdoff_s
             self.timeout_s = timeout_s
-            super().setUp(servers=servers, num_servers_passed=num_servers_passed, bootstrap_server=bootstrap_server,
+            super().setUp(servers=servers, num_servers_passed=num_servers_passed,
+                          bootstrap_server=bootstrap_server,
                           extra_cmdline_args=extra_args, **kwargs)
 
         def perform_bootstrap_finish(self):
@@ -55,42 +54,54 @@ class BootstrapTest:
                        server_communication_sequence_delay_timer=0):
             if bootstrap_on_registration_failure is not None:
                 additional_server_data += TLV.make_resource(
-                    RID.Server.BootstrapOnRegistrationFailure, bootstrap_on_registration_failure).serialize()
+                    RID.Server.BootstrapOnRegistrationFailure,
+                    bootstrap_on_registration_failure).serialize()
 
             if server_communication_retry_count is not None:
                 additional_server_data += TLV.make_resource(
-                    RID.Server.ServerCommunicationRetryCount, server_communication_retry_count).serialize()
+                    RID.Server.ServerCommunicationRetryCount,
+                    server_communication_retry_count).serialize()
                 additional_server_data += TLV.make_resource(
-                    RID.Server.ServerCommunicationRetryTimer, server_communication_retry_timer).serialize()
-                additional_server_data += TLV.make_resource(RID.Server.ServerCommunicationSequenceRetryCount,
-                                                            server_communication_sequence_retry_count).serialize()
-                additional_server_data += TLV.make_resource(RID.Server.ServerCommunicationSequenceDelayTimer,
-                                                            server_communication_sequence_delay_timer).serialize()
+                    RID.Server.ServerCommunicationRetryTimer,
+                    server_communication_retry_timer).serialize()
+                additional_server_data += TLV.make_resource(
+                    RID.Server.ServerCommunicationSequenceRetryCount,
+                    server_communication_sequence_retry_count).serialize()
+                additional_server_data += TLV.make_resource(
+                    RID.Server.ServerCommunicationSequenceDelayTimer,
+                    server_communication_sequence_delay_timer).serialize()
 
             # Create typical Server Object instance
             self.write_instance(self.bootstrap_server, oid=OID.Server, iid=server_iid,
                                 content=TLV.make_resource(
                                     RID.Server.Lifetime, lifetime).serialize()
-                                + TLV.make_resource(RID.Server.ShortServerID, server_iid).serialize()
-                                + TLV.make_resource(RID.Server.NotificationStoring, True).serialize()
-                                + TLV.make_resource(RID.Server.Binding, binding).serialize()
-                                + additional_server_data)
+                                        + TLV.make_resource(RID.Server.ShortServerID,
+                                                            server_iid).serialize()
+                                        + TLV.make_resource(RID.Server.NotificationStoring,
+                                                            True).serialize()
+                                        + TLV.make_resource(RID.Server.Binding, binding).serialize()
+                                        + additional_server_data)
 
             # Create typical (corresponding) Security Object instance
             self.write_instance(self.bootstrap_server, oid=OID.Security, iid=security_iid,
                                 content=TLV.make_resource(
                                     RID.Security.ServerURI, server_uri).serialize()
-                                + TLV.make_resource(RID.Security.Bootstrap, 0).serialize()
-                                + TLV.make_resource(RID.Security.Mode, security_mode.value).serialize()
-                                + TLV.make_resource(RID.Security.ShortServerID, server_iid).serialize()
-                                + TLV.make_resource(RID.Security.PKOrIdentity, secure_identity).serialize()
-                                + TLV.make_resource(RID.Security.SecretKey, secure_key).serialize()
-                                + additional_security_data)
+                                        + TLV.make_resource(RID.Security.Bootstrap, 0).serialize()
+                                        + TLV.make_resource(RID.Security.Mode,
+                                                            security_mode.value).serialize()
+                                        + TLV.make_resource(RID.Security.ShortServerID,
+                                                            server_iid).serialize()
+                                        + TLV.make_resource(RID.Security.PKOrIdentity,
+                                                            secure_identity).serialize()
+                                        + TLV.make_resource(RID.Security.SecretKey,
+                                                            secure_key).serialize()
+                                        + additional_security_data)
 
         def perform_typical_bootstrap(self, server_iid, security_iid, server_uri, lifetime=86400,
                                       secure_identity=b'', secure_key=b'',
                                       security_mode: SecurityMode = SecurityMode.NoSec,
-                                      finish=True, holdoff_s=None, binding="U", clear_everything=False,
+                                      finish=True, holdoff_s=None, binding="U",
+                                      clear_everything=False,
                                       endpoint=DEMO_ENDPOINT_NAME,
                                       additional_security_data=b'',
                                       additional_server_data=b'',
@@ -223,9 +234,9 @@ class BootstrapOnRegistrationFailure(BootstrapTest.Test):
                                            True).serialize())
 
         # There was a race condition in Anjay, which causes different behavior
-        # if refresh_server_job was called before getting response to Register
-        # request. This sleep is added to ensure all jobs scheduled for 'now'
-        # will be called first.
+        # if ANJAY_SERVER_NEXT_ACTION_REFRESH action was executed before getting
+        # response to Register request. This sleep is added to ensure all jobs
+        # scheduled for 'now' will be called first.
         time.sleep(1)
         self.assertDemoRegisters(self.serv, lifetime=60)
 
@@ -289,12 +300,12 @@ class MultipleBootstrapSecurityInstancesNotAllowed(BootstrapTest.Test):
         self.write_instance(self.bootstrap_server, oid=OID.Security, iid=42,
                             content=TLV.make_resource(
                                 RID.Security.ServerURI, 'coap://127.0.0.1:5683').serialize()
-                            + TLV.make_resource(RID.Security.Bootstrap, 1).serialize()
-                            + TLV.make_resource(RID.Security.Mode,
-                                                3).serialize()
-                            + TLV.make_resource(RID.Security.ShortServerID, 42).serialize()
-                            + TLV.make_resource(RID.Security.PKOrIdentity, "").serialize()
-                            + TLV.make_resource(RID.Security.SecretKey, "").serialize(),
+                                    + TLV.make_resource(RID.Security.Bootstrap, 1).serialize()
+                                    + TLV.make_resource(RID.Security.Mode,
+                                                        3).serialize()
+                                    + TLV.make_resource(RID.Security.ShortServerID, 42).serialize()
+                                    + TLV.make_resource(RID.Security.PKOrIdentity, "").serialize()
+                                    + TLV.make_resource(RID.Security.SecretKey, "").serialize(),
                             expect_error_code=coap.Code.RES_BAD_REQUEST)
 
 
@@ -394,13 +405,15 @@ class ClientInitiatedBootstrapFallbackOnly(BootstrapTest.Test):
     def setUp(self):
         # Using DTLS for Bootstrap Server allows us to check when does the client attempt to connect to it
         # We need to use DTLS for regular server as well, as mixing security modes is not currently possible in demo
-        super().setUp(servers=[Lwm2mServer(coap.DtlsServer(psk_key=self.PSK_KEY, psk_identity=self.PSK_IDENTITY))],
-                      num_servers_passed=1,
-                      bootstrap_server=Lwm2mServer(
-                          coap.DtlsServer(psk_key=self.PSK_KEY, psk_identity=self.PSK_IDENTITY)),
-                      extra_cmdline_args=['--identity', str(binascii.hexlify(self.PSK_IDENTITY), 'ascii'),
-                                          '--key', str(binascii.hexlify(self.PSK_KEY), 'ascii')],
-                      legacy_server_initiated_bootstrap_allowed=False)
+        super().setUp(servers=[
+            Lwm2mServer(coap.DtlsServer(psk_key=self.PSK_KEY, psk_identity=self.PSK_IDENTITY))],
+            num_servers_passed=1,
+            bootstrap_server=Lwm2mServer(
+                coap.DtlsServer(psk_key=self.PSK_KEY, psk_identity=self.PSK_IDENTITY)),
+            extra_cmdline_args=['--identity',
+                                str(binascii.hexlify(self.PSK_IDENTITY), 'ascii'),
+                                '--key', str(binascii.hexlify(self.PSK_KEY), 'ascii')],
+            legacy_server_initiated_bootstrap_allowed=False)
 
     def tearDown(self):
         super().tearDown(auto_deregister=False)
@@ -511,9 +524,10 @@ class DtlsTlsCiphersuitesSingleSupportedCipher(DtlsBootstrap.Test):
                                        security_mode=SecurityMode.PreSharedKey,
                                        secure_identity=self.PSK_IDENTITY,
                                        secure_key=self.PSK_KEY,
-                                       additional_security_data=TLV.make_multires(RID.Security.DtlsTlsCiphersuite,
-                                                                                  enumerate([
-                                                                                      self.SUPPORTED_CIPHER])).serialize())
+                                       additional_security_data=TLV.make_multires(
+                                           RID.Security.DtlsTlsCiphersuite,
+                                           enumerate([
+                                               self.SUPPORTED_CIPHER])).serialize())
         self.assertDemoRegisters()
 
 
@@ -538,7 +552,8 @@ class DtlsTlsCiphersuitesSingleUnsupportedCipher(DtlsBootstrap.Test):
                                        additional_security_data=TLV.make_multires(
                                            RID.Security.DtlsTlsCiphersuite,
                                            enumerate([self.UNSUPPORTED_CIPHER])).serialize())
-        with self.assertRaisesRegex(RuntimeError, r'The server has no ciphersuites in common|The handshake negotiation failed'):
+        with self.assertRaisesRegex(RuntimeError,
+                                    r'The server has no ciphersuites in common|The handshake negotiation failed'):
             self.assertDemoRegisters()
         self.assertDemoRequestsBootstrap()
 
@@ -595,8 +610,6 @@ class DtlsTlsConnectionFailedSetsAlertCode(BootstrapTest.Test):
 
     def tearDown(self):
         super().teardown_demo_with_servers(auto_deregister=False)
-
-
 
 
 class BootstrapFallback(BootstrapTest.Test):
@@ -665,12 +678,12 @@ class LastBootstrappedResource(BootstrapTest.Test):
                             content=TLV.make_resource(
                                 RID.Security.ServerURI,
                                 'coap://127.0.0.1:%d' % self.serv.get_listen_port()).serialize()
-                            + TLV.make_resource(RID.Security.Bootstrap, 0).serialize()
-                            + TLV.make_resource(RID.Security.Mode,
-                                                SecurityMode.NoSec.value).serialize()
-                            + TLV.make_resource(RID.Security.ShortServerID, 42).serialize()
-                            + TLV.make_resource(RID.Security.PKOrIdentity, b'').serialize()
-                            + TLV.make_resource(RID.Security.SecretKey, b'').serialize())
+                                    + TLV.make_resource(RID.Security.Bootstrap, 0).serialize()
+                                    + TLV.make_resource(RID.Security.Mode,
+                                                        SecurityMode.NoSec.value).serialize()
+                                    + TLV.make_resource(RID.Security.ShortServerID, 42).serialize()
+                                    + TLV.make_resource(RID.Security.PKOrIdentity, b'').serialize()
+                                    + TLV.make_resource(RID.Security.SecretKey, b'').serialize())
 
         last_bootstrapped_resource = self.get_last_bootstrapped_timestamp(1)
         self.assertIsNotNone(last_bootstrapped_resource)
@@ -685,9 +698,10 @@ class LastBootstrappedResource(BootstrapTest.Test):
         self.write_instance(self.bootstrap_server, oid=OID.Server, iid=1,
                             content=TLV.make_resource(
                                 RID.Server.Lifetime, 86400).serialize()
-                            + TLV.make_resource(RID.Server.ShortServerID, 42).serialize()
-                            + TLV.make_resource(RID.Server.NotificationStoring, True).serialize()
-                            + TLV.make_resource(RID.Server.Binding, 'U').serialize())
+                                    + TLV.make_resource(RID.Server.ShortServerID, 42).serialize()
+                                    + TLV.make_resource(RID.Server.NotificationStoring,
+                                                        True).serialize()
+                                    + TLV.make_resource(RID.Server.Binding, 'U').serialize())
 
         last_bootstrapped_resource = self.get_last_bootstrapped_timestamp(1)
         self.assertIsNotNone(last_bootstrapped_resource)
@@ -712,9 +726,10 @@ class BootstrappedSecurityInstanceBindingAndUriMismatch(BootstrapTest.Test):
         self.write_instance(self.bootstrap_server, oid=OID.Server, iid=1,
                             content=TLV.make_resource(
                                 RID.Server.Lifetime, 86400).serialize()
-                            + TLV.make_resource(RID.Server.ShortServerID, 42).serialize()
-                            + TLV.make_resource(RID.Server.NotificationStoring, True).serialize()
-                            + TLV.make_resource(RID.Server.Binding, 'N').serialize())
+                                    + TLV.make_resource(RID.Server.ShortServerID, 42).serialize()
+                                    + TLV.make_resource(RID.Server.NotificationStoring,
+                                                        True).serialize()
+                                    + TLV.make_resource(RID.Server.Binding, 'N').serialize())
 
         import socket
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -726,12 +741,12 @@ class BootstrappedSecurityInstanceBindingAndUriMismatch(BootstrapTest.Test):
                             content=TLV.make_resource(
                                 RID.Security.ServerURI,
                                 'coap+tcp://127.0.0.1:%d' % s.getsockname()[1]).serialize()
-                            + TLV.make_resource(RID.Security.Bootstrap, 0).serialize()
-                            + TLV.make_resource(RID.Security.Mode,
-                                                SecurityMode.NoSec.value).serialize()
-                            + TLV.make_resource(RID.Security.ShortServerID, 42).serialize()
-                            + TLV.make_resource(RID.Security.PKOrIdentity, b'').serialize()
-                            + TLV.make_resource(RID.Security.SecretKey, b'').serialize())
+                                    + TLV.make_resource(RID.Security.Bootstrap, 0).serialize()
+                                    + TLV.make_resource(RID.Security.Mode,
+                                                        SecurityMode.NoSec.value).serialize()
+                                    + TLV.make_resource(RID.Security.ShortServerID, 42).serialize()
+                                    + TLV.make_resource(RID.Security.PKOrIdentity, b'').serialize()
+                                    + TLV.make_resource(RID.Security.SecretKey, b'').serialize())
 
         self.perform_bootstrap_finish()
 
@@ -764,11 +779,13 @@ class BootstrapSingleServerRegistrationOnFailureNotSet(BootstrapTest.Test):
         self.assertDemoRequestsBootstrap(timeout_s=3 + 1)
 
 
-class BootstrapSingleServerRegistrationOnFailureFalse(BootstrapSingleServerRegistrationOnFailureNotSet):
+class BootstrapSingleServerRegistrationOnFailureFalse(
+    BootstrapSingleServerRegistrationOnFailureNotSet):
     BOOTSTRAP_ON_REGISTRATION_FAILURE = False
 
 
-class BootstrapSingleServerRegistrationOnFailureTrue(BootstrapSingleServerRegistrationOnFailureNotSet):
+class BootstrapSingleServerRegistrationOnFailureTrue(
+    BootstrapSingleServerRegistrationOnFailureNotSet):
     BOOTSTRAP_ON_REGISTRATION_FAILURE = True
 
 
@@ -832,10 +849,13 @@ class NoBootstrapAfterCompleteFail(BootstrapTest.Test):
     PSK_KEY = b'test-key'
 
     def setUp(self, **kwargs):
-        super().setUp(bootstrap_server=Lwm2mServer(
-            coap.DtlsServer(psk_identity=self.PSK_IDENTITY, psk_key=self.PSK_KEY)),
-            psk_identity=self.PSK_IDENTITY, psk_key=self.PSK_KEY,
-            legacy_server_initiated_bootstrap_allowed=False)
+        # bootstrap server - PSK
+        # management server - NoSec
+        super().setUp(servers=[Lwm2mServer(coap.Server())],
+                      bootstrap_server=Lwm2mServer(coap.DtlsServer(psk_identity=self.PSK_IDENTITY,
+                                                                   psk_key=self.PSK_KEY)),
+                      psk_identity=self.PSK_IDENTITY, psk_key=self.PSK_KEY,
+                      legacy_server_initiated_bootstrap_allowed=False)
 
     def tearDown(self):
         super().tearDown(auto_deregister=False)
@@ -864,6 +884,33 @@ class NoBootstrapAfterCompleteFail(BootstrapTest.Test):
         with self.serv.fake_close():
             self.assertDtlsReconnect(self.bootstrap_server, timeout_s=10)
             self.assertDemoRequestsBootstrap()
+
+
+class BootstrapReconnectAfterCompleteFail(BootstrapTest.Test):
+    PSK_IDENTITY = b'test-identity'
+    PSK_KEY = b'test-key'
+
+    def setUp(self, **kwargs):
+        super().setUp(bootstrap_server=Lwm2mServer(
+            coap.DtlsServer(psk_identity=self.PSK_IDENTITY, psk_key=self.PSK_KEY)),
+            psk_identity=self.PSK_IDENTITY, psk_key=self.PSK_KEY,
+            legacy_server_initiated_bootstrap_allowed=False)
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+    def runTest(self):
+        pkt = self.bootstrap_server.recv()
+        self.assertMsgEqual(Lwm2mRequestBootstrap(endpoint_name=DEMO_ENDPOINT_NAME), pkt)
+
+        with self.bootstrap_server.fake_close():
+            # let everything fail
+            time.sleep(10)
+
+        self.communicate('reconnect')
+        # client shall connect to the Bootstrap Server
+        self.assertDtlsReconnect(self.bootstrap_server, timeout_s=10)
+        self.assertDemoRequestsBootstrap()
 
 
 class BootstrapCheckOngoingRegistrationsWithLegacyServerInitiated(BootstrapTest.Test):

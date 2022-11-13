@@ -298,9 +298,8 @@ int anjay_unregister_object(anjay_t *anjay_locked,
 
 void _anjay_dm_cleanup(anjay_unlocked_t *anjay) {
     AVS_LIST_CLEAR(&anjay->dm.modules) {
-        if (anjay->dm.modules->def->deleter) {
-            anjay->dm.modules->def->deleter(anjay->dm.modules->arg);
-        }
+        assert(anjay->dm.modules->deleter);
+        anjay->dm.modules->deleter(anjay->dm.modules->arg);
     }
 
     AVS_LIST_CLEAR(&anjay->dm.objects);

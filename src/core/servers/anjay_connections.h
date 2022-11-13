@@ -106,10 +106,9 @@ typedef struct {
      *     the current binding
      *
      * - The socket may exist, but be offline (closed), when:
-     *   - reconnection is scheduled, as part of the executions path of
-     *     _anjay_schedule_server_reconnect(), anjay_schedule_reconnect() or
-     *     registration_update_with_ctx() - see those functions' docs and call
-     *     graphs for details
+     *   - reconnection is scheduled, as part of the execution path of
+     *     anjay_transport_schedule_reconnect() - see that function's docs and
+     *     call graph for details
      *   - when the queue mode for this connection is used, and
      *     MAX_TRANSMIT_WAIT passed since last communication
      *   - when Client- or Server-Initiated Bootstrap is in progress - all
@@ -234,9 +233,7 @@ int _anjay_connection_ensure_coap_context(anjay_server_info_t *server,
                                           anjay_connection_type_t conn_type);
 
 avs_error_t _anjay_server_connection_internal_bring_online(
-        anjay_server_info_t *server,
-        anjay_connection_type_t conn_type,
-        const anjay_iid_t *security_iid);
+        anjay_server_info_t *server, anjay_connection_type_t conn_type);
 
 void _anjay_connections_close(anjay_unlocked_t *anjay,
                               anjay_connections_t *connections);

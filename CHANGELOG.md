@@ -1,5 +1,37 @@
 # Changelog
 
+## 3.2.0 (December 7th, 2022)
+
+### BREAKING CHANGES
+
+- Observations are now implicitly canceled when the client's endpoint identity changes (i.e., when the socket is reconnected without a successful DTLS session resumption). This is in line with [RFC 7641](https://datatracker.ietf.org/doc/html/rfc7641#page-22) and LwM2M TS requirements (see [Core 6.4.1](https://www.openmobilealliance.org/release/LightweightM2M/V1_1_1-20190617-A/HTML-Version/OMA-TS-LightweightM2M_Core-V1_1_1-20190617-A.html#6-4-1-0-641-Observe-Operation) and [Transport 6.4.3](https://www.openmobilealliance.org/release/LightweightM2M/V1_1_1-20190617-A/HTML-Version/OMA-TS-LightweightM2M_Transport-V1_1_1-20190617-A.html#6-4-3-0-643-Registration-Interface)), but **may break compatibility with some non-well-behaved servers.**
+
+### Features
+
+- New APIs to access information about the last registration time, next registration update time and last communication with a server time
+- Expanded `anjay_resource_observation_status_t` structure so that now `anjay_resource_observation_status()` returns also the number of servers that observe the given Resource (capped at newly introduced `ANJAY_MAX_OBSERVATION_SERVERS_REPORTED_NUMBER`) and their SSIDs
+
+### Improvements
+
+- Migrated GitHub Actions tests from Fedora-36 to RockyLinux-9
+- Added compilation flag to enforce Content-Format in Send messages.
+- Refactored Firmware Update notification handling and simplified internal module support
+- Removed the usage of symbolic links between Python packages to make them usable on Windows
+- Key generation in the factory provisioning script has been rewritten to use the cryptography Python module instead of pyOpenSSL
+- Factory provisioning script now uses elliptic curve cryptography by default in certificate mode
+- `anjay_next_planned_lifecycle_operation()` and `anjay_transport_next_planned_lifecycle_operation()` now properly respect jobs that have been scheduled manually (e.g. `anjay_schedule_registration_update()`)
+
+### Bugfixes
+
+- Fixed a bug that could cause some resources in a Write message to be ignored when they follow a Multiple-Instance Resource entry
+- Fixed semantics of Resources 19 and 20 in the Server object, which were mistakenly swapped
+  - **NOTE:** The persistence format for the Server object has been reinterpreted so that Resources 19 and 20 remain where they were, without taking semantics into account. This will fix configurations provisioned by Servers but may break configuration persisted just after initially configuring it from code.
+- Made sure that `anjay_schedule_registration_update()` forces a single Update request even when followed by `anjay_transport_schedule_reconnect()` or a change of offline mode
+- Made sure that notifications are not sent before the Update operation if one has been scheduled
+- Made sure that `anjay_transport_schedule_reconnect()` properly reconnects the Bootstrap server connection in all cases
+- Made sure that the socket is properly closed when queue mode is enabled, including previously missing cases related to the Send operation and when no CoAP message needs to be sent at all
+- Refactored asynchronous server connection management to avoid race conditions that could lead to required actions (e.g. EST requests) not being performed when the calculated delays were not big enough
+
 ## 3.1.2 (August 24th, 2022)
 
 ### Improvements

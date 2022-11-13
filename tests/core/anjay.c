@@ -844,3 +844,161 @@ AVS_UNIT_TEST(anjay_new, no_endpoint_name) {
     };
     ASSERT_NULL(anjay_new(&configuration));
 }
+
+static const anjay_iid_t FAKE_SERVER_INSTANCES[] = { 1, ANJAY_ID_INVALID };
+static const anjay_mock_dm_res_entry_t FAKE_SERVER_RESOURCES[] = {
+    { ANJAY_DM_RID_SERVER_SSID, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT },
+    { ANJAY_DM_RID_SERVER_LIFETIME, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+    { ANJAY_DM_RID_SERVER_BINDING, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+    ANJAY_MOCK_DM_RES_END
+};
+
+static void expect_refresh_server(anjay_t *anjay) {
+    _anjay_mock_dm_expect_list_instances(anjay, &FAKE_SERVER, 0,
+                                         FAKE_SERVER_INSTANCES);
+    // Read SSID
+    _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SERVER, 1, 0,
+                                         FAKE_SERVER_RESOURCES);
+    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
+                                        ANJAY_DM_RID_SERVER_SSID,
+                                        ANJAY_ID_INVALID, 0,
+                                        ANJAY_MOCK_DM_INT(0, 1));
+    // Read Binding
+    _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SERVER, 1, 0,
+                                         FAKE_SERVER_RESOURCES);
+    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
+                                        ANJAY_DM_RID_SERVER_BINDING,
+                                        ANJAY_ID_INVALID, 0,
+                                        ANJAY_MOCK_DM_STRING(0, "U"));
+#ifdef ANJAY_WITH_LWM2M11
+    // attempt to read Preferred Transport
+    _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SERVER, 1, 0,
+                                         FAKE_SERVER_RESOURCES);
+#endif // ANJAY_WITH_LWM2M11
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &FAKE_SECURITY2, 0,
+            (const anjay_iid_t[]) { 1, ANJAY_ID_INVALID });
+    const anjay_mock_dm_res_entry_t FAKE_SECURITY_RESOURCES[] = {
+        { ANJAY_DM_RID_SECURITY_SERVER_URI, ANJAY_DM_RES_R,
+          ANJAY_DM_RES_PRESENT },
+        { ANJAY_DM_RID_SECURITY_SSID, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT },
+        ANJAY_MOCK_DM_RES_END
+    };
+    // attempt to read Bootstrap
+    _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SECURITY2, 1, 0,
+                                         FAKE_SECURITY_RESOURCES);
+    // Read SSID
+    _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SECURITY2, 1, 0,
+                                         FAKE_SECURITY_RESOURCES);
+    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SECURITY2, 1,
+                                        ANJAY_DM_RID_SECURITY_SSID,
+                                        ANJAY_ID_INVALID, 0,
+                                        ANJAY_MOCK_DM_INT(0, 1));
+    // Read Server URI
+    _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SECURITY2, 1, 0,
+                                         FAKE_SECURITY_RESOURCES);
+    _anjay_mock_dm_expect_resource_read(
+            anjay, &FAKE_SECURITY2, 1, ANJAY_DM_RID_SECURITY_SERVER_URI,
+            ANJAY_ID_INVALID, 0, ANJAY_MOCK_DM_STRING(0, "coap://127.0.0.1"));
+#ifdef ANJAY_WITH_LWM2M11
+    // Attempt to read SNI
+    _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SECURITY2, 1, 0,
+                                         FAKE_SECURITY_RESOURCES);
+#endif // ANJAY_WITH_LWM2M11
+    // Query the data model
+    _anjay_mock_dm_expect_list_instances(anjay, &FAKE_SERVER, 0,
+                                         FAKE_SERVER_INSTANCES);
+    // attempt to read Bootstrap
+    _anjay_mock_dm_expect_list_instances(anjay, &FAKE_SERVER, 0,
+                                         FAKE_SERVER_INSTANCES);
+    // Read SSID
+    _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SERVER, 1, 0,
+                                         FAKE_SERVER_RESOURCES);
+    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
+                                        ANJAY_DM_RID_SERVER_SSID,
+                                        ANJAY_ID_INVALID, 0,
+                                        ANJAY_MOCK_DM_INT(0, 1));
+    // Read Lifetime
+    _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SERVER, 1, 0,
+                                         FAKE_SERVER_RESOURCES);
+    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
+                                        ANJAY_DM_RID_SERVER_LIFETIME,
+                                        ANJAY_ID_INVALID, 0,
+                                        ANJAY_MOCK_DM_INT(0, 86400));
+}
+
+static void force_update(anjay_t *anjay, avs_net_socket_t *mocksock) {
+    AVS_UNIT_ASSERT_SUCCESS(anjay_schedule_registration_update(anjay, 1));
+    expect_refresh_server(anjay);
+    anjay_sched_run(anjay);
+    const coap_test_msg_t *update_request =
+            COAP_MSG(CON, POST, ID_TOKEN_RAW(0x0000, nth_token(0)),
+                     CONTENT_FORMAT(LINK_FORMAT), QUERY("lt=86400", "b=U"),
+                     PAYLOAD("</1/1>"));
+    avs_unit_mocksock_expect_output(mocksock, update_request->content,
+                                    update_request->length);
+    anjay_sched_run(anjay);
+    DM_TEST_REQUEST(mocksock, ACK, CHANGED, ID_TOKEN_RAW(0x0000, nth_token(0)),
+                    NO_PAYLOAD);
+    expect_has_buffered_data_check(mocksock, false);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksock));
+    anjay_sched_run(anjay);
+}
+
+AVS_UNIT_TEST(reconnect_after_update, test) {
+    DM_TEST_INIT_WITH_OBJECTS(&FAKE_SECURITY2, &FAKE_SERVER);
+    // Do an initial Update first, to update the registration expire time
+    force_update(anjay, mocksocks[0]);
+
+    AVS_UNIT_ASSERT_SUCCESS(anjay_schedule_registration_update(anjay, 1));
+    avs_unit_mocksock_expect_shutdown(mocksocks[0]);
+    AVS_UNIT_ASSERT_SUCCESS(
+            anjay_transport_schedule_reconnect(anjay, ANJAY_TRANSPORT_SET_ALL));
+
+    // ANJAY_SERVER_NEXT_ACTION_SEND_UPDATE
+    expect_refresh_server(anjay);
+    avs_unit_mocksock_expect_connect(mocksocks[0], "", "");
+    avs_unit_mocksock_expect_local_port(mocksocks[0], "5683");
+    avs_unit_mocksock_expect_get_opt(mocksocks[0],
+                                     AVS_NET_SOCKET_OPT_SESSION_RESUMED,
+                                     (avs_net_socket_opt_value_t) {
+                                         .flag = true
+                                     });
+    // reload_servers_sched_job
+    _anjay_mock_dm_expect_list_instances(anjay, &FAKE_SERVER, 0,
+                                         FAKE_SERVER_INSTANCES);
+    _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SERVER, 1, 0,
+                                         FAKE_SERVER_RESOURCES);
+    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
+                                        ANJAY_DM_RID_SERVER_SSID,
+                                        ANJAY_ID_INVALID, 0,
+                                        ANJAY_MOCK_DM_INT(0, 1));
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &FAKE_SECURITY2, 0,
+            (const anjay_iid_t[]) { 1, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SECURITY2, 1, 0,
+                                         (const anjay_mock_dm_res_entry_t[]) {
+                                                 ANJAY_MOCK_DM_RES_END });
+    anjay_sched_run(anjay);
+
+    // retry_or_request_expired_job
+    const coap_test_msg_t *update_request =
+            COAP_MSG(CON, POST, ID_TOKEN_RAW(0x0001, nth_token(1)), NO_PAYLOAD);
+    avs_unit_mocksock_expect_output(mocksocks[0], update_request->content,
+                                    update_request->length);
+    // ANJAY_SERVER_NEXT_ACTION_REFRESH
+    expect_refresh_server(anjay);
+    anjay_sched_run(anjay);
+
+    DM_TEST_REQUEST(mocksocks[0], ACK, CHANGED,
+                    ID_TOKEN_RAW(0x0001, nth_token(1)), NO_PAYLOAD);
+    expect_has_buffered_data_check(mocksocks[0], false);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+    anjay_sched_run(anjay);
+
+    // Assert that second update is NOT scheduled
+    AVS_UNIT_ASSERT_TRUE(anjay_sched_calculate_wait_time_ms(anjay, INT_MAX)
+                         >= 1000);
+
+    DM_TEST_FINISH;
+}

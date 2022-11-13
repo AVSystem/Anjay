@@ -98,6 +98,7 @@ static void delete_value(anjay_unlocked_t *anjay,
         }
     }
     AVS_LIST_DELETE(value_ptr);
+    // defined(ANJAY_WITH_CORE_PERSISTENCE)
 }
 
 static inline const anjay_observe_path_entry_t *
@@ -500,6 +501,7 @@ static int insert_new_value(anjay_observe_connection_entry_t *conn_state,
         conn_state->unsent = res_value;
     }
     observation->last_unsent = res_value;
+    // defined(ANJAY_WITH_CORE_PERSISTENCE)
     return 0;
 }
 
@@ -1127,6 +1129,7 @@ static int observe_handle(anjay_connection_ref_t ref,
             delete_connection_if_empty(conn_ptr);
         }
     }
+    // defined(ANJAY_WITH_CORE_PERSISTENCE)
     delete_batch_array(&batches, paths->count);
 
     if (result && !send_result) {
@@ -1539,6 +1542,7 @@ static void flush_next_unsent(anjay_observe_connection_entry_t *conn) {
                 on_entry_flushed(conn, err);
             }
         }
+        // defined(ANJAY_WITH_CORE_PERSISTENCE)
     }
     avs_coap_options_cleanup(&response.options);
     // on_entry_flushed() may have closed the socket already,
@@ -1546,6 +1550,12 @@ static void flush_next_unsent(anjay_observe_connection_entry_t *conn) {
     if (_anjay_connection_get_online_socket(conn_ref)) {
         _anjay_connection_schedule_queue_mode_close(conn_ref);
     }
+
+#    ifdef ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
+    if (avs_is_ok(err)) {
+        _anjay_server_set_last_communication_time(conn->conn_ref.server);
+    }
+#    endif // ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
 }
 
 void _anjay_observe_interrupt(anjay_connection_ref_t ref) {
@@ -1934,6 +1944,13 @@ static int get_observe_status(anjay_observe_connection_entry_t *connection,
                 || out_status->max_eval_period == ANJAY_ATTRIB_INTEGER_NONE)) {
         out_status->max_eval_period = attrs.max_eval_period;
     }
+#        if (ANJAY_MAX_OBSERVATION_SERVERS_REPORTED_NUMBER > 0)
+    if (out_status->servers_number
+            < ANJAY_MAX_OBSERVATION_SERVERS_REPORTED_NUMBER) {
+        out_status->servers[out_status->servers_number++] =
+                _anjay_server_ssid(connection->conn_ref.server);
+    }
+#        endif //(ANJAY_MAX_OBSERVATION_SERVERS_REPORTED_NUMBER > 0)
     return 0;
 }
 

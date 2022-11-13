@@ -13,10 +13,6 @@
 
 #include <assert.h>
 
-#include <anjay/core.h>
-
-#include <anjay_modules/anjay_raw_buffer.h>
-
 #include "anjay_mod_security.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN

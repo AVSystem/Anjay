@@ -88,6 +88,8 @@ struct
     anjay_security_config_cache_t security_config_from_dm_cache;
     uint16_t udp_listen_port;
 
+    // defined(ANJAY_WITH_CORE_PERSISTENCE)
+
     /**
      * List of known LwM2M servers we may want to be connected to. This is
      * semantically a map, keyed (and ordered) by SSID.

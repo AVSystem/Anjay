@@ -7,10 +7,6 @@
 # Licensed under the AVSystem-5-clause License.
 # See the attached LICENSE file for details.
 
-import socket
-import time
-import unittest
-
 from framework.lwm2m_test import *
 
 from . import access_control as ac
@@ -152,7 +148,8 @@ class ObserveWithDefaultAttributesTest(test_suite.Lwm2mSingleServerTest,
         # Up until they're reset
         self.communicate('set-attrs %s 1' % (ResPath.Test[0].Counter,))
 
-class ObserveOfflineWithStoredNotificationLimit(test_suite.Lwm2mSingleServerTest,
+
+class ObserveOfflineWithStoredNotificationLimit(test_suite.Lwm2mDtlsSingleServerTest,
                                                 test_suite.Lwm2mDmOperations):
     QUEUE_SIZE = 3
 
@@ -165,7 +162,8 @@ class ObserveOfflineWithStoredNotificationLimit(test_suite.Lwm2mSingleServerTest
         SKIP_NOTIFICATIONS = 3  # number of Notify messages that should be skipped
         EPSILON_S = PMAX_S / 2  # extra time to wait for each Notify
 
-        self.write_attributes(self.serv, OID.Device, 0, RID.Device.CurrentTime, query=['pmax=%d' % PMAX_S])
+        self.write_attributes(self.serv, OID.Device, 0, RID.Device.CurrentTime,
+                              query=['pmax=%d' % PMAX_S])
         observe = self.observe(self.serv, OID.Device, 0, RID.Device.CurrentTime)
 
         self.communicate('enter-offline')
@@ -180,7 +178,8 @@ class ObserveOfflineWithStoredNotificationLimit(test_suite.Lwm2mSingleServerTest
 
         self.communicate('exit-offline')
 
-        self.assertDemoRegisters()
+        # demo will resume DTLS session without sending any LwM2M messages
+        self.serv.listen()
 
         seen_values = []
 
@@ -198,7 +197,8 @@ class ObserveOfflineWithStoredNotificationLimit(test_suite.Lwm2mSingleServerTest
 
         # make sure the oldest values were dropped
         for idx in range(SKIP_NOTIFICATIONS):
-            self.assertNotIn(str(int(observe.content.decode('utf-8')) + idx).encode('utf-8'), seen_values)
+            self.assertNotIn(str(int(observe.content.decode('utf-8')) + idx).encode('utf-8'),
+                             seen_values)
 
 
 class ObserveOfflineWithStoredNotificationLimitAndMultipleServers(test_suite.Lwm2mTest,
@@ -206,7 +206,7 @@ class ObserveOfflineWithStoredNotificationLimitAndMultipleServers(test_suite.Lwm
     QUEUE_SIZE = 3
 
     def setUp(self):
-        super().setUp(servers=2,
+        super().setUp(servers=2, psk_identity=b'test-identity', psk_key=b'test-key',
                       extra_cmdline_args=['--stored-notification-limit', str(self.QUEUE_SIZE)])
         self.write_resource(self.servers[0], OID.Server, 1, RID.Server.NotificationStoring, '1')
         self.write_resource(self.servers[1], OID.Server, 2, RID.Server.NotificationStoring, '1')
@@ -216,8 +216,10 @@ class ObserveOfflineWithStoredNotificationLimitAndMultipleServers(test_suite.Lwm
         SKIP_NOTIFICATIONS = 3  # number of Notify messages that should be skipped per server
         EPSILON_S = PMAX_S / 2  # extra time to wait for each Notify
 
-        self.write_attributes(self.servers[0], OID.Device, 0, RID.Device.CurrentTime, query=['pmax=%d' % PMAX_S])
-        self.write_attributes(self.servers[1], OID.Device, 0, RID.Device.CurrentTime, query=['pmax=%d' % PMAX_S])
+        self.write_attributes(self.servers[0], OID.Device, 0, RID.Device.CurrentTime,
+                              query=['pmax=%d' % PMAX_S])
+        self.write_attributes(self.servers[1], OID.Device, 0, RID.Device.CurrentTime,
+                              query=['pmax=%d' % PMAX_S])
 
         observes = [
             self.observe(self.servers[0], OID.Device, 0, RID.Device.CurrentTime),
@@ -238,8 +240,9 @@ class ObserveOfflineWithStoredNotificationLimitAndMultipleServers(test_suite.Lwm
 
         self.communicate('exit-offline')
 
+        # demo will resume DTLS sessions without sending any LwM2M messages
         for serv in self.servers:
-            self.assertDemoRegisters(serv)
+            serv.listen()
 
         remaining_notifications = self.QUEUE_SIZE
         seen_values = []
@@ -266,7 +269,8 @@ class ObserveOfflineWithStoredNotificationLimitAndMultipleServers(test_suite.Lwm
 
         # make sure the oldest values were dropped
         for idx in range(SKIP_NOTIFICATIONS):
-            self.assertNotIn(str(int(observe.content.decode('utf-8')) + idx).encode('utf-8'), seen_values)
+            self.assertNotIn(str(int(observe.content.decode('utf-8')) + idx).encode('utf-8'),
+                             seen_values)
 
 
 class ObserveOfflineWithStoringDisabled(test_suite.Lwm2mDtlsSingleServerTest,
@@ -346,14 +350,16 @@ class ObserveResourceInstance(test_suite.Lwm2mSingleServerTest,
         discover_output = self.discover(self.serv, oid=OID.Test,
                                         iid=0, rid=RID.Test.IntArray).content
         self.assertEqual(b'</%d/0/%d>;dim=1,</%d/0/%d/0>' %
-                         (OID.Test, RID.Test.IntArray, OID.Test, RID.Test.IntArray), discover_output)
+                         (OID.Test, RID.Test.IntArray, OID.Test, RID.Test.IntArray),
+                         discover_output)
         # Write gt attribute
         self.write_attributes(self.serv, oid=OID.Test, iid=0,
                               rid=RID.Test.IntArray, query=['gt=2000'])
         discover_output = self.discover(self.serv, oid=OID.Test,
                                         iid=0, rid=RID.Test.IntArray).content
         self.assertEqual(b'</%d/0/%d>;dim=1;gt=2000,</%d/0/%d/0>' %
-                         (OID.Test, RID.Test.IntArray, OID.Test, RID.Test.IntArray), discover_output)
+                         (OID.Test, RID.Test.IntArray, OID.Test, RID.Test.IntArray),
+                         discover_output)
         # Observe resource instance
         observe_pkt = self.observe(self.serv, oid=OID.Test, iid=0, rid=RID.Test.IntArray, riid=0)
         self.assertEqual(b'1337', observe_pkt.content)

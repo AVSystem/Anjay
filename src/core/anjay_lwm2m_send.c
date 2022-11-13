@@ -297,8 +297,18 @@ static avs_error_t start_send_exchange(anjay_send_entry_t *entry,
         return avs_errno(AVS_EBADF);
     }
 
-    uint16_t content_format = _anjay_default_hierarchical_format(
-            _anjay_server_registration_info(connection.server)->lwm2m_version);
+    uint16_t content_format =
+#        if defined(ANJAY_DEFAULT_SEND_FORMAT) \
+                && ANJAY_DEFAULT_SEND_FORMAT != AVS_COAP_FORMAT_NONE
+            ANJAY_DEFAULT_SEND_FORMAT
+#        else  // defined(ANJAY_DEFAULT_SEND_FORMAT)
+               // && ANJAY_DEFAULT_SEND_FORMAT != AVS_COAP_FORMAT_NONE
+            _anjay_default_hierarchical_format(
+                    _anjay_server_registration_info(connection.server)
+                            ->lwm2m_version)
+#        endif // defined(ANJAY_DEFAULT_SEND_FORMAT)
+               // && ANJAY_DEFAULT_SEND_FORMAT != AVS_COAP_FORMAT_NONE
+            ;
 
     const anjay_url_t *server_uri = _anjay_connection_uri(connection);
     assert(server_uri);
@@ -320,22 +330,29 @@ static avs_error_t start_send_exchange(anjay_send_entry_t *entry,
     }
 
     if (!(entry->exchange_status.memstream = avs_stream_membuf_create())
-            || !(entry->exchange_status.out_ctx =
-                         _anjay_output_senml_like_create(
-                                 entry->exchange_status.memstream, &base_path,
-                                 content_format))) {
-        send_log(ERROR, _("out of memory"));
+            || (_anjay_output_dynamic_send_construct(
+                       &entry->exchange_status.out_ctx,
+                       entry->exchange_status.memstream, &base_path,
+                       content_format))) {
+        send_log(ERROR, _("could not create output context"));
+        err = avs_errno(AVS_ENOMEM);
         goto finish;
     }
     entry->exchange_status.expected_offset = 0;
     entry->exchange_status.serialization_time = avs_time_real_now();
+
     err = avs_coap_client_send_async_request(coap, &entry->exchange_status.id,
                                              &request, request_payload_writer,
                                              entry, response_handler, entry);
+    _anjay_connection_schedule_queue_mode_close(connection);
 finish:
     avs_coap_options_cleanup(&request.options);
     if (avs_is_err(err)) {
         clear_exchange_status(&entry->exchange_status);
+#        ifdef ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
+    } else {
+        _anjay_server_set_last_communication_time(connection.server);
+#        endif // ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
     }
     return err;
 }

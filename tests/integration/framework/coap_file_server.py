@@ -7,16 +7,13 @@
 # Licensed under the AVSystem-5-clause License.
 # See the attached LICENSE file for details.
 import contextlib
-from typing import NamedTuple, Optional
 import socket
 import struct
 import threading
-import zlib
-
 import time
+import zlib
+from typing import NamedTuple
 
-from .lwm2m import coap
-from .lwm2m.path import CoapPath
 from .lwm2m.messages import *
 
 
@@ -45,7 +42,7 @@ class CoapFileServer:
         if path not in self._resources:
             raise ValueError('unknown resource: %s' % (path,))
 
-        if isinstance(self._server, coap.DtlsServer):
+        if isinstance(self._server, coap.TlsServer):
             proto = 'coaps'
         elif isinstance(self._server, coap.Server):
             proto = 'coap'
@@ -54,7 +51,6 @@ class CoapFileServer:
 
 
         return '%s://127.0.0.1:%d%s' % (proto, self._server.get_listen_port(), path)
-
 
     def _recv_request(self, timeout_s):
         if self._server.get_remote_addr() is None:
@@ -101,13 +97,14 @@ class CoapFileServer:
         resource = self._resources[path]
         data_offset = block2.seq_num() * block2.block_size()
         res_block2 = coap.Option.BLOCK2(seq_num=block2.seq_num(),
-                                        has_more=data_offset + block2.block_size() < len(resource.data),
+                                        has_more=data_offset + block2.block_size() < len(
+                                            resource.data),
                                         block_size=block2.block_size())
         content = resource.data[data_offset:data_offset + block2.block_size()]
 
         self._server.send(Lwm2mContent.matching(req)(content=content,
-                                                     options=[res_block2, coap.Option.ETAG(resource.etag)]))
-
+                                                     options=[res_block2,
+                                                              coap.Option.ETAG(resource.etag)]))
 
     def handle_request(self, timeout_s=5.0):
         self.handle_recvd_request(self._recv_request(timeout_s=timeout_s))

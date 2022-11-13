@@ -55,7 +55,7 @@ if __name__ == '__main__':
             if args.cert is not None:
                 fcty.generate_self_signed_cert()
             elif args.pkey is not None and args.pcert is not None:
-                fcty.set_endpoint_cert_and_key(args.pkey, args.pcert)
+                fcty.set_endpoint_cert_and_key(args.pcert, args.pkey)
 
         fcty.provision_device()
 

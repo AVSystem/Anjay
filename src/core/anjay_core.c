@@ -47,7 +47,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "3.1.2"
+#    define ANJAY_VERSION "3.2.0"
 #endif // ANJAY_VERSION
 
 #ifdef ANJAY_WITH_LWM2M11
@@ -1001,6 +1001,12 @@ static int serve_connection(anjay_connection_ref_t connection) {
         _anjay_server_on_server_communication_error(connection.server, err);
     }
 
+#ifdef ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
+    if (avs_is_ok(err) && !args.serve_result) {
+        _anjay_server_set_last_communication_time(connection.server);
+    }
+#endif // ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
+
     return avs_is_ok(err) ? args.serve_result : -1;
 }
 
@@ -1197,6 +1203,7 @@ int anjay_set_queue_mode_preference(anjay_t *anjay_locked,
     case ANJAY_PREFER_ONLINE_MODE:
     case ANJAY_FORCE_ONLINE_MODE:
         anjay->queue_mode_preference = preference;
+        // defined(ANJAY_WITH_CORE_PERSISTENCE)
         result = 0;
     }
     if (result) {

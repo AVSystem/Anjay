@@ -343,9 +343,7 @@ int _anjay_connection_ensure_coap_context(anjay_server_info_t *server,
 }
 
 avs_error_t _anjay_server_connection_internal_bring_online(
-        anjay_server_info_t *server,
-        anjay_connection_type_t conn_type,
-        const anjay_iid_t *security_iid) {
+        anjay_server_info_t *server, anjay_connection_type_t conn_type) {
     assert(server);
     anjay_server_connection_t *connection =
             _anjay_connection_get(&server->connections, conn_type);
@@ -356,8 +354,6 @@ avs_error_t _anjay_server_connection_internal_bring_online(
             get_connection_type_def(connection->transport);
     assert(def);
 
-    (void) security_iid;
-
     if (_anjay_connection_is_online(connection)) {
         anjay_log(DEBUG, _("socket already connected"));
         connection->state = ANJAY_SERVER_CONNECTION_STABLE;
@@ -365,32 +361,54 @@ avs_error_t _anjay_server_connection_internal_bring_online(
         return AVS_OK;
     }
 
-    avs_error_t err = avs_errno(AVS_ENOMEM);
-    if (_anjay_connection_ensure_coap_context(server, conn_type)
-            || avs_is_err((
-                       err = def->connect_socket(server->anjay, connection)))) {
-        connection->state = ANJAY_SERVER_CONNECTION_OFFLINE;
-        _anjay_coap_ctx_cleanup(server->anjay, &connection->coap_ctx);
+    // defined(ANJAY_WITH_CORE_PERSISTENCE)
 
-        if (avs_is_err(avs_net_socket_close(connection->conn_socket_))) {
-            anjay_log(ERROR, _("Could not close the socket (?!)"));
-        }
-        return err;
+    bool session_resumed;
+    bool should_attempt_context_wrapping;
+    avs_error_t err = def->connect_socket(server->anjay, connection);
+    if (avs_is_err(err)) {
+        goto error;
     }
 
-    const bool session_resumed =
-            _anjay_was_session_resumed(connection->conn_socket_);
-    if (!session_resumed) {
+    if (!(session_resumed =
+                  _anjay_was_session_resumed(connection->conn_socket_))) {
         _anjay_conn_session_token_reset(&connection->session_token);
+        // Clean up and recreate the CoAP context to discard observations
+        _anjay_coap_ctx_cleanup(server->anjay, &connection->coap_ctx);
     }
+
+    if (_anjay_connection_ensure_coap_context(server, conn_type)) {
+        err = avs_errno(AVS_ENOMEM);
+        goto error;
+    }
+    if (!avs_coap_ctx_has_socket(connection->coap_ctx)
+            && avs_is_err((err = avs_coap_ctx_set_socket(
+                                   connection->coap_ctx,
+                                   connection->conn_socket_)))) {
+        anjay_log(ERROR, _("could not assign socket to CoAP/UDP context"));
+        goto error;
+    }
+
     if (session_resumed) {
         anjay_log(INFO, "resumed connection");
     } else {
         anjay_log(INFO, "reconnected");
     }
     connection->state = ANJAY_SERVER_CONNECTION_FRESHLY_CONNECTED;
+    // NOTE: needs_observe_flush also controls flushing Send messages,
+    // so we need it even if there are no observations due to new session
     connection->needs_observe_flush = true;
     return AVS_OK;
+
+error:
+    connection->state = ANJAY_SERVER_CONNECTION_OFFLINE;
+    _anjay_coap_ctx_cleanup(server->anjay, &connection->coap_ctx);
+
+    if (connection->conn_socket_
+            && avs_is_err(avs_net_socket_close(connection->conn_socket_))) {
+        anjay_log(WARNING, _("Could not close the socket (?!)"));
+    }
+    return err;
 }
 
 static void connection_cleanup(anjay_unlocked_t *anjay,
@@ -473,6 +491,7 @@ recreate_socket(anjay_unlocked_t *anjay,
             avs_net_socket_shutdown(connection->conn_socket_);
             avs_net_socket_close(connection->conn_socket_);
         }
+        // defined(ANJAY_WITH_CORE_PERSISTENCE)
     }
     _anjay_security_config_cache_cleanup(&security_config_cache);
     return err;
@@ -500,8 +519,7 @@ ensure_socket_connected(anjay_server_info_t *server,
         }
     }
 
-    return _anjay_server_connection_internal_bring_online(
-            server, conn_type, &inout_info->security_iid);
+    return _anjay_server_connection_internal_bring_online(server, conn_type);
 }
 
 static bool should_primary_connection_be_online(anjay_server_info_t *server) {
@@ -552,6 +570,7 @@ static avs_error_t refresh_connection(anjay_server_info_t *server,
         } else {
             // Disabled trigger connection does not matter much,
             // so treat it as stable
+            // defined(ANJAY_WITH_CORE_PERSISTENCE)
             _anjay_connection_internal_clean_socket(server->anjay,
                                                     out_connection);
             out_connection->state = ANJAY_SERVER_CONNECTION_STABLE;
@@ -624,6 +643,7 @@ void _anjay_server_connections_refresh(
         connection_cleanup(server->anjay, primary_conn);
         primary_conn->transport = server_info.transport_info->transport;
         server->registration_info.expire_time = AVS_TIME_REAL_INVALID;
+        // defined(ANJAY_WITH_CORE_PERSISTENCE)
     }
 
     anjay_connection_type_t conn_type;

@@ -164,7 +164,7 @@ sudo yum install -y which git make cmake3 mbedtls-devel gcc gcc-c++ zlib-devel
 #### macOS Sierra or later, with [Homebrew](https://brew.sh/)
 
 ``` sh
-brew install cmake mbedtls
+brew install cmake mbedtls openssl
 ```
 
 ### Running the demo client

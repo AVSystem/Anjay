@@ -90,8 +90,8 @@ static int32_t randint_from_range(int32_t min_value, int32_t max_value) {
     assert(min_value <= max_value);
 
     // RNG-like predictable generation in range [min_value, max_value]
-    int32_t diff = max_value - min_value;
-    return min_value + (int32_t) time_to_rand() % (diff + 1);
+    uint32_t diff = (uint32_t) (max_value - min_value);
+    return min_value + (int32_t) (time_to_rand() % (diff + 1));
 }
 
 static int32_t get_dc_voltage_mv(void) {

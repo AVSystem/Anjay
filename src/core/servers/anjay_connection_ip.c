@@ -124,13 +124,6 @@ static avs_error_t connect_socket(anjay_unlocked_t *anjay,
         return err;
     }
 
-    if (!avs_coap_ctx_has_socket(connection->coap_ctx)
-            && avs_is_err((err = avs_coap_ctx_set_socket(connection->coap_ctx,
-                                                         socket)))) {
-        anjay_log(ERROR, _("could not assign socket to CoAP/UDP context"));
-        return err;
-    }
-
     char local_port[sizeof(connection->nontransient_state.last_local_port)] =
             "";
     if (avs_is_ok(avs_net_socket_get_local_port(socket, local_port,
@@ -144,6 +137,7 @@ static avs_error_t connect_socket(anjay_unlocked_t *anjay,
     if (strcmp(local_port, connection->nontransient_state.last_local_port)
             != 0) {
         strcpy(connection->nontransient_state.last_local_port, local_port);
+        // defined(ANJAY_WITH_CORE_PERSISTENCE)
     }
     return AVS_OK;
 }

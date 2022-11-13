@@ -521,7 +521,7 @@ anjay_send_result_t anjay_send(anjay_t *anjay,
  * this variant returns success and postpones the actual Send operation until
  * the server connection identified by @p ssid is online.
  *
- * If at that time, the server in question will be removed from the datat model,
+ * If at that time, the server in question will be removed from the data model,
  * registered using a LwM2M version that does not support the Send operation
  * (i.e., LwM2M 1.0), or the Mute Send resource changes while the Send is
  * deferred, the operation is cancelled and @p finished_handler is called with

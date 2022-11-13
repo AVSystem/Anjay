@@ -868,6 +868,25 @@ static void cmd_observation_status(anjay_demo_t *demo,
              "min_period == %" PRId32 ", max_eval_period == %" PRId32,
              status.is_observed ? "true" : "false", status.min_period,
              status.max_eval_period);
+#    if (ANJAY_MAX_OBSERVATION_SERVERS_REPORTED_NUMBER > 0)
+    if (status.servers_number > 0) {
+        char *ssid_list =
+                (char *) avs_calloc((AVS_UINT_STR_BUF_SIZE(anjay_ssid_t) + 2)
+                                            * status.servers_number,
+                                    1);
+        if (ssid_list) {
+            for (uint16_t i = 0; i < status.servers_number; i++) {
+                char ssid_string[AVS_UINT_STR_BUF_SIZE(anjay_ssid_t) + 2];
+                sprintf(ssid_string, " %" PRIu16 ",", status.servers[i]);
+                strcat(ssid_list, ssid_string);
+            }
+            ssid_list[strlen(ssid_list) - 1] = '\0'; // remove trailing comma
+            demo_log(INFO, "SSIDs of servers observing given path:%s",
+                     ssid_list);
+            avs_free(ssid_list);
+        }
+    }
+#    endif //(ANJAY_MAX_OBSERVATION_SERVERS_REPORTED_NUMBER > 0)
 }
 #endif // ANJAY_WITH_OBSERVATION_STATUS
 
@@ -1184,6 +1203,66 @@ static void cmd_set_dtls_timeouts(anjay_demo_t *demo, const char *args_string) {
     anjay_update_dtls_handshake_timeouts(demo->anjay, dtls_handshake_timeouts);
 }
 
+#ifdef ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
+static void cmd_last_registration_time(anjay_demo_t *demo,
+                                       const char *args_string) {
+    avs_time_real_t result = AVS_TIME_REAL_INVALID;
+    anjay_ssid_t ssid = ANJAY_SSID_ANY;
+
+    if (*args_string && parse_ssid(args_string, &ssid)) {
+        demo_log(ERROR, "invalid Short Server ID: %s", args_string);
+        return;
+    }
+    avs_error_t err =
+            anjay_get_server_last_registration_time(demo->anjay, ssid, &result);
+
+    if (!avs_is_err(err)) {
+        demo_log(INFO, "LAST_REGISTRATION_TIME=%s",
+                 AVS_TIME_DURATION_AS_STRING(result.since_real_epoch));
+    } else {
+        demo_log(INFO, "Failed to get last registration time");
+    }
+}
+
+static void cmd_next_update_time(anjay_demo_t *demo, const char *args_string) {
+    avs_time_real_t result = AVS_TIME_REAL_INVALID;
+    anjay_ssid_t ssid = ANJAY_SSID_ANY;
+
+    if (*args_string && parse_ssid(args_string, &ssid)) {
+        demo_log(ERROR, "invalid Short Server ID: %s", args_string);
+        return;
+    }
+    avs_error_t err =
+            anjay_get_server_next_update_time(demo->anjay, ssid, &result);
+
+    if (!avs_is_err(err)) {
+        demo_log(INFO, "NEXT_UPDATE_TIME=%s",
+                 AVS_TIME_DURATION_AS_STRING(result.since_real_epoch));
+    } else {
+        demo_log(INFO, "Failed to get next update time");
+    }
+}
+
+static void cmd_last_communication_time(anjay_demo_t *demo,
+                                        const char *args_string) {
+    avs_time_real_t result = AVS_TIME_REAL_INVALID;
+    anjay_ssid_t ssid = ANJAY_SSID_ANY;
+
+    if (*args_string && parse_ssid(args_string, &ssid)) {
+        demo_log(ERROR, "invalid Short Server ID: %s", args_string);
+        return;
+    }
+    avs_error_t err = anjay_get_server_last_communication_time(demo->anjay,
+                                                               ssid, &result);
+    if (!avs_is_err(err)) {
+        demo_log(INFO, "LAST_COMMUNICATION_TIME=%s",
+                 AVS_TIME_DURATION_AS_STRING(result.since_real_epoch));
+    } else {
+        demo_log(INFO, "Failed to get last communication time");
+    }
+}
+#endif // ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
+
 static void cmd_help(anjay_demo_t *demo, const char *args_string);
 
 struct cmd_handler_def {
@@ -1255,9 +1334,10 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 cmd_download,
                 "Download a file from given URL to target_file."),
 #ifdef ANJAY_WITH_ATTR_STORAGE
+#        define SUPPORTED_ATTRS "pmin,pmax,lt,gt,st,epmin,epmax"
     CMD_HANDLER("set-attrs", "", cmd_set_attrs, "Syntax [/a [/b [/c [/d] ] ] ] "
-                "ssid [pmin,pmax,lt,gt,st,epmin,epmax] "
-                "- e.g. /a/b 1 pmin=3,pmax=4"),
+                "ssid [" SUPPORTED_ATTRS "] - e.g. /a/b 1 pmin=3,pmax=4"),
+#    undef SUPPORTED_ATTRS
 #endif // ANJAY_WITH_ATTR_STORAGE
     CMD_HANDLER("disable-server", "ssid reactivate_timeout", cmd_disable_server,
                 "Disables a server with given SSID for a given time "
@@ -1362,6 +1442,23 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 "Sets maximal length of the CoAP exchange."),
     CMD_HANDLER("set-dtls-handshake-timeout", "min max", cmd_set_dtls_timeouts,
                 "Sets DTLS handshake timeouts for all of the used DTLS sockets."),
+#ifdef ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
+    CMD_HANDLER("last-registration-time", "[SSID]",
+                cmd_last_registration_time,
+                "Displays time of the last registration operation with any "
+                "server (if no argument specified) or a given server (if "
+                "numeric SSID argument given)."),
+    CMD_HANDLER("next-update-time", "[SSID]",
+                cmd_next_update_time,
+                "Displays time when next update operation is scheduled for "
+                "any server (if no argument specified) or a given server (if "
+                "numeric SSID argument given)."),
+    CMD_HANDLER("last-communication-time", "[SSID]",
+                cmd_last_communication_time,
+                "Displays time of the last communication with any server (if "
+                "no argument specified) or a given server (if numeric SSID "
+                "argument given)."),
+#endif // ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
     CMD_HANDLER("help", "", cmd_help, "Prints this message")
     // clang-format on
 };

@@ -11,15 +11,10 @@
 #define SECURITY_SECURITY_H
 #include <anjay_init.h>
 
-#include <anjay/core.h>
-
-#include <avsystem/commons/avs_list.h>
-
 #include <anjay/security.h>
 
-#include <anjay_modules/anjay_dm_utils.h>
 #include <anjay_modules/anjay_raw_buffer.h>
-#include <anjay_modules/anjay_utils_core.h>
+#include <anjay_modules/dm/anjay_modules.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 

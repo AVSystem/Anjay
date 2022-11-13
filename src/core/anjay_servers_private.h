@@ -118,6 +118,14 @@ typedef struct {
     bool update_forced;
 
     anjay_update_parameters_t last_update_params;
+
+#ifdef ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
+    /**
+     * Stores the time at with the last registration or registration update was
+     * performed successfully.
+     */
+    avs_time_real_t last_registration_time;
+#endif // ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
 } anjay_registration_info_t;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -326,10 +334,10 @@ int _anjay_servers_foreach_active(anjay_unlocked_t *anjay,
  * 2.6.3. Prevent activate_server_job() from ever being called again, until
  *        anjay_schedule_reconnect() is manually called.
  *
- * Server deactivation is normally handled by _anjay_server_deactivate(). The
- * server might also enter inactive state through enter_offline_job(), or in
- * case of failure in activate_server_job(). Still, _anjay_server_deactivate()
- * works as follows:
+ * Server deactivation is normally handled by deactivate_server(). The server
+ * might also enter inactive state through enter_offline_job(), or in case of
+ * failure in activate_server_job(). Still, deactivate_server() works as
+ * follows:
  *
  * 1. If the server has a valid registration - send Deregister. Intentionally
  *    ignore errors if it fails for any reason - Deregister is optional anyway.
@@ -373,6 +381,12 @@ anjay_unlocked_t *_anjay_from_server(anjay_server_info_t *server);
 const anjay_binding_mode_t *
 _anjay_server_binding_mode(anjay_server_info_t *server);
 
+#ifdef ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
+/*
+ * Sets the last communication timestamp for a given server.
+ */
+void _anjay_server_set_last_communication_time(anjay_server_info_t *server);
+#endif // ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
 /**
  * Gets the token uniquely identifying the CoAP endpoint association (i.e., DTLS
  * session or raw UDP socket) of the server's primary connection.

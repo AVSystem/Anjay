@@ -56,7 +56,9 @@ void _anjay_server_on_updated_registration(anjay_server_info_t *server,
                                            avs_error_t err);
 
 /**
- * Schedules a @ref _anjay_server_activate execution after given @p delay.
+ * Schedules a @ref _anjay_server_activate execution on
+ * <c>server->reactivate_time</c>. Set that field before calling this function
+ * to specify the intended reactivation time.
  *
  * Activation is performed as a retryable job, so it does not need to be
  * repeated by the caller.
@@ -64,8 +66,7 @@ void _anjay_server_on_updated_registration(anjay_server_info_t *server,
  * After the activation succeeds, the scheduled job takes care of any required
  * Registration Updates.
  */
-int _anjay_server_sched_activate(anjay_server_info_t *server,
-                                 avs_time_duration_t reactivate_delay);
+int _anjay_server_sched_activate(anjay_server_info_t *server);
 
 int _anjay_servers_sched_reactivate_all_given_up(anjay_unlocked_t *anjay);
 
@@ -80,17 +81,6 @@ int _anjay_servers_sched_reactivate_all_given_up(anjay_unlocked_t *anjay);
  */
 void _anjay_servers_add(AVS_LIST(anjay_server_info_t) *servers,
                         AVS_LIST(anjay_server_info_t) server);
-/**
- * Deactivates the active server entry associated with @p ssid . Fails if there
- * is no active server entry with such @p ssid .
- *
- * If @p reactivate_delay is not AVS_TIME_DURATION_INVALID, schedules a
- * reactivate job after @p reactivate_delay. The job is a retryable one, so
- * the caller does not need to worry about reactivating the server manually.
- */
-int _anjay_server_deactivate(anjay_unlocked_t *anjay,
-                             anjay_ssid_t ssid,
-                             avs_time_duration_t reactivate_delay);
 
 /**
  * Creates a new detached inactive server entry for given @p ssid .
@@ -99,6 +89,21 @@ int _anjay_server_deactivate(anjay_unlocked_t *anjay,
  */
 AVS_LIST(anjay_server_info_t)
 _anjay_servers_create_inactive(anjay_unlocked_t *anjay, anjay_ssid_t ssid);
+
+/**
+ * Synchronous part of @ref anjay_disable_server - this function does what that
+ * public API schedules to be executed in an async job.
+ */
+void _anjay_disable_server_with_timeout_from_dm_sync(
+        anjay_server_info_t *server);
+
+/**
+ * Synchronous part of
+ * @ref _anjay_schedule_disable_server_with_explicit_timeout_unlocked - this
+ * function does what that API schedules to be executed in an async job.
+ */
+void _anjay_disable_server_with_explicit_timeout_sync(
+        anjay_server_info_t *server);
 
 /**
  * Checks whether now is a right moment to initiate Client Initiated Bootstrap

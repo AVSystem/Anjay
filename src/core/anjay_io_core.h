@@ -274,6 +274,13 @@ uint16_t _anjay_default_hierarchical_format(anjay_lwm2m_version_t version);
 uint16_t _anjay_default_simple_format(anjay_unlocked_t *anjay,
                                       anjay_lwm2m_version_t version);
 
+#ifdef ANJAY_WITH_SEND
+int _anjay_output_dynamic_send_construct(anjay_unlocked_output_ctx_t **out_ctx,
+                                         avs_stream_t *stream,
+                                         const anjay_uri_path_t *uri,
+                                         uint16_t format);
+#endif // ANJAY_WITH_SEND
+
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif /* ANJAY_IO_CORE_H */

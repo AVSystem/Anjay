@@ -67,11 +67,13 @@ _anjay_servers_find_by_primary_socket(anjay_unlocked_t *anjay,
                                       avs_net_socket_t *socket);
 
 /**
- * Reschedules Update for a specified server or all servers. In the very end, it
- * calls schedule_update(), which basically speeds up the scheduled Update
+ * Reschedules Update for a specified server or all servers. In the very end,
+ * it calls schedule_update(), which basically speeds up the scheduled Update
  * operation (it is normally scheduled for "just before the lifetime expires",
  * this function reschedules it to now. The scheduled job is
- * send_update_sched_job() and it is also used for regular Updates.
+ * server_next_action_job() with the action set to
+ * ANJAY_SERVER_NEXT_ACTION_REFRESH action, and it is also used for regular
+ * Updates.
  *
  * Aside from being a public API, this is also called in:
  *
@@ -97,9 +99,10 @@ int _anjay_schedule_registration_update_unlocked(anjay_unlocked_t *anjay,
  * - serv_execute(), as a reference implementation of the Disable resource
  * - _anjay_schedule_socket_update(), to force reconnection of all sockets
  */
-int _anjay_disable_server_with_timeout_unlocked(anjay_unlocked_t *anjay,
-                                                anjay_ssid_t ssid,
-                                                avs_time_duration_t timeout);
+int _anjay_schedule_disable_server_with_explicit_timeout_unlocked(
+        anjay_unlocked_t *anjay,
+        anjay_ssid_t ssid,
+        avs_time_duration_t timeout);
 
 /**
  * Schedules server activation immediately, after some sanity checks.

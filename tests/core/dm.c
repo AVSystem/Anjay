@@ -1153,6 +1153,192 @@ AVS_UNIT_TEST(dm_write, no_instance) {
     DM_TEST_FINISH;
 }
 
+AVS_UNIT_TEST(dm_write, multiple_resource_followed_by_single_resoure) {
+    DM_TEST_INIT;
+    DM_TEST_REQUEST(mocksocks[0], CON, PUT, ID(0xFA3E), PATH("42", "69"),
+                    CONTENT_FORMAT(OMA_LWM2M_TLV),
+                    PAYLOAD("\x88\x15\x0e"
+                            "\x45\x03"
+                            "Hello"
+                            "\x45\x07"
+                            "world"
+                            "\xe4\x01\xa4"
+                            "test"));
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &OBJ, 0, (const anjay_iid_t[]) { 69, ANJAY_ID_INVALID });
+    // Write /42/69/21
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &OBJ, 69, 0,
+            (const anjay_mock_dm_res_entry_t[]) {
+                    { 21, ANJAY_DM_RES_RWM, ANJAY_DM_RES_PRESENT },
+                    { 37, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    { 420, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_resource_reset(anjay, &OBJ, 69, 21, 0);
+    _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 21, 3,
+                                         ANJAY_MOCK_DM_STRING(0, "Hello"), 0);
+    _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 21, 7,
+                                         ANJAY_MOCK_DM_STRING(0, "world"), 0);
+    // Write /42/69/420
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &OBJ, 69, 0,
+            (const anjay_mock_dm_res_entry_t[]) {
+                    { 21, ANJAY_DM_RES_RWM, ANJAY_DM_RES_PRESENT },
+                    { 37, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    { 420, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 420, ANJAY_ID_INVALID,
+                                         ANJAY_MOCK_DM_STRING(0, "test"), 0);
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CHANGED, ID(0xFA3E), NO_PAYLOAD);
+    expect_has_buffered_data_check(mocksocks[0], false);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(dm_write, multiple_resource_reset_not_found) {
+    DM_TEST_INIT;
+    DM_TEST_REQUEST(mocksocks[0], CON, PUT, ID(0xFA3E), PATH("42", "69"),
+                    CONTENT_FORMAT(OMA_LWM2M_TLV),
+                    PAYLOAD("\x88\x15\x0e"
+                            "\x45\x03"
+                            "Hello"
+                            "\x45\x07"
+                            "world"
+                            "\xe4\x01\xa4"
+                            "test"));
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &OBJ, 0, (const anjay_iid_t[]) { 69, ANJAY_ID_INVALID });
+    // Reset attempt for /42/69/21/3
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &OBJ, 69, 0,
+            (const anjay_mock_dm_res_entry_t[]) {
+                    { 21, ANJAY_DM_RES_RWM, ANJAY_DM_RES_PRESENT },
+                    { 37, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    { 420, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_resource_reset(anjay, &OBJ, 69, 21,
+                                         ANJAY_ERR_NOT_FOUND);
+    // Reset attempt for /42/69/21/3
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &OBJ, 69, 0,
+            (const anjay_mock_dm_res_entry_t[]) {
+                    { 21, ANJAY_DM_RES_RWM, ANJAY_DM_RES_PRESENT },
+                    { 37, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    { 420, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_resource_reset(anjay, &OBJ, 69, 21,
+                                         ANJAY_ERR_NOT_FOUND);
+    // Write /42/69/420
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &OBJ, 69, 0,
+            (const anjay_mock_dm_res_entry_t[]) {
+                    { 21, ANJAY_DM_RES_RWM, ANJAY_DM_RES_PRESENT },
+                    { 37, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    { 420, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 420, ANJAY_ID_INVALID,
+                                         ANJAY_MOCK_DM_STRING(0, "test"), 0);
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CHANGED, ID(0xFA3E), NO_PAYLOAD);
+    expect_has_buffered_data_check(mocksocks[0], false);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(dm_write, multiple_resource_first_instance_not_found) {
+    DM_TEST_INIT;
+    DM_TEST_REQUEST(mocksocks[0], CON, PUT, ID(0xFA3E), PATH("42", "69"),
+                    CONTENT_FORMAT(OMA_LWM2M_TLV),
+                    PAYLOAD("\x88\x15\x0e"
+                            "\x45\x03"
+                            "Hello"
+                            "\x45\x07"
+                            "world"
+                            "\xe4\x01\xa4"
+                            "test"));
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &OBJ, 0, (const anjay_iid_t[]) { 69, ANJAY_ID_INVALID });
+    // Write attempt for /42/69/21/3
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &OBJ, 69, 0,
+            (const anjay_mock_dm_res_entry_t[]) {
+                    { 21, ANJAY_DM_RES_RWM, ANJAY_DM_RES_PRESENT },
+                    { 37, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    { 420, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_resource_reset(anjay, &OBJ, 69, 21, 0);
+    _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 21, 3,
+                                         ANJAY_MOCK_DM_STRING(0, "Hello"),
+                                         ANJAY_ERR_NOT_FOUND);
+    // Write attempt for /42/69/21/7
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &OBJ, 69, 0,
+            (const anjay_mock_dm_res_entry_t[]) {
+                    { 21, ANJAY_DM_RES_RWM, ANJAY_DM_RES_PRESENT },
+                    { 37, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    { 420, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_resource_reset(anjay, &OBJ, 69, 21, 0);
+    _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 21, 7,
+                                         ANJAY_MOCK_DM_STRING(0, "world"), 0);
+    // Write /42/69/420
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &OBJ, 69, 0,
+            (const anjay_mock_dm_res_entry_t[]) {
+                    { 21, ANJAY_DM_RES_RWM, ANJAY_DM_RES_PRESENT },
+                    { 37, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    { 420, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 420, ANJAY_ID_INVALID,
+                                         ANJAY_MOCK_DM_STRING(0, "test"), 0);
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CHANGED, ID(0xFA3E), NO_PAYLOAD);
+    expect_has_buffered_data_check(mocksocks[0], false);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(dm_write, multiple_resource_second_instance_not_found) {
+    DM_TEST_INIT;
+    DM_TEST_REQUEST(mocksocks[0], CON, PUT, ID(0xFA3E), PATH("42", "69"),
+                    CONTENT_FORMAT(OMA_LWM2M_TLV),
+                    PAYLOAD("\x88\x15\x0e"
+                            "\x45\x03"
+                            "Hello"
+                            "\x45\x07"
+                            "world"
+                            "\xe4\x01\xa4"
+                            "test"));
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &OBJ, 0, (const anjay_iid_t[]) { 69, ANJAY_ID_INVALID });
+    // Write /42/69/21
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &OBJ, 69, 0,
+            (const anjay_mock_dm_res_entry_t[]) {
+                    { 21, ANJAY_DM_RES_RWM, ANJAY_DM_RES_PRESENT },
+                    { 37, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    { 420, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_resource_reset(anjay, &OBJ, 69, 21, 0);
+    _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 21, 3,
+                                         ANJAY_MOCK_DM_STRING(0, "Hello"), 0);
+    _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 21, 7,
+                                         ANJAY_MOCK_DM_STRING(0, "world"),
+                                         ANJAY_ERR_NOT_FOUND);
+    // Write /42/69/420
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &OBJ, 69, 0,
+            (const anjay_mock_dm_res_entry_t[]) {
+                    { 21, ANJAY_DM_RES_RWM, ANJAY_DM_RES_PRESENT },
+                    { 37, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    { 420, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 420, ANJAY_ID_INVALID,
+                                         ANJAY_MOCK_DM_STRING(0, "test"), 0);
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CHANGED, ID(0xFA3E), NO_PAYLOAD);
+    expect_has_buffered_data_check(mocksocks[0], false);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+    DM_TEST_FINISH;
+}
+
 #ifdef ANJAY_WITH_LWM2M11
 AVS_UNIT_TEST(dm_write_composite, write_to_resource_of_nonexistent_instance) {
     DM_TEST_INIT;
@@ -2627,6 +2813,40 @@ AVS_UNIT_TEST(dm_create, multiple_iids) {
                     ANJAY_MOCK_DM_RES_END });
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 0, ANJAY_ID_INVALID,
                                          ANJAY_MOCK_DM_INT(0, 42), 0);
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, BAD_REQUEST, ID(0xfa3e),
+                            NO_PAYLOAD);
+    expect_has_buffered_data_check(mocksocks[0], false);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(dm_create, multiple_iids_after_multiple_resource) {
+    DM_TEST_INIT;
+    DM_TEST_REQUEST(mocksocks[0], CON, POST, ID(0xFA3E), PATH("42"),
+                    CONTENT_FORMAT(OMA_LWM2M_TLV),
+                    PAYLOAD("\x08\x45\x11"
+                            "\x88\x15\x0e"
+                            "\x45\x03"
+                            "Hello"
+                            "\x45\x07"
+                            "world"
+                            "\x27\x01\xa4"
+                            "\xe4\x08\x59"
+                            "test"));
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &OBJ, 0, (const anjay_iid_t[]) { 4, 14, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_instance_create(anjay, &OBJ, 69, 0);
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &OBJ, 69, 0,
+            (const anjay_mock_dm_res_entry_t[]) {
+                    { 21, ANJAY_DM_RES_RWM, ANJAY_DM_RES_ABSENT },
+                    { 37, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
+                    { 420, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
+                    ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 21, 3,
+                                         ANJAY_MOCK_DM_STRING(0, "Hello"), 0);
+    _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 21, 7,
+                                         ANJAY_MOCK_DM_STRING(0, "world"), 0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, BAD_REQUEST, ID(0xfa3e),
                             NO_PAYLOAD);
     expect_has_buffered_data_check(mocksocks[0], false);

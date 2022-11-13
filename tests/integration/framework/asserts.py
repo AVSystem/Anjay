@@ -9,9 +9,10 @@
 
 import collections
 from typing import Optional
+from urllib import response
 
 from .lwm2m.messages import *
-from .test_utils import DEMO_ENDPOINT_NAME
+from .test_utils import DEMO_ENDPOINT_NAME, ResponseFilter
 from framework.lwm2m.coap.transport import Transport
 
 
@@ -123,7 +124,8 @@ class Lwm2mAsserts:
                             respond=True,
                             binding=None,
                             lwm2m11_queue_mode=False,
-                            reject=False):
+                            reject=False,
+                            response_filter: ResponseFilter=None):
         # passing a float instead of an integer results in a disaster
         # (serializes as e.g. lt=4.0 instead of lt=4), which makes the
         # assertion fail
@@ -132,7 +134,10 @@ class Lwm2mAsserts:
 
         serv = server or self.serv
 
-        pkt = serv.recv(timeout_s=timeout_s)
+        if response_filter:
+            pkt = response_filter.filtered_recv(serv, timeout_s)
+        else:
+            pkt = serv.recv(timeout_s=timeout_s)
         self.assertMsgEqual(self._expected_register_message(
             version, endpoint, lifetime, binding, lwm2m11_queue_mode), pkt)
         self.assertIsNotNone(pkt.content)
@@ -152,7 +157,8 @@ class Lwm2mAsserts:
                                       sms_number: Optional[str] = None,
                                       content: bytes = b'',
                                       timeout_s: float = 1,
-                                      respond: bool = True):
+                                      respond: bool = True,
+                                      response_filter: ResponseFilter = None):
         serv = server or self.serv
 
         query_args = (([('lt', lifetime)] if lifetime is not None else [])
@@ -164,7 +170,10 @@ class Lwm2mAsserts:
         if query_string:
             path += '?' + query_string
 
-        pkt = serv.recv(timeout_s=timeout_s)
+        if response_filter:
+            pkt = response_filter.filtered_recv(serv, timeout_s)
+        else:
+            pkt = serv.recv(timeout_s=timeout_s)
         self.assertMsgEqual(Lwm2mUpdate(path, content=content), pkt)
         if respond:
             serv.send(Lwm2mChanged.matching(pkt)())

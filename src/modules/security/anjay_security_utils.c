@@ -13,7 +13,7 @@
 
 #    include <string.h>
 
-#    include <avsystem/commons/avs_utils.h>
+#    include <anjay_modules/anjay_dm_utils.h>
 
 #    include "anjay_security_utils.h"
 

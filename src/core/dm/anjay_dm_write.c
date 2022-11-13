@@ -101,11 +101,23 @@ static int write_resource_instance(anjay_unlocked_t *anjay,
 }
 #endif // ANJAY_WITH_LWM2M11
 
-static int write_single_resource(anjay_unlocked_t *anjay,
-                                 const anjay_dm_installed_object_t *obj,
-                                 const anjay_uri_path_t *path,
-                                 bool is_array,
-                                 anjay_unlocked_input_ctx_t *in_ctx) {
+static int return_with_moving_to_next_entry(anjay_unlocked_input_ctx_t *in_ctx,
+                                            int result) {
+    int next_entry_result = _anjay_input_next_entry(in_ctx);
+    if (next_entry_result
+            && (!result || result == ANJAY_ERR_NOT_FOUND
+                || result == ANJAY_ERR_NOT_IMPLEMENTED)) {
+        return next_entry_result;
+    }
+    return result;
+}
+
+static int write_single_resource_and_move_to_next_entry(
+        anjay_unlocked_t *anjay,
+        const anjay_dm_installed_object_t *obj,
+        const anjay_uri_path_t *path,
+        bool is_array,
+        anjay_unlocked_input_ctx_t *in_ctx) {
     assert(_anjay_uri_path_has(path, ANJAY_ID_RID));
     if (is_array || _anjay_uri_path_has(path, ANJAY_ID_RIID)) {
         dm_log(LAZY_DEBUG,
@@ -114,17 +126,19 @@ static int write_single_resource(anjay_unlocked_t *anjay,
                ANJAY_DEBUG_MAKE_PATH(path));
         return ANJAY_ERR_BAD_REQUEST;
     }
-    return _anjay_dm_call_resource_write(anjay, obj, path->ids[ANJAY_ID_IID],
-                                         path->ids[ANJAY_ID_RID],
-                                         ANJAY_ID_INVALID, in_ctx);
+    return return_with_moving_to_next_entry(
+            in_ctx, _anjay_dm_call_resource_write(
+                            anjay, obj, path->ids[ANJAY_ID_IID],
+                            path->ids[ANJAY_ID_RID], ANJAY_ID_INVALID, in_ctx));
 }
 
-static int write_multiple_resource(anjay_unlocked_t *anjay,
-                                   const anjay_dm_installed_object_t *obj,
-                                   const anjay_uri_path_t *first_path,
-                                   bool is_array,
-                                   anjay_unlocked_input_ctx_t *in_ctx,
-                                   anjay_dm_write_type_t write_type) {
+static int write_multiple_resource_and_move_to_next_entry(
+        anjay_unlocked_t *anjay,
+        const anjay_dm_installed_object_t *obj,
+        const anjay_uri_path_t *first_path,
+        bool is_array,
+        anjay_unlocked_input_ctx_t *in_ctx,
+        anjay_dm_write_type_t write_type) {
     anjay_uri_path_t path = *first_path;
     assert(_anjay_uri_path_has(&path, ANJAY_ID_RID));
     if (!is_array && _anjay_uri_path_leaf_is(&path, ANJAY_ID_RID)) {
@@ -137,20 +151,21 @@ static int write_multiple_resource(anjay_unlocked_t *anjay,
 
     int result = 0;
 
-    if (write_type != ANJAY_DM_WRITE_TYPE_UPDATE
-            && (result = _anjay_dm_call_resource_reset(
-                        anjay, obj, path.ids[ANJAY_ID_IID],
-                        path.ids[ANJAY_ID_RID]))) {
-        return result;
+    if ((write_type != ANJAY_DM_WRITE_TYPE_UPDATE
+         && (result = _anjay_dm_call_resource_reset(anjay, obj,
+                                                    path.ids[ANJAY_ID_IID],
+                                                    path.ids[ANJAY_ID_RID])))
+            || !_anjay_uri_path_leaf_is(&path, ANJAY_ID_RIID)) {
+        return return_with_moving_to_next_entry(in_ctx, result);
     }
 
     while (!result) {
-        if (!_anjay_uri_path_leaf_is(&path, ANJAY_ID_RIID)
-                || (result = _anjay_dm_call_resource_write(
-                            anjay, obj, path.ids[ANJAY_ID_IID],
-                            path.ids[ANJAY_ID_RID], path.ids[ANJAY_ID_RIID],
-                            in_ctx))
-                || (result = _anjay_input_next_entry(in_ctx))) {
+        if ((result = _anjay_dm_call_resource_write(
+                     anjay, obj, path.ids[ANJAY_ID_IID], path.ids[ANJAY_ID_RID],
+                     path.ids[ANJAY_ID_RIID], in_ctx))) {
+            return return_with_moving_to_next_entry(in_ctx, result);
+        }
+        if ((result = _anjay_input_next_entry(in_ctx))) {
             break;
         }
         if ((result = _anjay_input_get_path(in_ctx, &path, NULL))) {
@@ -160,27 +175,30 @@ static int write_multiple_resource(anjay_unlocked_t *anjay,
             break;
         }
         if (path.ids[ANJAY_ID_IID] != first_path->ids[ANJAY_ID_IID]
-                || path.ids[ANJAY_ID_RID] != first_path->ids[ANJAY_ID_RID]) {
+                || path.ids[ANJAY_ID_RID] != first_path->ids[ANJAY_ID_RID]
+                || !_anjay_uri_path_leaf_is(&path, ANJAY_ID_RIID)) {
             break;
         }
     }
     return result;
 }
 
-static int write_resource(anjay_unlocked_t *anjay,
-                          const anjay_dm_installed_object_t *obj,
-                          const anjay_uri_path_t *path,
-                          anjay_dm_resource_kind_t kind,
-                          bool is_array,
-                          anjay_unlocked_input_ctx_t *in_ctx,
-                          anjay_notify_queue_t *notify_queue,
-                          anjay_dm_write_type_t write_type) {
+static int
+write_resource_and_move_to_next_entry(anjay_unlocked_t *anjay,
+                                      const anjay_dm_installed_object_t *obj,
+                                      const anjay_uri_path_t *path,
+                                      anjay_dm_resource_kind_t kind,
+                                      bool is_array,
+                                      anjay_unlocked_input_ctx_t *in_ctx,
+                                      anjay_notify_queue_t *notify_queue,
+                                      anjay_dm_write_type_t write_type) {
     int result;
     if (_anjay_dm_res_kind_multiple(kind)) {
-        result = write_multiple_resource(anjay, obj, path, is_array, in_ctx,
-                                         write_type);
+        result = write_multiple_resource_and_move_to_next_entry(
+                anjay, obj, path, is_array, in_ctx, write_type);
     } else {
-        result = write_single_resource(anjay, obj, path, is_array, in_ctx);
+        result = write_single_resource_and_move_to_next_entry(anjay, obj, path,
+                                                              is_array, in_ctx);
     }
     if (!result && notify_queue) {
         result = _anjay_notify_queue_resource_change(notify_queue,
@@ -191,10 +209,11 @@ static int write_resource(anjay_unlocked_t *anjay,
     return result;
 }
 
-int _anjay_dm_write_resource(anjay_unlocked_t *anjay,
-                             const anjay_dm_installed_object_t *obj,
-                             anjay_unlocked_input_ctx_t *in_ctx,
-                             anjay_notify_queue_t *notify_queue) {
+int _anjay_dm_write_resource_and_move_to_next_entry(
+        anjay_unlocked_t *anjay,
+        const anjay_dm_installed_object_t *obj,
+        anjay_unlocked_input_ctx_t *in_ctx,
+        anjay_notify_queue_t *notify_queue) {
     anjay_uri_path_t path;
     bool is_array;
     int result = _anjay_input_get_path(in_ctx, &path, &is_array);
@@ -208,11 +227,12 @@ int _anjay_dm_write_resource(anjay_unlocked_t *anjay,
     anjay_dm_resource_kind_t kind;
     if ((result = preverify_resource_before_writing(anjay, obj, NULL, &path,
                                                     true, &kind, NULL))) {
-        return result;
+        return return_with_moving_to_next_entry(in_ctx, result);
     }
 
-    return write_resource(anjay, obj, &path, kind, is_array, in_ctx,
-                          notify_queue, ANJAY_DM_WRITE_TYPE_REPLACE);
+    return write_resource_and_move_to_next_entry(anjay, obj, &path, kind,
+                                                 is_array, in_ctx, notify_queue,
+                                                 ANJAY_DM_WRITE_TYPE_REPLACE);
 }
 
 #ifdef ANJAY_WITH_LWM2M11
@@ -234,7 +254,7 @@ static int write_resource_raw(anjay_unlocked_t *anjay,
 
     int result = ANJAY_ERR_INTERNAL;
     if (avs_is_ok(_anjay_dm_transaction_begin(anjay))) {
-        result = _anjay_dm_write_resource(
+        result = _anjay_dm_write_resource_and_move_to_next_entry(
                 anjay, obj, (anjay_unlocked_input_ctx_t *) &temp_ctx,
                 notify_queue);
         result = _anjay_dm_transaction_finish(anjay, result);
@@ -266,12 +286,13 @@ int _anjay_dm_write_resource_u64(anjay_unlocked_t *anjay,
  * Writes to instance whose location is determined by the path extracted
  * from Input Context (@p in_ctx).
  */
-static int write_instance(anjay_unlocked_t *anjay,
-                          const anjay_dm_installed_object_t *obj,
-                          anjay_iid_t iid,
-                          anjay_unlocked_input_ctx_t *in_ctx,
-                          anjay_notify_queue_t *notify_queue,
-                          anjay_dm_write_type_t write_type) {
+static int
+write_instance_and_move_to_next_entry(anjay_unlocked_t *anjay,
+                                      const anjay_dm_installed_object_t *obj,
+                                      anjay_iid_t iid,
+                                      anjay_unlocked_input_ctx_t *in_ctx,
+                                      anjay_notify_queue_t *notify_queue,
+                                      anjay_dm_write_type_t write_type) {
     int result;
     do {
         anjay_uri_path_t path;
@@ -287,20 +308,19 @@ static int write_instance(anjay_unlocked_t *anjay,
             /* more than one instance in the payload is not allowed */
             return ANJAY_ERR_BAD_REQUEST;
         }
-        if (!_anjay_uri_path_has(&path, ANJAY_ID_RID)) {
-            /* no resources, meaning the instance is empty */
-            break;
-        }
         anjay_dm_resource_kind_t kind;
-        (void) ((result = preverify_resource_before_writing(
-                         anjay, obj, NULL, &path, false, &kind, NULL))
-                || (result = write_resource(anjay, obj, &path, kind, is_array,
-                                            in_ctx, notify_queue, write_type)));
-        if (result == ANJAY_ERR_NOT_FOUND
-                || result == ANJAY_ERR_NOT_IMPLEMENTED) {
-            result = 0;
-        }
-        if (!result) {
+        if (_anjay_uri_path_has(&path, ANJAY_ID_RID)
+                && !preverify_resource_before_writing(anjay, obj, NULL, &path,
+                                                      false, &kind, NULL)) {
+            result = write_resource_and_move_to_next_entry(anjay, obj, &path,
+                                                           kind, is_array,
+                                                           in_ctx, notify_queue,
+                                                           write_type);
+            if (result == ANJAY_ERR_NOT_FOUND
+                    || result == ANJAY_ERR_NOT_IMPLEMENTED) {
+                result = 0;
+            }
+        } else {
             result = _anjay_input_next_entry(in_ctx);
         }
     } while (!result);
@@ -336,8 +356,9 @@ int _anjay_dm_write(anjay_unlocked_t *anjay,
                             anjay, obj, request->uri.ids[ANJAY_ID_IID]))) {
             return result;
         }
-        result = write_instance(anjay, obj, request->uri.ids[ANJAY_ID_IID],
-                                in_ctx, &notify_queue, write_type);
+        result = write_instance_and_move_to_next_entry(
+                anjay, obj, request->uri.ids[ANJAY_ID_IID], in_ctx,
+                &notify_queue, write_type);
     } else {
         anjay_uri_path_t path;
         bool is_array;
@@ -352,8 +373,9 @@ int _anjay_dm_write(anjay_unlocked_t *anjay,
                           anjay, obj, &request->uri, &path, false, &kind,
                           &presence))) {
                 if (_anjay_uri_path_leaf_is(&request->uri, ANJAY_ID_RID)) {
-                    result = write_resource(anjay, obj, &path, kind, is_array,
-                                            in_ctx, &notify_queue, write_type);
+                    result = write_resource_and_move_to_next_entry(
+                            anjay, obj, &path, kind, is_array, in_ctx,
+                            &notify_queue, write_type);
                 } else {
                     assert(_anjay_uri_path_leaf_is(&request->uri,
                                                    ANJAY_ID_RIID));
@@ -419,18 +441,21 @@ int _anjay_dm_write_composite(anjay_unlocked_t *anjay,
         if (!(result = preverify_resource_before_writing(
                       anjay, obj, NULL, &path, false, &kind, &presence))) {
             if (_anjay_uri_path_leaf_is(&path, ANJAY_ID_RID)) {
-                result =
-                        write_resource(anjay, obj, &path, kind, is_array,
-                                       in_ctx, &notify_queue,
-                                       _anjay_dm_write_type_from_request_action(
-                                               request->action));
+                result = write_resource_and_move_to_next_entry(
+                        anjay, obj, &path, kind, is_array, in_ctx,
+                        &notify_queue,
+                        _anjay_dm_write_type_from_request_action(
+                                request->action));
             } else {
-                result = write_resource_instance(anjay, obj, &path, presence,
-                                                 in_ctx, &notify_queue, true);
+                {
+                    result = write_resource_instance(anjay, obj, &path,
+                                                     presence, in_ctx,
+                                                     &notify_queue, true);
+                }
+                if (!result) {
+                    result = _anjay_input_next_entry(in_ctx);
+                }
             }
-        }
-        if (!result) {
-            result = _anjay_input_next_entry(in_ctx);
         }
         if (result) {
             goto finish;
@@ -448,11 +473,12 @@ finish:
 }
 #endif // ANJAY_WITH_LWM2M11
 
-int _anjay_dm_write_created_instance(anjay_unlocked_t *anjay,
-                                     const anjay_dm_installed_object_t *obj,
-                                     anjay_iid_t iid,
-                                     anjay_unlocked_input_ctx_t *in_ctx) {
-    return write_instance(anjay, obj, iid, in_ctx, NULL,
-                          _anjay_dm_write_type_from_request_action(
-                                  ANJAY_ACTION_CREATE));
+int _anjay_dm_write_created_instance_and_move_to_next_entry(
+        anjay_unlocked_t *anjay,
+        const anjay_dm_installed_object_t *obj,
+        anjay_iid_t iid,
+        anjay_unlocked_input_ctx_t *in_ctx) {
+    return write_instance_and_move_to_next_entry(
+            anjay, obj, iid, in_ctx, NULL,
+            _anjay_dm_write_type_from_request_action(ANJAY_ACTION_CREATE));
 }

@@ -7,13 +7,14 @@
 # Licensed under the AVSystem-5-clause License.
 # See the attached LICENSE file for details.
 
-import requests
 import json
 import os.path
-from factory_prov.framework import serialize_senml_cbor as ssc
+
+import requests
 from factory_prov.cert_gen import *
-from factory_prov.framework.test_utils import *
-from factory_prov.framework.lwm2m.coap.server import SecurityMode
+from framework import serialize_senml_cbor as ssc
+from framework.lwm2m.coap.server import SecurityMode
+from framework.test_utils import *
 
 SupportedSecMode = [
     SecurityMode.PreSharedKey,
@@ -25,8 +26,8 @@ SupportedSecMode = [
 class CoioteRegistration:
     def __init__(self, srv_info):
         self.addr = srv_info.get('url', 'https://eu.iot.avsystem.cloud') + \
-            ':' + \
-            str(srv_info.get('port', 8087))
+                    ':' + \
+                    str(srv_info.get('port', 8087))
 
         if 'access_token' not in srv_info:
             raise ValueError(
@@ -57,7 +58,9 @@ class CoioteRegistration:
         }
 
         request = {
-            'id': self.endpoint_name,
+            'properties': {
+                'endpointName': self.endpoint_name
+            },
             'connectorType': 'management',
             'domain': self.domain,
             'securityMode': self.sec_mode,
@@ -155,7 +158,7 @@ class FactoryProvisioning:
                 'Security Object Private Key ID resource is empty')
 
     def __serialize_config(self):
-        return ssc.serialize_config(self.endpoint_cfg)
+        return ssc.serialize_config(str(self.cfg_dict))
 
     def get_sec_mode(self):
         return str(SecurityMode(self.sec_mode))
@@ -178,18 +181,58 @@ class FactoryProvisioning:
             raise ValueError('Missing information for certificate generation')
 
         print('Generating device certificates...')
-        if not os.path.isdir('cert'):
-            os.mkdir('cert')
-        key = 'cert/client_key'
-        cert = 'cert/client_cert'
-        gen_cert_and_key(self.cert_info, key, cert)
         try:
-            self.set_endpoint_cert_and_key(key+'.der', cert+'.der')
+            os.mkdir('cert')
+        except FileExistsError:
+            pass
+        cert_dir = os.path.realpath('cert')
+        key_filename = os.path.join(cert_dir, 'client_key')
+        cert_filename = os.path.join(cert_dir, 'client_cert')
+
+        if 'commonName' in self.cert_info:
+            cert_info = self.cert_info
+        else:
+            cert_info = {**self.cert_info, 'commonName': self.endpoint_name}
+
+        gen_cert_and_key(cert_info, key_filename, cert_filename)
+        try:
+            self.set_endpoint_cert_and_key(cert_filename + '.der', key_filename + '.der')
             print('Certificates generated')
         except:
             raise RuntimeError('Failed to generate certificate')
 
     def provision_device(self):
+        print(f'Security Mode set to "{SecurityMode(self.sec_mode)}"')
+
+        if self.sec_mode == SecurityMode.Certificate.value:
+            list_of_sec_inst = list(self.cfg_dict[0].values())
+            if len(list_of_sec_inst) != 1:
+                raise ValueError(
+                    'Invalid number of Security instances. Requires exactly one instance.')
+
+            sec_inst = list_of_sec_inst[0]
+
+            if self.server_cert is not None:
+                print(f'Load server cert: {self.server_cert}')
+                with open(self.server_cert, 'rb') as cert:
+                    sec_inst[RID.Security.ServerPKOrIdentity] = cert.read()
+            else:
+                raise ValueError('Missing server cert')
+
+            if self.endpoint_cert is not None:
+                print(f'Load endpoint cert: {self.endpoint_cert}')
+                with open(self.endpoint_cert, 'rb') as cert:
+                    sec_inst[RID.Security.PKOrIdentity] = cert.read()
+            else:
+                raise ValueError('Missing endpoint cert')
+
+            if self.endpoint_key is not None:
+                print(f'Load endpoint key: {self.endpoint_key}')
+                with open(self.endpoint_key, 'rb') as cert:
+                    sec_inst[RID.Security.SecretKey] = cert.read()
+            else:
+                raise ValueError('Missing endpoint key')
+
         print('Serializing endpoint configuration...')
         cbor_blob = self.__serialize_config()
         if len(cbor_blob) > 0:
@@ -200,24 +243,6 @@ class FactoryProvisioning:
         # TODO: open device and send blob/certs to the device, for now dump blob to file
         with open('SenMLCBOR', 'wb') as file:
             file.write(cbor_blob)
-
-        print(f'Security Mode set to "{SecurityMode(self.sec_mode)}"')
-
-        if self.sec_mode == SecurityMode.Certificate.value:
-            if self.server_cert is not None:
-                print(f'Load server cert: {self.server_cert}')
-            else:
-                raise ValueError('Missing server cert')
-
-            if self.endpoint_cert is not None:
-                print(f'Load endpoint cert: {self.endpoint_cert}')
-            else:
-                raise ValueError('Missing endpoint cert')
-
-            if self.endpoint_key is not None:
-                print(f'Load endpoint key: {self.endpoint_key}')
-            else:
-                raise ValueError('Missing endpoint key')
 
         print('Load endpoint configuration: SenMLCBOR')
 

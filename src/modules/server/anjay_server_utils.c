@@ -11,6 +11,8 @@
 
 #ifdef ANJAY_WITH_MODULE_SERVER
 
+#    include <anjay_modules/anjay_dm_utils.h>
+
 #    include "anjay_server_utils.h"
 
 #    include <string.h>

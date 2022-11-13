@@ -44,32 +44,8 @@ VISIBILITY_SOURCE_BEGIN
  * seconds. */
 #define ANJAY_MIN_UPDATE_INTERVAL_S 1
 
-static void send_update_sched_job(avs_sched_t *sched, const void *ssid_ptr) {
-    anjay_ssid_t ssid = *(const anjay_ssid_t *) ssid_ptr;
-    assert(ssid != ANJAY_SSID_ANY);
-
-    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
-    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
-    AVS_LIST(anjay_server_info_t) server =
-            _anjay_servers_find_active(anjay, ssid);
-    if (server) {
-        server->registration_info.update_forced = true;
-        _anjay_active_server_refresh(server);
-    }
-    ANJAY_MUTEX_UNLOCK(anjay_locked);
-}
-
-static int schedule_update(anjay_server_info_t *server,
-                           avs_time_duration_t delay) {
-    anjay_log(DEBUG, _("scheduling update for SSID ") "%u" _(" after ") "%s",
-              server->ssid, AVS_TIME_DURATION_AS_STRING(delay));
-
-    return AVS_SCHED_DELAYED(server->anjay->sched, &server->next_action_handle,
-                             delay, send_update_sched_job, &server->ssid,
-                             sizeof(server->ssid));
-}
-
-static avs_time_real_t time_of_next_update(anjay_server_info_t *server) {
+static avs_time_real_t
+calculate_time_of_next_update(anjay_server_info_t *server) {
     avs_time_real_t expire_time = _anjay_registration_expire_time(server);
     if (!avs_time_real_valid(expire_time)) {
         return AVS_TIME_REAL_INVALID;
@@ -94,9 +70,30 @@ static avs_time_real_t time_of_next_update(anjay_server_info_t *server) {
                              avs_time_duration_mul(interval_margin, -1));
 }
 
+static avs_time_real_t get_time_of_next_update(anjay_server_info_t *server) {
+    if (server->next_action_handle
+            && (server->next_action == ANJAY_SERVER_NEXT_ACTION_SEND_UPDATE
+                || (server->next_action == ANJAY_SERVER_NEXT_ACTION_REFRESH
+                    && server->registration_info.update_forced))) {
+        // Update is scheduled - just return the time of that job
+        avs_time_real_t real_now = avs_time_real_now();
+        avs_time_monotonic_t monotonic_now = avs_time_monotonic_now();
+        return avs_time_real_add(
+                real_now, avs_time_monotonic_diff(
+                                  avs_sched_time(&server->next_action_handle),
+                                  monotonic_now));
+    }
+    // We don't have Update scheduled, so let's calculate it from scratch
+    return calculate_time_of_next_update(server);
+}
+
 static int schedule_next_update(anjay_server_info_t *server) {
-    assert(_anjay_server_active(server));
-    avs_time_real_t update_time = time_of_next_update(server);
+    if (!_anjay_server_active(server)) {
+        // This may happen if the server is in the process of being disabled.
+        // Skip scheduling Update in that case.
+        return 0;
+    }
+    avs_time_real_t update_time = calculate_time_of_next_update(server);
     avs_time_duration_t min_margin =
             avs_time_duration_from_scalar(ANJAY_MIN_UPDATE_INTERVAL_S,
                                           AVS_TIME_S);
@@ -105,16 +102,20 @@ static int schedule_next_update(anjay_server_info_t *server) {
     if (avs_time_duration_less(delay, min_margin)) {
         delay = min_margin;
     }
-    return schedule_update(server, delay);
+
+    anjay_log(DEBUG, _("scheduling update for SSID ") "%u" _(" after ") "%s",
+              server->ssid, AVS_TIME_DURATION_AS_STRING(delay));
+
+    return _anjay_server_reschedule_next_action(
+            server, delay, ANJAY_SERVER_NEXT_ACTION_SEND_UPDATE);
 }
 
 bool _anjay_server_primary_connection_valid(anjay_server_info_t *server) {
-    assert(_anjay_server_active(server));
-    return _anjay_connection_get_online_socket((anjay_connection_ref_t) {
-               .server = server,
-               .conn_type = ANJAY_CONNECTION_PRIMARY
-           })
-           != NULL;
+    return _anjay_server_active(server)
+           && _anjay_connection_get_online_socket((anjay_connection_ref_t) {
+                  .server = server,
+                  .conn_type = ANJAY_CONNECTION_PRIMARY
+              }) != NULL;
 }
 
 int _anjay_server_reschedule_update_job(anjay_server_info_t *server) {
@@ -127,17 +128,12 @@ int _anjay_server_reschedule_update_job(anjay_server_info_t *server) {
 }
 
 static int reschedule_update_for_server(anjay_server_info_t *server) {
-    if (_anjay_bootstrap_in_progress(server->anjay)) {
-        // Bootstrap Finish will trigger _anjay_schedule_reload_servers();
-        // make sure that Update will be sent then.
+    int result = _anjay_schedule_refresh_server(server, AVS_TIME_DURATION_ZERO);
+    if (!result) {
+        // Make sure that Update is actually sent during the refresh.
         server->registration_info.update_forced = true;
-        return 0;
     }
-    if (schedule_update(server, AVS_TIME_DURATION_ZERO)) {
-        anjay_log(ERROR, _("could not schedule send_update_sched_job"));
-        return -1;
-    }
-    return 0;
+    return result;
 }
 
 static int reschedule_update_for_all_servers(anjay_unlocked_t *anjay) {
@@ -735,6 +731,10 @@ static void send_register(anjay_server_info_t *server,
         _anjay_server_on_updated_registration(server, map_coap_error(err), err);
     } else {
         anjay_log(INFO, _("Register sent"));
+        server->registration_info.update_forced = false;
+#ifdef ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
+        _anjay_server_set_last_communication_time(server);
+#endif // ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
     }
 cleanup:
     avs_coap_options_cleanup(&request.options);
@@ -876,6 +876,7 @@ on_registration_update_result(anjay_server_info_t *server,
                           _("; trying to re-register"),
                   server->ssid);
         server->registration_info.expire_time = AVS_TIME_REAL_INVALID;
+        // defined(ANJAY_WITH_CORE_PERSISTENCE)
         do_register(server, move_params);
         break;
 
@@ -885,6 +886,7 @@ on_registration_update_result(anjay_server_info_t *server,
                           "; needs re-registration"),
                   server->ssid);
         server->registration_info.expire_time = AVS_TIME_REAL_INVALID;
+        // defined(ANJAY_WITH_CORE_PERSISTENCE)
         do_register(server, move_params);
         break;
 
@@ -920,6 +922,9 @@ receive_update_response(avs_coap_ctx_t *coap,
                         void *state_) {
     anjay_registration_async_exchange_state_t *state =
             (anjay_registration_async_exchange_state_t *) state_;
+    anjay_server_info_t *server = AVS_CONTAINER_OF(state, anjay_server_info_t,
+                                                   registration_exchange_state);
+
     anjay_registration_result_t result = ANJAY_REGISTRATION_ERROR_OTHER;
     if (request_state != AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT) {
         state->exchange_id = AVS_COAP_EXCHANGE_ID_INVALID;
@@ -930,6 +935,7 @@ receive_update_response(avs_coap_ctx_t *coap,
         // Note: this will recursively call this function with
         // AVS_COAP_CLIENT_REQUEST_CANCEL.
         avs_coap_exchange_cancel(coap, exchange_id);
+        server->registration_info.update_forced = false;
         // fall-through
 
     case AVS_COAP_CLIENT_REQUEST_OK:
@@ -945,12 +951,12 @@ receive_update_response(avs_coap_ctx_t *coap,
     }
 
     case AVS_COAP_CLIENT_REQUEST_CANCEL:
+        // Interrupted Update - make sure it is restarted after next refresh
+        server->registration_info.update_forced = true;
         return;
     }
 
-    on_registration_update_result(AVS_CONTAINER_OF(state, anjay_server_info_t,
-                                                   registration_exchange_state),
-                                  &state->new_params, result, err);
+    on_registration_update_result(server, &state->new_params, result, err);
 }
 
 static void send_update(anjay_server_info_t *server,
@@ -1003,6 +1009,10 @@ static void send_update(anjay_server_info_t *server,
                                       err);
     } else {
         anjay_log(INFO, _("Update sent"));
+        server->registration_info.update_forced = false;
+#ifdef ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
+        _anjay_server_set_last_communication_time(server);
+#endif // ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
     }
 end:
     avs_coap_options_cleanup(&request.options);
@@ -1043,8 +1053,12 @@ static void update_registration(anjay_server_info_t *server,
 }
 
 void _anjay_server_ensure_valid_registration(anjay_server_info_t *server) {
-    assert(_anjay_server_active(server));
     assert(server->ssid != ANJAY_SSID_BOOTSTRAP);
+    if (!_anjay_server_active(server)) {
+        // This may happen if the server is in the process of being disabled.
+        // Skip Register/Update in that case.
+        return;
+    }
 
     anjay_update_parameters_t new_params;
     if (update_parameters_init(server, server->registration_info.lwm2m_version,
@@ -1084,6 +1098,15 @@ void _anjay_server_ensure_valid_registration(anjay_server_info_t *server) {
             if (!registration_or_update_in_progress) {
                 _anjay_server_on_updated_registration(
                         server, ANJAY_REGISTRATION_SUCCESS, AVS_OK);
+                anjay_connection_ref_t ref = {
+                    .server = server,
+                    .conn_type = ANJAY_CONNECTION_PRIMARY
+                };
+                anjay_server_connection_t *connection =
+                        _anjay_get_server_connection(ref);
+                if (!connection->queue_mode_close_socket_clb) {
+                    _anjay_connection_schedule_queue_mode_close(ref);
+                }
             }
         } else {
             update_registration(server, &new_params);
@@ -1145,6 +1168,9 @@ static avs_error_t deregister(anjay_server_info_t *server) {
 
     anjay_log(INFO, _("De-register sent"));
     err = AVS_OK;
+#    ifdef ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
+    _anjay_server_set_last_communication_time(server);
+#    endif // ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
 
 end:
     avs_coap_options_cleanup(&request.options);
@@ -1193,7 +1219,6 @@ void _anjay_server_update_registration_info(
         anjay_lwm2m_version_t lwm2m_version,
         bool queue_mode,
         anjay_update_parameters_t *move_params) {
-    assert(_anjay_server_active(server));
     anjay_registration_info_t *info = &server->registration_info;
 
     if (move_endpoint_path && move_endpoint_path != &info->endpoint_path) {
@@ -1212,6 +1237,7 @@ void _anjay_server_update_registration_info(
             get_registration_expire_time(info->last_update_params.lifetime_s);
     info->update_forced = false;
     info->session_token = _anjay_server_primary_session_token(server);
+    // defined(ANJAY_WITH_CORE_PERSISTENCE)
 }
 
 static int
@@ -1335,7 +1361,7 @@ next_planned_lifecycle_operation(anjay_server_info_t *server) {
     } else if (server_active && server->registration_info.update_forced) {
         return avs_time_real_now();
     } else {
-        return time_of_next_update(server);
+        return get_time_of_next_update(server);
     }
 }
 
@@ -1388,3 +1414,131 @@ avs_time_real_t anjay_transport_next_planned_lifecycle_operation(
     ANJAY_MUTEX_UNLOCK(anjay_locked);
     return result;
 }
+
+#ifdef ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
+avs_error_t anjay_get_server_last_registration_time(anjay_t *anjay,
+                                                    anjay_ssid_t ssid,
+                                                    avs_time_real_t *out_time) {
+    assert(anjay);
+    assert(out_time);
+
+    avs_error_t err = avs_errno(AVS_EBUSY);
+    *out_time = AVS_TIME_REAL_INVALID;
+
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    if (ssid == ANJAY_SSID_ANY) {
+        if (!anjay_unlocked->servers) {
+            anjay_log(WARNING, _("no servers found"));
+            err = avs_errno(AVS_EEXIST);
+        } else {
+            AVS_LIST(anjay_server_info_t) it;
+            AVS_LIST_FOREACH(it, anjay_unlocked->servers) {
+                avs_time_real_t server_result =
+                        it->registration_info.last_registration_time;
+                if (!avs_time_real_valid(*out_time)
+                        || avs_time_real_before(*out_time, server_result)) {
+                    *out_time = server_result;
+                }
+            }
+            err = AVS_OK;
+        }
+    } else if (ssid == ANJAY_SSID_BOOTSTRAP) {
+        err = avs_errno(AVS_EINVAL);
+    } else {
+        anjay_server_info_t *server = _anjay_servers_find(anjay_unlocked, ssid);
+        if (!server) {
+            anjay_log(WARNING, _("no server with SSID = ") "%u", ssid);
+            err = avs_errno(AVS_EEXIST);
+        } else {
+            *out_time = server->registration_info.last_registration_time;
+            err = AVS_OK;
+        }
+    }
+    ANJAY_MUTEX_UNLOCK(anjay);
+
+    return err;
+}
+
+avs_error_t anjay_get_server_next_update_time(anjay_t *anjay,
+                                              anjay_ssid_t ssid,
+                                              avs_time_real_t *out_time) {
+    assert(anjay);
+    assert(out_time);
+
+    avs_error_t err = avs_errno(AVS_EBUSY);
+    *out_time = AVS_TIME_REAL_INVALID;
+
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    if (ssid == ANJAY_SSID_ANY) {
+        if (!anjay_unlocked->servers) {
+            anjay_log(WARNING, _("no servers found"));
+            err = avs_errno(AVS_EEXIST);
+        } else {
+            AVS_LIST(anjay_server_info_t) it;
+            AVS_LIST_FOREACH(it, anjay_unlocked->servers) {
+                avs_time_real_t server_result = get_time_of_next_update(it);
+                if (!avs_time_real_valid(*out_time)
+                        || avs_time_real_before(server_result, *out_time)) {
+                    *out_time = server_result;
+                }
+            }
+            err = AVS_OK;
+        }
+    } else if (ssid == ANJAY_SSID_BOOTSTRAP) {
+        err = avs_errno(AVS_EINVAL);
+    } else {
+        anjay_server_info_t *server = _anjay_servers_find(anjay_unlocked, ssid);
+        if (!server) {
+            anjay_log(WARNING, _("no server with SSID = ") "%u", ssid);
+            err = avs_errno(AVS_EEXIST);
+        } else {
+            *out_time = get_time_of_next_update(server);
+            err = AVS_OK;
+        }
+    }
+    ANJAY_MUTEX_UNLOCK(anjay);
+
+    return err;
+}
+
+avs_error_t anjay_get_server_last_communication_time(
+        anjay_t *anjay, anjay_ssid_t ssid, avs_time_real_t *out_time) {
+    assert(anjay);
+    assert(out_time);
+
+    avs_error_t err = avs_errno(AVS_EBUSY);
+    *out_time = AVS_TIME_REAL_INVALID;
+
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    if (ssid == ANJAY_SSID_ANY) {
+        if (!anjay_unlocked->servers) {
+            anjay_log(WARNING, _("no servers found"));
+            err = avs_errno(AVS_EEXIST);
+        } else {
+            AVS_LIST(anjay_server_info_t) it;
+            AVS_LIST_FOREACH(it, anjay_unlocked->servers) {
+                avs_time_real_t server_result = it->last_communication_time;
+                if (!avs_time_real_valid(*out_time)
+                        || avs_time_real_before(*out_time, server_result)) {
+                    *out_time = server_result;
+                }
+            }
+            err = AVS_OK;
+        }
+    } else if (ssid == ANJAY_SSID_BOOTSTRAP) {
+        err = avs_errno(AVS_EINVAL);
+    } else {
+        anjay_server_info_t *server = _anjay_servers_find(anjay_unlocked, ssid);
+        if (!server) {
+            anjay_log(WARNING, _("no server with SSID = ") "%u", ssid);
+            err = avs_errno(AVS_EEXIST);
+        } else {
+            *out_time = server->last_communication_time;
+            err = AVS_OK;
+        }
+    }
+    ANJAY_MUTEX_UNLOCK(anjay);
+
+    return err;
+}
+#endif // ANJAY_WITH_COMMUNICATION_TIMESTAMP_API

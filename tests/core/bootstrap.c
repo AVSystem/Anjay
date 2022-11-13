@@ -706,6 +706,48 @@ AVS_UNIT_TEST(bootstrap_write, object_missing) {
     DM_TEST_FINISH;
 }
 
+AVS_UNIT_TEST(bootstrap_write, multiple_resource_followed_by_single_resoure) {
+    DM_TEST_INIT_WITH_SSIDS(ANJAY_SSID_BOOTSTRAP);
+    DM_TEST_REQUEST(mocksocks[0], CON, PUT, ID(0xFA3E), PATH("42", "69"),
+                    CONTENT_FORMAT(OMA_LWM2M_TLV),
+                    PAYLOAD("\x88\x15\x0e"
+                            "\x45\x03"
+                            "Hello"
+                            "\x45\x07"
+                            "world"
+                            "\xe4\x01\xa4"
+                            "test"));
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &OBJ, 0, (const anjay_iid_t[]) { 69, ANJAY_ID_INVALID });
+    // Write /42/69/21
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &OBJ, 69, 0,
+            (const anjay_mock_dm_res_entry_t[]) {
+                    { 21, ANJAY_DM_RES_RWM, ANJAY_DM_RES_PRESENT },
+                    { 37, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    { 420, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_resource_reset(anjay, &OBJ, 69, 21, 0);
+    _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 21, 3,
+                                         ANJAY_MOCK_DM_STRING(0, "Hello"), 0);
+    _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 21, 7,
+                                         ANJAY_MOCK_DM_STRING(0, "world"), 0);
+    // Write /42/69/420
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &OBJ, 69, 0,
+            (const anjay_mock_dm_res_entry_t[]) {
+                    { 21, ANJAY_DM_RES_RWM, ANJAY_DM_RES_PRESENT },
+                    { 37, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    { 420, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 420, ANJAY_ID_INVALID,
+                                         ANJAY_MOCK_DM_STRING(0, "test"), 0);
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CHANGED, ID(0xFA3E), NO_PAYLOAD);
+    expect_has_buffered_data_check(mocksocks[0], false);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+    DM_TEST_FINISH;
+}
+
 AVS_UNIT_TEST(bootstrap_delete, instance) {
     DM_TEST_INIT_WITH_SSIDS(ANJAY_SSID_BOOTSTRAP);
     DM_TEST_REQUEST(mocksocks[0], CON, DELETE, ID(0xFA3E), PATH("42", "34"));

@@ -6,11 +6,10 @@
 #
 # Licensed under the AVSystem-5-clause License.
 # See the attached LICENSE file for details.
-import time
 
 import framework.test_suite
 from framework.lwm2m_test import *
-from . import access_control, retransmissions
+from . import access_control, retransmissions, firmware_update
 
 
 class QueueModeBehaviour(retransmissions.RetransmissionTest.TestMixin,
@@ -19,12 +18,10 @@ class QueueModeBehaviour(retransmissions.RetransmissionTest.TestMixin,
     PSK_KEY = b'test-key'
 
     def setUp(self):
-        super().setUp(
-            servers=[
-                Lwm2mServer(coap.DtlsServer(psk_key=self.PSK_KEY, psk_identity=self.PSK_IDENTITY)),
-                Lwm2mServer(coap.DtlsServer(psk_key=self.PSK_KEY, psk_identity=self.PSK_IDENTITY))],
-            extra_cmdline_args=['--identity',
-                                str(binascii.hexlify(self.PSK_IDENTITY), 'ascii'),
+        super().setUp(servers=[
+            Lwm2mServer(coap.DtlsServer(psk_key=self.PSK_KEY, psk_identity=self.PSK_IDENTITY)),
+            Lwm2mServer(coap.DtlsServer(psk_key=self.PSK_KEY, psk_identity=self.PSK_IDENTITY))],
+            extra_cmdline_args=['--identity', str(binascii.hexlify(self.PSK_IDENTITY), 'ascii'),
                                 '--key', str(binascii.hexlify(self.PSK_KEY), 'ascii')])
 
     def tearDown(self):
@@ -183,7 +180,8 @@ class Lwm2m11UQBinding(retransmissions.RetransmissionTest.TestMixin,
                        framework.test_suite.Lwm2mDtlsSingleServerTest):
     def setUp(self):
         # UQ binding is not LwM2M 1.1-compliant, but we support it anyway
-        super().setUp(extra_cmdline_args=['--binding=UQ'], auto_register=False, maximum_version='1.1')
+        super().setUp(extra_cmdline_args=['--binding=UQ'], auto_register=False,
+                      maximum_version='1.1')
         self.assertDemoRegisters(self.serv, version='1.1', lwm2m11_queue_mode=True)
 
     def runTest(self):
@@ -223,3 +221,58 @@ class Lwm2m11UQBinding(retransmissions.RetransmissionTest.TestMixin,
         self.assertEqual(self.get_socket_count(), 1)
         time.sleep(4)
         self.assertEqual(self.get_socket_count(), 1)
+
+
+class QueueModeAfterManualReconnect(retransmissions.RetransmissionTest.TestMixin,
+                                    firmware_update.SameSocketDownload.Test):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--binding=UQ'], maximum_version='1.1', binding=None,
+                      lwm2m11_queue_mode=True, psk_identity=b'test-identity', psk_key=b'test-key')
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+    def runTest(self):
+        self.start_download()
+        self.serv.recv()
+        with self.serv.fake_close():
+            self.wait_until_socket_count(0, timeout_s=5)
+
+        # reconnect after a failure
+        self.serv.reset()
+        self.communicate('reconnect')
+        self.serv.listen(timeout_s=5)
+        time.sleep(self.max_transmit_wait() - 2)
+        self.assertEqual(self.get_socket_count(), 1)
+        time.sleep(4)
+        self.assertEqual(self.get_socket_count(), 0)
+
+
+class QueueModeAfterTimedOutSend(QueueModeAfterManualReconnect):
+    def runTest(self):
+        self.start_download()
+        self.serv.recv()
+        with self.serv.fake_close():
+            self.wait_until_socket_count(0, timeout_s=5)
+
+        # reconnect after a failure
+        self.serv.reset()
+        self.communicate('reconnect')
+        self.serv.listen(timeout_s=5)
+        time.sleep(self.max_transmit_wait() - 2)
+        self.assertEqual(self.get_socket_count(), 1)
+
+        self.communicate('send 1 %s' % (ResPath.Device.ModelNumber,))
+        sent_time = time.time()
+        expected_close = sent_time + self.max_transmit_wait()
+
+        for i in range(self.MAX_RETRANSMIT + 1):
+            pkt = self.serv.recv(timeout_s=max(1, expected_close - time.time()))
+            self.assertMsgEqual(Lwm2mSend(), pkt)
+
+        timeout = expected_close - time.time() - 2
+        if timeout > 0.0:
+            time.sleep(timeout)
+        self.assertEqual(self.get_socket_count(), 1)
+        time.sleep(4)
+        self.assertEqual(self.get_socket_count(), 0)

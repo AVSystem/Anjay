@@ -85,19 +85,21 @@ int _anjay_dm_select_free_iid(anjay_unlocked_t *anjay,
     return result;
 }
 
-static int dm_create_inner(anjay_unlocked_t *anjay,
-                           const anjay_dm_installed_object_t *obj,
-                           anjay_iid_t iid,
-                           anjay_unlocked_input_ctx_t *in_ctx) {
+static int
+dm_create_inner_and_move_to_next_entry(anjay_unlocked_t *anjay,
+                                       const anjay_dm_installed_object_t *obj,
+                                       anjay_iid_t iid,
+                                       anjay_unlocked_input_ctx_t *in_ctx) {
     assert(iid != ANJAY_ID_INVALID);
     int result = _anjay_dm_call_instance_create(anjay, obj, iid);
     if (result) {
         dm_log(DEBUG,
                _("Instance Create handler for object ") "%" PRIu16 _(" failed"),
                _anjay_dm_installed_object_oid(obj));
-        return result ? result : ANJAY_ERR_INTERNAL;
-    } else if ((result = _anjay_dm_write_created_instance(anjay, obj, iid,
-                                                          in_ctx))) {
+        return result;
+    } else if ((result =
+                        _anjay_dm_write_created_instance_and_move_to_next_entry(
+                                anjay, obj, iid, in_ctx))) {
         dm_log(DEBUG,
                _("Writing Resources for newly created ") "/%" PRIu16 "/%" PRIu16
                        _(" failed; removing"),
@@ -126,10 +128,9 @@ static int dm_create_with_explicit_iid(anjay_unlocked_t *anjay,
                _anjay_dm_installed_object_oid(obj), iid);
         return result;
     }
-    result = dm_create_inner(anjay, obj, iid, in_ctx);
+    result = dm_create_inner_and_move_to_next_entry(anjay, obj, iid, in_ctx);
     if (!result) {
-        (void) ((result = _anjay_input_next_entry(in_ctx))
-                || (result = _anjay_input_get_path(in_ctx, NULL, NULL)));
+        result = _anjay_input_get_path(in_ctx, NULL, NULL);
         if (result == ANJAY_GET_PATH_END) {
             return 0;
         } else {
@@ -166,7 +167,7 @@ int _anjay_dm_create(anjay_unlocked_t *anjay,
             (void) ((result = _anjay_dm_select_free_iid(
                              anjay, obj, &path.ids[ANJAY_ID_IID]))
                     || (result = _anjay_input_update_root_path(in_ctx, &path))
-                    || (result = dm_create_inner(
+                    || (result = dm_create_inner_and_move_to_next_entry(
                                 anjay, obj, path.ids[ANJAY_ID_IID], in_ctx)));
         }
     }

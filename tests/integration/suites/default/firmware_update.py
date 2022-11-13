@@ -12,10 +12,8 @@ import http
 import http.server
 import os
 import re
-import socket
 import ssl
 import threading
-import time
 import unittest
 import zlib
 
@@ -1726,7 +1724,7 @@ class FirmwareUpdateWeakEtagTest(FirmwareUpdate.TestWithHttpServer):
 
 
 class SameSocketDownload:
-    class Test(test_suite.Lwm2mSingleServerTest, test_suite.Lwm2mDmOperations):
+    class Test(test_suite.Lwm2mDtlsSingleServerTest, test_suite.Lwm2mDmOperations):
         GARBAGE_SIZE = 2048
         # Set to be able to comfortably test interleaved requests
         ACK_TIMEOUT = 10
@@ -1913,9 +1911,8 @@ class FirmwareDownloadSameSocketAndReconnectNstart1(SameSocketDownload.Test):
             # rather than responding to a request force reconnect
             self.communicate('reconnect')
             self.serv.reset()
-            # blockwise exchange is canceled, that's why register is sent even
-            # though nstart=1
-            self.assertDemoRegisters()
+            # demo will resume DTLS session without sending any LwM2M messages
+            self.serv.listen()
             # download request is retried
             dl_req_get = self.serv.recv()
             # and finally we respond to a block
@@ -1994,8 +1991,11 @@ class FirmwareDownloadSameSocketSuspendDueToOffline(SameSocketDownload.Test):
         self.communicate('enter-offline')
         with self.assertRaises(socket.timeout):
             self.serv.recv(timeout_s=2 * self.ACK_TIMEOUT)
+        self.serv.reset()
         self.communicate('exit-offline')
-        self.assertDemoRegisters()
+
+        # demo will resume DTLS session without sending any LwM2M messages
+        self.serv.listen()
 
         for _ in range(self.num_blocks()):
             self.handle_get(self.serv.recv())
@@ -2015,8 +2015,11 @@ class FirmwareDownloadSameSocketSuspendDueToOfflineDuringUpdate(
         with self.serv.fake_close():
             self.communicate('enter-offline')
             self.wait_until_socket_count(expected=0, timeout_s=5)
+        self.serv.reset()
         self.communicate('exit-offline')
-        self.assertDemoRegisters()
+        # demo will resume DTLS session before sending Register
+        self.serv.listen()
+        self.assertDemoUpdatesRegistration()
 
         for _ in range(self.num_blocks()):
             self.handle_get(self.serv.recv())
@@ -2041,8 +2044,11 @@ class FirmwareDownloadSameSocketSuspendDueToOfflineDuringUpdateNoMessagesCheck(
         self.communicate('enter-offline')
         with self.assertRaises(socket.timeout):
             self.serv.recv(timeout_s=2 * self.ACK_TIMEOUT)
+        self.serv.reset()
         self.communicate('exit-offline')
-        self.assertDemoRegisters()
+        # demo will resume DTLS session before sending Update
+        self.serv.listen()
+        self.assertDemoUpdatesRegistration()
 
         for _ in range(self.num_blocks()):
             self.handle_get(self.serv.recv())
@@ -2075,6 +2081,11 @@ class FirmwareDownloadSameSocketAndBootstrap(SameSocketDownload.Test):
                             rid=RID.Security.ServerURI,
                             content=bytes('coap://127.0.0.1:%d' % self.new_server.get_listen_port(),
                                           'ascii'))
+        self.write_resource(self.bootstrap_server,
+                            oid=OID.Security,
+                            iid=2,
+                            rid=RID.Security.Mode,
+                            content=str(coap.server.SecurityMode.NoSec.value).encode())
         req = Lwm2mBootstrapFinish()
         self.bootstrap_server.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
@@ -2121,6 +2132,9 @@ class FirmwareDownloadSameSocketInterruptedByRebootTwoServers(FirmwareUpdate.Dem
         self.servers[1].reset()
         self._start_demo(self.cmdline_args)
 
+        # demo will resume all DTLS sessions before sending Register
+        self.servers[0].listen()
+        self.servers[1].listen()
         self.assertDemoRegisters(self.servers[1])
         # Still not registered with server=0, but the download is "already
         # started"
@@ -2155,6 +2169,9 @@ class FirmwareDownloadSameSocketInterruptedByRebootTwoServersFail(
         self.servers[1].reset()
         self._start_demo(self.cmdline_args)
 
+        # demo will resume all DTLS sessions before sending Register
+        self.servers[0].listen()
+        self.servers[1].listen()
         self.assertDemoRegisters(self.servers[1])
         # Still not registered with server=0, but the download is "already
         # started"
@@ -2195,6 +2212,9 @@ class FirmwareDownloadSameSocketInterruptedByRebootTwoServersCancel(
         self.servers[1].reset()
         self._start_demo(self.cmdline_args)
 
+        # demo will resume all DTLS sessions before sending Register
+        self.servers[0].listen()
+        self.servers[1].listen()
         self.assertDemoRegisters(self.servers[1])
         # Still not registered with server=0, but the download is "already
         # started"
