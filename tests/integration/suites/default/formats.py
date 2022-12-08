@@ -113,6 +113,13 @@ class TlvWritesTest(FormatTest.Test):
                                 ])
 
 
+class TlvInstanceWriteMethodNotAllowedTest(FormatTest.Test):
+    def runTest(self):
+        self.write_instance(self.serv, OID.Server, 1,
+                            TLV.make_resource(RID.Server.ShortServerID, 42).serialize(),
+                            partial=True, expect_error_code=coap.Code.RES_METHOD_NOT_ALLOWED)
+
+
 class UnsupportedFormatWritesTest(FormatTest.Test):
     def runTest(self):
         for rid in (RID.Test.ResInt,

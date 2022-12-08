@@ -47,7 +47,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "3.2.0"
+#    define ANJAY_VERSION "3.2.1"
 #endif // ANJAY_VERSION
 
 #ifdef ANJAY_WITH_LWM2M11
@@ -270,11 +270,12 @@ void _anjay_reschedule_coap_sched_job(anjay_unlocked_t *anjay) {
         avs_time_monotonic_t next_job_time =
                 avs_sched_time_of_next(anjay->coap_sched);
         if (avs_time_monotonic_valid(next_job_time)) {
-            if (!anjay->coap_sched_job_handle
-                    || AVS_RESCHED_AT(&anjay->coap_sched_job_handle,
-                                      next_job_time)) {
-                AVS_SCHED_AT(anjay->sched, &anjay->coap_sched_job_handle,
-                             next_job_time, coap_sched_job, NULL, 0);
+            if ((!anjay->coap_sched_job_handle
+                 || AVS_RESCHED_AT(&anjay->coap_sched_job_handle,
+                                   next_job_time))
+                    && AVS_SCHED_AT(anjay->sched, &anjay->coap_sched_job_handle,
+                                    next_job_time, coap_sched_job, NULL, 0)) {
+                anjay_log(ERROR, _("Could not reschedule coap_sched_job"));
             }
         } else {
             avs_sched_del(&anjay->coap_sched_job_handle);

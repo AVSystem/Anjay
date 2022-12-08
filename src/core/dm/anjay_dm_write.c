@@ -309,19 +309,24 @@ write_instance_and_move_to_next_entry(anjay_unlocked_t *anjay,
             return ANJAY_ERR_BAD_REQUEST;
         }
         anjay_dm_resource_kind_t kind;
-        if (_anjay_uri_path_has(&path, ANJAY_ID_RID)
-                && !preverify_resource_before_writing(anjay, obj, NULL, &path,
-                                                      false, &kind, NULL)) {
+        if (!_anjay_uri_path_has(&path, ANJAY_ID_RID)) {
+            return _anjay_input_next_entry(in_ctx);
+        }
+        bool next_entry_called = false;
+        if (!(result = preverify_resource_before_writing(
+                      anjay, obj, NULL, &path, false, &kind, NULL))) {
             result = write_resource_and_move_to_next_entry(anjay, obj, &path,
                                                            kind, is_array,
                                                            in_ctx, notify_queue,
                                                            write_type);
-            if (result == ANJAY_ERR_NOT_FOUND
-                    || result == ANJAY_ERR_NOT_IMPLEMENTED) {
-                result = 0;
-            }
-        } else {
-            result = _anjay_input_next_entry(in_ctx);
+            next_entry_called = true;
+        }
+        if (result == ANJAY_ERR_NOT_FOUND
+                || result == ANJAY_ERR_NOT_IMPLEMENTED) {
+            result = 0;
+        }
+        if (!next_entry_called) {
+            result = return_with_moving_to_next_entry(in_ctx, result);
         }
     } while (!result);
     return result;

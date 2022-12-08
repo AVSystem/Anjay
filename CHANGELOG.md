@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.2.1 (December 13th, 2022)
+
+### Improvements
+
+- Added some missing log messages for potential scheduler errors
+- Updated the version of pybind11 used by integration tests to 2.10.1
+
+### Bugfixes
+
+- Fixed a regression in 3.2.0 that caused some invalid Writes to be silently ignored without responding with proper error codes
+- Fixed compatibility of integration tests with Python 3.11 and the current Github macOS environment
+
 ## 3.2.0 (December 7th, 2022)
 
 ### BREAKING CHANGES

@@ -1544,8 +1544,10 @@ static void handle_command(avs_sched_t *sched, const void *invocation_) {
 }
 
 void demo_command_dispatch(const demo_command_invocation_t *invocation) {
-    AVS_SCHED_NOW(anjay_get_scheduler(invocation->demo->anjay), NULL,
-                  handle_command, invocation,
-                  offsetof(demo_command_invocation_t, cmd)
-                          + strlen(invocation->cmd) + 1);
+    if (AVS_SCHED_NOW(anjay_get_scheduler(invocation->demo->anjay), NULL,
+                      handle_command, invocation,
+                      offsetof(demo_command_invocation_t, cmd)
+                              + strlen(invocation->cmd) + 1)) {
+        demo_log(ERROR, "Could not schedule handle_command");
+    }
 }

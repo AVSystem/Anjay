@@ -149,7 +149,7 @@ jobs:
       - run: brew update && brew upgrade
       # NOTE: latest known compatible versions are openssl@3--3.0.5 and mbedtls--3.2.1
       - run: brew install openssl mbedtls $COMPILER_VERSION
-      - run: pip3 install sphinx sphinx-rtd-theme cbor2 aiocoap cryptography packaging requests
+      - run: pip3 install sphinx sphinx-rtd-theme cbor2 aiocoap cryptography packaging requests wheel
       - run: env JAVA_HOME="$JAVA_HOME_17_X64" ./devconfig --with-asan --without-analysis --no-examples -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF
       - run: LC_ALL=C.UTF-8 make -j
       - run: LC_ALL=C.UTF-8 make check
@@ -157,9 +157,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - CC: gcc-11
-            CXX: g++-11
-            COMPILER_VERSION: gcc@11
           - CC: gcc-12
             CXX: g++-12
             COMPILER_VERSION: gcc@12

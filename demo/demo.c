@@ -426,10 +426,12 @@ static void reschedule_notify_time_dependent(anjay_demo_t *demo) {
             .nanoseconds = 0
         }
     };
-    AVS_SCHED_DELAYED(anjay_get_scheduler(demo->anjay),
-                      &demo->notify_time_dependent_job,
-                      avs_time_real_diff(next_full_second, now),
-                      notify_time_dependent_job, &demo, sizeof(demo));
+    if (AVS_SCHED_DELAYED(anjay_get_scheduler(demo->anjay),
+                          &demo->notify_time_dependent_job,
+                          avs_time_real_diff(next_full_second, now),
+                          notify_time_dependent_job, &demo, sizeof(demo))) {
+        demo_log(ERROR, "Could not reschedule notify_time_dependent_job");
+    }
 }
 
 static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
@@ -865,8 +867,10 @@ int main(int argc, char *argv[]) {
             // called before the event loop actually starts; it means that we
             // can't call it directly here, as it would lead to a race condition
             // if stdin is closed immediately (e.g. is /dev/null).
-            AVS_SCHED_NOW(anjay_get_scheduler(demo->anjay), NULL,
-                          interrupt_event_loop_job, &demo, sizeof(demo));
+            if (AVS_SCHED_NOW(anjay_get_scheduler(demo->anjay), NULL,
+                              interrupt_event_loop_job, &demo, sizeof(demo))) {
+                demo_log(ERROR, "Could not schedule interrupt_event_loop_job");
+            }
         }
 
         pthread_join(event_loop_thread, NULL);
