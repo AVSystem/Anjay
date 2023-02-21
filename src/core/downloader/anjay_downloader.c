@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -258,6 +258,8 @@ static uintptr_t find_free_id(anjay_downloader_t *dl) {
 
     return id;
 }
+#    else // ANJAY_WITH_HTTP_DOWNLOAD || ANJAY_WITH_COAP_DOWNLOAD
+#        error "ANJAY_WITH_DOWNLOADER is enabled but no transport selected. Please enable at least one of ANJAY_WITH_HTTP_DOWNLOAD or ANJAY_WITH_COAP_DOWNLOAD"
 #    endif // ANJAY_WITH_HTTP_DOWNLOAD || ANJAY_WITH_COAP_DOWNLOAD
 
 #    ifdef ANJAY_WITH_HTTP_DOWNLOAD

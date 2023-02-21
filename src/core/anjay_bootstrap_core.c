@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -90,7 +90,7 @@ static avs_error_t start_bootstrap_if_not_already_started(
         // clear inactive servers so that they won't attempt to retry; they will
         // be recreated during _anjay_schedule_reload_servers() after bootstrap
         // procedure is finished
-        _anjay_servers_cleanup_inactive(anjay);
+        _anjay_servers_cleanup_inactive_nonbootstrap(anjay);
         // suspend active connections
         _anjay_servers_foreach_active(anjay, suspend_nonbootstrap_server, NULL);
 
@@ -718,14 +718,20 @@ static int bootstrap_finish_impl(anjay_unlocked_t *anjay,
             retval = schedule_bootstrap_timeout(anjay);
         }
     }
-    anjay_server_info_t *server =
+    // Server might have been invalidated during
+    // _anjay_notify_perform_without_servers() above
+    bootstrap_connection.server =
             _anjay_servers_find_active(anjay, ANJAY_SSID_BOOTSTRAP);
-    if ((flags & BOOTSTRAP_FINISH_DISABLE_SERVER) && !retval) {
+    if ((flags & BOOTSTRAP_FINISH_DISABLE_SERVER) && !retval
+            && bootstrap_connection.server) {
         if (!anjay->bootstrap.allow_legacy_server_initiated_bootstrap) {
-            retval =
-                    _anjay_schedule_disable_server_with_explicit_timeout_unlocked(
-                            anjay, ANJAY_SSID_BOOTSTRAP,
-                            AVS_TIME_DURATION_INVALID);
+            if (!(retval =
+                          _anjay_schedule_disable_server_with_explicit_timeout_unlocked(
+                                  anjay, ANJAY_SSID_BOOTSTRAP,
+                                  AVS_TIME_DURATION_INVALID))) {
+                // Server is now invalidated
+                bootstrap_connection.server = NULL;
+            }
         }
     }
     if (retval) {
@@ -733,8 +739,9 @@ static int bootstrap_finish_impl(anjay_unlocked_t *anjay,
                   _("Bootstrap Finish failed, re-entering bootstrap phase"));
         avs_error_t err = start_bootstrap_if_not_already_started(
                 anjay, bootstrap_connection, true);
-        if (avs_is_err(err) && server) {
-            _anjay_server_on_server_communication_error(server, err);
+        if (avs_is_err(err) && bootstrap_connection.server) {
+            _anjay_server_on_server_communication_error(
+                    bootstrap_connection.server, err);
         }
     } else {
         _anjay_schedule_reload_servers(anjay);
@@ -980,7 +987,17 @@ static int invoke_action(anjay_connection_ref_t bootstrap_connection,
         result = ANJAY_ERR_METHOD_NOT_ALLOWED;
         break;
     }
-    if ((request->action != ANJAY_ACTION_BOOTSTRAP_FINISH || result)
+    if (request->action == ANJAY_ACTION_BOOTSTRAP_FINISH) {
+        if (!result) {
+            // Don't reschedule finish timeout
+            bootstrap_connection.server = NULL;
+        } else {
+            // The server might have been invalidated, re-find it
+            bootstrap_connection.server =
+                    _anjay_servers_find_active(anjay, ANJAY_SSID_BOOTSTRAP);
+        }
+    }
+    if (bootstrap_connection.server
             && avs_is_err(
                        schedule_finish_timeout(anjay, bootstrap_connection))) {
         result = -1;

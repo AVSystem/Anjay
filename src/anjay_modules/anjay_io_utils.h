@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -22,7 +22,7 @@
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 typedef int anjay_input_ctx_constructor_t(anjay_unlocked_input_ctx_t **out,
-                                          avs_stream_t **stream_ptr,
+                                          avs_stream_t *stream_ptr,
                                           const anjay_uri_path_t *request_uri);
 
 anjay_input_ctx_constructor_t _anjay_input_opaque_create;

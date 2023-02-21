@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -101,6 +101,17 @@ static inline bool _anjay_was_session_resumed(avs_net_socket_t *socket) {
         return false;
     }
     return session_resumed.flag;
+}
+
+static inline bool _anjay_was_connection_id_resumed(avs_net_socket_t *socket) {
+    avs_net_socket_opt_value_t connection_id_resumed;
+    if (avs_is_err(
+                avs_net_socket_get_opt(socket,
+                                       AVS_NET_SOCKET_OPT_CONNECTION_ID_RESUMED,
+                                       &connection_id_resumed))) {
+        return false;
+    }
+    return connection_id_resumed.flag;
 }
 
 int _anjay_copy_tls_ciphersuites(avs_net_socket_tls_ciphersuites_t *dest,

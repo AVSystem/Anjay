@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -9,22 +9,21 @@
 
 #include <anjay_init.h>
 
-#include <avsystem/commons/avs_unit_memstream.h>
+#include <avsystem/commons/avs_stream_inbuf.h>
 #include <avsystem/commons/avs_unit_test.h>
 
 #include <anjay/core.h>
 
-#define TEST_ENV(Data)                                                         \
-    avs_stream_t *stream = NULL;                                               \
-    AVS_UNIT_ASSERT_SUCCESS(avs_unit_memstream_alloc(&stream, sizeof(Data)));  \
-    AVS_UNIT_ASSERT_SUCCESS(avs_stream_write(stream, Data, sizeof(Data) - 1)); \
-    anjay_unlocked_input_ctx_t *ctx;                                           \
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_input_tlv_create(                           \
-            &ctx, &stream, &MAKE_OBJECT_PATH(ANJAY_DM_OID_ACCESS_CONTROL)));
+#define TEST_ENV(Data)                                               \
+    avs_stream_inbuf_t stream = AVS_STREAM_INBUF_STATIC_INITIALIZER; \
+    avs_stream_inbuf_set_buffer(&stream, Data, sizeof(Data) - 1);    \
+    anjay_unlocked_input_ctx_t *ctx;                                 \
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_input_tlv_create(                 \
+            &ctx,                                                    \
+            (avs_stream_t *) &stream,                                \
+            &MAKE_OBJECT_PATH(ANJAY_DM_OID_ACCESS_CONTROL)));
 
-#define TEST_TEARDOWN               \
-    _anjay_input_ctx_destroy(&ctx); \
-    avs_stream_cleanup(&stream);
+#define TEST_TEARDOWN _anjay_input_ctx_destroy(&ctx);
 
 AVS_UNIT_TEST(input_array, example) {
     TEST_ENV(              // example from spec 6.3.3.2

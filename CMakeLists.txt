@@ -1,4 +1,4 @@
-# Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -8,7 +8,7 @@
 cmake_minimum_required(VERSION 3.6.0)
 
 project(anjay C)
-set(ANJAY_VERSION "3.2.1" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "3.3.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -276,7 +276,7 @@ cmake_dependent_option(WITH_OBSERVATION_STATUS "Enable support for anjay_resourc
 cmake_dependent_option(WITH_COAP_DOWNLOAD "Enable support for CoAP(S) downloads" ON WITH_DOWNLOADER OFF)
 
 cmake_dependent_option(WITH_ANJAY_LOGS "Enable logging support" ON WITH_AVS_LOG OFF)
-cmake_dependent_option(WITH_ANJAY_TRACE_LOGS "Enable logging support" ON WITH_ANJAY_LOGS OFF)
+cmake_dependent_option(WITH_ANJAY_TRACE_LOGS "Enable logging support" ON "WITH_ANJAY_LOGS;NOT EXTERNAL_LOG_LEVELS_HEADER" OFF)
 
 cmake_dependent_option(AVS_LOG_WITH_TRACE "Enable TRACE level logging" OFF WITH_AVS_LOG OFF)
 cmake_dependent_option(WITH_INTERNAL_LOGS "Enable logging from inside AVSystem Commons libraries" ON WITH_AVS_LOG OFF)
@@ -294,7 +294,7 @@ endif()
 
 cmake_dependent_option(WITH_ATTR_STORAGE "Enable automatic attribute storage" ON WITH_AVS_PERSISTENCE OFF)
 
-option(WITH_SECURITY_STRUCTURED "Enable support for avs_crypto types in the data model" "${WITH_LWM2M11}")
+option(WITH_SECURITY_STRUCTURED "Enable support for avs_crypto types in the data model" ON)
 
 # ANJAY_MUTEX_LOCK() variant based on nested functions
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/CMakeTmp/nested_funcs.c"
@@ -326,6 +326,9 @@ option(WITH_MODULE_ipso_objects "Generic implementation of certain kinds of IPSO
 option(WITH_MODULE_security "Security object module" ON)
 option(WITH_MODULE_server "Server object module" ON)
 option(WITH_MODULE_fw_update "Firmware Update object module" ON)
+cmake_dependent_option(WITHOUT_MODULE_fw_update_PUSH_MODE
+                       "Disable support for PUSH mode Firmware Update"
+                       OFF "WITH_MODULE_fw_update;WITH_DOWNLOADER" OFF)
 cmake_dependent_option(WITH_MODULE_factory_provisioning "Factory provisioning module" ON "WITH_BOOTSTRAP;WITH_CBOR" OFF)
 
 ################# CODE #########################################################
@@ -519,6 +522,7 @@ set(ANJAY_WITHOUT_IP_STICKINESS "${WITHOUT_IP_STICKINESS}")
 set(ANJAY_WITH_MODULE_ACCESS_CONTROL "${WITH_MODULE_access_control}")
 set(ANJAY_WITH_MODULE_IPSO_OBJECTS "${WITH_MODULE_ipso_objects}")
 set(ANJAY_WITH_MODULE_FW_UPDATE "${WITH_MODULE_fw_update}")
+set(ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE "${WITHOUT_MODULE_fw_update_PUSH_MODE}")
 set(ANJAY_WITH_MODULE_SECURITY "${WITH_MODULE_security}")
 set(ANJAY_WITH_MODULE_SERVER "${WITH_MODULE_server}")
 set(ANJAY_WITH_NET_STATS "${WITH_NET_STATS}")

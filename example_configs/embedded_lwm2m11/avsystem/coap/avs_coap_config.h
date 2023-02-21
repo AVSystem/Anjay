@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem CoAP library
  * All rights reserved.
  *
@@ -145,7 +145,7 @@
  *
  * Only meaningful if <c>WITH_AVS_COAP_LOGS</c> is enabled.
  */
-#define WITH_AVS_COAP_TRACE_LOGS
+/* #undef WITH_AVS_COAP_TRACE_LOGS */
 
 /**
  * Enable poisoning of unwanted symbols when compiling avs_coap.

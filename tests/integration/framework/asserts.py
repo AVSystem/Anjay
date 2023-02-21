@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -27,7 +27,8 @@ class Lwm2mAsserts:
 
         segments = path[1:].split('/')
         if len(segments) > 3:
-            self.fail('LwM2M path too long (expected at most 3 segments): %r' % (path,))
+            self.fail(
+                'LwM2M path too long (expected at most 3 segments): %r' % (path,))
 
         for segment in segments:
             try:
@@ -35,7 +36,8 @@ class Lwm2mAsserts:
                                 ('LwM2M path segment not in range [0, 65535] '
                                  'in path %r' % (path,)))
             except ValueError:
-                self.fail('segment rs is not an integer in link: %r' % (segment, path))
+                self.fail('segment rs is not an integer in link: %r' %
+                          (segment, path))
 
     def assertLinkListValid(self, link_list):
         """
@@ -125,12 +127,13 @@ class Lwm2mAsserts:
                             binding=None,
                             lwm2m11_queue_mode=False,
                             reject=False,
-                            response_filter: ResponseFilter=None):
+                            response_filter: ResponseFilter = None):
         # passing a float instead of an integer results in a disaster
         # (serializes as e.g. lt=4.0 instead of lt=4), which makes the
         # assertion fail
         if lifetime is not None:
-            self.assertIsInstance(lifetime, int, msg="lifetime MUST be an integer")
+            self.assertIsInstance(
+                lifetime, int, msg="lifetime MUST be an integer")
 
         serv = server or self.serv
 
@@ -144,9 +147,11 @@ class Lwm2mAsserts:
         self.assertGreater(len(pkt.content), 0)
         if respond:
             if reject:
-                serv.send(Lwm2mErrorResponse(code=coap.Code.RES_UNAUTHORIZED, msg_id=pkt.msg_id, token=pkt.token))
+                serv.send(Lwm2mErrorResponse(
+                    code=coap.Code.RES_UNAUTHORIZED, msg_id=pkt.msg_id, token=pkt.token))
             else:
-                serv.send(Lwm2mCreated(location=location, msg_id=pkt.msg_id, token=pkt.token))
+                serv.send(Lwm2mCreated(location=location,
+                          msg_id=pkt.msg_id, token=pkt.token))
         return pkt
 
     def assertDemoUpdatesRegistration(self,
@@ -208,14 +213,16 @@ class Lwm2mAsserts:
             raise ValueError('Expected Release on non-TCP server')
 
         pkt = serv.recv(timeout_s=timeout_s)
-        self.assertMsgEqual(coap.Packet(code=coap.Code.SIGNALING_RELEASE, token=ANY), pkt)
+        self.assertMsgEqual(coap.Packet(
+            code=coap.Code.SIGNALING_RELEASE, token=ANY), pkt)
 
     def assertDtlsReconnect(self, server=None, timeout_s=1):
         serv = server or self.serv
 
         with self.assertRaises(RuntimeError) as raised:
             serv.recv(timeout_s=timeout_s)
-        self.assertIn('0x6780', raised.exception.args[0])  # -0x6780 == MBEDTLS_ERR_SSL_CLIENT_RECONNECT
+        # -0x6780 == MBEDTLS_ERR_SSL_CLIENT_RECONNECT
+        self.assertIn('0x6780', raised.exception.args[0])
 
     def assertPktIsDtlsClientHello(self, pkt, seq_number=ANY):
         if seq_number is not ANY and seq_number >= 2 ** 48:

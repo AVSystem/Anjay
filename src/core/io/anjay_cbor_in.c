@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -351,7 +351,7 @@ static const anjay_input_ctx_vtable_t CBOR_IN_VTABLE = {
 };
 
 int _anjay_input_cbor_create(anjay_unlocked_input_ctx_t **out,
-                             avs_stream_t **stream_ptr,
+                             avs_stream_t *stream_ptr,
                              const anjay_uri_path_t *request_uri) {
     cbor_in_t *ctx = (cbor_in_t *) avs_calloc(1, sizeof(cbor_in_t));
     *out = (anjay_unlocked_input_ctx_t *) ctx;
@@ -360,10 +360,10 @@ int _anjay_input_cbor_create(anjay_unlocked_input_ctx_t **out,
     }
 
     ctx->vtable = &CBOR_IN_VTABLE;
-    ctx->stream = *stream_ptr;
+    ctx->stream = stream_ptr;
     ctx->request_uri = request_uri ? *request_uri : MAKE_ROOT_PATH();
     ctx->cbor_decoder =
-            _anjay_cbor_decoder_new(*stream_ptr,
+            _anjay_cbor_decoder_new(stream_ptr,
                                     MAX_SIMPLE_CBOR_NEST_STACK_SIZE);
 
     if (!ctx->cbor_decoder) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -78,11 +78,12 @@ void _anjay_servers_cleanup(anjay_unlocked_t *anjay) {
     AVS_LIST_CLEAR(&anjay->cached_public_sockets);
 }
 
-void _anjay_servers_cleanup_inactive(anjay_unlocked_t *anjay) {
+void _anjay_servers_cleanup_inactive_nonbootstrap(anjay_unlocked_t *anjay) {
     AVS_LIST(anjay_server_info_t) *server_ptr;
     AVS_LIST(anjay_server_info_t) helper;
     AVS_LIST_DELETABLE_FOREACH_PTR(server_ptr, helper, &anjay->servers) {
-        if (!_anjay_server_active(*server_ptr)) {
+        if ((*server_ptr)->ssid != ANJAY_SSID_BOOTSTRAP
+                && !_anjay_server_active(*server_ptr)) {
             _anjay_server_cleanup(*server_ptr);
             AVS_LIST_DELETE(server_ptr);
         }
@@ -205,7 +206,18 @@ anjay_server_info_t *_anjay_servers_find(anjay_unlocked_t *anjay,
     return ptr ? *ptr : NULL;
 }
 
+bool _anjay_server_is_disable_scheduled(anjay_server_info_t *server) {
+    return server->next_action_handle
+           && (server->next_action
+                       == ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_TIMEOUT_FROM_DM
+               || server->next_action
+                          == ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_EXPLICIT_TIMEOUT);
+}
+
 bool _anjay_server_active(anjay_server_info_t *server) {
+    if (_anjay_server_is_disable_scheduled(server)) {
+        return false;
+    }
     anjay_connection_type_t conn_type;
     ANJAY_CONNECTION_TYPE_FOREACH(conn_type) {
         if (_anjay_connection_internal_get_socket(
@@ -213,11 +225,7 @@ bool _anjay_server_active(anjay_server_info_t *server) {
                         .server = server,
                         .conn_type = conn_type
                     }))) {
-            return !server->next_action_handle
-                   || (server->next_action
-                               != ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_TIMEOUT_FROM_DM
-                       && server->next_action
-                                  != ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_EXPLICIT_TIMEOUT);
+            return true;
         }
     }
 

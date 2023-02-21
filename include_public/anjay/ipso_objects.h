@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -95,7 +95,7 @@ int anjay_ipso_basic_sensor_instance_add(
         const anjay_ipso_basic_sensor_impl_t impl);
 
 /**
- * Adds an instance of a sensor object installed in an Anjay object.
+ * Removes an instance of a sensor object installed in an Anjay object.
  *
  * @param anjay Anjay object with the installed the sensor object.
  * @param oid   OID of the installed object.

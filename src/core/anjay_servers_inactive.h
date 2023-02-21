@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -22,6 +22,8 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 
 anjay_server_info_t *_anjay_servers_find(anjay_unlocked_t *anjay,
                                          anjay_ssid_t ssid);
+
+bool _anjay_server_is_disable_scheduled(anjay_server_info_t *server);
 
 bool _anjay_server_active(anjay_server_info_t *server);
 

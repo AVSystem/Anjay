@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -86,10 +86,10 @@ void _anjay_test_dm_finish(anjay_t *anjay_locked) {
             _anjay_mocksock_expect_stats_zero(connection->conn_socket_);
         }
     }
-    _anjay_mock_dm_expect_clean();
     AVS_LIST_CLEAR(&anjay->servers) {
         _anjay_server_cleanup(anjay->servers);
     }
+    _anjay_mock_dm_expect_clean();
     ANJAY_MUTEX_UNLOCK(anjay_locked);
     anjay_delete(anjay_locked);
     _anjay_mock_clock_finish();

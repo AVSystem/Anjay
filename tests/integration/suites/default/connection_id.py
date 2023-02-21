@@ -1,22 +1,22 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
 # Licensed under the AVSystem-5-clause License.
 # See the attached LICENSE file for details.
 
-import errno
-import socket
-import select
-import unittest
-import pymbedtls
-import threading
 import contextlib
+import errno
+import select
+import threading
+import unittest
+
+import pymbedtls
 
 from framework.lwm2m_test import *
-from framework.lwm2m.coap.server import Server
+from suites.default.retransmissions import RetransmissionTest
 
 
 class UdpProxy(threading.Thread):
@@ -101,6 +101,15 @@ class CoapServerWithProxy(coap.DtlsServer):
             proxy.join()
 
 
+def _disconnect_socket(sock):
+    try:
+        sock.connect(('', 0))
+    except OSError as e:
+        # On macOS, the call above returns failure, but actually works anyway...
+        if e.errno not in {errno.EAFNOSUPPORT, errno.EADDRNOTAVAIL}:
+            raise
+
+
 # At the beginning of the test, things look like this:
 #
 # .------.      .-----------------------.      .-----------------------.      .--------------.
@@ -159,11 +168,16 @@ class DtlsConnectionIdTest(test_suite.Lwm2mDtlsSingleServerTest,
                            test_suite.Lwm2mDmOperations):
     CONNECTION_ID_VALUE = 'something'
 
-    def setUp(self):
+    def setUp(self, extra_cmdline_args=None, **kwargs):
+        if extra_cmdline_args is None:
+            extra_cmdline_args = []
+        if '--use-connection-id' not in extra_cmdline_args:
+            extra_cmdline_args.insert(0, '--use-connection-id')
         server = Lwm2mServer(CoapServerWithProxy(psk_identity=self.PSK_IDENTITY,
                                                  psk_key=self.PSK_KEY,
                                                  connection_id=self.CONNECTION_ID_VALUE))
-        super().setUp(servers=[server], auto_register=False, extra_cmdline_args=['--use-connection-id'])
+        super().setUp(servers=[server], auto_register=False, extra_cmdline_args=extra_cmdline_args,
+                      **kwargs)
 
     def runTest(self):
         with self.serv.server_proxy():
@@ -172,7 +186,7 @@ class DtlsConnectionIdTest(test_suite.Lwm2mDtlsSingleServerTest,
 
         # Unconnect the socket at the pymbedtls site (this unconnects the link between "server proxy"
         # and "Lwm2m Server" in the diagram above), to allow accepting packets from unknown endpoints.
-        self.serv.socket.py_socket.connect(('', 0))
+        _disconnect_socket(self.serv.socket.py_socket)
 
         with self.serv.server_proxy():
             self.communicate('send-update')
@@ -202,12 +216,7 @@ class DtlsWithoutConnectionIdTest(test_suite.Lwm2mDtlsSingleServerTest,
 
         # Unconnect the socket at the pymbedtls site (this unconnects the link between "server proxy"
         # and "Lwm2m Server" in the diagram above), to allow accepting packets from unknown endpoints.
-        try:
-            self.serv.socket.py_socket.connect(('', 0))
-        except OSError as e:
-            # On macOS, the call above returns failure, but actually works anyway...
-            if e.errno not in {errno.EAFNOSUPPORT, errno.EADDRNOTAVAIL}:
-                raise
+        _disconnect_socket(self.serv.socket.py_socket)
 
         # Nonetheless, connection_id was not used, so we should expect that the server
         # ignores Update messages messages.
@@ -218,3 +227,5 @@ class DtlsWithoutConnectionIdTest(test_suite.Lwm2mDtlsSingleServerTest,
 
     def tearDown(self):
         super().tearDown(force_kill=True)
+
+

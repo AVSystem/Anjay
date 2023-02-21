@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -333,6 +333,7 @@ AVS_UNIT_TEST(observe, multiple_equivalent_observations) {
                    "42", 2);
 #undef TLV_RESPONSE
     anjay_sched_run(anjay);
+    DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     DM_TEST_FINISH;
 }
 
@@ -444,6 +445,7 @@ AVS_UNIT_TEST(observe, instance_overwrite) {
                    TLV_RESPONSE, sizeof(TLV_RESPONSE) - 1);
 #undef TLV_RESPONSE
     anjay_sched_run(anjay);
+    DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     DM_TEST_FINISH;
 }
 
@@ -538,6 +540,7 @@ AVS_UNIT_TEST(observe, cancel_deregister_keying) {
     // CANCEL USING Res5 TOKEN BUT /42/69/4 PATH
     DM_TEST_REQUEST(mocksocks[0], CON, GET, ID_TOKEN(0xFA3E, "Res5"),
                     OBSERVE(0x01), PATH("42", "69", "4"));
+    DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     _anjay_mock_dm_expect_list_instances(
             anjay, &OBJ, 0,
             (const anjay_iid_t[]) { 14, 42, 69, ANJAY_ID_INVALID });

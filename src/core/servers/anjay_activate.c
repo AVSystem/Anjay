@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -319,7 +319,6 @@ void _anjay_server_on_refreshed(anjay_server_info_t *server,
 void _anjay_server_on_updated_registration(anjay_server_info_t *server,
                                            anjay_registration_result_t result,
                                            avs_error_t err) {
-
     if (result == ANJAY_REGISTRATION_SUCCESS) {
         if (_anjay_server_reschedule_update_job(server)) {
             // Updates are retryable, we only need to reschedule after success
@@ -454,11 +453,7 @@ int _anjay_server_sched_activate(anjay_server_info_t *server) {
     assert(!_anjay_server_active(server));
     assert(avs_time_real_valid(server->reactivate_time));
     server->refresh_failed = false;
-    if (server->next_action_handle
-            && (server->next_action
-                        == ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_TIMEOUT_FROM_DM
-                || server->next_action
-                           == ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_EXPLICIT_TIMEOUT)) {
+    if (_anjay_server_is_disable_scheduled(server)) {
         // Server is in the process of being disabled. Let it happen, it will be
         // re-enabled afterwards, but make sure that reactivate_time is honored.
         server->next_action =

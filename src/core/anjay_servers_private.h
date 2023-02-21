@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -161,9 +161,9 @@ void _anjay_servers_deregister(anjay_unlocked_t *anjay);
 void _anjay_servers_cleanup(anjay_unlocked_t *anjay);
 
 /**
- * Removes all references to inactive servers (see docs for anjay_server_info_t
- * above for an information what is considered "active") from internal
- * structures.
+ * Removes all references to inactive servers except the bootstrap server (see
+ * docs for anjay_server_info_t above for an information what is considered
+ * "active") from internal structures.
  *
  * This is currently only called from start_bootstrap_if_not_already_started().
  * Inactive servers are removed during the bootstrap process - this unschedules
@@ -177,7 +177,7 @@ void _anjay_servers_cleanup(anjay_unlocked_t *anjay);
  * bootstrap procedure, which we were implementing as fallback. Probably there
  * are other ways to achieve the same thing.
  */
-void _anjay_servers_cleanup_inactive(anjay_unlocked_t *anjay);
+void _anjay_servers_cleanup_inactive_nonbootstrap(anjay_unlocked_t *anjay);
 
 typedef int anjay_servers_foreach_ssid_handler_t(anjay_unlocked_t *anjay,
                                                  anjay_ssid_t ssid,

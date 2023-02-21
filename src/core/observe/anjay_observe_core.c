@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -731,13 +731,72 @@ find_or_create_connection_state(anjay_connection_ref_t ref) {
     return conn_ptr;
 }
 
+static int schedule_all_triggers(anjay_observe_connection_entry_t *conn) {
+    int result = 0;
+    AVS_SORTED_SET_ELEM(anjay_observation_t) observation;
+    AVS_SORTED_SET_FOREACH(observation, conn->observations) {
+        if (!observation->notify_task) {
+            _anjay_update_ret(&result, _anjay_observe_schedule_pmax_trigger(
+                                               conn, observation));
+        }
+    }
+    return result;
+}
+
+static void flush_next_unsent(anjay_observe_connection_entry_t *conn);
+
+static void flush_send_queue_job(avs_sched_t *sched, const void *conn_ptr) {
+    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    anjay_observe_connection_entry_t *conn =
+            *(anjay_observe_connection_entry_t *const *) conn_ptr;
+    if (conn && conn->unsent
+            && !avs_coap_exchange_id_valid(conn->notify_exchange_id)
+            && _anjay_connection_ready_for_outgoing_message(conn->conn_ref)
+            && _anjay_connection_get_online_socket(conn->conn_ref)) {
+        flush_next_unsent(conn);
+    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+}
+
+static int
+sched_flush_send_queue(AVS_LIST(anjay_observe_connection_entry_t) conn) {
+    if (conn->flush_task
+            || avs_coap_exchange_id_valid(conn->notify_exchange_id)) {
+        anjay_log(TRACE, _("skipping notification flush scheduling: flush "
+                           "already scheduled"));
+        return 0;
+    }
+    if (AVS_SCHED_NOW(_anjay_from_server(conn->conn_ref.server)->sched,
+                      &conn->flush_task, flush_send_queue_job, &conn,
+                      sizeof(conn))) {
+        anjay_log(WARNING, _("Could not schedule notification flush"));
+        return -1;
+    }
+    return 0;
+}
+
+static int sched_flush(anjay_observe_connection_entry_t *conn) {
+    if (conn->unsent) {
+        return sched_flush_send_queue(conn);
+    } else {
+        return schedule_all_triggers(conn);
+    }
+}
+
 static void
 delete_observation(AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr,
                    AVS_SORTED_SET_ELEM(anjay_observation_t) *observation_ptr) {
-    clear_observation(*conn_ptr, *observation_ptr);
-    detach_observation(*conn_ptr, *observation_ptr);
+    AVS_LIST(anjay_observe_connection_entry_t) conn = *conn_ptr;
+    clear_observation(conn, *observation_ptr);
+    detach_observation(conn, *observation_ptr);
     AVS_SORTED_SET_ELEM_DELETE_DETACHED(observation_ptr);
     delete_connection_if_empty(conn_ptr);
+
+    if (*conn_ptr == conn) {
+        // Connection has not been removed
+        sched_flush(conn);
+    }
 }
 
 static void observe_remove_entry(anjay_connection_ref_t connection,
@@ -1310,18 +1369,6 @@ static void remove_all_unsent_values(anjay_observe_connection_entry_t *conn) {
     }
 }
 
-static int schedule_all_triggers(anjay_observe_connection_entry_t *conn) {
-    int result = 0;
-    AVS_SORTED_SET_ELEM(anjay_observation_t) observation;
-    AVS_SORTED_SET_FOREACH(observation, conn->observations) {
-        if (!observation->notify_task) {
-            _anjay_update_ret(&result, _anjay_observe_schedule_pmax_trigger(
-                                               conn, observation));
-        }
-    }
-    return result;
-}
-
 static void
 recalculate_conn_trigger_times(anjay_observe_connection_entry_t *conn) {
     avs_time_monotonic_t monotonic_now = avs_time_monotonic_now();
@@ -1355,8 +1402,6 @@ static bool connection_exists(anjay_unlocked_t *anjay,
     return conn_ptr && *conn_ptr == conn;
 }
 
-static void flush_next_unsent(anjay_observe_connection_entry_t *conn);
-
 static void on_network_error(anjay_connection_ref_t conn_ref, avs_error_t err) {
     anjay_log(WARNING, _("network communication error while sending Notify"));
     if (conn_ref.conn_type == ANJAY_CONNECTION_PRIMARY) {
@@ -1364,45 +1409,10 @@ static void on_network_error(anjay_connection_ref_t conn_ref, avs_error_t err) {
     }
 }
 
-static void flush_send_queue_job(avs_sched_t *sched, const void *conn_ptr) {
-    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
-    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
-    anjay_observe_connection_entry_t *conn =
-            *(anjay_observe_connection_entry_t *const *) conn_ptr;
-    if (conn && conn->unsent
-            && !avs_coap_exchange_id_valid(conn->notify_exchange_id)
-            && _anjay_connection_ready_for_outgoing_message(conn->conn_ref)
-            && _anjay_connection_get_online_socket(conn->conn_ref)) {
-        flush_next_unsent(conn);
-    }
-    ANJAY_MUTEX_UNLOCK(anjay_locked);
-}
-
-static int
-sched_flush_send_queue(AVS_LIST(anjay_observe_connection_entry_t) conn) {
-    if (conn->flush_task
-            || avs_coap_exchange_id_valid(conn->notify_exchange_id)) {
-        anjay_log(TRACE, _("skipping notification flush scheduling: flush "
-                           "already scheduled"));
-        return 0;
-    }
-    if (AVS_SCHED_NOW(_anjay_from_server(conn->conn_ref.server)->sched,
-                      &conn->flush_task, flush_send_queue_job, &conn,
-                      sizeof(conn))) {
-        anjay_log(WARNING, _("Could not schedule notification flush"));
-        return -1;
-    }
-    return 0;
-}
-
 static void on_entry_flushed(anjay_observe_connection_entry_t *conn,
                              avs_error_t err) {
     if (avs_is_ok(err)) {
-        if (conn->unsent) {
-            sched_flush_send_queue(conn);
-        } else {
-            schedule_all_triggers(conn);
-        }
+        sched_flush(conn);
         return;
     }
 
@@ -1604,11 +1614,7 @@ int _anjay_observe_sched_flush(anjay_connection_ref_t ref) {
                            "appropriate connection found"));
         return 0;
     }
-    if ((*conn_ptr)->unsent) {
-        return sched_flush_send_queue(*conn_ptr);
-    } else {
-        return schedule_all_triggers(*conn_ptr);
-    }
+    return sched_flush(*conn_ptr);
 }
 
 static int

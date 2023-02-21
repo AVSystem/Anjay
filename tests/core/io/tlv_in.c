@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -10,7 +10,7 @@
 #include <anjay_init.h>
 
 #include <avsystem/commons/avs_memory.h>
-#include <avsystem/commons/avs_unit_memstream.h>
+#include <avsystem/commons/avs_stream_inbuf.h>
 
 #define AVS_UNIT_ENABLE_SHORT_ASSERTS
 #include <avsystem/commons/avs_unit_test.h>
@@ -18,16 +18,15 @@
 #include "bigdata.h"
 #include <anjay/core.h>
 
-#define TEST_ENV(Size, Path)                            \
-    avs_stream_t *stream = NULL;                        \
-    ASSERT_OK(avs_unit_memstream_alloc(&stream, Size)); \
-    anjay_unlocked_input_ctx_t *in;                     \
-    ASSERT_OK(_anjay_input_tlv_create(&in, &stream, &(Path)));
+#define TEST_ENV(Data, Path)                                         \
+    avs_stream_inbuf_t stream = AVS_STREAM_INBUF_STATIC_INITIALIZER; \
+    avs_stream_inbuf_set_buffer(&stream, Data, sizeof(Data) - 1);    \
+    anjay_unlocked_input_ctx_t *in;                                  \
+    ASSERT_OK(_anjay_input_tlv_create(&in, (avs_stream_t *) &stream, &(Path)));
 
 #define TEST_TEARDOWN                             \
     do {                                          \
         ASSERT_OK(_anjay_input_ctx_destroy(&in)); \
-        ASSERT_OK(avs_stream_cleanup(&stream));   \
     } while (0)
 
 #define TLV_BYTES_TEST_DATA(Header, Data)                                    \
@@ -58,15 +57,13 @@ static const anjay_uri_path_t TEST_INSTANCE_PATH =
         ASSERT_TRUE(_anjay_uri_path_equal(&path, &(Path))); \
     } while (0)
 
-#define TLV_BYTES_TEST(Name, Path, Header, Data)                     \
-    AVS_UNIT_TEST(tlv_in_bytes, Name##_with_id) {                    \
-        TEST_ENV(sizeof(Data) + sizeof(Header), TEST_INSTANCE_PATH); \
-        ASSERT_OK(avs_stream_write(stream, Header Data,              \
-                                   sizeof(Header Data) - 1));        \
-        TLV_BYTES_TEST_PATH(Path);                                   \
-        TLV_BYTES_TEST_PATH(Path);                                   \
-        TLV_BYTES_TEST_DATA(Header, Data);                           \
-        TEST_TEARDOWN;                                               \
+#define TLV_BYTES_TEST(Name, Path, Header, Data)   \
+    AVS_UNIT_TEST(tlv_in_bytes, Name##_with_id) {  \
+        TEST_ENV(Header Data, TEST_INSTANCE_PATH); \
+        TLV_BYTES_TEST_PATH(Path);                 \
+        TLV_BYTES_TEST_PATH(Path);                 \
+        TLV_BYTES_TEST_DATA(Header, Data);         \
+        TEST_TEARDOWN;                             \
     }
 
 // 3 bits for length - <=7
@@ -107,9 +104,7 @@ TLV_BYTES_TEST(len24b_id16b,
 #undef TLV_BYTES_TEST_DATA
 
 AVS_UNIT_TEST(tlv_in_bytes, id_too_short) {
-    TEST_ENV(64, MAKE_ROOT_PATH());
-
-    ASSERT_OK(avs_stream_write(stream, "\xE7\x00", 1));
+    TEST_ENV("\xE7", MAKE_ROOT_PATH());
 
     char buf[64];
     size_t bytes_read;
@@ -121,9 +116,7 @@ AVS_UNIT_TEST(tlv_in_bytes, id_too_short) {
 }
 
 AVS_UNIT_TEST(tlv_in_bytes, length_too_short) {
-    TEST_ENV(64, MAKE_ROOT_PATH());
-
-    ASSERT_OK(avs_stream_write(stream, "\xF8\x01\x02\x01\x86", 5));
+    TEST_ENV("\xF8\x01\x02\x01\x86", MAKE_ROOT_PATH());
 
     char buf[64];
     size_t bytes_read;
@@ -135,10 +128,9 @@ AVS_UNIT_TEST(tlv_in_bytes, length_too_short) {
 }
 
 AVS_UNIT_TEST(tlv_in_bytes, partial_read) {
-    TEST_ENV(16, MAKE_INSTANCE_PATH(3, 4));
     static const char DATA[] = "\xC7\x2A"
                                "0123456";
-    ASSERT_OK(avs_stream_write(stream, DATA, sizeof(DATA) - 1));
+    TEST_ENV(DATA, MAKE_INSTANCE_PATH(3, 4));
 
     for (size_t i = 0; i < 7; ++i) {
         char ch;
@@ -161,16 +153,13 @@ AVS_UNIT_TEST(tlv_in_bytes, partial_read) {
 }
 
 AVS_UNIT_TEST(tlv_in_bytes, short_read_get_id) {
-    TEST_ENV(64, MAKE_INSTANCE_PATH(3, 4));
-    ASSERT_OK(avs_stream_write_f(stream, "%s",
-                                 "\xC4\x2A"
-                                 "0123"));
-    ASSERT_OK(avs_stream_write_f(stream, "%s",
-                                 "\xC7\x45"
-                                 "0123456"));
-    ASSERT_OK(avs_stream_write_f(stream, "%s",
-                                 "\xC5\x16"
-                                 "01234"));
+    const char DATA[] = "\xC4\x2A"
+                        "0123"
+                        "\xC7\x45"
+                        "0123456"
+                        "\xC5\x16"
+                        "01234";
+    TEST_ENV(DATA, MAKE_INSTANCE_PATH(3, 4));
 
     TLV_BYTES_TEST_PATH(MAKE_RESOURCE_PATH(3, 4, 42));
     TLV_BYTES_TEST_PATH(MAKE_RESOURCE_PATH(3, 4, 42));
@@ -203,10 +192,9 @@ AVS_UNIT_TEST(tlv_in_bytes, short_read_get_id) {
 #undef TLV_BYTES_TEST_PATH
 
 AVS_UNIT_TEST(tlv_in_bytes, premature_end) {
-    TEST_ENV(16, MAKE_ROOT_PATH());
     static const char DATA[] = "\xC7\x2A"
                                "012";
-    ASSERT_OK(avs_stream_write(stream, DATA, sizeof(DATA) - 1));
+    TEST_ENV(DATA, MAKE_ROOT_PATH());
 
     char buf[16];
     size_t bytes_read;
@@ -218,7 +206,7 @@ AVS_UNIT_TEST(tlv_in_bytes, premature_end) {
 }
 
 AVS_UNIT_TEST(tlv_in_bytes, no_data) {
-    TEST_ENV(16, MAKE_ROOT_PATH());
+    TEST_ENV("", MAKE_ROOT_PATH());
 
     unsigned seed = (unsigned) avs_time_real_now().since_real_epoch.seconds;
     const char init = (char) avs_rand_r(&seed);
@@ -236,22 +224,21 @@ AVS_UNIT_TEST(tlv_in_bytes, no_data) {
 #undef TEST_TEARDOWN
 #undef TEST_ENV
 
-#define TEST_ENV(Data)                                                   \
-    avs_stream_t *stream = NULL;                                         \
-    ASSERT_OK(avs_unit_memstream_alloc(&stream, sizeof(Data)));          \
-    ASSERT_OK(avs_stream_write(stream, Data, sizeof(Data) - 1));         \
-    anjay_unlocked_input_ctx_t *in;                                      \
-    ASSERT_OK(_anjay_input_tlv_create(&in, &stream, &MAKE_ROOT_PATH())); \
-    tlv_in_t *ctx = (tlv_in_t *) in;                                     \
-    ctx->has_path = true;                                                \
-    tlv_entry_t *entry = tlv_entry_push(ctx);                            \
-    AVS_UNIT_ASSERT_NOT_NULL(entry);                                     \
+#define TEST_ENV(Data)                                               \
+    avs_stream_inbuf_t stream = AVS_STREAM_INBUF_STATIC_INITIALIZER; \
+    avs_stream_inbuf_set_buffer(&stream, Data, sizeof(Data) - 1);    \
+    anjay_unlocked_input_ctx_t *in;                                  \
+    ASSERT_OK(_anjay_input_tlv_create(&in, (avs_stream_t *) &stream, \
+                                      &MAKE_ROOT_PATH()));           \
+    tlv_in_t *ctx = (tlv_in_t *) in;                                 \
+    ctx->has_path = true;                                            \
+    tlv_entry_t *entry = tlv_entry_push(ctx);                        \
+    AVS_UNIT_ASSERT_NOT_NULL(entry);                                 \
     entry->length = sizeof(Data) - 1;
 
 #define TEST_TEARDOWN                             \
     do {                                          \
         ASSERT_OK(_anjay_input_ctx_destroy(&in)); \
-        ASSERT_OK(avs_stream_cleanup(&stream));   \
     } while (0)
 
 AVS_UNIT_TEST(tlv_in_types, string_ok) {
@@ -445,12 +432,11 @@ AVS_UNIT_TEST(tlv_in_types, invalid_read) {
 
 #undef TEST_ENV
 
-#define TEST_ENV(Data, Path)                                     \
-    avs_stream_t *stream = NULL;                                 \
-    ASSERT_OK(avs_unit_memstream_alloc(&stream, sizeof(Data)));  \
-    ASSERT_OK(avs_stream_write(stream, Data, sizeof(Data) - 1)); \
-    anjay_unlocked_input_ctx_t *in;                              \
-    ASSERT_OK(_anjay_input_tlv_create(&in, &stream, &(Path)));
+#define TEST_ENV(Data, Path)                                         \
+    avs_stream_inbuf_t stream = AVS_STREAM_INBUF_STATIC_INITIALIZER; \
+    avs_stream_inbuf_set_buffer(&stream, Data, sizeof(Data) - 1);    \
+    anjay_unlocked_input_ctx_t *in;                                  \
+    ASSERT_OK(_anjay_input_tlv_create(&in, (avs_stream_t *) &stream, &(Path)));
 
 AVS_UNIT_TEST(tlv_in_path, typical_payload_for_create_without_iid) {
     TEST_ENV("\xC7\x00"

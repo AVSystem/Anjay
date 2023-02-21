@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -74,7 +74,7 @@
  *
  * Only meaningful if <c>ANJAY_WITH_LOGS</c> is enabled.
  */
-#define ANJAY_WITH_TRACE_LOGS
+/* #undef ANJAY_WITH_TRACE_LOGS */
 
 /**
  * Enable core support for Access Control mechanisms.
@@ -84,7 +84,7 @@
  * <c>ANJAY_WITH_MODULE_ACCESS_CONTROL</c>, or a custom application-provided one
  * may be used.
  */
-#define ANJAY_WITH_ACCESS_CONTROL
+/* #undef ANJAY_WITH_ACCESS_CONTROL */
 
 /**
  * Enable automatic attribute storage.
@@ -142,7 +142,7 @@
  * <c>anjay_get_num_incoming_retransmissions()</c> and
  * <c>anjay_get_num_outgoing_retransmissions()</c> APIs.
  */
-#define ANJAY_WITH_NET_STATS
+/* #undef ANJAY_WITH_NET_STATS */
 
 /**
  * Enable support for communication timestamp
@@ -150,7 +150,7 @@
  * <c>anjay_get_server_next_update_time()</c> and
  * <c>anjay_get_server_last_communication_time()</c>) APIs.
  */
-#define ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
+/* #undef ANJAY_WITH_COMMUNICATION_TIMESTAMP_API */
 
 /**
  * Enable support for the <c>anjay_resource_observation_status()</c> API.
@@ -257,7 +257,7 @@
 /* #undef ANJAY_WITH_CORE_PERSISTENCE */
 
 /**
- * Enable support for CoAP Content-Format numerical values 1541-1543 that have
+ * Enable support for CoAP Content-Format numerical values 1541-1544 that have
  * been used before final LwM2M TS 1.0.
  */
 /* #undef ANJAY_WITH_LEGACY_CONTENT_FORMAT_SUPPORT */
@@ -268,7 +268,7 @@
  * NOTE: Anjay is only capable of generating this format, there is no parsing
  * support regardless of the state of this option.
  */
-#define ANJAY_WITH_LWM2M_JSON
+/* #undef ANJAY_WITH_LWM2M_JSON */
 
 /**
  * Disable support for TLV format as specified in LwM2M TS 1.0.
@@ -357,7 +357,7 @@
  * credentials through such structured types when adding Security object
  * instances via the @ref anjay_security_instance_t structure.
  */
-/* #undef ANJAY_WITH_SECURITY_STRUCTURED */
+#define ANJAY_WITH_SECURITY_STRUCTURED
 
 /**
  * Maximum size in bytes supported for the "Public Key or Identity" resource in
@@ -466,7 +466,7 @@
  *
  * Requires <c>ANJAY_WITH_ACCESS_CONTROL</c> to be enabled.
  */
-#define ANJAY_WITH_MODULE_ACCESS_CONTROL
+/* #undef ANJAY_WITH_MODULE_ACCESS_CONTROL */
 
 /**
  * Enable security module (implementation of the LwM2M Security object).
@@ -499,6 +499,14 @@
  * Enable fw_update module (implementation of the Firmware Update object).
  */
 #define ANJAY_WITH_MODULE_FW_UPDATE
+
+/**
+ * Disable support for PUSH mode Firmware Update.
+ *
+ * Only meaningful if <c>ANJAY_WITH_MODULE_FW_UPDATE</c> is enabled. Requires
+ * <c>ANJAY_WITH_DOWNLOADER</c> to be enabled.
+ */
+/* #undef ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE */
 
 /**
  * Enables ipso_objects module (generic implementation of the following kinds of

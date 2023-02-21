@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -10,17 +10,16 @@
 #include <anjay_init.h>
 
 #include <avsystem/commons/avs_memory.h>
-#include <avsystem/commons/avs_unit_memstream.h>
+#include <avsystem/commons/avs_stream_inbuf.h>
 #include <avsystem/commons/avs_vector.h>
 
 #include "senml_in_common.h"
 
-#define TEST_ENV(Data, Path)                                        \
-    avs_stream_t *stream = NULL;                                    \
-    ASSERT_OK(avs_unit_memstream_alloc(&stream, sizeof(Data) - 1)); \
-    ASSERT_OK(avs_stream_write(stream, Data, sizeof(Data) - 1));    \
-    anjay_unlocked_input_ctx_t *in;                                 \
-    ASSERT_OK(_anjay_input_json_create(&in, &stream, &(Path)));
+#define TEST_ENV(Data, Path)                                         \
+    avs_stream_inbuf_t stream = AVS_STREAM_INBUF_STATIC_INITIALIZER; \
+    avs_stream_inbuf_set_buffer(&stream, Data, sizeof(Data) - 1);    \
+    anjay_unlocked_input_ctx_t *in;                                  \
+    ASSERT_OK(_anjay_input_json_create(&in, (avs_stream_t *) &stream, &(Path)));
 
 AVS_UNIT_TEST(json_in_resource, single_instance) {
     static const char RESOURCE[] = "[ { \"n\": \"/13/26/1\", \"v\": 42 } ]";
@@ -504,12 +503,12 @@ AVS_UNIT_TEST(json_in, get_path_for_resource_instance_path) {
     TEST_TEARDOWN(OK);
 }
 
-#define COMPOSITE_TEST_ENV(Data, Path)                              \
-    avs_stream_t *stream = NULL;                                    \
-    ASSERT_OK(avs_unit_memstream_alloc(&stream, sizeof(Data) - 1)); \
-    ASSERT_OK(avs_stream_write(stream, Data, sizeof(Data) - 1));    \
-    anjay_unlocked_input_ctx_t *in;                                 \
-    ASSERT_OK(_anjay_input_json_composite_read_create(&in, &stream, &(Path)));
+#define COMPOSITE_TEST_ENV(Data, Path)                               \
+    avs_stream_inbuf_t stream = AVS_STREAM_INBUF_STATIC_INITIALIZER; \
+    avs_stream_inbuf_set_buffer(&stream, Data, sizeof(Data) - 1);    \
+    anjay_unlocked_input_ctx_t *in;                                  \
+    ASSERT_OK(_anjay_input_json_composite_read_create(               \
+            &in, (avs_stream_t *) &stream, &(Path)));
 
 AVS_UNIT_TEST(json_in_composite, composite_read_mode_additional_payload) {
     static const char RESOURCE_INSTANCE_WITH_PAYLOAD[] =

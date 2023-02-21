@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -10,6 +10,12 @@
 #include <anjay_init.h>
 
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
+
+#    if !defined(ANJAY_WITH_DOWNLOADER) \
+            && defined(ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE)
+#        error "ANJAY_WITH_MODULE_FW_UPDATE requires at least one of PUSH or PULL modes to be possible: please either disable ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE or enable ANJAY_WITH_DOWNLOADER"
+#    endif // !defined(ANJAY_WITH_DOWNLOADER) &&
+           // defined(ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE)
 
 #    include <string.h>
 
@@ -482,13 +488,18 @@ static int fw_read(anjay_unlocked_t *anjay,
         assert(riid < AVS_ARRAY_SIZE(SUPPORTED_PROTOCOLS));
         return _anjay_ret_i64_unlocked(ctx, SUPPORTED_PROTOCOLS[riid]);
     case FW_RES_UPDATE_DELIVERY_METHOD:
-#    ifdef ANJAY_WITH_DOWNLOADER
+#    ifdef ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE
+        // 0 -> pull only
+        return _anjay_ret_i64_unlocked(ctx, 0);
+#    else // ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE
+#        ifdef ANJAY_WITH_DOWNLOADER
         // 2 -> pull && push
         return _anjay_ret_i64_unlocked(ctx, 2);
-#    else  // ANJAY_WITH_DOWNLOADER
-           // 1 -> push only
-        return anjay_ret_i32(ctx, 1);
-#    endif // ANJAY_WITH_DOWNLOADER
+#        else  // ANJAY_WITH_DOWNLOADER
+        // 1 -> push only
+        return _anjay_ret_i64_unlocked(ctx, 1);
+#        endif // ANJAY_WITH_DOWNLOADER
+#    endif     // ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE
     default:
         AVS_UNREACHABLE("Read called on unknown or non-readable Firmware "
                         "Update resource");
@@ -788,6 +799,7 @@ static int schedule_background_anjay_download(anjay_unlocked_t *anjay,
 }
 #    endif // ANJAY_WITH_DOWNLOADER
 
+#    ifndef ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE
 static int write_firmware_to_stream(anjay_unlocked_t *anjay,
                                     fw_repr_t *fw,
                                     anjay_unlocked_input_ctx_t *ctx,
@@ -874,6 +886,7 @@ static int write_firmware(anjay_unlocked_t *anjay,
     }
     return result;
 }
+#    endif // ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE
 
 static void cancel_existing_download_if_in_progress(anjay_unlocked_t *anjay,
                                                     fw_repr_t *fw) {
@@ -903,6 +916,9 @@ static int fw_write(anjay_unlocked_t *anjay,
     fw_repr_t *fw = get_fw(obj_ptr);
     switch (rid) {
     case FW_RES_PACKAGE: {
+#    ifdef ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE
+        return ANJAY_ERR_BAD_REQUEST;
+#    else  // ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE
         assert(riid == ANJAY_ID_INVALID);
         int result = 0;
         if (fw->state == UPDATE_STATE_UPDATING) {
@@ -922,6 +938,7 @@ static int fw_write(anjay_unlocked_t *anjay,
             }
         }
         return result;
+#    endif // ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE
     }
     case FW_RES_PACKAGE_URI: {
         assert(riid == ANJAY_ID_INVALID);

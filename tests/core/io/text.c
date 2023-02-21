@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -10,7 +10,7 @@
 #include <anjay_init.h>
 
 #include <avsystem/commons/avs_stream.h>
-#include <avsystem/commons/avs_unit_memstream.h>
+#include <avsystem/commons/avs_stream_inbuf.h>
 #include <avsystem/commons/avs_unit_test.h>
 
 #include "tests/utils/utils.h"
@@ -181,24 +181,21 @@ AVS_UNIT_TEST(text_out, unimplemented) {
 
 /////////////////////////////////////////////////////////////////////// DECODING
 
-#define TEST_ENV(Size)                                                \
-    avs_stream_t *stream = NULL;                                      \
-    AVS_UNIT_ASSERT_SUCCESS(avs_unit_memstream_alloc(&stream, Size)); \
-    anjay_unlocked_input_ctx_t *in;                                   \
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_input_text_create(&in, &stream, NULL));
+#define TEST_ENV(Data)                                               \
+    avs_stream_inbuf_t stream = AVS_STREAM_INBUF_STATIC_INITIALIZER; \
+    avs_stream_inbuf_set_buffer(&stream, Data, sizeof(Data) - 1);    \
+    anjay_unlocked_input_ctx_t *in;                                  \
+    AVS_UNIT_ASSERT_SUCCESS(                                         \
+            _anjay_input_text_create(&in, (avs_stream_t *) &stream, NULL));
 
 #define TEST_TEARDOWN                                           \
     do {                                                        \
         AVS_UNIT_ASSERT_SUCCESS(_anjay_input_ctx_destroy(&in)); \
-        AVS_UNIT_ASSERT_SUCCESS(avs_stream_cleanup(&stream));   \
     } while (0)
 
 AVS_UNIT_TEST(text_in, string) {
-    TEST_ENV(64);
-
-    static const char TEST_STRING[] = "Hello, world!";
-    AVS_UNIT_ASSERT_SUCCESS(
-            avs_stream_write(stream, TEST_STRING, strlen(TEST_STRING)));
+    const char TEST_STRING[] = "Hello, world!";
+    TEST_ENV(TEST_STRING);
 
     char buf[64];
     AVS_UNIT_ASSERT_SUCCESS(_anjay_get_string_unlocked(in, buf, sizeof(buf)));
@@ -208,11 +205,7 @@ AVS_UNIT_TEST(text_in, string) {
 }
 
 AVS_UNIT_TEST(text_in, string_too_long) {
-    TEST_ENV(16);
-
-    static const char TEST_STRING[] = "Hello, world!";
-    AVS_UNIT_ASSERT_SUCCESS(
-            avs_stream_write(stream, TEST_STRING, strlen(TEST_STRING)));
+    TEST_ENV("Hello, world!");
 
     char buf[8];
     AVS_UNIT_ASSERT_FAILED(_anjay_get_string_unlocked(in, buf, sizeof(buf)));
@@ -221,16 +214,13 @@ AVS_UNIT_TEST(text_in, string_too_long) {
     TEST_TEARDOWN;
 }
 
-#define TEST_NUM_COMMON(Val, ...)                                  \
-    do {                                                           \
-        TEST_ENV(32);                                              \
-                                                                   \
-        AVS_UNIT_ASSERT_SUCCESS(                                   \
-                avs_stream_write(stream, #Val, sizeof(#Val) - 1)); \
-                                                                   \
-        __VA_ARGS__;                                               \
-                                                                   \
-        TEST_TEARDOWN;                                             \
+#define TEST_NUM_COMMON(Val, ...) \
+    do {                          \
+        TEST_ENV(#Val);           \
+                                  \
+        __VA_ARGS__;              \
+                                  \
+        TEST_TEARDOWN;            \
     } while (false)
 
 #define TEST_NUM_FAIL(Type, Getter, Val)                      \
@@ -295,9 +285,7 @@ AVS_UNIT_TEST(text_in, f64) {
 
 #define TEST_BOOL_FAIL(Str)                                            \
     do {                                                               \
-        TEST_ENV(32);                                                  \
-        AVS_UNIT_ASSERT_SUCCESS(                                       \
-                avs_stream_write(stream, Str, sizeof(Str) - 1));       \
+        TEST_ENV(Str);                                                 \
         bool result;                                                   \
         AVS_UNIT_ASSERT_FAILED(_anjay_get_bool_unlocked(in, &result)); \
         TEST_TEARDOWN;                                                 \
@@ -316,15 +304,13 @@ AVS_UNIT_TEST(text_in, boolean) {
 #undef TEST_NUM_FAIL
 #undef TEST_NUM_COMMON
 
-#define TEST_OBJLNK_COMMON(Str, ...)                             \
-    do {                                                         \
-        TEST_ENV(64);                                            \
-        AVS_UNIT_ASSERT_SUCCESS(                                 \
-                avs_stream_write(stream, Str, sizeof(Str) - 1)); \
-        anjay_oid_t oid;                                         \
-        anjay_iid_t iid;                                         \
-        __VA_ARGS__;                                             \
-        TEST_TEARDOWN;                                           \
+#define TEST_OBJLNK_COMMON(Str, ...) \
+    do {                             \
+        TEST_ENV(Str);               \
+        anjay_oid_t oid;             \
+        anjay_iid_t iid;             \
+        __VA_ARGS__;                 \
+        TEST_TEARDOWN;               \
     } while (false)
 
 #define TEST_OBJLNK(Oid, Iid)                                               \

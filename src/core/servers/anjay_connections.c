@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -390,11 +390,18 @@ avs_error_t _anjay_server_connection_internal_bring_online(
     }
 
     if (session_resumed) {
-        anjay_log(INFO, "resumed connection");
+        if (!connection->stateful
+                || _anjay_was_connection_id_resumed(connection->conn_socket_)) {
+            connection->state = ANJAY_SERVER_CONNECTION_STABLE;
+            anjay_log(INFO, "statelessly resumed connection");
+        } else {
+            connection->state = ANJAY_SERVER_CONNECTION_FRESHLY_CONNECTED;
+            anjay_log(INFO, "statefully resumed connection");
+        }
     } else {
+        connection->state = ANJAY_SERVER_CONNECTION_FRESHLY_CONNECTED;
         anjay_log(INFO, "reconnected");
     }
-    connection->state = ANJAY_SERVER_CONNECTION_FRESHLY_CONNECTED;
     // NOTE: needs_observe_flush also controls flushing Send messages,
     // so we need it even if there are no observations due to new session
     connection->needs_observe_flush = true;

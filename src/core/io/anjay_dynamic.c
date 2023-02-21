@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -295,7 +295,7 @@ int _anjay_input_dynamic_construct_raw(anjay_unlocked_input_ctx_t **out,
         return 0;
     }
     if (constructor) {
-        return constructor(out, &stream, uri);
+        return constructor(out, stream, uri);
     }
     return ANJAY_ERR_UNSUPPORTED_CONTENT_FORMAT;
 }

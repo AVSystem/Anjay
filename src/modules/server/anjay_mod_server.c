@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -219,14 +219,14 @@ static int add_instance(server_repr_t *repr,
 #    ifdef ANJAY_WITH_LWM2M11
 #        ifdef ANJAY_WITH_BOOTSTRAP
     new_instance->present_resources[SERV_RES_BOOTSTRAP_REQUEST_TRIGGER] = true;
+    new_instance
+            ->present_resources[SERV_RES_BOOTSTRAP_ON_REGISTRATION_FAILURE] =
+            true;
 #        endif // ANJAY_WITH_BOOTSTRAP
     new_instance->bootstrap_on_registration_failure =
             instance->bootstrap_on_registration_failure
                     ? *instance->bootstrap_on_registration_failure
                     : true;
-    new_instance
-            ->present_resources[SERV_RES_BOOTSTRAP_ON_REGISTRATION_FAILURE] =
-            true;
     if (instance->communication_retry_count) {
         new_instance
                 ->present_resources[SERV_RES_SERVER_COMMUNICATION_RETRY_COUNT] =
@@ -572,7 +572,9 @@ static int serv_execute(anjay_unlocked_t *anjay,
                        : 0;
 #    if defined(ANJAY_WITH_LWM2M11) && defined(ANJAY_WITH_BOOTSTRAP)
     case SERV_RES_BOOTSTRAP_REQUEST_TRIGGER:
-        return _anjay_schedule_bootstrap_request_unlocked(anjay);
+        return _anjay_schedule_bootstrap_request_unlocked(anjay)
+                       ? ANJAY_ERR_METHOD_NOT_ALLOWED
+                       : 0;
 #    endif // defined(ANJAY_WITH_LWM2M11) && defined(ANJAY_WITH_BOOTSTRAP)
     default:
         AVS_UNREACHABLE(

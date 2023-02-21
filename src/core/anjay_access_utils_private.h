@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -46,7 +46,7 @@ bool _anjay_instance_action_allowed(anjay_unlocked_t *anjay,
  *    that have been removed from the data model.
  * 2. If there were changes to the Security object, removes all ACL entries
  *    (i.e., ACL Resource Instances) that refer to SSIDs of Servers who are no
- *    longer repesented in the data model. This may cause changing the owner of
+ *    longer represented in the data model. This may cause changing the owner of
  *    those Access Control object instances which have multiple ACL entries, or
  *    removal of instances for which the ACL would be empty. In the latter case,
  *    the referred Object Instances are removed as well (see LwM2M TS 1.0.2,

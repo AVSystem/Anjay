@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -180,7 +180,7 @@ static const anjay_input_ctx_vtable_t OPAQUE_IN_VTABLE = {
 };
 
 int _anjay_input_opaque_create(anjay_unlocked_input_ctx_t **out,
-                               avs_stream_t **stream_ptr,
+                               avs_stream_t *stream_ptr,
                                const anjay_uri_path_t *request_uri) {
     opaque_in_t *ctx = (opaque_in_t *) avs_calloc(1, sizeof(opaque_in_t));
     *out = (anjay_unlocked_input_ctx_t *) ctx;
@@ -189,7 +189,7 @@ int _anjay_input_opaque_create(anjay_unlocked_input_ctx_t **out,
     }
 
     ctx->vtable = &OPAQUE_IN_VTABLE;
-    ctx->stream = *stream_ptr;
+    ctx->stream = stream_ptr;
     ctx->request_uri = request_uri ? *request_uri : MAKE_ROOT_PATH();
 
     return 0;

@@ -1,35 +1,19 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
 # Licensed under the AVSystem-5-clause License.
 # See the attached LICENSE file for details.
 
+from framework.lwm2m.coap.code import Code
 from framework.lwm2m.coap.server import SecurityMode
 from framework.lwm2m_test import *
 
 
 class BootstrapTest:
-    class Test(test_suite.Lwm2mSingleServerTest,
-               test_suite.Lwm2mDmOperations):
-        def setUp(self, servers=1, num_servers_passed=0, holdoff_s=None, timeout_s=None,
-                  bootstrap_server=True,
-                  extra_cmdline_args=None, **kwargs):
-            assert bootstrap_server
-            extra_args = extra_cmdline_args or []
-            if holdoff_s is not None:
-                extra_args += ['--bootstrap-holdoff', str(holdoff_s)]
-            if timeout_s is not None:
-                extra_args += ['--bootstrap-timeout', str(timeout_s)]
-
-            self.holdoff_s = holdoff_s
-            self.timeout_s = timeout_s
-            super().setUp(servers=servers, num_servers_passed=num_servers_passed,
-                          bootstrap_server=bootstrap_server,
-                          extra_cmdline_args=extra_args, **kwargs)
-
+    class TestMixin:
         def perform_bootstrap_finish(self):
             req = Lwm2mBootstrapFinish()
             self.bootstrap_server.send(req)
@@ -145,6 +129,23 @@ class BootstrapTest:
             if finish:
                 self.perform_bootstrap_finish()
 
+    class Test(TestMixin, test_suite.Lwm2mSingleServerTest, test_suite.Lwm2mDmOperations):
+        def setUp(self, servers=1, num_servers_passed=0, holdoff_s=None, timeout_s=None,
+                  bootstrap_server=True,
+                  extra_cmdline_args=None, **kwargs):
+            assert bootstrap_server
+            extra_args = extra_cmdline_args or []
+            if holdoff_s is not None:
+                extra_args += ['--bootstrap-holdoff', str(holdoff_s)]
+            if timeout_s is not None:
+                extra_args += ['--bootstrap-timeout', str(timeout_s)]
+
+            self.holdoff_s = holdoff_s
+            self.timeout_s = timeout_s
+            super().setUp(servers=servers, num_servers_passed=num_servers_passed,
+                          bootstrap_server=bootstrap_server,
+                          extra_cmdline_args=extra_args, **kwargs)
+
 
 class BootstrapClientTest(BootstrapTest.Test):
     def setUp(self):
@@ -185,6 +186,10 @@ class BootstrapClientTest(BootstrapTest.Test):
         # client did not try to register to a Bootstrap server (as in T847)
         with self.assertRaises(socket.timeout):
             print(self.bootstrap_server.recv(timeout_s=1))
+
+        # ensure that bootstrap account was purged and client won't accept Request Bootstrap Trigger
+        self.execute_resource(server=self.serv, oid=OID.Server, iid=1, rid=RID.Server.RequestBootstrapTrigger,
+                              expect_error_code=Code.RES_METHOD_NOT_ALLOWED)
 
 
 class BootstrapOneResourceAtATimeTest(BootstrapTest.Test):
@@ -967,3 +972,26 @@ class BootstrapCheckOngoingRegistrationsWithoutLegacyServerInitiated(BootstrapTe
 
     def tearDown(self):
         super().tearDown(auto_deregister=False)
+
+
+class BootstrapCuriousServerDisabling(BootstrapTest.Test):
+    def setUp(self):
+        super().setUp(maximum_version='1.1', legacy_server_initiated_bootstrap_allowed=False)
+
+    def runTest(self):
+        self.assertDemoRequestsBootstrap(
+            preferred_content_format=coap.ContentFormat.APPLICATION_LWM2M_SENML_CBOR)
+
+        # rewrite the bootstrap instance
+        self.write_instance(self.bootstrap_server, oid=OID.Security, iid=1,
+                            content=TLV.make_resource(RID.Security.ServerURI,
+                                                      'coap://127.0.0.1:%d/' % self.bootstrap_server.get_listen_port()).serialize() + TLV.make_resource(
+                                RID.Security.ClientHoldOffTime, 1).serialize())
+        self.add_server(server_iid=1, security_iid=2, binding='UQ',
+                        server_uri='coap://127.0.0.1:%d' % self.serv.get_listen_port(),
+                        additional_security_data=TLV.make_resource(RID.Security.ClientHoldOffTime,
+                                                                   1).serialize())
+        self.perform_bootstrap_finish()
+
+        # Registration
+        self.assertDemoRegisters(version='1.1', lwm2m11_queue_mode=True)

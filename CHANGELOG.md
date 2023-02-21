@@ -1,5 +1,28 @@
 # Changelog
 
+## 3.3.0 (February 21st, 2023)
+
+### Features
+
+- New configuration option, `WITHOUT_MODULE_fw_update_PUSH_MODE` (CMake) / `ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE` (header), that allows disabling support for the PUSH mode in the Firmware Update module
+
+### Improvements
+
+- Refactored tests to use `avs_stream_inbuf` instead of `avs_unit_memstream`
+- Refactored `anjay_input_ctx_constructor_t` to use only a single pointer for input stream
+- Revised support for DTLS Connection ID extension, so that a new handshake is
+  not performed if Connection ID is used, unless an error occurs
+- Revised example Anjay configurations for embedded builds without CMake to
+  optimize compile time and code size
+
+#### Bugfixes
+
+- Fixed a critical regression in 3.2.0 that could cause an assertion failure and use-after-free during Bootstrap Finish if the Bootstrap Server is reconfigured in the new bootstrap information and legacy Server-Initiated Bootstrap is disabled
+- Fixed a bug that could cause undefined behavior when reading the Update Delivery Method resource in the Firmware Update object with thread safety enabled but Downloader disabled
+- Fixed a bug that prevented notifications from being sent in a timely manner after receiving Reset message cancelling an Observation in response to another confirmable notification
+- Fixed a bug that could cause an assertion failure when using `anjay_delete_with_core_persistence()` if a primary server connection failed, but a trigger (SMS) connection is operational
+- Fixed the response code of unsuccessful Resource /1/x/9 Bootstrap-Request Trigger execution (e.g. when there is no Bootstrap-Server Account)
+
 ## 3.2.1 (December 13th, 2022)
 
 ### Improvements

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -191,8 +191,8 @@
 #define AVS_COMMONS_WITH_AVS_LOG
 #define AVS_COMMONS_WITH_AVS_NET
 #define AVS_COMMONS_WITH_AVS_PERSISTENCE
-#define AVS_COMMONS_WITH_AVS_RBTREE
-/* #undef AVS_COMMONS_WITH_AVS_SORTED_SET */
+/* #undef AVS_COMMONS_WITH_AVS_RBTREE */
+#define AVS_COMMONS_WITH_AVS_SORTED_SET
 #define AVS_COMMONS_WITH_AVS_SCHED
 #define AVS_COMMONS_WITH_AVS_STREAM
 /* #undef AVS_COMMONS_WITH_AVS_UNIT */
@@ -442,7 +442,7 @@
  * CK_RV _avs_crypto_mbedtls_pkcs11_get_function_list(CK_FUNCTION_LIST_PTR_PTR);
  * </pre>
  */
-#define AVS_COMMONS_HAVE_DLSYM
+/* #undef AVS_COMMONS_HAVE_DLSYM */
 
 /**
  * Enables the default implementation of avs_crypto engine, based on OpenSSL and
@@ -500,7 +500,7 @@
  * Enabling this option would reduce the stack space required to use avs_log, at
  * the expense of global storage and the complexity of using a mutex.
  */
-/* #undef AVS_COMMONS_LOG_USE_GLOBAL_BUFFER */
+#define AVS_COMMONS_LOG_USE_GLOBAL_BUFFER
 
 /**
  * Provides a default avs_log handler that prints log messages on stderr.
@@ -550,6 +550,52 @@
  * Default logger implementation can be found in avs_log_impl.h
  */
 /* #undef AVS_COMMONS_WITH_EXTERNAL_LOGGER_HEADER */
+
+/**
+ * If specified, the process of checking if avs_log should be written out
+ * takes place in compile time.
+ *
+ * Specify an optional header with a list of modules for which log level
+ * is set. If a log level for specific module is not set, the DEFAULT level
+ * will be taken into account. Value of the default logging level is set to 
+ * DEBUG, but can be overwritten in this header file with AVS_LOG_LEVEL_DEFAULT
+ * define. Messages with lower level than the one set will be removed during
+ * compile time. Possible values match @ref avs_log_level_t.
+ *
+ * That file should contain C preprocesor defines in the:
+ * - "#define AVS_LOG_LEVEL_FOR_MODULE_<Module> <Level>" format, 
+ *   where <Module> is the module name and <Level> is allowed logging level
+ * - "#define AVS_LOG_LEVEL_DEFAULT <Level>" format, where <Level> is the
+ *   allowed logging level
+ *
+ * Example file content:
+ *
+ * <code>
+ * #ifndef AVS_COMMONS_EXTERNAL_LOG_LEVELS_H
+ * #define AVS_COMMONS_EXTERNAL_LOG_LEVELS_H
+ * 
+ * // global log level value
+ * #define AVS_LOG_LEVEL_DEFAULT INFO
+ *
+ * //for "coap" messages only WARNING and ERROR messages will be present
+ * #define AVS_LOG_LEVEL_FOR_MODULE_coap WARNING
+ *
+ * //logs are disable for "net" module
+ * #define AVS_LOG_LEVEL_FOR_MODULE_net QUIET
+ *
+ * #endif
+ * </code>
+ */
+/* #undef AVS_COMMONS_WITH_EXTERNAL_LOG_LEVELS_HEADER */
+
+/**
+ * Disable log level check in runtime. Allows to save at least 1.3kB of memory.  
+ * 
+ * The macros avs_log_set_level and avs_log_set_default_level 
+ * will not be available.
+ *
+ */
+/* #undef AVS_COMMONS_WITHOUT_LOG_CHECK_IN_RUNTIME */
 /**@}*/
 
 /**

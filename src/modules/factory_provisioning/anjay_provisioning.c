@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -46,7 +46,7 @@ static avs_error_t factory_provisioning_unlocked(anjay_unlocked_t *anjay,
         anjay_unlocked_input_ctx_t *input_ctx;
 
         if (_anjay_input_senml_cbor_create(
-                    &input_ctx, &data_stream, &MAKE_ROOT_PATH())) {
+                    &input_ctx, data_stream, &MAKE_ROOT_PATH())) {
             provisioning_log(ERROR, _("Cannot create CBOR context"));
             return avs_errno(AVS_ENOMEM);
         } else {

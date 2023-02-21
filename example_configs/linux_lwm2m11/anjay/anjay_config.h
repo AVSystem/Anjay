@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -257,7 +257,7 @@
 /* #undef ANJAY_WITH_CORE_PERSISTENCE */
 
 /**
- * Enable support for CoAP Content-Format numerical values 1541-1543 that have
+ * Enable support for CoAP Content-Format numerical values 1541-1544 that have
  * been used before final LwM2M TS 1.0.
  */
 /* #undef ANJAY_WITH_LEGACY_CONTENT_FORMAT_SUPPORT */
@@ -499,6 +499,14 @@
  * Enable fw_update module (implementation of the Firmware Update object).
  */
 #define ANJAY_WITH_MODULE_FW_UPDATE
+
+/**
+ * Disable support for PUSH mode Firmware Update.
+ *
+ * Only meaningful if <c>ANJAY_WITH_MODULE_FW_UPDATE</c> is enabled. Requires
+ * <c>ANJAY_WITH_DOWNLOADER</c> to be enabled.
+ */
+/* #undef ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE */
 
 /**
  * Enables ipso_objects module (generic implementation of the following kinds of

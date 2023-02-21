@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -10,23 +10,21 @@
 #include <anjay_init.h>
 
 #define AVS_UNIT_ENABLE_SHORT_ASSERTS
-#include <avsystem/commons/avs_unit_memstream.h>
+#include <avsystem/commons/avs_stream_inbuf.h>
 #include <avsystem/commons/avs_unit_test.h>
 
 static const anjay_uri_path_t TEST_RESOURCE_PATH =
         RESOURCE_PATH_INITIALIZER(12, 34, 56);
 
-#define TEST_ENV(Data, Path)                                        \
-    avs_stream_t *stream = NULL;                                    \
-    ASSERT_OK(avs_unit_memstream_alloc(&stream, sizeof(Data) - 1)); \
-    ASSERT_OK(avs_stream_write(stream, Data, sizeof(Data) - 1));    \
-    anjay_unlocked_input_ctx_t *in;                                 \
-    ASSERT_OK(_anjay_input_cbor_create(&in, &stream, &(Path)));
+#define TEST_ENV(Data, Path)                                         \
+    avs_stream_inbuf_t stream = AVS_STREAM_INBUF_STATIC_INITIALIZER; \
+    avs_stream_inbuf_set_buffer(&stream, Data, sizeof(Data) - 1);    \
+    anjay_unlocked_input_ctx_t *in;                                  \
+    ASSERT_OK(_anjay_input_cbor_create(&in, (avs_stream_t *) &stream, &(Path)));
 
 #define TEST_TEARDOWN                             \
     do {                                          \
         ASSERT_OK(_anjay_input_ctx_destroy(&in)); \
-        ASSERT_OK(avs_stream_cleanup(&stream));   \
     } while (0)
 
 AVS_UNIT_TEST(raw_cbor_in, single_integer) {

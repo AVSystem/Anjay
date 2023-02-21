@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -663,11 +663,10 @@ static const senml_deserialization_vtable_t
         };
 
 int _anjay_input_senml_cbor_create(anjay_unlocked_input_ctx_t **out,
-                                   avs_stream_t **stream_ptr,
+                                   avs_stream_t *stream_ptr,
                                    const anjay_uri_path_t *request_uri) {
     anjay_json_like_decoder_t *cbor_ctx =
-            _anjay_cbor_decoder_new(*stream_ptr,
-                                    MAX_SENML_CBOR_NEST_STACK_SIZE);
+            _anjay_cbor_decoder_new(stream_ptr, MAX_SENML_CBOR_NEST_STACK_SIZE);
     if (!cbor_ctx) {
         return -1;
     }
@@ -677,11 +676,10 @@ int _anjay_input_senml_cbor_create(anjay_unlocked_input_ctx_t **out,
 
 int _anjay_input_senml_cbor_composite_read_create(
         anjay_unlocked_input_ctx_t **out,
-        avs_stream_t **stream_ptr,
+        avs_stream_t *stream_ptr,
         const anjay_uri_path_t *request_uri) {
     anjay_json_like_decoder_t *cbor_ctx =
-            _anjay_cbor_decoder_new(*stream_ptr,
-                                    MAX_SENML_CBOR_NEST_STACK_SIZE);
+            _anjay_cbor_decoder_new(stream_ptr, MAX_SENML_CBOR_NEST_STACK_SIZE);
     if (!cbor_ctx) {
         return -1;
     }
@@ -816,9 +814,9 @@ static const senml_deserialization_vtable_t
         };
 
 int _anjay_input_json_create(anjay_unlocked_input_ctx_t **out,
-                             avs_stream_t **stream_ptr,
+                             avs_stream_t *stream_ptr,
                              const anjay_uri_path_t *request_uri) {
-    anjay_json_like_decoder_t *json_ctx = _anjay_json_decoder_new(*stream_ptr);
+    anjay_json_like_decoder_t *json_ctx = _anjay_json_decoder_new(stream_ptr);
     if (!json_ctx) {
         return -1;
     }
@@ -828,9 +826,9 @@ int _anjay_input_json_create(anjay_unlocked_input_ctx_t **out,
 
 int _anjay_input_json_composite_read_create(
         anjay_unlocked_input_ctx_t **out,
-        avs_stream_t **stream_ptr,
+        avs_stream_t *stream_ptr,
         const anjay_uri_path_t *request_uri) {
-    anjay_json_like_decoder_t *json_ctx = _anjay_json_decoder_new(*stream_ptr);
+    anjay_json_like_decoder_t *json_ctx = _anjay_json_decoder_new(stream_ptr);
     if (!json_ctx) {
         return -1;
     }

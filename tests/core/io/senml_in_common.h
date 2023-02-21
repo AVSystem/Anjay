@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -18,7 +18,6 @@
 #define TEST_TEARDOWN(ExpectedResult)                                       \
     do {                                                                    \
         AVS_CONCAT(ASSERT_, ExpectedResult)(_anjay_input_ctx_destroy(&in)); \
-        ASSERT_OK(avs_stream_cleanup(&stream));                             \
     } while (0)
 
 static const anjay_uri_path_t TEST_RESOURCE_PATH =

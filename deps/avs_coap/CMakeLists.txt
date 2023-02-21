@@ -1,4 +1,4 @@
-# Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
 # AVSystem CoAP library
 # All rights reserved.
 #
@@ -41,7 +41,7 @@ cmake_dependent_option(WITH_AVS_COAP_OBSERVE_PERSISTENCE "Enable observations pe
 option(WITH_AVS_COAP_BLOCK "Enable support for BLOCK/BERT transfers" ON)
 
 option(WITH_AVS_COAP_LOGS "Enable logging" ON)
-cmake_dependent_option(WITH_AVS_COAP_TRACE_LOGS "Enable TRACE-level logging" ON "WITH_AVS_COAP_LOGS" OFF)
+cmake_dependent_option(WITH_AVS_COAP_TRACE_LOGS "Enable TRACE-level logging" ON "WITH_AVS_COAP_LOGS;NOT EXTERNAL_LOG_LEVELS_HEADER" OFF)
 
 set(COAP_UDP_NOTIFY_CACHE_SIZE 4 CACHE STRING "Maximum number of notification tokens stored to match Reset responses to")
 
