@@ -1,5 +1,19 @@
 # Changelog
 
+## 3.3.1 (March 10th, 2023)
+
+### Improvements
+
+- `anjay_disable_server()` and `anjay_disable_server_with_timeout()` can now be
+  be called on servers that are not enabled as well
+
+### Bugfixes
+
+- Fixed resetting of counter for the Communication Sequence Retry Count resource
+- Fixed a regression in 3.2.0 that prevented the bootstrap connection to be
+  properly closed if the Bootstrap Server is reconfigured in the new bootstrap
+  information and legacy Server-Initiated Bootstrap is disabled
+
 ## 3.3.0 (February 21st, 2023)
 
 ### Features

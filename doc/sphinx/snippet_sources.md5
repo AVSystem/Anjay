@@ -2,7 +2,7 @@ c2fdb37415d974d06387a40f7e87ed2d  demo/demo_cmds.c
 cd5ba3adb34a01fdd2ceceb6a35d5be2  demo/objects/ipso_objects.c
 90e172b4b00a21b7290510a21498e0b8  deps/avs_coap/include_public/avsystem/coap/tcp.h
 4670a0997896b4ab2b973fb833c4a039  deps/avs_coap/include_public/avsystem/coap/udp.h
-cb2f72863dde53754f158b723a70810f  deps/avs_commons/include_public/avsystem/commons/avs_addrinfo.h
+632ec469b37df582ff65792fc01d81ce  deps/avs_commons/include_public/avsystem/commons/avs_addrinfo.h
 b02b7236e89497c73496ab2e5503ed14  deps/avs_commons/include_public/avsystem/commons/avs_base64.h
 045968e7cbf1891b418ed417b6b8d189  deps/avs_commons/include_public/avsystem/commons/avs_crypto_common.h
 477cd70c144b9fba0f1be35f0c049f76  deps/avs_commons/include_public/avsystem/commons/avs_crypto_pki.h
@@ -11,7 +11,7 @@ b02b7236e89497c73496ab2e5503ed14  deps/avs_commons/include_public/avsystem/commo
 0691a3c8a2dbb7f8f22c74e09db381ce  deps/avs_commons/include_public/avsystem/commons/avs_socket_v_table.h
 1dc558d1f1b72af3da021cf9c1fca4f4  deps/avs_commons/include_public/avsystem/commons/avs_utils.h
 6805fe6ea07bc0eabd90a52923abfc77  deps/avs_commons/src/net/avs_net_global.h
-0bde43a45d34f3428024363be4264d56  deps/avs_commons/src/net/avs_net_impl.h
+ca82847266e70bd9728611eda7b1a19e  deps/avs_commons/src/net/avs_net_impl.h
 646826b1669c1dfa639d3c1899f26ba3  deps/avs_commons/src/utils/compat/posix/avs_compat_time.c
 9bba955ab235e4c315b28aa83589e010  examples/commercial-features/CF-CorePersistence/src/main.c
 4613be67a0c66ba130fe5601e75ef5f0  examples/commercial-features/CF-EST-PKCS11/src/main.c
@@ -82,7 +82,7 @@ f971df7872a8f052bb72ae64610a8031  examples/tutorial/firmware-update/basic-implem
 844cd7d9d0ebe80007dc5ae8d6a719b0  examples/tutorial/firmware-update/download-resumption/src/firmware_update.c
 077f6b89dad59ef3b9b58e2abe93aff6  examples/tutorial/firmware-update/secure-downloads/src/firmware_update.c
 af2f0e0ac0de25dc04713f05a378d469  include_public/anjay/attr_storage.h
-905feb6369f49041b7a505c074cb000b  include_public/anjay/core.h
+40556bc52ee8a6b3080840a40d200a88  include_public/anjay/core.h
 01253f147521b96a08d08ff533b7d789  include_public/anjay/dm.h
 bd04d42f0c35a3fdd16173a3003af577  include_public/anjay/fw_update.h
 c14cc4edd6db240a0a6c5d93170a0010  include_public/anjay/io.h

@@ -92,6 +92,9 @@ _anjay_downloader_set_next_block_offset(anjay_downloader_t *dl,
 void _anjay_downloader_abort(anjay_downloader_t *dl,
                              anjay_download_handle_t handle);
 
+bool _anjay_downloader_same_socket_transfer_ongoing(anjay_downloader_t *dl,
+                                                    avs_net_socket_t *socket);
+
 void _anjay_downloader_suspend_same_socket(anjay_downloader_t *dl,
                                            avs_net_socket_t *socket);
 

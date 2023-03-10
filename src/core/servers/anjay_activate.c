@@ -325,6 +325,7 @@ void _anjay_server_on_updated_registration(anjay_server_info_t *server,
             result = ANJAY_REGISTRATION_ERROR_OTHER;
         } else {
             server->registration_attempts = 0;
+            server->registration_sequences_performed = 0;
         }
     }
     switch (result) {
@@ -484,6 +485,8 @@ int _anjay_servers_sched_reactivate_all_given_up(anjay_unlocked_t *anjay) {
             }
         }
         it->reactivate_time = avs_time_real_now();
+        it->registration_attempts = 0;
+        it->registration_sequences_performed = 0;
         if (!_anjay_server_sched_activate(it)) {
             active_server_exists = true;
         } else {
@@ -566,6 +569,47 @@ void _anjay_disable_server_with_timeout_from_dm_sync(
     }
 }
 
+static int disable_server_impl(anjay_unlocked_t *anjay,
+                               anjay_ssid_t ssid,
+                               anjay_server_next_action_t disable_action,
+                               const char *disable_action_str,
+                               avs_time_duration_t timeout) {
+    assert(disable_action
+                   == ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_TIMEOUT_FROM_DM
+           || disable_action
+                      == ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_EXPLICIT_TIMEOUT);
+    if (ssid == ANJAY_SSID_ANY) {
+        anjay_log(WARNING, _("invalid SSID: ") "%u", ssid);
+        return -1;
+    }
+
+    anjay_server_info_t *server = _anjay_servers_find(anjay, ssid);
+    if (!server) {
+        return -1;
+    }
+
+    bool server_active = _anjay_server_active(server);
+    if (!server_active && server->next_action_handle
+            && server->next_action
+                           == ANJAY_SERVER_NEXT_ACTION_COMMUNICATION_ERROR) {
+        return -1;
+    }
+
+    if (_anjay_server_reschedule_next_action(server, AVS_TIME_DURATION_ZERO,
+                                             disable_action)) {
+        anjay_log(ERROR, _("could not schedule ") "%s", disable_action_str);
+        return -1;
+    }
+
+    if (disable_action
+            == ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_EXPLICIT_TIMEOUT) {
+        server->reactivate_time =
+                avs_time_real_add(avs_time_real_now(), timeout);
+    }
+    // defined(ANJAY_WITH_CORE_PERSISTENCE)
+    return 0;
+}
+
 /**
  * Disables a specified server - in a scheduler job which calls
  * deactivate_server(). The reactivation timeout is read from data model.
@@ -575,20 +619,10 @@ void _anjay_disable_server_with_timeout_from_dm_sync(
 int anjay_disable_server(anjay_t *anjay_locked, anjay_ssid_t ssid) {
     int result = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
-    anjay_server_info_t *server = _anjay_servers_find_active(anjay, ssid);
-    if (server) {
-        if (_anjay_server_reschedule_next_action(
-                    server, AVS_TIME_DURATION_ZERO,
-                    ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_TIMEOUT_FROM_DM)) {
-            anjay_log(
-                    ERROR,
-                    _("could not schedule "
-                      "ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_TIMEOUT_FROM_DM"));
-        } else {
-            result = 0;
-            // defined(ANJAY_WITH_CORE_PERSISTENCE)
-        }
-    }
+    result = disable_server_impl(
+            anjay, ssid, ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_TIMEOUT_FROM_DM,
+            "ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_TIMEOUT_FROM_DM",
+            AVS_TIME_DURATION_INVALID);
     ANJAY_MUTEX_UNLOCK(anjay_locked);
     return result;
 }
@@ -615,28 +649,9 @@ int _anjay_schedule_disable_server_with_explicit_timeout_unlocked(
         anjay_unlocked_t *anjay,
         anjay_ssid_t ssid,
         avs_time_duration_t timeout) {
-    if (ssid == ANJAY_SSID_ANY) {
-        anjay_log(WARNING, _("invalid SSID: ") "%u", ssid);
-        return -1;
-    }
-
-    anjay_server_info_t *server = _anjay_servers_find_active(anjay, ssid);
-    if (!server) {
-        return -1;
-    }
-
-    if (_anjay_server_reschedule_next_action(
-                server, AVS_TIME_DURATION_ZERO,
-                ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_EXPLICIT_TIMEOUT)) {
-        anjay_log(ERROR,
-                  _("could not schedule "
-                    "ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_EXPLICIT_TIMEOUT"));
-        return -1;
-    }
-
-    server->reactivate_time = avs_time_real_add(avs_time_real_now(), timeout);
-    // defined(ANJAY_WITH_CORE_PERSISTENCE)
-    return 0;
+    return disable_server_impl(
+            anjay, ssid, ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_EXPLICIT_TIMEOUT,
+            "ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_EXPLICIT_TIMEOUT", timeout);
 }
 
 int anjay_disable_server_with_timeout(anjay_t *anjay_locked,

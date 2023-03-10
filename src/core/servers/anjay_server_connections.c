@@ -308,6 +308,34 @@ void _anjay_active_server_refresh(anjay_server_info_t *server) {
     }
 }
 
+bool _anjay_connection_outgoing_exchanges_in_progress(
+        anjay_connection_ref_t conn_ref) {
+    assert(conn_ref.server->ssid != ANJAY_SSID_BOOTSTRAP);
+    if (conn_ref.conn_type == ANJAY_CONNECTION_PRIMARY
+            && avs_coap_exchange_id_valid(
+                       conn_ref.server->registration_exchange_state
+                               .exchange_id)) {
+        return true;
+    }
+    if (_anjay_observe_confirmable_in_delivery(conn_ref)) {
+        return true;
+    }
+#ifdef ANJAY_WITH_DOWNLOADER
+    if (_anjay_downloader_same_socket_transfer_ongoing(
+                &conn_ref.server->anjay->downloader,
+                _anjay_connection_internal_get_socket(
+                        _anjay_get_server_connection(conn_ref)))) {
+        return true;
+    }
+#endif // ANJAY_WITH_DOWNLOADER
+#ifdef ANJAY_WITH_SEND
+    if (_anjay_send_in_progress(conn_ref)) {
+        return true;
+    }
+#endif // ANJAY_WITH_SEND
+    return false;
+}
+
 static void cancel_exchanges(anjay_connection_ref_t conn_ref) {
     anjay_server_connection_t *conn = _anjay_get_server_connection(conn_ref);
 #ifdef ANJAY_WITH_DOWNLOADER
@@ -424,9 +452,31 @@ void _anjay_connection_bring_online(anjay_connection_ref_t ref) {
 }
 
 static void queue_mode_close_socket(avs_sched_t *sched, const void *ref_ptr) {
+    static const long RETRY_DELAY_S = 1;
     anjay_t *anjay_locked = _anjay_get_from_sched(sched);
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
-    _anjay_connection_suspend(*(const anjay_connection_ref_t *) ref_ptr);
+    anjay_connection_ref_t ref = *(const anjay_connection_ref_t *) ref_ptr;
+    bool skip_suspend = false;
+    if (_anjay_connection_outgoing_exchanges_in_progress(ref)) {
+        anjay_log(DEBUG, _("outgoing exchanges in progress, deferring socket "
+                           "closure for queue mode"));
+        anjay_server_connection_t *connection =
+                _anjay_get_server_connection(ref);
+        if (connection
+                && !AVS_SCHED_DELAYED(
+                           sched, &connection->queue_mode_close_socket_clb,
+                           avs_time_duration_from_scalar(RETRY_DELAY_S,
+                                                         AVS_TIME_S),
+                           queue_mode_close_socket, &ref, sizeof(ref))) {
+            skip_suspend = true;
+        } else {
+            anjay_log(WARNING, _("could not delay queue mode operations, "
+                                 "suspending the connection now"));
+        }
+    }
+    if (!skip_suspend) {
+        _anjay_connection_suspend(ref);
+    }
     ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 

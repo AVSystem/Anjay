@@ -895,6 +895,9 @@ int anjay_schedule_bootstrap_request(anjay_t *anjay);
  * the invocation of this function (during next @ref anjay_sched_run) and is
  * <strong>not</strong> updated upon any subsequent Writes to that resource.
  *
+ * If the server is already disabled, its re-enable action will be re-scheduled
+ * according to the value of the Disable Timeout resource added to current time.
+ *
  * @param anjay Anjay object to operate on.
  * @param ssid  Short Server ID of the server to put in a disabled state.
  *              NOTE: disabling a server requires a Server Object Instance
@@ -913,6 +916,9 @@ int anjay_disable_server(anjay_t *anjay, anjay_ssid_t ssid);
  * server becomes unreachable.
  *
  * The server will become disabled during next @ref anjay_sched_run call.
+ *
+ * If the server is already disabled, its re-enable action will be re-scheduled
+ * or cancelled, according to the @p timeout argument.
  *
  * NOTE: disabling a server with dual binding (e.g. UDP+SMS trigger) closes both
  * communication channels. Shutting down only one of them requires changing

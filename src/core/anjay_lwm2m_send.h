@@ -20,6 +20,8 @@ typedef struct {
     AVS_LIST(anjay_send_entry_t) entries;
 } anjay_sender_t;
 
+bool _anjay_send_in_progress(anjay_connection_ref_t ref);
+
 void _anjay_send_interrupt(anjay_connection_ref_t ref);
 
 void _anjay_send_cleanup(anjay_sender_t *sender);

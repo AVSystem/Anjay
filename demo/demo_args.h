@@ -101,6 +101,7 @@ typedef struct cmdline_args {
 #endif // ANJAY_WITH_LWM2M11
 
     bool alternative_logger;
+
 } cmdline_args_t;
 
 int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char **argv);

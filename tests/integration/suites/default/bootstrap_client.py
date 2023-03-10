@@ -995,3 +995,4 @@ class BootstrapCuriousServerDisabling(BootstrapTest.Test):
 
         # Registration
         self.assertDemoRegisters(version='1.1', lwm2m11_queue_mode=True)
+        self.wait_until_socket_count(expected=1, timeout_s=5)

@@ -728,6 +728,27 @@ static void cancel_send_entry(AVS_LIST(anjay_send_entry_t) *entry_ptr,
     delete_send_entry(entry_ptr);
 }
 
+bool _anjay_send_in_progress(anjay_connection_ref_t ref) {
+    assert(ref.server);
+    avs_coap_ctx_t *coap = NULL;
+    if (ref.conn_type == ANJAY_CONNECTION_PRIMARY) {
+        coap = _anjay_connection_get_coap(ref);
+    }
+    if (!coap) {
+        return false;
+    }
+    AVS_LIST(anjay_send_entry_t) entry;
+    AVS_LIST_FOREACH(entry, _anjay_from_server(ref.server)->sender.entries) {
+        if (entry->target_ssid == _anjay_server_ssid(ref.server)
+                && avs_coap_exchange_id_valid(entry->exchange_status.id)) {
+            return true;
+        } else if (entry->target_ssid > _anjay_server_ssid(ref.server)) {
+            break;
+        }
+    }
+    return false;
+}
+
 void _anjay_send_interrupt(anjay_connection_ref_t ref) {
     assert(ref.server);
     avs_coap_ctx_t *coap = NULL;

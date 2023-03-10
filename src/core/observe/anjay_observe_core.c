@@ -1592,6 +1592,13 @@ void _anjay_observe_interrupt(anjay_connection_ref_t ref) {
     }
 }
 
+bool _anjay_observe_confirmable_in_delivery(anjay_connection_ref_t ref) {
+    AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr =
+            _anjay_observe_find_connection_state(ref);
+    return conn_ptr
+           && avs_coap_exchange_id_valid((*conn_ptr)->notify_exchange_id);
+}
+
 bool _anjay_observe_needs_flushing(anjay_connection_ref_t ref) {
     AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr =
             _anjay_observe_find_connection_state(ref);

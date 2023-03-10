@@ -7,8 +7,6 @@
 # Licensed under the AVSystem-5-clause License.
 # See the attached LICENSE file for details.
 
-import socket
-
 from framework.lwm2m_test import *
 from .access_control import AccessMask
 
@@ -50,13 +48,12 @@ class DisableServerTest(test_suite.Lwm2mSingleServerTest):
 
 class DisabledServerUpdateTriggerTest(test_suite.Lwm2mTest, test_suite.Lwm2mDmOperations):
     def setUp(self, **kwargs):
-        super().setUp(servers=2, extra_cmdline_args=[
-            '--access-entry', '/%d/1,2,%d' % (OID.Server, AccessMask.OWNER)])
+        super().setUp(servers=2, extra_cmdline_args=['--access-entry',
+                                                     '/%d/1,2,%d' % (OID.Server, AccessMask.OWNER)])
 
     def runTest(self):
         # Disable the first server
-        self.execute_resource(
-            self.servers[0], OID.Server, 1, RID.Server.Disable)
+        self.execute_resource(self.servers[0], OID.Server, 1, RID.Server.Disable)
         self.assertDemoDeregisters(self.servers[0])
 
         # Update trigger for the disabled server should return BAD REQUEST
@@ -65,3 +62,32 @@ class DisabledServerUpdateTriggerTest(test_suite.Lwm2mTest, test_suite.Lwm2mDmOp
 
     def tearDown(self):
         self.teardown_demo_with_servers(deregister_servers=[self.servers[1]])
+
+
+class DisableServerRestartTest(test_suite.Lwm2mTest, test_suite.Lwm2mDmOperations):
+    def setUp(self, **kwargs):
+        super().setUp(servers=2, extra_cmdline_args=['--access-entry',
+                                                     '/%d/1,2,%d' % (OID.Server, AccessMask.OWNER)])
+
+    def runTest(self):
+        self.write_resource(self.servers[1], OID.Server, 1, RID.Server.DisableTimeout, b'6')
+        self.execute_resource(self.servers[1], OID.Server, 1, RID.Server.Disable)
+        first_disable_timestamp = time.time()
+        self.assertDemoDeregisters(self.servers[0])
+
+        # no message for now
+        with self.assertRaises(socket.timeout):
+            print(self.servers[0].recv(timeout_s=3))
+
+        # execute Disable again, this should reset the timer
+        self.execute_resource(self.servers[1], OID.Server, 1, RID.Server.Disable)
+        with self.assertRaises(socket.timeout):
+            print(self.servers[0].recv(timeout_s=5))
+
+        # only now the server should re-register
+        self.assertDemoRegisters(server=self.servers[0], timeout_s=3)
+        register_timestamp = time.time()
+
+        self.assertGreater(register_timestamp - first_disable_timestamp, 8)
+
+

@@ -510,6 +510,14 @@ void _anjay_connection_bring_online(anjay_connection_ref_t ref);
  */
 void _anjay_connection_suspend(anjay_connection_ref_t conn_ref);
 
+/**
+ * Returns true if there are any outgoing CoAP exchanges in progress for a given
+ * connection. This may include Register, Update, Confirmable Notify, Send, or
+ * same-socket downloads. If none of these are in progress, returns false.
+ */
+bool _anjay_connection_outgoing_exchanges_in_progress(
+        anjay_connection_ref_t conn_ref);
+
 anjay_socket_transport_t
 _anjay_connection_transport(anjay_connection_ref_t conn_ref);
 

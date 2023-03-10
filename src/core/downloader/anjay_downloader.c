@@ -364,6 +364,21 @@ void _anjay_downloader_abort(anjay_downloader_t *dl,
     }
 }
 
+bool _anjay_downloader_same_socket_transfer_ongoing(anjay_downloader_t *dl,
+                                                    avs_net_socket_t *socket) {
+    assert(dl);
+    if (!socket) {
+        return false;
+    }
+    AVS_LIST(anjay_download_ctx_t) ctx;
+    AVS_LIST_FOREACH(ctx, dl->downloads) {
+        if (ctx->common.same_socket_download && get_ctx_socket(ctx) == socket) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void _anjay_downloader_suspend_same_socket(anjay_downloader_t *dl,
                                            avs_net_socket_t *socket) {
     assert(dl);

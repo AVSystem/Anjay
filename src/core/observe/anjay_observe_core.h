@@ -71,6 +71,8 @@ int _anjay_observe_composite_handle(anjay_connection_ref_t ref,
 
 void _anjay_observe_interrupt(anjay_connection_ref_t ref);
 
+bool _anjay_observe_confirmable_in_delivery(anjay_connection_ref_t ref);
+
 bool _anjay_observe_needs_flushing(anjay_connection_ref_t ref);
 
 int _anjay_observe_sched_flush(anjay_connection_ref_t ref);
@@ -94,6 +96,7 @@ _anjay_observe_status(anjay_unlocked_t *anjay,
 #    define _anjay_observe_cleanup(...) ((void) 0)
 #    define _anjay_observe_gc(...) ((void) 0)
 #    define _anjay_observe_interrupt(...) ((void) 0)
+#    define _anjay_observe_confirmable_in_delivery(...) false
 #    define _anjay_observe_needs_flushing(...) false
 #    define _anjay_observe_sched_flush(...) 0
 

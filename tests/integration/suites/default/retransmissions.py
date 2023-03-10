@@ -332,6 +332,22 @@ class UpdateTimeoutFallbacksToRegisterTest(RetransmissionTest.TestMixin,
         self.assertDemoRegisters(lifetime=new_lifetime)
 
 
+class UpdateTimeoutWithQueueModeTest(RetransmissionTest.TestMixin,
+                                     test_suite.Lwm2mSingleServerTest,
+                                     test_suite.Lwm2mDmOperations):
+    def setUp(self):
+        super().setUp(binding='UQ', extra_cmdline_args=['--binding=UQ'])
+
+    def runTest(self):
+        self.communicate('send-update')
+        for _ in range(self.MAX_RETRANSMIT + 1):
+            self.assertDemoUpdatesRegistration(respond=False, timeout_s=2 * self.max_transmit_wait())
+        self.wait_for_retransmission_response_timeout()
+
+        # Demo should re-register
+        self.assertDemoRegisters(binding='UQ')
+
+
 class UpdateFailsOnIcmpTest:
     class TestMixin(test_suite.PcapEnabledTest,
                     RetransmissionTest.TestMixin,
