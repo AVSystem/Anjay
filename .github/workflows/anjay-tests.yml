@@ -23,7 +23,7 @@ jobs:
           submodules: recursive
       - run: apt-get update
       - run: apt-get -y install $CC $CXX
-      - run: ./devconfig --with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF
+      - run: ./devconfig --with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF -DWITH_IPV6=OFF
       - run: env CC=gcc LC_ALL=C.UTF-8 make -j
       - run: env CC=gcc LC_ALL=C.UTF-8 make check
     strategy:
@@ -50,7 +50,7 @@ jobs:
           submodules: recursive
       - run: apt-get update
       - run: apt-get -y install $CC $CXX
-      - run: ./devconfig --with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF
+      - run: ./devconfig --with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF -DWITH_IPV6=OFF
       - run: env CC=gcc LC_ALL=C.UTF-8 make -j
       - run: env CC=gcc LC_ALL=C.UTF-8 make check
     strategy:
@@ -82,7 +82,7 @@ jobs:
           submodules: recursive
       - run: apt-get update
       - run: apt-get -y install $CC $CXX
-      - run: ./devconfig $MEM_CHECK_TOOL --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF
+      - run: ./devconfig $MEM_CHECK_TOOL --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF -DWITH_IPV6=OFF
       - run: env CC=gcc LC_ALL=C.UTF-8 make -j
       - run: env CC=gcc LC_ALL=C.UTF-8 make check
     strategy:
@@ -123,7 +123,7 @@ jobs:
           submodules: recursive
       - run: dnf update -y
       - run: dnf install -y $CC
-      - run: ./devconfig --with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF
+      - run: ./devconfig --with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF -DWITH_IPV6=OFF
       - run: env CC=gcc LC_ALL=C.UTF-8 make -j
       - run: env CC=gcc LC_ALL=C.UTF-8 make check
     strategy:
@@ -146,11 +146,11 @@ jobs:
       - uses: actions/checkout@v1
         with:
           submodules: recursive
-      - run: brew update && brew upgrade
+      - run: brew update
       # NOTE: latest known compatible versions are openssl@3--3.0.5 and mbedtls--3.2.1
       - run: brew install openssl mbedtls $COMPILER_VERSION
       - run: pip3 install sphinx sphinx-rtd-theme cbor2 aiocoap cryptography packaging requests wheel
-      - run: env JAVA_HOME="$JAVA_HOME_17_X64" ./devconfig --with-asan --without-analysis --no-examples -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF
+      - run: env JAVA_HOME="$JAVA_HOME_17_X64" ./devconfig --with-asan --without-analysis --no-examples -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF -DWITH_IPV6=OFF
       - run: LC_ALL=C.UTF-8 make -j
       - run: LC_ALL=C.UTF-8 make check
     strategy:
