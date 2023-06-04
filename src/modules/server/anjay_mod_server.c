@@ -704,8 +704,10 @@ AVS_LIST(const anjay_ssid_t) anjay_server_get_ssids(anjay_t *anjay_locked) {
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *server_obj =
             _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
-    server_repr_t *repr = _anjay_serv_get(*server_obj);
-    if (_anjay_dm_transaction_object_included(anjay, server_obj)) {
+    server_repr_t *repr = server_obj ? _anjay_serv_get(*server_obj) : NULL;
+    if (!repr) {
+        server_log(ERROR, _("Server object is not registered"));
+    } else if (_anjay_dm_transaction_object_included(anjay, server_obj)) {
         source = repr->saved_instances;
     } else {
         source = repr->instances;
@@ -782,8 +784,10 @@ int anjay_server_object_set_lifetime(anjay_t *anjay_locked,
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *server_obj =
             _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
-    server_repr_t *repr = _anjay_serv_get(*server_obj);
-    if (repr->saved_instances) {
+    server_repr_t *repr = server_obj ? _anjay_serv_get(*server_obj) : NULL;
+    if (!repr) {
+        server_log(ERROR, _("Server object is not registered"));
+    } else if (repr->saved_instances) {
         server_log(ERROR, _("cannot set Lifetime while some transaction is "
                             "started on the Server Object"));
     } else {
