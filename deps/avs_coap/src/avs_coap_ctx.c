@@ -59,7 +59,7 @@ void avs_coap_ctx_cleanup(avs_coap_ctx_t **ctx) {
         }
 #ifdef WITH_AVS_COAP_OBSERVE
         while (coap_base->observes) {
-            _avs_coap_observe_cancel(*ctx, &coap_base->observes->id);
+            avs_coap_observe_cancel(*ctx, coap_base->observes->id);
         }
 #endif // WITH_AVS_COAP_OBSERVE
 #ifdef WITH_AVS_COAP_STREAMING_API
@@ -226,9 +226,11 @@ static void retry_or_request_expired_job(avs_sched_t *sched,
 void _avs_coap_reschedule_retry_or_request_expired_job(
         avs_coap_ctx_t *ctx, avs_time_monotonic_t target_time) {
     avs_coap_base_t *coap_base = _avs_coap_get_base(ctx);
-    if (avs_time_monotonic_before(
-                avs_sched_time(&coap_base->retry_or_request_expired_job),
-                target_time)) {
+    if (coap_base->retry_or_request_expired_job
+            && !avs_time_monotonic_before(
+                       target_time,
+                       avs_sched_time(
+                               &coap_base->retry_or_request_expired_job))) {
         return;
     }
 

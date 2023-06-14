@@ -139,15 +139,6 @@ static avs_error_t send_simple_msg(avs_coap_tcp_ctx_t *ctx,
     return _avs_coap_tcp_send_msg(ctx, &msg);
 }
 
-static void send_release(avs_coap_tcp_ctx_t *ctx) {
-    avs_coap_borrowed_msg_t msg = {
-        .code = AVS_COAP_CODE_RELEASE
-    };
-
-    (void) _avs_coap_ctx_generate_token(ctx->base.prng_ctx, &msg.token);
-    (void) _avs_coap_tcp_send_msg(ctx, &msg);
-}
-
 static avs_error_t handle_cached_msg(avs_coap_tcp_ctx_t *ctx,
                                      avs_coap_borrowed_msg_t *out_request) {
     avs_coap_tcp_cached_msg_t *msg = &ctx->cached_msg;
@@ -266,11 +257,8 @@ static inline void send_abort(avs_coap_tcp_ctx_t *ctx) {
 static void coap_tcp_cleanup(avs_coap_ctx_t *ctx_) {
     avs_coap_tcp_ctx_t *ctx = (avs_coap_tcp_ctx_t *) ctx_;
 
-    if (!ctx->aborted && ctx->base.socket) {
-        (void) send_release(ctx);
-    }
     // TODO T2262
-    // Wait for completion of pending requests after sending release message.
+    // Send the Release message and wait for completion of pending requests.
     // "The peer responding to the Release message SHOULD delay the closing of
     //  the connection until it has responded to all requests received by it
     //  before the Release message."

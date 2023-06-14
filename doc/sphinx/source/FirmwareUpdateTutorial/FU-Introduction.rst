@@ -118,7 +118,7 @@ give an idea on what the implementation of FOTA would take:
         anjay_fw_update_get_security_config_t *get_security_config;
 
         /** Queries CoAP transmission parameters to be used during firmware
-         * update. */
+         * update; @ref anjay_fw_update_get_coap_tx_params_t */
         anjay_fw_update_get_coap_tx_params_t *get_coap_tx_params;
     } anjay_fw_update_handlers_t;
 

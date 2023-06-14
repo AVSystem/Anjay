@@ -25,8 +25,6 @@ void _anjay_registration_info_cleanup(anjay_registration_info_t *info);
 void _anjay_registration_exchange_state_cleanup(
         anjay_registration_async_exchange_state_t *state);
 
-bool _anjay_server_primary_connection_valid(anjay_server_info_t *server);
-
 typedef enum {
     /** Successfully registered/updated */
     ANJAY_REGISTRATION_SUCCESS,

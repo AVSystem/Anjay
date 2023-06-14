@@ -24,6 +24,7 @@
 #include <anjay_modules/anjay_servers.h>
 
 #include <avsystem/commons/avs_errno.h>
+#include <avsystem/commons/avs_persistence.h>
 #include <avsystem/commons/avs_url.h>
 #include <avsystem/commons/avs_utils.h>
 
@@ -817,6 +818,8 @@ int _anjay_safe_strtod(const char *in, double *value) {
     *value = strtod(in, &endptr);
     return map_str_conversion_result(in, endptr);
 }
+
+// || defined(ANJAY_WITH_CORE_PERSISTENCE))
 
 #ifdef ANJAY_TEST
 #    include "tests/core/utils.c"

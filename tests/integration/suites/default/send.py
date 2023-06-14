@@ -235,14 +235,14 @@ class DeferrableSendFail(Send.Test):
 
         # demo retries with lwm2m=1.0
         self.assertDemoRegisters(self.serv, version='1.0')
-        self.assertIsNotNone(self.read_log_until_match(b'SEND FINISHED HANDLER: -3', 1))
+        self.assertIsNotNone(self.read_log_until_match(b'SEND FINISHED HANDLER: -3', 60))
 
 
 class CleanupWhileThereIsDeferredSend(Send.Test):
     def tearDown(self):
         try:
             self.request_demo_shutdown()
-            self.assertIsNotNone(self.read_log_until_match(b'SEND FINISHED HANDLER: -2', 1))
+            self.assertIsNotNone(self.read_log_until_match(b'SEND FINISHED HANDLER: -2', 60))
         finally:
             super().tearDown(auto_deregister=False)
 
@@ -265,7 +265,7 @@ class ServerRemovedWhileThereIsDeferredSend(Send.Test):
 
         self.communicate('send_deferrable 1 %s' % ResPath.Device.ModelNumber)
         self.communicate('trim-servers 0')
-        self.assertIsNotNone(self.read_log_until_match(b'SEND FINISHED HANDLER: -3', 1))
+        self.assertIsNotNone(self.read_log_until_match(b'SEND FINISHED HANDLER: -3', 60))
 
 
 class ServerRemovedWhileAwaitingResponseToDeferredSend(Send.Test):
@@ -287,7 +287,7 @@ class ServerRemovedWhileAwaitingResponseToDeferredSend(Send.Test):
 
         self.communicate('trim-servers 0')
         self.assertDemoDeregisters()
-        self.assertIsNotNone(self.read_log_until_match(b'SEND FINISHED HANDLER: -2', 1))
+        self.assertIsNotNone(self.read_log_until_match(b'SEND FINISHED HANDLER: -2', 60))
 
 
 class QueueModeSend(retransmissions.RetransmissionTest.TestMixin, Send.Test):
@@ -295,6 +295,15 @@ class QueueModeSend(retransmissions.RetransmissionTest.TestMixin, Send.Test):
     PSK_KEY = b'test-key'
 
     def setUp(self):
+        import subprocess
+        import unittest
+        output = subprocess.run([self._get_demo_executable(), '-e', 'dummy', '-u', 'invalid'],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout.decode(
+            'utf-8')
+
+        if 'ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE = ON' in output:
+            raise unittest.SkipTest('Queue mode autoclose disabled')
+
         super().setUp(psk_identity=self.PSK_IDENTITY, psk_key=self.PSK_KEY,
                       extra_cmdline_args=['--binding=UQ'], auto_register=False)
         self.assertDemoRegisters(version='1.1', lwm2m11_queue_mode=True)

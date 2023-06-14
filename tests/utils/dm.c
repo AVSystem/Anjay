@@ -35,23 +35,41 @@ anjay_t *_anjay_test_dm_init(const anjay_configuration_t *config) {
     return anjay;
 }
 
+void _anjay_test_dm_unsched_notify_clb(anjay_t *anjay_locked) {
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    _anjay_notify_clear_queue(&anjay->scheduled_notify.queue);
+    avs_sched_del(&anjay->scheduled_notify.handle);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+}
+
 void _anjay_test_dm_unsched_reload_sockets(anjay_t *anjay_locked) {
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     avs_sched_del(&anjay->reload_servers_sched_job_handle);
     ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
+avs_net_socket_t *_anjay_test_dm_create_socket(bool connected) {
+    avs_net_socket_t *socket = NULL;
+    _anjay_mocksock_create(&socket, 1252, 1252);
+    if (connected) {
+        avs_unit_mocksock_expect_connect(socket, "", "");
+        AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(socket, "", ""));
+    }
+    avs_unit_mocksock_enable_recv_timeout_getsetopt(
+            socket, avs_time_duration_from_scalar(1, AVS_TIME_S));
+    avs_unit_mocksock_enable_inner_mtu_getopt(socket, 1252);
+    avs_unit_mocksock_enable_state_getopt(socket);
+    return socket;
+}
+
 avs_net_socket_t *_anjay_test_dm_install_socket(anjay_t *anjay_locked,
                                                 anjay_ssid_t ssid) {
-    avs_net_socket_t *socket = NULL;
+    avs_net_socket_t *socket = _anjay_test_dm_create_socket(true);
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     AVS_UNIT_ASSERT_NOT_NULL(
             AVS_LIST_INSERT_NEW(anjay_server_info_t, &anjay->servers));
     anjay->servers->anjay = anjay;
     anjay->servers->ssid = ssid;
-    _anjay_mocksock_create(&socket, 1252, 1252);
-    avs_unit_mocksock_expect_connect(socket, "", "");
-    AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(socket, "", ""));
     anjay->servers->registration_info.expire_time.since_real_epoch.seconds =
             INT64_MAX;
     anjay_server_connection_t *connection =
@@ -89,9 +107,9 @@ void _anjay_test_dm_finish(anjay_t *anjay_locked) {
     AVS_LIST_CLEAR(&anjay->servers) {
         _anjay_server_cleanup(anjay->servers);
     }
-    _anjay_mock_dm_expect_clean();
     ANJAY_MUTEX_UNLOCK(anjay_locked);
     anjay_delete(anjay_locked);
+    _anjay_mock_dm_expect_clean();
     _anjay_mock_clock_finish();
 }
 

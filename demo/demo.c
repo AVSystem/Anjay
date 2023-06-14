@@ -25,6 +25,10 @@
 #    include "firmware_update.h"
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
 
+#ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+#    include "advanced_firmware_update.h"
+#endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+
 #include "objects.h"
 #include <avsystem/commons/avs_url.h>
 
@@ -237,6 +241,9 @@ static void demo_delete(anjay_demo_t *demo) {
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
     firmware_update_destroy(&demo->fw_update);
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+    advanced_firmware_update_uninstall(demo->advanced_fw_update_logic_table);
+#endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
 
     AVS_LIST_CLEAR(&demo->allocated_strings);
     avs_free(demo);
@@ -474,6 +481,9 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         .prefer_hierarchical_formats =
                 cmdline_args->prefer_hierarchical_formats,
         .use_connection_id = cmdline_args->use_connection_id,
+        .update_immediately_on_dm_change =
+                cmdline_args->update_immediately_on_dm_change,
+        .enable_self_notify = cmdline_args->enable_self_notify,
         .default_tls_ciphersuites = {
             .ids = cmdline_args->default_ciphersuites,
             .num_ids = cmdline_args->default_ciphersuites_count
@@ -482,6 +492,9 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         .lwm2m_version_config = &cmdline_args->lwm2m_version_config,
         .rebuild_client_cert_chain = cmdline_args->rebuild_client_cert_chain,
 #endif // ANJAY_WITH_LWM2M11
+#if defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+        .coap_tcp_request_timeout = cmdline_args->tcp_request_timeout,
+#endif // defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
     };
 
 #ifdef ANJAY_WITH_LWM2M11
@@ -505,6 +518,15 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         fw_security_info_ptr = &cmdline_args->fw_security_info;
     }
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
+
+#ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+    const avs_net_security_info_t *advanced_fw_security_info_ptr = NULL;
+    if (cmdline_args->advanced_fw_security_info.mode
+            != (avs_net_security_mode_t) -1) {
+        advanced_fw_security_info_ptr =
+                &cmdline_args->advanced_fw_security_info;
+    }
+#endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
 
     demo->connection_args = &cmdline_args->connection_args;
 #ifdef AVS_COMMONS_STREAM_WITH_FILE
@@ -653,6 +675,29 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
     }
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
 
+#ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+    // Install Advanced Firmware Update Object at the end, because installed
+    // Device Object and Server Object's instances may be needed.
+    if (advanced_firmware_update_install(
+                demo->anjay,
+                demo->advanced_fw_update_logic_table,
+                cmdline_args->advanced_fw_updated_marker_path,
+                advanced_fw_security_info_ptr,
+                cmdline_args->advanced_fwu_tx_params_modified
+                        ? &cmdline_args->advanced_fwu_tx_params
+                        : NULL,
+                cmdline_args->advanced_fw_update_delayed_result,
+                cmdline_args->prefer_same_socket_downloads,
+                cmdline_args->original_img_file_path
+#    ifdef ANJAY_WITH_SEND
+                ,
+                cmdline_args->advanced_fw_update_use_send
+#    endif // ANJAY_WITH_SEND
+                )) {
+        return -1;
+    }
+#endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+
 #ifdef ANJAY_WITH_MODULE_ACCESS_CONTROL
     if (!dm_persistence_restored
             && (add_default_access_entries(demo)
@@ -680,6 +725,12 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
        // defined(AVS_COMMONS_STREAM_WITH_FILE)
 
     reschedule_notify_time_dependent(demo);
+
+    if (cmdline_args->start_offline
+            && anjay_transport_enter_offline(demo->anjay,
+                                             ANJAY_TRANSPORT_SET_ALL)) {
+        return -1;
+    }
 
     return 0;
 }

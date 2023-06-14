@@ -47,8 +47,6 @@ class AccessViolationOn256ByteUri(test_suite.Lwm2mSingleServerTest):
 
 class CrashAfterRequestWithTokenFollowedByNoToken(test_suite.Lwm2mSingleServerTest):
     def runTest(self):
-        self.serv.set_timeout(timeout_s=1)
-
         # failure to clear the token from last message remembered by output
         # buffer combined with not overriding cached token length in case of
         # a zero-length token caused anjay to incorrectly assume a non-empty

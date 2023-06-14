@@ -99,7 +99,12 @@ class SeparateResponseToSendTest(test_suite.Lwm2mSingleServerTest):
 
 class SeparateResponseToSendTimeoutTest(test_suite.Lwm2mSingleServerTest):
     def setUp(self):
-        super().setUp(maximum_version='1.1')
+        super().setUp(maximum_version='1.1',
+                      extra_cmdline_args=[
+                          '--ack-random-factor', '1',
+                          '--ack-timeout', '1',
+                          '--max-retransmit', '1'
+                      ])
 
     def runTest(self):
         self.communicate('send 1 %s' % (ResPath.Server[1].Lifetime,))
@@ -109,9 +114,12 @@ class SeparateResponseToSendTimeoutTest(test_suite.Lwm2mSingleServerTest):
         # Separate Response: empty ACK
         self.serv.send(Lwm2mEmpty.matching(req)())
 
-        # Separate Response timeout in CoAP2 is arbitrarily set to 5 minutes
+        # Separate Response timeout in CoAP2 is EXCHANGE_LIFETIME, which is effectively:
+        #   ACK_TIMEOUT * (2 ** MAX_RETRANSMIT) * ACK_RANDOM_FACTOR + 200
+        # Unfortunately the 200 part is hardcoded,
+        # based on the value of MAX_LATENCY given in RFC 7252
         with self.assertRaises(socket.timeout, msg='unexpected message'):
-            print(self.serv.recv(timeout_s=305))
+            print(self.serv.recv(timeout_s=210))
 
         # Separate Response
         req = Lwm2mChanged(msg_id=(req.msg_id * 2) % (2 ** 16), token=req.token)

@@ -345,6 +345,7 @@ class RegisterTcpWithAbort(
         super().setUp(auto_register=False)
 
     def runTest(self):
+        self.assertTcpCsm()
         pkt = self.serv.recv()
         self.assertMsgEqual(
             Lwm2mRegister(
@@ -480,10 +481,11 @@ class RegisterWithBlock(test_suite.Lwm2mSingleServerTest):
 class ConcurrentRequestWhileWaitingForResponse:
     class TestMixin:
         def runTest(self):
-            pkt = self.serv.recv()
             path = '/rd?lwm2m=1.0&ep=%s&lt=86400' % DEMO_ENDPOINT_NAME
             if self.serv.transport == Transport.TCP:
                 path += '&b=T'
+                self.assertTcpCsm()
+            pkt = self.serv.recv()
             self.assertMsgEqual(Lwm2mRegister(path, content=expected_content()), pkt)
             self.read_path(self.serv, ResPath.Device.Manufacturer)
             self.serv.send(Lwm2mCreated.matching(pkt)(location='/rd/demo'))
@@ -509,10 +511,11 @@ class RegisterUri:
             return args
 
         def runTest(self):
-            pkt = self.serv.recv()
             path = '/i/am/crazy/and/rd?lwm2m=i&ep=know&lt=it&lwm2m=1.0&ep=%s&lt=86400' % DEMO_ENDPOINT_NAME
             if self.serv.transport == Transport.TCP:
                 path += '&b=T'
+                self.assertTcpCsm()
+            pkt = self.serv.recv()
             self.assertMsgEqual(Lwm2mRegister(path, content=expected_content()), pkt)
             self.serv.send(Lwm2mCreated.matching(pkt)(location='/some/weird/rd/point'))
 
@@ -606,12 +609,16 @@ class Lwm2m11BindingSemantics(bootstrap_client.BootstrapTest.Test):
         self.serv.send(Lwm2mCreated.matching(pkt)(location=self.DEFAULT_REGISTER_ENDPOINT))
 
         # change binding and register with TCP binding
-        # receive register packet in background to avoid race condition
+        # receive CSM packet in background to avoid race condition
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(self.tcp_serv.recv, timeout_s=10)
             self.write_resource(self.serv, OID.Server, 100, RID.Server.Binding, 'TU')
             pkt = future.result()
 
+        assert pkt.code == coap.Code.SIGNALING_CSM
+        self.tcp_serv.send(coap.Packet(code=coap.Code.SIGNALING_CSM, token=b''))
+
+        pkt = self.tcp_serv.recv()
         self.assertIsInstance(pkt, Lwm2mRegister)
         self.tcp_serv.send(Lwm2mCreated.matching(pkt)(location=self.DEFAULT_REGISTER_ENDPOINT))
 

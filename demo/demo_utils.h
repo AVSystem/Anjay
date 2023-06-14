@@ -65,6 +65,23 @@ int demo_parse_long(const char *str, long *out_value);
 
 int fetch_bytes(anjay_input_ctx_t *ctx, void **buffer, size_t *out_size);
 
-int open_temporary_file(char *path);
+char *generate_random_target_filepath(void);
+
+int copy_file_contents(FILE *dst, FILE *src);
+
+int calc_file_crc32(const char *filename, uint32_t *out_crc);
+
+#if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
+        && defined(AVS_COMMONS_STREAM_WITH_FILE)
+avs_error_t store_etag(avs_persistence_context_t *ctx,
+                       const anjay_etag_t *etag);
+avs_error_t restore_etag(avs_persistence_context_t *ctx, anjay_etag_t **etag);
+#endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
+       // defined(AVS_COMMONS_STREAM_WITH_FILE)
+
+void fw_set_coap_tx_params(const avs_coap_udp_tx_params_t *tx_params);
+
+avs_coap_udp_tx_params_t fw_get_coap_tx_params(void *user_ptr,
+                                               const char *download_uri);
 
 #endif // DEMO_UTILS_H

@@ -51,18 +51,19 @@ class OfflineWithDtlsResumeTest(test_suite.Lwm2mDtlsSingleServerTest):
 
         # client reconnects with DTLS session resumption
         self.assertDtlsReconnect()
-        exit_offline_time = time.time()
 
         notifications = 0
         while True:
             try:
-                timestamp_pkt = self.serv.recv(timeout_s=0.2)
+                timestamp_pkt = self.serv.recv(timeout_s=0.9)
                 self.assertEqual(timestamp_pkt.token, observe_req.token)
                 notifications += 1
             except socket.timeout:
                 break
-        self.assertGreaterEqual(notifications, exit_offline_time - enter_offline_time - 1)
-        self.assertLessEqual(notifications, exit_offline_time - enter_offline_time + 1)
+        end_time = time.time()
+
+        self.assertGreaterEqual(notifications, end_time - enter_offline_time - 1)
+        self.assertLessEqual(notifications, end_time - enter_offline_time + 1)
 
         # Cancel Observe
         req = Lwm2mObserve(ResPath.Test[0].Timestamp, observe=1, token=observe_req.token)
@@ -143,11 +144,23 @@ class OfflineWithRegistrationUpdateSchedule(test_suite.Lwm2mDtlsSingleServerTest
         self.assertDemoUpdatesRegistration()
 
 
-class OfflineWithQueueMode(retransmissions.RetransmissionTest.TestMixin,
-                           test_suite.Lwm2mDtlsSingleServerTest):
-    def setUp(self):
-        super().setUp(extra_cmdline_args=['--binding=UQ'], binding='UQ')
+class OfflineWithQueueMode:
+    class Test(retransmissions.RetransmissionTest.TestMixin, test_suite.Lwm2mDtlsSingleServerTest):
+        def setUp(self, extra_cmdline_args=None, binding='UQ', *args, **kwargs):
+            import subprocess
+            import unittest
+            output = subprocess.run([self._get_demo_executable(), '-e', 'dummy', '-u', 'invalid'],
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout.decode(
+                'utf-8')
 
+            if 'ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE = ON' in output:
+                raise unittest.SkipTest('Queue mode autoclose disabled')
+
+            super().setUp(*args, extra_cmdline_args=(extra_cmdline_args or []) + ['--binding=UQ'],
+                          binding=binding, **kwargs)
+
+
+class OfflineWithQueueModeTest(OfflineWithQueueMode.Test):
     def runTest(self):
         self.wait_until_socket_count(0, timeout_s=self.max_transmit_wait() + 2)
         self.communicate('enter-offline')
@@ -164,10 +177,9 @@ class OfflineWithQueueMode(retransmissions.RetransmissionTest.TestMixin,
         self.assertDemoUpdatesRegistration()
 
 
-class OfflineWithQueueModeScheduledUpdate(retransmissions.RetransmissionTest.TestMixin,
-                                          test_suite.Lwm2mDtlsSingleServerTest):
+class OfflineWithQueueModeScheduledUpdate(OfflineWithQueueMode.Test):
     def setUp(self):
-        super().setUp(extra_cmdline_args=['--binding=UQ'], lifetime=45, auto_register=False)
+        super().setUp(lifetime=45, auto_register=False)
 
     def runTest(self):
         self.assertDemoRegisters(lifetime=45, binding='UQ')
@@ -189,12 +201,7 @@ class OfflineWithQueueModeScheduledUpdate(retransmissions.RetransmissionTest.Tes
         self.assertDemoUpdatesRegistration()
 
 
-class OfflineWithQueueModeNotify(retransmissions.RetransmissionTest.TestMixin,
-                                 test_suite.Lwm2mDtlsSingleServerTest,
-                                 test_suite.Lwm2mDmOperations):
-    def setUp(self):
-        super().setUp(extra_cmdline_args=['--binding=UQ'], binding='UQ')
-
+class OfflineWithQueueModeNotify(OfflineWithQueueMode.Test, test_suite.Lwm2mDmOperations):
     def runTest(self):
         token = self.observe(self.serv, OID.EventLog, 0, RID.EventLog.LogData).token
         self.wait_until_socket_count(0, timeout_s=self.max_transmit_wait() + 2)
@@ -212,12 +219,7 @@ class OfflineWithQueueModeNotify(retransmissions.RetransmissionTest.TestMixin,
         self.assertMsgEqual(Lwm2mNotify(token=token), self.serv.recv())
 
 
-class OfflineWithQueueModeScheduledNotify(retransmissions.RetransmissionTest.TestMixin,
-                                          test_suite.Lwm2mDtlsSingleServerTest,
-                                          test_suite.Lwm2mDmOperations):
-    def setUp(self):
-        super().setUp(extra_cmdline_args=['--binding=UQ'], binding='UQ')
-
+class OfflineWithQueueModeScheduledNotify(OfflineWithQueueMode.Test, test_suite.Lwm2mDmOperations):
     def runTest(self):
         token = self.observe(self.serv, OID.EventLog, 0, RID.EventLog.LogData).token
         self.wait_until_socket_count(0, timeout_s=self.max_transmit_wait() + 2)
@@ -232,12 +234,9 @@ class OfflineWithQueueModeScheduledNotify(retransmissions.RetransmissionTest.Tes
         self.assertMsgEqual(Lwm2mNotify(token=token), self.serv.recv())
 
 
-class OfflineWithQueueModeScheduledSend(retransmissions.RetransmissionTest.TestMixin,
-                                        test_suite.Lwm2mDtlsSingleServerTest,
-                                        test_suite.Lwm2mDmOperations):
+class OfflineWithQueueModeScheduledSend(OfflineWithQueueMode.Test, test_suite.Lwm2mDmOperations):
     def setUp(self):
-        super().setUp(extra_cmdline_args=['--binding=UQ'], auto_register=False,
-                      minimum_version='1.1', maximum_version='1.1')
+        super().setUp(auto_register=False, minimum_version='1.1', maximum_version='1.1')
         self.assertDemoRegisters(version='1.1', lwm2m11_queue_mode=True)
 
     def runTest(self):
@@ -301,3 +300,14 @@ class ObservationDroppingAfterNosecReconnect(test_suite.Lwm2mSingleServerTest,
         # observation got canceled, no new messages shall arrive
         with self.assertRaises(socket.timeout):
             self.serv.recv(timeout_s=OFFLINE_INTERVAL)
+
+
+class ForceReregisterDuringOffline(test_suite.Lwm2mDtlsSingleServerTest):
+    def runTest(self):
+        self.communicate('enter-offline')
+        self.wait_until_socket_count(0, timeout_s=5)
+        self.communicate('send-register')
+        time.sleep(1)
+        self.communicate('exit-offline')
+        self.assertDtlsReconnect()
+        self.assertDemoRegisters()

@@ -36,7 +36,11 @@ typedef enum {
     MOCK_DM_RESOURCE_READ_ATTRS,
     MOCK_DM_RESOURCE_WRITE_ATTRS,
     MOCK_DM_RESOURCE_INSTANCE_READ_ATTRS,
-    MOCK_DM_RESOURCE_INSTANCE_WRITE_ATTRS
+    MOCK_DM_RESOURCE_INSTANCE_WRITE_ATTRS,
+    MOCK_DM_TRANSACTION_BEGIN,
+    MOCK_DM_TRANSACTION_VALIDATE,
+    MOCK_DM_TRANSACTION_COMMIT,
+    MOCK_DM_TRANSACTION_ROLLBACK
 } anjay_mock_dm_expected_command_type_t;
 
 typedef struct {
@@ -480,6 +484,18 @@ int _anjay_mock_dm_resource_write_attrs(
     DM_ACTION_RETURN;
 }
 
+#define TRANSACTION_ACTION(LName, UName)                                   \
+    int _anjay_mock_dm_transaction_##LName(                                \
+            anjay_t *anjay, const anjay_dm_object_def_t *const *obj_ptr) { \
+        DM_ACTION_COMMON(TRANSACTION_##UName);                             \
+        DM_ACTION_RETURN;                                                  \
+    }
+
+TRANSACTION_ACTION(begin, BEGIN)
+TRANSACTION_ACTION(validate, VALIDATE)
+TRANSACTION_ACTION(commit, COMMIT)
+TRANSACTION_ACTION(rollback, ROLLBACK)
+
 #ifdef ANJAY_WITH_LWM2M11
 int _anjay_mock_dm_resource_instance_read_attrs(
         anjay_t *anjay,
@@ -849,6 +865,22 @@ void _anjay_mock_dm_expect_resource_instance_write_attrs(
     command->retval = retval;
     command->value.resource_attributes = *attrs;
 }
+
+#define EXPECT_TRANSACTION_ACTION(LName, UName)                          \
+    void _anjay_mock_dm_expect_transaction_##LName(                      \
+            anjay_t *anjay, const anjay_dm_object_def_t *const *obj_ptr, \
+            int retval) {                                                \
+        anjay_mock_dm_expected_command_t *command =                      \
+                NEW_EXPECTED_COMMAND(MOCK_DM_TRANSACTION_##UName);       \
+        command->anjay = anjay;                                          \
+        command->obj_ptr = obj_ptr;                                      \
+        command->retval = retval;                                        \
+    }
+
+EXPECT_TRANSACTION_ACTION(begin, BEGIN)
+EXPECT_TRANSACTION_ACTION(validate, VALIDATE)
+EXPECT_TRANSACTION_ACTION(commit, COMMIT)
+EXPECT_TRANSACTION_ACTION(rollback, ROLLBACK)
 
 void _anjay_mock_dm_expect_clean(void) {
     AVS_UNIT_ASSERT_NULL(EXPECTED_COMMANDS);

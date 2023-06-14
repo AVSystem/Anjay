@@ -84,7 +84,7 @@ extern const anjay_dm_r_attributes_t ANJAY_DM_R_ATTRIBUTES_EMPTY;
  * @param      anjay   Anjay object to operate on.
  * @param      obj_ptr Object definition pointer, as passed to
  *                     @ref anjay_register_object .
- * @param      ssid    Short Server ID of the server requesting the RPC.
+ * @param      ssid    Short Server ID of the server requesting the operation.
  * @param[out] out     Attributes struct to be filled by the handler.
  *
  * @returns This handler should return:
@@ -106,7 +106,7 @@ typedef int anjay_dm_object_read_default_attrs_t(
  * @param anjay   Anjay object to operate on.
  * @param obj_ptr Object definition pointer, as passed to
  *                @ref anjay_register_object .
- * @param ssid    Short Server ID of the server requesting the RPC.
+ * @param ssid    Short Server ID of the server requesting the operation.
  * @param attrs   Attributes struct to be set for the Object.
  *
  * @returns This handler should return:
@@ -242,7 +242,7 @@ anjay_dm_instance_create_t(anjay_t *anjay,
  * @param      obj_ptr Object definition pointer, as passed to
  *                     @ref anjay_register_object .
  * @param      iid     Checked Object Instance ID.
- * @param      ssid    Short Server ID of the server requesting the RPC.
+ * @param      ssid    Short Server ID of the server requesting the operation.
  * @param[out] out     Returned attributes.
  *
  * @returns This handler should return:
@@ -266,7 +266,7 @@ typedef int anjay_dm_instance_read_default_attrs_t(
  * @param obj_ptr Object definition pointer, as passed to
  *                @ref anjay_register_object .
  * @param iid     Checked Object Instance ID.
- * @param ssid    Short Server ID of the server requesting the RPC.
+ * @param ssid    Short Server ID of the server requesting the operation.
  * @param attrs   Attributes to set for the Object Instance.
  *
  * @returns This handler should return:
@@ -1106,7 +1106,8 @@ anjay_resource_observation_status_t anjay_resource_observation_status(
 #endif // ANJAY_WITH_OBSERVATION_STATUS
 
 /**
- * Registers the Object in the data model, making it available for RPC calls.
+ * Registers the Object in the data model, making it available for access by the
+ * LwM2M Servers.
  *
  * NOTE: <c>def_ptr</c> MUST stay valid up to and including the corresponding
  * @ref anjay_delete or @ref anjay_unregister_object call.
@@ -1123,7 +1124,7 @@ int anjay_register_object(anjay_t *anjay,
 
 /**
  * Unregisters an Object in the data model, so that it is no longer available
- * for RPC calls.
+ * for access by the LwM2M Servers.
  *
  * <c>def_ptr</c> MUST be a pointer previously passed to
  * @ref anjay_register_object for the same <c>anjay</c> object.

@@ -62,7 +62,9 @@ void _anjay_connection_internal_clean_socket(
 #endif // ANJAY_WITH_DOWNLOADER
     _anjay_coap_ctx_cleanup(anjay, &connection->coap_ctx);
     _anjay_socket_cleanup(anjay, &connection->conn_socket_);
+#ifndef ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
     avs_sched_del(&connection->queue_mode_close_socket_clb);
+#endif // ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
 }
 
 typedef struct {
@@ -361,10 +363,7 @@ avs_error_t _anjay_server_connection_internal_bring_online(
         return AVS_OK;
     }
 
-    // defined(ANJAY_WITH_CORE_PERSISTENCE)
-
     bool session_resumed;
-    bool should_attempt_context_wrapping;
     avs_error_t err = def->connect_socket(server->anjay, connection);
     if (avs_is_err(err)) {
         goto error;
@@ -374,6 +373,8 @@ avs_error_t _anjay_server_connection_internal_bring_online(
                   _anjay_was_session_resumed(connection->conn_socket_))) {
         _anjay_conn_session_token_reset(&connection->session_token);
         // Clean up and recreate the CoAP context to discard observations
+        // NOTE: In old versions of avs_coap, this was sending the Release
+        // message. This may need to be revised if it's ever reintroduced.
         _anjay_coap_ctx_cleanup(server->anjay, &connection->coap_ctx);
     }
 
@@ -529,6 +530,9 @@ ensure_socket_connected(anjay_server_info_t *server,
     return _anjay_server_connection_internal_bring_online(server, conn_type);
 }
 
+#ifdef ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
+#    define should_primary_connection_be_online(...) true
+#else // ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
 static bool should_primary_connection_be_online(anjay_server_info_t *server) {
     anjay_connection_ref_t ref = {
         .server = server,
@@ -550,12 +554,13 @@ static bool should_primary_connection_be_online(anjay_server_info_t *server) {
            || !server->registration_info.queue_mode
            // if there are notifications to be sent, we need to send them
            || _anjay_observe_needs_flushing(ref)
-#ifdef ANJAY_WITH_SEND
+#    ifdef ANJAY_WITH_SEND
            // if there are Send messages to be sent, we need to send them
            || _anjay_send_has_deferred(server->anjay, server->ssid)
-#endif // ANJAY_WITH_SEND
+#    endif // ANJAY_WITH_SEND
             ;
 }
+#endif     // ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
 
 static avs_error_t refresh_connection(anjay_server_info_t *server,
                                       anjay_connection_type_t conn_type,
@@ -658,7 +663,9 @@ void _anjay_server_connections_refresh(
         anjay_server_connection_t *connection =
                 _anjay_connection_get(&server->connections, conn_type);
         connection->state = ANJAY_SERVER_CONNECTION_IN_PROGRESS;
+#ifndef ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
         avs_sched_del(&connection->queue_mode_close_socket_clb);
+#endif // ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
     }
     avs_error_t err = refresh_connection(
             server, ANJAY_CONNECTION_PRIMARY,

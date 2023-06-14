@@ -210,7 +210,7 @@ static bool entry_valid(const avs_coap_udp_response_cache_t *cache,
 
 static bool entry_expired(const cache_entry_t *entry,
                           const avs_time_monotonic_t *now) {
-    return avs_time_monotonic_before(entry->expiration_time, *now);
+    return !avs_time_monotonic_before(*now, entry->expiration_time);
 }
 
 /* returns total size of avs_coap_udp_msg_t, including length field

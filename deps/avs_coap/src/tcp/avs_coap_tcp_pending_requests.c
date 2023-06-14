@@ -52,8 +52,8 @@ is_list_ordered_by_expire_time(AVS_LIST(avs_coap_tcp_pending_request_t) list) {
         AVS_LIST(avs_coap_tcp_pending_request_t) next = list;
         AVS_LIST_ADVANCE(&next);
         if (next
-                && avs_time_monotonic_before(next->expire_time,
-                                             list->expire_time)) {
+                && !avs_time_monotonic_before(list->expire_time,
+                                              next->expire_time)) {
             return false;
         }
     }
@@ -139,8 +139,9 @@ find_pending_request_ptr_by_token(
 avs_time_monotonic_t
 _avs_coap_tcp_fail_expired_pending_requests(avs_coap_tcp_ctx_t *ctx) {
     while (ctx->pending_requests
-           && avs_time_monotonic_before(ctx->pending_requests->expire_time,
-                                        avs_time_monotonic_now())) {
+           && avs_time_monotonic_valid(ctx->pending_requests->expire_time)
+           && !avs_time_monotonic_before(avs_time_monotonic_now(),
+                                         ctx->pending_requests->expire_time)) {
         finish_pending_request_with_error(ctx, &ctx->pending_requests,
                                           AVS_COAP_SEND_RESULT_FAIL,
                                           _avs_coap_err(AVS_COAP_ERR_TIMEOUT));

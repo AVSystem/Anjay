@@ -47,7 +47,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "3.3.1"
+#    define ANJAY_VERSION "3.4.0"
 #endif // ANJAY_VERSION
 
 #ifdef ANJAY_WITH_LWM2M11
@@ -228,6 +228,9 @@ static int init_anjay(anjay_unlocked_t *anjay,
 #endif // ANJAY_WITH_DOWNLOADER
 
     anjay->prefer_hierarchical_formats = config->prefer_hierarchical_formats;
+    anjay->update_immediately_on_dm_change =
+            config->update_immediately_on_dm_change;
+    anjay->enable_self_notify = config->enable_self_notify;
     anjay->use_connection_id = config->use_connection_id;
     anjay->additional_tls_config_clb = config->additional_tls_config_clb;
 
@@ -859,7 +862,7 @@ static int handle_request(anjay_connection_ref_t connection,
         result = _anjay_bootstrap_perform_action(connection, request);
     } else {
         result = _anjay_dm_perform_action(connection, request);
-        _anjay_observe_sched_flush(connection);
+        (void) _anjay_observe_sched_flush(connection);
     }
     return result;
 }

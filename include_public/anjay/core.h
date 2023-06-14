@@ -262,6 +262,30 @@ typedef struct anjay_configuration {
     bool use_connection_id;
 
     /**
+     * Send the Update message immediately when Object Instances are created or
+     * deleted.
+     *
+     * NOTE: In case of Create and Delete operations, the Update message will be
+     * immediately sent to <strong>all</strong> the servers, including the one
+     * that initiated the operation.
+     *
+     * By default, such data model changes are reported in the next scheduled
+     * update message (or the message can be requested using
+     * @ref anjay_schedule_registration_update), but the Update is not triggered
+     * automatically.
+     */
+    bool update_immediately_on_dm_change;
+
+    /**
+     * Send the Notify messages as a result of a server action (e.g. Write) even
+     * to the initiating server.
+     *
+     * By default, notifications resulting from server actions are only sent to
+     * the servers other than the one which initiated the action.
+     */
+    bool enable_self_notify;
+
+    /**
      * (D)TLS ciphersuites to use if the "DTLS/TLS Ciphersuite" Resource
      * (/0/x/16) is not available or empty.
      *
@@ -579,49 +603,49 @@ typedef uint16_t anjay_riid_t;
  * Request sent by the LwM2M Server was malformed or contained an invalid
  * value.
  */
-#define ANJAY_ERR_BAD_REQUEST (-ANJAY_COAP_STATUS(4, 0))
+#define ANJAY_ERR_BAD_REQUEST (-(int) ANJAY_COAP_STATUS(4, 0))
 /**
  * LwM2M Server is not allowed to perform the operation due to lack of
  * necessary access rights.
  */
-#define ANJAY_ERR_UNAUTHORIZED (-ANJAY_COAP_STATUS(4, 1))
+#define ANJAY_ERR_UNAUTHORIZED (-(int) ANJAY_COAP_STATUS(4, 1))
 /**
  * Low-level CoAP error code; used internally by Anjay when CoAP option values
  * were invalid.
  */
-#define ANJAY_ERR_BAD_OPTION (-ANJAY_COAP_STATUS(4, 2))
-#define ANJAY_ERR_FORBIDDEN (-ANJAY_COAP_STATUS(4, 3))
+#define ANJAY_ERR_BAD_OPTION (-(int) ANJAY_COAP_STATUS(4, 2))
+#define ANJAY_ERR_FORBIDDEN (-(int) ANJAY_COAP_STATUS(4, 3))
 /** Target of the operation (Object/Instance/Resource) does not exist. */
-#define ANJAY_ERR_NOT_FOUND (-ANJAY_COAP_STATUS(4, 4))
+#define ANJAY_ERR_NOT_FOUND (-(int) ANJAY_COAP_STATUS(4, 4))
 /**
  * Operation is not allowed in current device state or the attempted operation
  * is invalid for this target (Object/Instance/Resource)
  */
-#define ANJAY_ERR_METHOD_NOT_ALLOWED (-ANJAY_COAP_STATUS(4, 5))
+#define ANJAY_ERR_METHOD_NOT_ALLOWED (-(int) ANJAY_COAP_STATUS(4, 5))
 /**
  * Low-level CoAP error code; used internally by Anjay when the client is
  * unable to encode response in requested content format.
  */
-#define ANJAY_ERR_NOT_ACCEPTABLE (-ANJAY_COAP_STATUS(4, 6))
+#define ANJAY_ERR_NOT_ACCEPTABLE (-(int) ANJAY_COAP_STATUS(4, 6))
 /**
  * Low-level CoAP error code; used internally by Anjay in case of unrecoverable
  * problems during block-wise transfer.
  */
-#define ANJAY_ERR_REQUEST_ENTITY_INCOMPLETE (-ANJAY_COAP_STATUS(4, 8))
+#define ANJAY_ERR_REQUEST_ENTITY_INCOMPLETE (-(int) ANJAY_COAP_STATUS(4, 8))
 /**
  * The server requested operation has a Content Format option that is
  * unsupported by Anjay.
  */
-#define ANJAY_ERR_UNSUPPORTED_CONTENT_FORMAT (-ANJAY_COAP_STATUS(4, 15))
+#define ANJAY_ERR_UNSUPPORTED_CONTENT_FORMAT (-(int) ANJAY_COAP_STATUS(4, 15))
 /** Unspecified error, no other error code was suitable. */
-#define ANJAY_ERR_INTERNAL (-ANJAY_COAP_STATUS(5, 0))
+#define ANJAY_ERR_INTERNAL (-(int) ANJAY_COAP_STATUS(5, 0))
 /** Operation is not implemented by the LwM2M Client. */
-#define ANJAY_ERR_NOT_IMPLEMENTED (-ANJAY_COAP_STATUS(5, 1))
+#define ANJAY_ERR_NOT_IMPLEMENTED (-(int) ANJAY_COAP_STATUS(5, 1))
 /**
  * LwM2M Client is busy processing some other request; LwM2M Server may retry
  * sending the same request after some delay.
  */
-#define ANJAY_ERR_SERVICE_UNAVAILABLE (-ANJAY_COAP_STATUS(5, 3))
+#define ANJAY_ERR_SERVICE_UNAVAILABLE (-(int) ANJAY_COAP_STATUS(5, 3))
 /** @} */
 
 /**
@@ -794,7 +818,7 @@ int anjay_event_loop_run_with_error_handling(anjay_t *anjay_locked,
  * instead wait until either of the following:
  *
  * - any ongoing scheduler tasks finish
- * - any incoming RPC involving a blockwise transfer finishes
+ * - any incoming operation involving a blockwise transfer finishes
  * - the <c>poll</c> or <c>select()</c> operation finishes (see the
  *   <c>max_wait_time</c> argument to @ref anjay_event_loop_run)
  *
@@ -850,6 +874,39 @@ int anjay_serve_any(anjay_t *anjay, avs_time_duration_t max_wait_time);
 #endif // ANJAY_WITH_EVENT_LOOP
 
 /**
+ * Schedules sending a Register message to the server identified by given
+ * Short Server ID.
+ *
+ * For currently connected servers, the Register message will be sent during the
+ * next @ref anjay_sched_run call, without reconnecting (and thus without a new
+ * DTLS handshake, if applicable). Please additionally call
+ * @ref anjay_server_schedule_reconnect before or after this function (without
+ * running @ref anjay_sched_run in between - so in multi-threaded applications
+ * you may need to do that from within an intermediary scheduler job) if you
+ * want to force a reconnect.
+ *
+ * For servers that are disabled or in a failure state, this function will
+ * invalidate the registration state, so that a new Register message will
+ * definitely be sent once the server is re-enabled (even if the DTLS session
+ * is successfully resumed), but will not re-enable it itself. Please
+ * additionally call @ref anjay_enable_server before or after this funciton if
+ * you want the server reactivated immediately.
+ *
+ * Note: This function will not change the offline state of the server's
+ * transport.
+ *
+ * @param anjay Anjay object to operate on.
+ * @param ssid  Short Server ID of the server to send Register to or
+ *              @ref ANJAY_SSID_ANY to send Register to all known servers.
+ *              NOTE: Since Register is not useful for the Bootstrap Server,
+ *              this function does not send one for @ref ANJAY_SSID_BOOTSTRAP
+ *              @p ssid .
+ *
+ * @returns 0 on success, a negative value in case of error.
+ */
+int anjay_schedule_register(anjay_t *anjay, anjay_ssid_t ssid);
+
+/**
  * Schedules sending an Update message to the server identified by given
  * Short Server ID.
  *
@@ -898,6 +955,7 @@ int anjay_schedule_bootstrap_request(anjay_t *anjay);
  * If the server is already disabled, its re-enable action will be re-scheduled
  * according to the value of the Disable Timeout resource added to current time.
  *
+ *
  * @param anjay Anjay object to operate on.
  * @param ssid  Short Server ID of the server to put in a disabled state.
  *              NOTE: disabling a server requires a Server Object Instance
@@ -924,6 +982,7 @@ int anjay_disable_server(anjay_t *anjay, anjay_ssid_t ssid);
  * communication channels. Shutting down only one of them requires changing
  * the Binding Resource in Server object.
  *
+ *
  * @param anjay   Anjay object to operate on.
  * @param ssid    Short Server ID of the server to put in a disabled state.
  * @param timeout Disable timeout. If set to @c AVS_TIME_DURATION_INVALID,
@@ -948,6 +1007,27 @@ int anjay_disable_server_with_timeout(anjay_t *anjay,
  * @returns 0 on success, a negative value in case of error.
  */
 int anjay_enable_server(anjay_t *anjay, anjay_ssid_t ssid);
+
+/**
+ * Reconnects sockets associated with a specific LwM2M Server.
+ *
+ * The reconnection will be performed during the next @ref anjay_sched_run call
+ * and will trigger sending any messages necessary to maintain valid
+ * registration (DTLS session resumption and/or Register or Update operations).
+ *
+ * If the server connection is disconnected due to queue mode, and there are no
+ * outstanding messages (Register, Update, Notify or Send), the socket will not
+ * be reconnected.
+ *
+ * If the server is in a disabled state, an error will be returned. Use
+ * @ref anjay_enable_server if you want to re-enable such a server.
+ *
+ * @param anjay Anjay object to operate on.
+ * @param ssid  Short Server ID of the server to reconnect.
+ *
+ * @returns 0 on success, a negative value in case of error.
+ */
+int anjay_server_schedule_reconnect(anjay_t *anjay, anjay_ssid_t ssid);
 
 /**
  * Structure defining the set of transports that
@@ -1072,7 +1152,7 @@ int anjay_transport_set_online(anjay_t *anjay,
  *
  * The reconnection will be performed during the next @ref anjay_sched_run call
  * and will trigger sending any messages necessary to maintain valid
- * registration (DTLS session resumption and/or Register or Update RPCs).
+ * registration (DTLS session resumption and/or Register or Update operations).
  *
  * In case of ongoing downloads (started via @ref anjay_download or the
  * <c>fw_update</c> module), if the reconnection fails, the download will be
@@ -1602,7 +1682,7 @@ avs_error_t anjay_update_dtls_handshake_timeouts(
         avs_net_dtls_handshake_timeouts_t dtls_handshake_timeouts);
 
 #ifdef ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
-/*
+/**
  * Gets the time at which the client has registered successfully to a given
  * LwM2M server for the last time.
  *
@@ -1626,7 +1706,7 @@ avs_error_t anjay_get_server_last_registration_time(anjay_t *anjay,
                                                     anjay_ssid_t ssid,
                                                     avs_time_real_t *out_time);
 
-/*
+/**
  * Gets the time at which next registration update operation with a given
  * LwM2M Server is scheduled.
  *
@@ -1658,7 +1738,7 @@ avs_error_t anjay_get_server_last_registration_time(anjay_t *anjay,
 avs_error_t anjay_get_server_next_update_time(anjay_t *anjay,
                                               anjay_ssid_t ssid,
                                               avs_time_real_t *out_time);
-/*
+/**
  * Gets the time at which the client has communicated with a given LwM2M Server
  * for the last time.
  *

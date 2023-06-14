@@ -11,9 +11,9 @@ Attribute storage
 
 .. highlight:: c
 
-The Write Attributes and Discover RPCs, as well as the Information Reporting
-interface, use a concept of Attributes that may be set for Resources, Object
-Instances or Objects.
+The Write Attributes and Discover operations, as well as the Information
+Reporting interface, use a concept of Attributes that may be set for Resources,
+Object Instances or Objects.
 
 .. seealso::
     :doc:`/LwM2M` chapter contains more information about LwM2M Attributes.

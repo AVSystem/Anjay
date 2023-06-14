@@ -26,7 +26,9 @@ void _anjay_send_interrupt(anjay_connection_ref_t ref);
 
 void _anjay_send_cleanup(anjay_sender_t *sender);
 
+#ifndef ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
 bool _anjay_send_has_deferred(anjay_unlocked_t *anjay, anjay_ssid_t ssid);
+#endif // ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
 
 int _anjay_send_sched_retry_deferred(anjay_unlocked_t *anjay,
                                      anjay_ssid_t ssid);

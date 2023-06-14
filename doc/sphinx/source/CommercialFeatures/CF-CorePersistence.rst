@@ -324,3 +324,18 @@ To see how this feature affects data sent during the connection, we encourage to
 not only analyze application's log output, but use some packet analyzer software
 like Wireshark.
 
+.. important::
+
+   Because Core Persistence feature maintains some data that depends on real
+   time (time at which disabled servers should be reenabled, registration expiry
+   time), this feature requires a properly implemented real clock
+   (``avs_time_real_now()``,
+   :ref:`see porting article <timeapi_avs_time_real_now>`) to work correctly.
+   Also, make sure to synchronize it first (by using e.g. RTC or NTP protocol)
+   before starting the client, otherwise disabled servers will be not reenabled
+   as expected and the registration will be incorrectly deemed to be up to date.
+   Alternatively, if it's not possible to synchronize the clock before, make
+   sure to manually enable those disabled servers back by using
+   ``anjay_enable_server()`` and schedule a registration update using
+   ``anjay_schedule_registration_update()``.
+

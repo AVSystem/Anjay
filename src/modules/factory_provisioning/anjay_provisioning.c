@@ -14,6 +14,7 @@
 #        error "CBOR content format must be enabled to use factory provisioning"
 #    endif // ANJAY_WITH_CBOR
 
+#    include <avsystem/commons/avs_errno.h>
 #    include <avsystem/commons/avs_stream_membuf.h>
 #    include <avsystem/commons/avs_utils.h>
 
@@ -25,7 +26,6 @@
 #    include <anjay/factory_provisioning.h>
 
 #    include "core/dm/anjay_dm_write.h"
-#    include <inttypes.h>
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -48,26 +48,29 @@ static avs_error_t factory_provisioning_unlocked(anjay_unlocked_t *anjay,
         if (_anjay_input_senml_cbor_create(
                     &input_ctx, data_stream, &MAKE_ROOT_PATH())) {
             provisioning_log(ERROR, _("Cannot create CBOR context"));
-            return avs_errno(AVS_ENOMEM);
+            err = avs_errno(AVS_ENOMEM);
         } else {
             if (_anjay_bootstrap_write_composite(anjay, input_ctx)) {
+                provisioning_log(ERROR,
+                                 _("Error occured during writing bootstrap "
+                                   "information"));
                 err = avs_errno(AVS_EPROTO);
             }
             (void) _anjay_input_ctx_destroy(&input_ctx);
         }
     }
 
-    if (avs_is_err(err)) {
-        provisioning_log(
-                ERROR, _("Error occured during writing bootstrap information"));
-        return err;
-    } else if (_anjay_bootstrap_finish(anjay)) {
+    if (avs_is_ok(err) && _anjay_bootstrap_finish(anjay)) {
         provisioning_log(ERROR, _("Could not apply bootstrap information"));
-        return avs_errno(AVS_EBADMSG);
+        err = avs_errno(AVS_EBADMSG);
     }
 
-    provisioning_log(INFO, _("Finished factory provisioning"));
-    return AVS_OK;
+    if (avs_is_ok(err)) {
+        provisioning_log(INFO, _("Finished factory provisioning"));
+    } else {
+        _anjay_bootstrap_cleanup(anjay);
+    }
+    return err;
 }
 
 avs_error_t anjay_factory_provision(anjay_t *anjay_locked,

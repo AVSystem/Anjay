@@ -8,6 +8,7 @@
 # See the attached LICENSE file for details.
 
 import inspect
+import io
 import logging
 import os
 import re
@@ -117,19 +118,19 @@ class CleanupList(list):
 
 
 class Lwm2mDmOperations(Lwm2mAsserts):
-    DEFAULT_OPERATION_TIMEOUT_S = 5
-
-    def _perform_action(self, server, request, expected_response, timeout_s=None,
-                        response_filter: ResponseFilter = None):
+    def _perform_action(self, server, request, expected_response, timeout_s=None, deadline=None):
         server.send(request)
-        if timeout_s is None:
-            timeout_s = self.DEFAULT_OPERATION_TIMEOUT_S
+        if timeout_s is None and deadline is None:
+            timeout_s = -1
 
-        if response_filter:
-            res = response_filter.filtered_recv(server, timeout_s)
+        if server.transport == Transport.UDP and request.msg_id is not None and request.msg_id is not ANY:
+            filter = lambda pkt: pkt.msg_id == request.msg_id
+        elif expected_response.token is not ANY:
+            filter = lambda pkt: pkt.token == expected_response.token
         else:
-            res = server.recv(timeout_s=timeout_s)
+            filter = lambda pkt: isinstance(pkt, type(expected_response))
 
+        res = server.recv(timeout_s=timeout_s, deadline=deadline, filter=filter)
         self.assertMsgEqual(expected_response, res)
         return res
 
@@ -288,12 +289,12 @@ class Lwm2mDmOperations(Lwm2mAsserts):
         return self._perform_action(server, req, expected_res, **kwargs)
 
     def observe(self, server, oid=None, iid=None, rid=None, riid=None, expect_error_code=None,
-                response_filter=None, **kwargs):
+                **kwargs):
         req = Lwm2mObserve(
             Lwm2mDmOperations.make_path(oid, iid, rid, riid), **kwargs)
         expected_res = self._make_expected_res(
             req, Lwm2mContent, expect_error_code)
-        return self._perform_action(server, req, expected_res, response_filter=response_filter)
+        return self._perform_action(server, req, expected_res)
 
     def write_attributes(self, server, oid=None, iid=None, rid=None, query=[],
                          expect_error_code=None, **kwargs):
@@ -384,6 +385,8 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                        minimum_version,
                        maximum_version,
                        fw_updated_marker_path,
+                       afu_marker_path=None,
+                       afu_original_img_file_path=None,
                        tls_version='TLSv1.2',
                        ciphersuites=(0xC030, 0xC0A8, 0xC0AE)):
         """
@@ -410,6 +413,10 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                 '--security-mode', security_mode]
         if fw_updated_marker_path is not None:
             args += ['--fw-updated-marker-path', fw_updated_marker_path]
+        if afu_marker_path is not None:
+            args += ['--afu-marker-path', afu_marker_path]
+        if afu_original_img_file_path is not None:
+            args += ['--afu-original-img-file-path', afu_original_img_file_path]
         if tls_version is not None:
             args += ['--tls-version', tls_version]
         if ciphersuites is not None:
@@ -434,6 +441,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         return log_path
 
     def read_log_until_match(self, regex, timeout_s):
+        orig_offset = self.demo_process.log_file.tell()
         deadline = time.time() + timeout_s
         out = bytearray()
         while True:
@@ -453,8 +461,15 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
 
             match = re.search(regex, out)
             if match:
+                # Move the file pointer to just after the match, in case we've read more
+                move_offset = match.end() - len(out)
+                if move_offset != 0:
+                    assert move_offset < 0
+                    self.demo_process.log_file.seek(move_offset, io.SEEK_CUR)
+
                 return match
             elif partial_timeout <= 0.0:
+                self.demo_process.log_file.seek(orig_offset, io.SEEK_SET)
                 return None
 
     def _get_valgrind_args(self):
@@ -480,7 +495,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
 
         return demo_executable
 
-    def _start_demo(self, cmdline_args, timeout_s=30, prepend_args=None):
+    def _start_demo(self, cmdline_args, timeout_s=60, prepend_args=None):
         """
         Starts the demo executable with given CMDLINE_ARGS.
         """
@@ -723,6 +738,8 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                 for serv in all_servers_passed:
                     if serv.security_mode() != 'nosec':
                         serv.listen()
+                    if serv.transport == Transport.TCP:
+                        self.assertTcpCsm(serv)
                 for serv in servers_passed:
                     self.assertDemoRegisters(serv,
                                              version=maximum_version,
@@ -911,8 +928,6 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
 
         for serv in deregister_servers:
             self.assertDemoDeregisters(serv, reset=False, timeout_s=timeout_s, *args, **kwargs)
-            if serv.transport == Transport.TCP:
-                self.assertDemoReleases(serv)
 
         logging.debug('demo terminated')
 
@@ -1076,8 +1091,8 @@ class PcapEnabledTest(Lwm2mTest):
     @staticmethod
     def is_icmp_unreachable(pkt):
         return isinstance(pkt, dpkt.ip.IP) \
-               and isinstance(pkt.data, dpkt.icmp.ICMP) \
-               and isinstance(pkt.data.data, dpkt.icmp.ICMP.Unreach)
+            and isinstance(pkt.data, dpkt.icmp.ICMP) \
+            and isinstance(pkt.data.data, dpkt.icmp.ICMP.Unreach)
 
     @staticmethod
     def is_dtls_client_hello(pkt):

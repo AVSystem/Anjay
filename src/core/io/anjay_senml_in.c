@@ -48,7 +48,6 @@ typedef struct {
 } senml_deserialization_vtable_t;
 
 typedef struct {
-    /* NOTE: empty state of cached entry is represented by 0-length path */
     char path[MAX_PATH_STRING_SIZE];
     anjay_json_like_value_type_t type;
     union {
@@ -63,9 +62,6 @@ typedef struct {
 } senml_cached_entry_t;
 
 static void cached_entry_reset(senml_cached_entry_t *entry) {
-    if (!*entry->path) {
-        return;
-    }
     if (entry->type == ANJAY_JSON_LIKE_VALUE_TEXT_STRING
             || entry->type == ANJAY_JSON_LIKE_VALUE_BYTE_STRING) {
         avs_free(entry->value.bytes.data);

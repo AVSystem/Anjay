@@ -61,8 +61,6 @@ int _anjay_perform_bootstrap_action_if_appropriate(
 void _anjay_bootstrap_init(anjay_bootstrap_t *bootstrap,
                            bool allow_legacy_server_initiated_bootstrap);
 
-void _anjay_bootstrap_cleanup(anjay_unlocked_t *anjay);
-
 #else
 
 #    define _anjay_bootstrap_notify_regular_connection_available(anjay) \
@@ -75,8 +73,6 @@ void _anjay_bootstrap_cleanup(anjay_unlocked_t *anjay);
 #    define _anjay_bootstrap_perform_action(...) (-1)
 
 #    define _anjay_perform_bootstrap_action_if_appropriate(...) (-1)
-
-#    define _anjay_bootstrap_cleanup(anjay) ((void) 0)
 
 #endif
 

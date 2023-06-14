@@ -20,30 +20,41 @@ else()
     endmacro()
 endif()
 
-set(DEFAULT_TEST_SUITE "default")
-set(INTEGRATION_TEST_SUITE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/suites")
 set(INTEGRATION_TEST_PREFIX "test_demo_")
 set(PYMBEDTLS_MODULE_DIR ${ANJAY_BUILD_OUTPUT_DIR}/pymbedtls)
 
-file(GLOB_RECURSE DEMO_TESTS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}/suites "${INTEGRATION_TEST_SUITE_ROOT}/*.py")
-list(SORT DEMO_TESTS)
-foreach(DEMO_TEST ${DEMO_TESTS})
-    string(REGEX REPLACE "^${CMAKE_CURRENT_SOURCE_DIR}" "" DEMO_TEST "${DEMO_TEST}")
-    string(REGEX REPLACE "\\.py" "" DEMO_TEST "${DEMO_TEST}")
-    string(REGEX REPLACE "/" "." DEMO_TEST "${DEMO_TEST}")
+if(TEST_KEEP_SUCCESS_LOGS)
+    set(ADDITIONAL_RUNTEST_ARGS "--keep-success-logs")
+else()
+    set(ADDITIONAL_RUNTEST_ARGS)
+endif()
 
-    if (NOT DEMO_TEST MATCHES "__init__$")
-        add_test(${INTEGRATION_TEST_PREFIX}${DEMO_TEST}
-                 ${CMAKE_CURRENT_SOURCE_DIR}/runtest.py "^${DEMO_TEST}\\\$"
-                                                        --client=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/demo)
+execute_process(COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/runtest.py" "-l"
+                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                RESULT_VARIABLE RUNTEST_LIST_RESULT
+                OUTPUT_VARIABLE RUNTEST_LIST_OUTPUT)
+
+if(NOT RUNTEST_LIST_RESULT EQUAL 0)
+    message(FATAL_ERROR "runtest.py -l failed")
+endif()
+
+string(REPLACE "\n" ";" RUNTEST_LIST_OUTPUT "${RUNTEST_LIST_OUTPUT}")
+list(SORT RUNTEST_LIST_OUTPUT)
+foreach(TEST_CASE_ENTRY IN LISTS RUNTEST_LIST_OUTPUT)
+    if(TEST_CASE_ENTRY MATCHES "^\\* .*$")
+        string(REGEX REPLACE "^\\* " "" TEST_CASE_ENTRY "${TEST_CASE_ENTRY}")
+        add_test(${INTEGRATION_TEST_PREFIX}${TEST_CASE_ENTRY}
+                 ${CMAKE_CURRENT_SOURCE_DIR}/runtest.py "^${TEST_CASE_ENTRY}\\\$"
+                                                        --client=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/demo
+                                                        ${ADDITIONAL_RUNTEST_ARGS})
 
         # Tell python tests where to look for pymbedtls*.so
-        set_property(TEST ${INTEGRATION_TEST_PREFIX}${DEMO_TEST}
+        set_property(TEST ${INTEGRATION_TEST_PREFIX}${TEST_CASE_ENTRY}
                      APPEND PROPERTY ENVIRONMENT "PYTHONPATH=${PYMBEDTLS_MODULE_DIR}")
-        # Limit each test suite to 15 minutes
-        set_property(TEST ${INTEGRATION_TEST_PREFIX}${DEMO_TEST} PROPERTY TIMEOUT 900)
+        # The longest test is 5 minutes, so set the timeout to 6 minutes
+        set_property(TEST ${INTEGRATION_TEST_PREFIX}${TEST_CASE_ENTRY} PROPERTY TIMEOUT 360)
 
-        add_valgrind(${INTEGRATION_TEST_PREFIX}${DEMO_TEST})
+        add_valgrind(${INTEGRATION_TEST_PREFIX}${TEST_CASE_ENTRY})
     endif()
 endforeach()
 
@@ -74,16 +85,14 @@ endif()
 unset(_MISSING_PYTHON_MSG)
 
 add_custom_target(pymbedtls COMMAND
+                  env "MBEDTLS_ROOT_DIR=${MBEDTLS_ROOT_DIR}"
                   python3 -m pip install --target ${PYMBEDTLS_MODULE_DIR} "${NSH_LWM2M_DIR}/pymbedtls")
 
 set(WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 configure_file("run_tests.sh.in" "run_tests.sh")
-add_custom_target(integration_check_st
-                  COMMAND ./run_tests.sh -s
-                  DEPENDS demo pymbedtls)
 add_custom_target(integration_check
                   COMMAND ./run_tests.sh
-                  DEPENDS integration_check_st)
+                  DEPENDS demo pymbedtls)
 add_custom_target(integration_check_hsm
                   COMMAND ./run_tests.sh -h
                   DEPENDS demo pymbedtls)

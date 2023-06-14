@@ -44,6 +44,50 @@ VISIBILITY_SOURCE_BEGIN
  * seconds. */
 #define ANJAY_MIN_UPDATE_INTERVAL_S 1
 
+static int schedule_register_for_server(anjay_server_info_t *server) {
+    int result = 0;
+    if (_anjay_server_active(server)) {
+        result = _anjay_schedule_refresh_server(server, AVS_TIME_DURATION_ZERO);
+    }
+    if (!result) {
+        anjay_server_connection_t *connection =
+                _anjay_connection_get(&server->connections,
+                                      ANJAY_CONNECTION_PRIMARY);
+        _anjay_conn_session_token_reset(&connection->session_token);
+    }
+    return result;
+}
+
+static int schedule_register_for_all_servers(anjay_unlocked_t *anjay) {
+    int result = 0;
+
+    AVS_LIST(anjay_server_info_t) it;
+    AVS_LIST_FOREACH(it, anjay->servers) {
+        _anjay_update_ret(&result, schedule_register_for_server(it));
+    }
+
+    return result;
+}
+
+int anjay_schedule_register(anjay_t *anjay_locked, anjay_ssid_t ssid) {
+    int result = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    if (ssid == ANJAY_SSID_ANY) {
+        result = schedule_register_for_all_servers(anjay);
+    } else {
+        AVS_LIST(anjay_server_info_t) *server_ptr =
+                _anjay_servers_find_ptr(&anjay->servers, ssid);
+        if (!server_ptr || !*server_ptr) {
+            anjay_log(WARNING, _("no known server with SSID = ") "%u", ssid);
+            result = -1;
+        } else {
+            result = schedule_register_for_server(*server_ptr);
+        }
+    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
+}
+
 static avs_time_real_t
 calculate_time_of_next_update(anjay_server_info_t *server) {
     avs_time_real_t expire_time = _anjay_registration_expire_time(server);
@@ -108,14 +152,6 @@ static int schedule_next_update(anjay_server_info_t *server) {
 
     return _anjay_server_reschedule_next_action(
             server, delay, ANJAY_SERVER_NEXT_ACTION_SEND_UPDATE);
-}
-
-bool _anjay_server_primary_connection_valid(anjay_server_info_t *server) {
-    return _anjay_server_active(server)
-           && _anjay_connection_get_online_socket((anjay_connection_ref_t) {
-                  .server = server,
-                  .conn_type = ANJAY_CONNECTION_PRIMARY
-              }) != NULL;
 }
 
 int _anjay_server_reschedule_update_job(anjay_server_info_t *server) {
@@ -356,10 +392,23 @@ get_binding_mode_for_version(anjay_server_info_t *server,
     }
 }
 
-static int update_parameters_init(anjay_server_info_t *server,
-                                  anjay_lwm2m_version_t lwm2m_version,
-                                  anjay_update_parameters_t *out_params) {
+static avs_error_t
+update_parameters_init(anjay_server_info_t *server,
+                       anjay_lwm2m_version_t lwm2m_version,
+                       anjay_update_parameters_t *out_params) {
+    avs_error_t err = avs_errno(AVS_UNKNOWN_ERROR);
     memset(out_params, 0, sizeof(*out_params));
+    if (!_anjay_server_connection_active((anjay_connection_ref_t) {
+            .server = server,
+            .conn_type = ANJAY_CONNECTION_PRIMARY
+        })) {
+        anjay_log(ERROR,
+                  _("No valid connection to Registration Interface for "
+                    "SSID = ") "%u",
+                  server->ssid);
+        err = avs_errno(AVS_EBADF);
+        goto error;
+    }
     if (query_dm(server->anjay, lwm2m_version, &out_params->dm)) {
         goto error;
     }
@@ -369,10 +418,10 @@ static int update_parameters_init(anjay_server_info_t *server,
     }
     get_binding_mode_for_version(server, lwm2m_version,
                                  &out_params->binding_mode);
-    return 0;
+    return AVS_OK;
 error:
     update_parameters_cleanup(out_params);
-    return -1;
+    return err;
 }
 
 void _anjay_registration_info_cleanup(anjay_registration_info_t *info) {
@@ -576,7 +625,7 @@ handle_register_response(anjay_server_info_t *server,
     if (result != ANJAY_REGISTRATION_SUCCESS) {
         anjay_log(WARNING, _("could not register to server ") "%u",
                   _anjay_server_ssid(server));
-        AVS_LIST_CLEAR(move_endpoint_path);
+        AVS_LIST_CLEAR(move_endpoint_path) {}
     } else {
         _anjay_server_update_registration_info(
                 server, move_endpoint_path, attempted_version,
@@ -595,8 +644,8 @@ handle_register_response(anjay_server_info_t *server,
             // NOTE: update_parameters format may differ slightly between
             // LwM2M versions, so we need to rebuild them
             update_parameters_cleanup(move_params);
-            if (update_parameters_init(server, attempted_version,
-                                       move_params)) {
+            if (avs_is_err(update_parameters_init(server, attempted_version,
+                                                  move_params))) {
                 result = ANJAY_REGISTRATION_ERROR_OTHER;
             } else {
                 register_with_version(server, attempted_version, move_params);
@@ -775,6 +824,13 @@ static void register_with_version(anjay_server_info_t *server,
 
 static void do_register(anjay_server_info_t *server,
                         anjay_update_parameters_t *move_params) {
+    anjay_connection_type_t conn_type;
+    ANJAY_CONNECTION_TYPE_FOREACH(conn_type) {
+        _anjay_observe_invalidate((anjay_connection_ref_t) {
+            .server = server,
+            .conn_type = conn_type
+        });
+    }
     anjay_lwm2m_version_t attempted_version =
 #ifdef ANJAY_WITH_LWM2M11
             server->anjay->lwm2m_version_config.maximum_version;
@@ -1061,19 +1117,11 @@ void _anjay_server_ensure_valid_registration(anjay_server_info_t *server) {
     }
 
     anjay_update_parameters_t new_params;
-    if (update_parameters_init(server, server->registration_info.lwm2m_version,
-                               &new_params)) {
+    avs_error_t err = update_parameters_init(
+            server, server->registration_info.lwm2m_version, &new_params);
+    if (avs_is_err(err)) {
         on_registration_update_result(server, &new_params,
-                                      ANJAY_REGISTRATION_ERROR_OTHER,
-                                      avs_errno(AVS_UNKNOWN_ERROR));
-    } else if (!_anjay_server_primary_connection_valid(server)) {
-        anjay_log(ERROR,
-                  _("No valid connection to Registration Interface for "
-                    "SSID = ") "%u",
-                  server->ssid);
-        on_registration_update_result(server, &new_params,
-                                      ANJAY_REGISTRATION_ERROR_OTHER,
-                                      avs_errno(AVS_EBADF));
+                                      ANJAY_REGISTRATION_ERROR_OTHER, err);
     } else {
         bool registration_or_update_in_progress = avs_coap_exchange_id_valid(
                 server->registration_exchange_state.exchange_id);
@@ -1098,6 +1146,7 @@ void _anjay_server_ensure_valid_registration(anjay_server_info_t *server) {
             if (!registration_or_update_in_progress) {
                 _anjay_server_on_updated_registration(
                         server, ANJAY_REGISTRATION_SUCCESS, AVS_OK);
+#ifndef ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
                 anjay_connection_ref_t ref = {
                     .server = server,
                     .conn_type = ANJAY_CONNECTION_PRIMARY
@@ -1107,6 +1156,7 @@ void _anjay_server_ensure_valid_registration(anjay_server_info_t *server) {
                 if (!connection->queue_mode_close_socket_clb) {
                     _anjay_connection_schedule_queue_mode_close(ref);
                 }
+#endif // ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
             }
         } else {
             update_registration(server, &new_params);
@@ -1271,7 +1321,7 @@ static bool server_state_stable(anjay_server_info_t *server) {
         // does not expire.
         return !_anjay_bootstrap_scheduled(server->anjay);
     } else if (!_anjay_server_active(server)) {
-        return false;
+        return server->disabled_explicitly;
     } else {
         // Management servers connections are considered stable when they have
         // a valid, non-expired registration.

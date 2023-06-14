@@ -10,6 +10,7 @@
 import struct
 import typing
 from textwrap import indent
+from ..test_utils import Objlink
 
 
 class TLVType:
@@ -83,6 +84,10 @@ class TLV:
         return struct.pack('>f', float(data))
 
     @staticmethod
+    def encode_objlink(data: Objlink):
+        return struct.pack('>HH', data.ObjID, data.ObjInstID)
+
+    @staticmethod
     def make_instance(instance_id: int,
                       content: typing.Iterable['TLV'] = None):
         """
@@ -93,7 +98,7 @@ class TLV:
         return TLV(TLVType.INSTANCE, instance_id, content or [])
 
     @staticmethod
-    def _encode_resource_value(content: int or float or str or bytes):
+    def _encode_resource_value(content: int or float or str or bytes or Objlink):
         if isinstance(content, int):
             content = TLV.encode_int(content)
         elif isinstance(content, float):
@@ -104,6 +109,8 @@ class TLV:
                 content = TLV.encode_double(content)
         elif isinstance(content, str):
             content = content.encode('ascii')
+        elif isinstance(content, Objlink):
+            content = TLV.encode_objlink(content)
 
         if not isinstance(content, bytes):
             raise ValueError('Unsupported resource value type: ' + type(content).__name__)
@@ -236,6 +243,7 @@ class TLV:
 
             if len(self.value) == 4:
                 value += ', float: %f' % struct.unpack('>f', self.value)[0]
+                value += ', objlink: %d:%d' % struct.unpack('>HH', self.value)
             elif len(self.value) == 8:
                 value += ', double: %f' % struct.unpack('>d', self.value)[0]
 
@@ -272,9 +280,11 @@ class TLV:
     def full_description(self):
         if self.tlv_type == TLVType.INSTANCE:
             return ('instance %d (%d resources)\n%s'
-                    % (self.identifier, len(self.value), indent('\n'.join(x.full_description() for x in self.value), '  ')))
+                    % (self.identifier, len(self.value),
+                       indent('\n'.join(x.full_description() for x in self.value), '  ')))
         elif self.tlv_type == TLVType.MULTIPLE_RESOURCE:
             return ('multiple resource %d (%d instances)\n%s'
-                    % (self.identifier, len(self.value), indent('\n'.join(x.full_description() for x in self.value), '  ')))
+                    % (self.identifier, len(self.value),
+                       indent('\n'.join(x.full_description() for x in self.value), '  ')))
         else:
             return str(self)

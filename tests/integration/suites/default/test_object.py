@@ -18,8 +18,6 @@ class TestObject:
         def setUp(self, *args, **kwargs):
             super().setUp(*args, **kwargs)
 
-            self.serv.set_timeout(timeout_s=1)
-
             req = Lwm2mCreate('/%d' % (OID.Test,))
             self.serv.send(req)
             self.assertMsgEqual(Lwm2mCreated.matching(req)(),

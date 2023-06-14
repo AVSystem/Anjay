@@ -32,6 +32,8 @@ The default
 implementation that uses POSIX ``clock_gettime()`` API can be used as a
 reference for writing your own integration layer.
 
+.. _timeapi_avs_time_real_now:
+
 avs_time_real_now()
 ^^^^^^^^^^^^^^^^^^^
 

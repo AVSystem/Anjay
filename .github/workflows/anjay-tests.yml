@@ -10,7 +10,7 @@ on: [push]
 jobs:
   ubuntu1804-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:ubuntu-18.04-1.0
+    container: avsystemembedded/anjay-travis:ubuntu-18.04-1.1
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
@@ -37,7 +37,7 @@ jobs:
 
   ubuntu2004-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:ubuntu-20.04-1.0
+    container: avsystemembedded/anjay-travis:ubuntu-20.04-1.1
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
@@ -68,7 +68,7 @@ jobs:
 
   ubuntu2204-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:ubuntu-22.04-1.0
+    container: avsystemembedded/anjay-travis:ubuntu-22.04-1.1
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
@@ -110,7 +110,7 @@ jobs:
 
   rockylinux9-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:rockylinux-9-1.0
+    container: avsystemembedded/anjay-travis:rockylinux-9-1.1
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
@@ -123,6 +123,8 @@ jobs:
           submodules: recursive
       - run: dnf update -y
       - run: dnf install -y $CC
+      # Solve issues with EPERM when running dumpcap
+      - run: setcap '' $(which dumpcap)
       - run: ./devconfig --with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF -DWITH_IPV6=OFF
       - run: env CC=gcc LC_ALL=C.UTF-8 make -j
       - run: env CC=gcc LC_ALL=C.UTF-8 make check

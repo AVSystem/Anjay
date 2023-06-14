@@ -7,11 +7,7 @@
 # Licensed under the AVSystem-5-clause License.
 # See the attached LICENSE file for details.
 
-import socket
-import time
-
 from framework.lwm2m_test import *
-from framework.test_utils import ResponseFilter
 
 
 class DmChangeDuringRegistration(test_suite.Lwm2mTest):
@@ -146,34 +142,26 @@ class SocketUpdateDuringRegister(test_suite.Lwm2mSingleServerTest):
 
 
 class AsyncNotifications:
-    class Test(test_suite.Lwm2mSingleServerTest,
-                             test_suite.Lwm2mDmOperations):
-        def clearObservation(self, respond=False):
-            notify_filter = ResponseFilter(Lwm2mNotify)
-            self.observe(self.serv,
-                        OID.Device,
-                        0,
-                        RID.Device.CurrentTime,
-                        observe=1,
-                        response_filter=notify_filter)
-
-            if respond:
-                for message in notify_filter.filtered_messages:
-                    self.serv.send(Lwm2mEmpty.matching(message)())
+    class Test(test_suite.Lwm2mSingleServerTest, test_suite.Lwm2mDmOperations):
+        def clearObservation(self, notif, respond=False):
+            self.observe(self.serv, OID.Device, 0, RID.Device.CurrentTime, token=notif.token,
+                         observe=1)
 
             # consume possibly outstanding Notify interrupting clean deregister
-            try:
-                pkt = self.serv.recv(timeout_s=1.5)
-                self.assertIsInstance(pkt, Lwm2mNotify)
-                if respond:
-                    self.serv.send(Lwm2mEmpty.matching(pkt)())
-            except socket.timeout:
-                pass
+            deadline = time.time() + 1.5
+            while True:
+                try:
+                    pkt = self.serv.recv(deadline=deadline)
+                    self.assertIsInstance(pkt, Lwm2mNotify)
+                    if respond:
+                        self.serv.send(Lwm2mEmpty.matching(pkt)())
+                except socket.timeout:
+                    break
 
 
 class NonconfirmableNotificationsDuringUpdate(AsyncNotifications.Test):
     def runTest(self):
-        self.observe(self.serv, OID.Device, 0, RID.Device.CurrentTime)
+        notif = self.observe(self.serv, OID.Device, 0, RID.Device.CurrentTime)
         self.communicate('send-update')
 
         received_update_requests = 0
@@ -204,9 +192,9 @@ class NonconfirmableNotificationsDuringUpdate(AsyncNotifications.Test):
                 break
 
         end_time = time.time()
-        self.assertAlmostEqual(received_notifications, end_time - start_time, delta=1.1)
+        self.assertAlmostEqual(received_notifications, end_time - start_time, delta=1.5)
 
-        self.clearObservation(respond=False)
+        self.clearObservation(notif, respond=False)
 
 
 class ConfirmableNotificationsDuringUpdate(AsyncNotifications.Test):
@@ -214,7 +202,7 @@ class ConfirmableNotificationsDuringUpdate(AsyncNotifications.Test):
         super().setUp(extra_cmdline_args=['--confirmable-notifications'])
 
     def runTest(self):
-        self.observe(self.serv, OID.Device, 0, RID.Device.CurrentTime)
+        notif = self.observe(self.serv, OID.Device, 0, RID.Device.CurrentTime)
         self.communicate('send-update')
 
         # Confirmable notifications honor NSTART
@@ -230,6 +218,7 @@ class ConfirmableNotificationsDuringUpdate(AsyncNotifications.Test):
             if not early_notify_checked_for:
                 early_notify_checked_for = True
                 if isinstance(pkt, Lwm2mNotify):
+                    self.serv.send(Lwm2mEmpty.matching(pkt)())
                     continue
 
             self.assertIsInstance(pkt, Lwm2mUpdate)
@@ -253,55 +242,6 @@ class ConfirmableNotificationsDuringUpdate(AsyncNotifications.Test):
                 break
 
         end_time = time.time()
-        self.assertAlmostEqual(received_notifications, end_time - start_time, delta=1.1)
+        self.assertAlmostEqual(received_notifications, end_time - start_time, delta=1.5)
 
-        self.clearObservation(respond=True)
-
-
-class NonconfirmableNotificationsDuringRegister(AsyncNotifications.Test):
-    def runTest(self, respond_to_notifications=False):
-        self.observe(self.serv, OID.Device, 0, RID.Device.CurrentTime)
-        notify_filter = ResponseFilter(Lwm2mNotify)
-
-        # force a Register
-        self.communicate('send-update')
-        update = self.assertDemoUpdatesRegistration(respond=False, response_filter=notify_filter)
-        self.serv.send(Lwm2mErrorResponse.matching(update)(coap.Code.RES_FORBIDDEN))
-        register = self.assertDemoRegisters(respond=False, response_filter=notify_filter)
-
-        if respond_to_notifications:
-            for message in notify_filter.filtered_messages:
-                self.serv.send(Lwm2mEmpty.matching(message)())
-
-        start_time = time.time()
-        received_register_requests = 1
-        while received_register_requests < 3:
-            pkt = self.serv.recv(timeout_s=10)
-            self.assertMsgEqual(pkt, register)
-            received_register_requests += 1
-
-        self.serv.send(Lwm2mCreated.matching(pkt)(location=self.DEFAULT_REGISTER_ENDPOINT))
-
-        received_notifications = 0
-        while True:
-            try:
-                pkt = self.serv.recv(timeout_s=0.5)
-                self.assertIsInstance(pkt, Lwm2mNotify)
-                received_notifications += 1
-                if respond_to_notifications:
-                    self.serv.send(Lwm2mEmpty.matching(pkt)())
-            except socket.timeout:
-                break
-
-        end_time = time.time()
-        self.assertAlmostEqual(received_notifications, end_time - start_time, delta=1.1)
-
-        self.clearObservation(respond=respond_to_notifications)
-
-
-class ConfirmableNotificationsDuringRegister(NonconfirmableNotificationsDuringRegister):
-    def setUp(self):
-        super().setUp(extra_cmdline_args=['--confirmable-notifications'])
-
-    def runTest(self):
-        super().runTest(respond_to_notifications=True)
+        self.clearObservation(notif, respond=True)

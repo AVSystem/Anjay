@@ -56,8 +56,6 @@ int clock_gettime(clockid_t clock, struct timespec *t) {
         // all clocks are equivalent for our purposes, so ignore clock
         t->tv_sec = (time_t) MOCK_CLOCK.since_monotonic_epoch.seconds;
         t->tv_nsec = MOCK_CLOCK.since_monotonic_epoch.nanoseconds;
-        MOCK_CLOCK = avs_time_monotonic_add(
-                MOCK_CLOCK, avs_time_duration_from_scalar(1, AVS_TIME_NS));
         return 0;
     } else {
         return orig_clock_gettime(clock, t);

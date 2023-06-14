@@ -48,13 +48,13 @@ typedef enum {
  * to a value default for a given handler.
  */
 #define ANJAY_FW_UPDATE_ERR_NOT_ENOUGH_SPACE \
-    (-ANJAY_FW_UPDATE_RESULT_NOT_ENOUGH_SPACE)
+    (-(int) ANJAY_FW_UPDATE_RESULT_NOT_ENOUGH_SPACE)
 #define ANJAY_FW_UPDATE_ERR_OUT_OF_MEMORY \
-    (-ANJAY_FW_UPDATE_RESULT_OUT_OF_MEMORY)
+    (-(int) ANJAY_FW_UPDATE_RESULT_OUT_OF_MEMORY)
 #define ANJAY_FW_UPDATE_ERR_INTEGRITY_FAILURE \
-    (-ANJAY_FW_UPDATE_RESULT_INTEGRITY_FAILURE)
+    (-(int) ANJAY_FW_UPDATE_RESULT_INTEGRITY_FAILURE)
 #define ANJAY_FW_UPDATE_ERR_UNSUPPORTED_PACKAGE_TYPE \
-    (-ANJAY_FW_UPDATE_RESULT_UNSUPPORTED_PACKAGE_TYPE)
+    (-(int) ANJAY_FW_UPDATE_RESULT_UNSUPPORTED_PACKAGE_TYPE)
 
 /** @} */
 
@@ -358,10 +358,10 @@ typedef const char *anjay_fw_update_get_version_t(void *user_ptr);
  * reboot. In such case, it is expected that this callback will do either one of
  * the following:
  *
- * - return, causing the outermost event loop to terminate, shutdown the library
- *   and then perform the firmware upgrade and then the device to reboot
- * - perform the firmware upgrade internally and never return, causing a reboot
- *   in the process
+ * - perform firmware upgrade, terminate outermost event loop and return,
+ *   call reboot after @ref anjay_event_loop_run()
+ * - perform the firmware upgrade internally and then reboot, it means that
+ *   the return will never happen
  *
  * After rebooting, the result of the upgrade process may be passed to the
  * library during initialization via the <c>initial_result</c> argument to
@@ -383,8 +383,6 @@ typedef const char *anjay_fw_update_get_version_t(void *user_ptr);
  *          Otherwise, if a non-zero value is returned, the Update Result
  *          Resource is set to generic "Firmware update failed" code.
  *
- *          If an update is to be attempted, it shall either return 0 or
- *          perform a reboot internally without returning.
  */
 typedef int anjay_fw_update_perform_upgrade_t(void *user_ptr);
 
@@ -436,6 +434,8 @@ typedef int anjay_fw_update_perform_upgrade_t(void *user_ptr);
  *                            @ref anjay_fw_update_install), whichever happens
  *                            first. Anjay will <strong>not</strong> attempt to
  *                            deallocate anything automatically.
+ *
+ * @param download_uri        Target firmware URI.
  *
  * @returns The callback shall return 0 if successful or a negative value in
  *          case of error. If one of the <c>ANJAY_FW_UPDATE_ERR_*</c> value is
@@ -538,7 +538,7 @@ typedef struct {
     anjay_fw_update_get_security_config_t *get_security_config;
 
     /** Queries CoAP transmission parameters to be used during firmware
-     * update. */
+     * update; @ref anjay_fw_update_get_coap_tx_params_t */
     anjay_fw_update_get_coap_tx_params_t *get_coap_tx_params;
 } anjay_fw_update_handlers_t;
 
@@ -605,6 +605,8 @@ int anjay_fw_update_install(
  * @param anjay  Anjay object to operate on.
  *
  * @param result Value of the Update Result resource to set.
+ *
+ * @returns 0 on success, or a negative value in case of error.
  */
 int anjay_fw_update_set_result(anjay_t *anjay, anjay_fw_update_result_t result);
 

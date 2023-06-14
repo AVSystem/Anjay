@@ -68,6 +68,12 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
     },
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
 
+#ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+    .advanced_fw_security_info = {
+        .mode = (avs_net_security_mode_t) -1
+    },
+#endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+
 #ifdef AVS_COMMONS_STREAM_WITH_FILE
 #    ifdef ANJAY_WITH_ATTR_STORAGE
     .attr_storage_file = NULL,
@@ -88,6 +94,10 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
     .fwu_tx_params_modified = false,
     .fwu_tx_params = ANJAY_COAP_DEFAULT_UDP_TX_PARAMS,
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+    .advanced_fwu_tx_params_modified = false,
+    .advanced_fwu_tx_params = ANJAY_COAP_DEFAULT_UDP_TX_PARAMS,
+#endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
 #ifdef ANJAY_WITH_LWM2M11
     .lwm2m_version_config = {
         .minimum_version = ANJAY_LWM2M_VERSION_1_0,
@@ -95,6 +105,8 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
     },
 #endif // ANJAY_WITH_LWM2M11
     .prefer_hierarchical_formats = false,
+    .update_immediately_on_dm_change = false,
+    .enable_self_notify = false,
     .prefer_same_socket_downloads = false,
 };
 
@@ -430,6 +442,48 @@ static void print_help(const struct option *options) {
           "Provide key from ASCII string (see -k parameter for more details)" },
         { 317, "VERSION", "TLS library default",
           "Minimum (D)TLS version to use." },
+#if defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+        { 319, "TIMEOUT", "30.0",
+          "Time in seconds to wait for incoming response after sending a TCP "
+          "request" },
+        { 320, NULL, NULL,
+          "Send the Update message immediately when Object Instances are "
+          "created or deleted." },
+        { 321, NULL, NULL,
+          "Send the Notify messages as a result of a server action (e.g. "
+          "Write) even to the initiating server." },
+#endif // defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+#ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+        { 322, "ADDITIONAL_IMG_FILE_PATH", NULL,
+          "Path to additional img binary file. Used to compare with obtained "
+          "through advanced firmware update procedure" },
+#    if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
+            && defined(AVS_COMMONS_STREAM_WITH_FILE)
+        { 323, "AFU_PERSISTENCE_FILE", NULL,
+          "Path to file used to persist advanced firmware update data, "
+          "if file not exists, it will be created" },
+#    endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
+           // defined(AVS_COMMONS_STREAM_WITH_FILE)
+        { 324, "CERT_FILE", NULL,
+          "Require certificate validation against specified file when "
+          "downloading firmware over encrypted channels. This argument is "
+          "used by Advanced Firmware Update." },
+        { 325, "RESULT", NULL,
+          "If specified and nonzero, initializes the Advanced Firmware Update "
+          "object in "
+          "UPDATING state, and sets the result to given value after a short "
+          "while" },
+#    ifdef ANJAY_WITH_SEND
+        { 326, NULL, NULL,
+          "Enables using LwM2M Send to report state and result of advanced "
+          "firmware update" },
+#    endif // ANJAY_WITH_SEND
+        { 327, "ACK_TIMEOUT", "2.0",
+          "Configures ACK_TIMEOUT (defined in RFC7252) in seconds for advanced "
+          "firmware update" },
+#endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+        { 328, NULL, NULL,
+          "Enter offline mode before starting the event loop." },
     };
 
     const size_t screen_width = get_screen_width();
@@ -708,9 +762,9 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
 #endif // ANJAY_WITH_LWM2M11
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
         { "delayed-upgrade-result",        required_argument, 0, 'r' },
-#if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
+#   if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
         { "fw-updated-marker-path",        required_argument, 0, 256 },
-#endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
+#   endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
         { "fw-cert-file",                  required_argument, 0, 257 },
         { "fw-cert-path",                  required_argument, 0, 258 },
         { "fw-psk-identity",               required_argument, 0, 259 },
@@ -765,6 +819,24 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "identity-as-string",            required_argument, 0, 307 },
         { "key-as-string",                 required_argument, 0, 308 },
         { "tls-version",                   required_argument, 0, 317 },
+#if defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+        { "tcp-request-timeout",           required_argument, 0, 319 },
+#endif // defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+        { "update-immediately-on-dm-change", no_argument,     0, 320 },
+        { "enable-self-notify",              no_argument,     0, 321 },
+#ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+        { "afu-original-img-file-path",    required_argument, 0, 322 },
+#   if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
+        { "afu-marker-path",               required_argument, 0, 323 },
+#   endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
+        { "afu-cert-file",                 required_argument, 0, 324 },
+       { "delayed-afu-result",            required_argument, 0, 325 },
+#   if defined(ANJAY_WITH_SEND)
+       { "afu-use-send",                  no_argument,       0, 326 },
+#   endif // defined(ANJAY_WITH_SEND)
+       { "afu-ack-timeout",               required_argument, 0, 327 },
+#endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+        { "start-offline",                   no_argument,     0, 328 },
         { 0, 0, 0, 0 }
         // clang-format on
     };
@@ -1422,6 +1494,81 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             if (parse_tls_version(optarg, &parsed_args->dtls_version)) {
                 goto finish;
             }
+            break;
+#if defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+        case 319: {
+            double tcp_request_timeout;
+            if (parse_double(optarg, &tcp_request_timeout)) {
+                demo_log(ERROR, "Expected TCP request timeout to be a floating "
+                                "point number");
+                goto finish;
+            }
+            parsed_args->tcp_request_timeout =
+                    avs_time_duration_from_fscalar(tcp_request_timeout,
+                                                   AVS_TIME_S);
+            break;
+        }
+#endif // defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+        case 320:
+            parsed_args->update_immediately_on_dm_change = true;
+            break;
+        case 321:
+            parsed_args->enable_self_notify = true;
+            break;
+#ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+        case 322:
+            parsed_args->original_img_file_path = optarg;
+            break;
+#    if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
+            && defined(AVS_COMMONS_STREAM_WITH_FILE)
+        case 323:
+            parsed_args->advanced_fw_updated_marker_path = optarg;
+            break;
+#    endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
+           // defined(AVS_COMMONS_STREAM_WITH_FILE)
+        case 324: {
+
+            const avs_net_certificate_info_t cert_info = {
+                .server_cert_validation = true,
+                .trusted_certs =
+                        avs_crypto_certificate_chain_info_from_file(optarg)
+            };
+            parsed_args->advanced_fw_security_info =
+                    avs_net_security_info_from_certificates(cert_info);
+            break;
+        }
+        case 325: {
+            int result;
+            if (parse_i32(optarg, &result)
+                    || result < (int) ANJAY_ADVANCED_FW_UPDATE_RESULT_INITIAL
+                    || result > (int) ANJAY_ADVANCED_FW_UPDATE_RESULT_UNSUPPORTED_PROTOCOL) {
+                demo_log(ERROR, "invalid update result value: %s", optarg);
+                goto finish;
+            }
+            parsed_args->advanced_fw_update_delayed_result =
+                    (anjay_advanced_fw_update_result_t) result;
+            break;
+        }
+#    ifdef ANJAY_WITH_SEND
+        case 326:
+            parsed_args->advanced_fw_update_use_send = true;
+            break;
+#    endif // ANJAY_WITH_SEND
+        case 327: {
+            double ack_timeout_s;
+            if (parse_double(optarg, &ack_timeout_s)) {
+                demo_log(ERROR,
+                         "Expected ACK_TIMEOUT to be a floating point number");
+                goto finish;
+            }
+            parsed_args->advanced_fwu_tx_params.ack_timeout =
+                    avs_time_duration_from_fscalar(ack_timeout_s, AVS_TIME_S);
+            parsed_args->advanced_fwu_tx_params_modified = true;
+            break;
+        }
+#endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+        case 328:
+            parsed_args->start_offline = true;
             break;
         case 0:
             goto process;

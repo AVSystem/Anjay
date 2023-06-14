@@ -73,7 +73,9 @@ static void assert_instances_equal(const server_instance_t *a,
     AVS_UNIT_ASSERT_EQUAL(a->lifetime, b->lifetime);
     AVS_UNIT_ASSERT_EQUAL(a->default_min_period, b->default_min_period);
     AVS_UNIT_ASSERT_EQUAL(a->default_max_period, b->default_max_period);
+#ifndef ANJAY_WITHOUT_DEREGISTER
     AVS_UNIT_ASSERT_EQUAL(a->disable_timeout, b->disable_timeout);
+#endif // ANJAY_WITHOUT_DEREGISTER
     AVS_UNIT_ASSERT_EQUAL(a->notification_storing, b->notification_storing);
 #ifdef ANJAY_WITH_LWM2M11
     AVS_UNIT_ASSERT_EQUAL(a->last_alert, b->last_alert);
@@ -141,7 +143,9 @@ AVS_UNIT_TEST(server_persistence, nonempty_store_restore_version_1) {
         .lifetime = 9001,
         .default_min_period = -1,
         .default_max_period = -1,
+#ifndef ANJAY_WITHOUT_DEREGISTER
         .disable_timeout = -1,
+#endif // ANJAY_WITHOUT_DEREGISTER
         .binding = {
             .data = "UQ",
         },
@@ -152,7 +156,9 @@ AVS_UNIT_TEST(server_persistence, nonempty_store_restore_version_1) {
         .present_resources = {
             [SERV_RES_SSID] = true,
             [SERV_RES_LIFETIME] = true,
+#ifndef ANJAY_WITHOUT_DEREGISTER
             [SERV_RES_DISABLE] = true,
+#endif // ANJAY_WITHOUT_DEREGISTER
             [SERV_RES_NOTIFICATION_STORING_WHEN_DISABLED_OR_OFFLINE] = true,
             [SERV_RES_BINDING] = true,
             [SERV_RES_REGISTRATION_UPDATE_TRIGGER] = true,
@@ -216,7 +222,9 @@ AVS_UNIT_TEST(server_persistence, nonempty_store_restore) {
         .present_resources = {
             [SERV_RES_SSID] = true,
             [SERV_RES_LIFETIME] = true,
+#ifndef ANJAY_WITHOUT_DEREGISTER
             [SERV_RES_DISABLE] = true,
+#endif // ANJAY_WITHOUT_DEREGISTER
             [SERV_RES_NOTIFICATION_STORING_WHEN_DISABLED_OR_OFFLINE] = true,
             [SERV_RES_BINDING] = true,
             [SERV_RES_REGISTRATION_UPDATE_TRIGGER] = true,

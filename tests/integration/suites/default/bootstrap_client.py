@@ -93,10 +93,10 @@ class BootstrapTest:
                                       bootstrap_request_timeout_s=None):
             # For the first holdoff_s seconds, the client should wait for
             # 1.0-style Server Initiated Bootstrap. Note that we subtract
-            # 1 second to take into account code execution delays.
+            # 2 seconds to take into account code execution delays.
             if holdoff_s is None:
                 holdoff_s = self.holdoff_s or 0
-            no_message_s = max(0, holdoff_s - 1)
+            no_message_s = max(0, holdoff_s - 2)
             if no_message_s > 0:
                 with self.assertRaises(socket.timeout):
                     print(self.bootstrap_server.recv(timeout_s=no_message_s))

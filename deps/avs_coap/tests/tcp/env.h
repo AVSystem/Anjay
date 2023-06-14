@@ -175,10 +175,6 @@ static inline test_env_t test_setup(void) {
 }
 
 static inline void test_teardown_impl(test_env_t *env) {
-    if (!env->aborted && env->mocksock) {
-        expect_send(env, COAP_MSG(RELEASE, TOKEN(current_token())));
-    }
-
     avs_coap_ctx_cleanup(&env->coap_ctx);
     if (env->mocksock) {
         avs_unit_mocksock_assert_expects_met(env->mocksock);

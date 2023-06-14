@@ -14,7 +14,7 @@ from .messages import get_lwm2m_msg
 class Lwm2mServer:
     def __init__(self, coap_server=None):
         super().__setattr__('_coap_server', coap_server or coap.Server())
-        self.set_timeout(timeout_s=5)
+        self.set_timeout(timeout_s=15)
 
     def send(self, pkt: coap.Packet):
         if not isinstance(pkt, coap.Packet):
@@ -22,8 +22,12 @@ class Lwm2mServer:
                              'valid syntax: Lwm2mSomething.matching(pkt)()') % (type(pkt),))
         self._coap_server.send(pkt.fill_placeholders())
 
-    def recv(self, timeout_s=-1):
-        pkt = self._coap_server.recv(timeout_s=timeout_s)
+    def recv(self, timeout_s: float = -1, deadline=None, filter=None, peek=False):
+        lwm2m_filter = None
+        if filter is not None:
+            lwm2m_filter = lambda pkt: filter(get_lwm2m_msg(pkt))
+        pkt = self._coap_server.recv(timeout_s=timeout_s, deadline=deadline, filter=lwm2m_filter,
+                                     peek=peek)
         return get_lwm2m_msg(pkt)
 
     def __getattr__(self, name):

@@ -9,6 +9,7 @@
 #ifndef ANJAY_INCLUDE_ANJAY_FACTORY_PROVISIONING_H
 #define ANJAY_INCLUDE_ANJAY_FACTORY_PROVISIONING_H
 
+#include <avsystem/commons/avs_errno.h>
 #include <avsystem/commons/avs_stream.h>
 
 #include <anjay/core.h>

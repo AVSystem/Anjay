@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+   Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
+
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
+-->
+
+<LWM2M xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.openmobilealliance.org/tech/profiles/LWM2M-v1_1.xsd">
+	<Object ObjectType="MODefinition">
+		<Name>Advanced Firmware Update</Name>
+		<Description1><![CDATA[This LwM2M Object enables management of multiple firmware components which are to be updated. This Object includes installing a firmware package, updating firmware, and performing actions after updating firmware. The firmware update MAY require to reboot the device; it will depend on a number of factors, such as the operating system architecture and the extent of the updated software.
+The envisioned functionality is to allow a LwM2M Client to connect to any LwM2M Server to obtain a firmware package using the object and resource structure defined in this section experiencing communication security protection using TLS/DTLS. There are, however, other design decisions that need to be taken into account to allow a manufacturer of a device to securely install firmware on a device. Examples for such design decisions are how to manage the firmware update repository at the server side (which may include user interface considerations), the techniques to provide additional application layer security protection of the firmware package, how many versions of firmware packages to store on the device, and how to execute the firmware update process considering the hardware specific details of a given IoT hardware product. These aspects are considered to be outside the scope of this version of the specification.
+A LwM2M Server may also instruct a LwM2M Client to fetch a firmware package from a dedicated server (instead of pushing firmware packages to the LwM2M Client). The Package URI resource is contained in the Firmware object and can be used for this purpose.
+A LwM2M Client MUST support block-wise transfer [CoAP_Blockwise] if it implements the Advanced Firmware Update object.
+A LwM2M Server MUST support block-wise transfer. Other protocols, such as HTTP/HTTPs, MAY also be used for downloading firmware updates (via the Package URI resource). For constrained devices it is, however, RECOMMENDED to use CoAP for firmware downloads to avoid the need for additional protocol implementations.
+This object differs from the Firmware Update object (ID 5) by allowing for multiple instances, with each instance representing a separate “component” of the device’s firmware that can be upgraded independently. The significance of such components is implementation-defined, however the intention is that they might refer to entities such as: bootloaders, application code, cellular modem firmwares, security processor firmwares, etc. Mapping components to lower level entities is also implementation-defined; example implementations include: flash memory partitions, software packages, or virtualized containers.
+It is expected that firmware components can be upgraded independently in most cases, however the object provides a mechanism for checking version dependencies when a certain order of updates is required, or when multiple components need to be upgraded in tandem.
+Instances of this object SHOULD be static and cannot be managed by the LwM2M Server. The client MUST respond with an error on the transport binding layer signifying a “Method Not Allowed” error upon receiving a Create or Delete request for this object.
+The main component (i.e., the one that contains code for the core part of the device’s functionality) SHOULD have Instance ID equal to 0.
+A LwM2M implementation may choose to support the Firmare Update object (ID 5), the Advanced Firmware Update object (ID 33629), both, or neither. If both objects are supported, only one of them MUST be used during a firmware update process. LwM2M Servers SHOULD prefer the Advanced Firmware Update object when communicating with LwM2M Clients that support both.]]></Description1>
+		<ObjectID>33629</ObjectID>
+		<ObjectURN>urn:oma:lwm2m:oma:33629</ObjectURN>
+		<LWM2MVersion>1.1</LWM2MVersion>
+		<ObjectVersion>1.0</ObjectVersion>
+		<MultipleInstances>Multiple</MultipleInstances>
+		<Mandatory>Optional</Mandatory>
+		<Resources>
+			<Item ID="0">
+				<Name>Package</Name>
+        <Operations>W</Operations>
+        <MultipleInstances>Single</MultipleInstances>
+				<Mandatory>Mandatory</Mandatory>
+				<Type>Opaque</Type>
+				<RangeEnumeration></RangeEnumeration>
+				<Units></Units>
+				<Description><![CDATA[Firmware package]]></Description>
+			</Item>
+			<Item ID="1">
+				<Name>Package URI</Name>
+        <Operations>RW</Operations>
+        <MultipleInstances>Single</MultipleInstances>
+				<Mandatory>Mandatory</Mandatory>
+				<Type>String</Type>
+				<RangeEnumeration>0..255</RangeEnumeration>
+				<Units></Units>
+				<Description><![CDATA[URI from where the device can download the firmware package by an alternative mechanism. As soon as the device has received the Package URI it performs the download at the next practical opportunity.
+The URI format is defined in RFC 3986. For example, coaps://example.org/firmware is a syntactically valid URI. The URI scheme determines the protocol to be used. For CoAP this endpoint MAY be a LwM2M Server but does not necessarily need to be. A CoAP server implementing block-wise transfer is sufficient as a server hosting a firmware repository and the expectation is that this server merely serves as a separate file server making firmware packages available to LwM2M Clients.]]></Description>
+			</Item>
+			<Item ID="2">
+				<Name>Update</Name>
+        <Operations>E</Operations>
+        <MultipleInstances>Single</MultipleInstances>
+				<Mandatory>Mandatory</Mandatory>
+				<Type></Type>
+				<RangeEnumeration></RangeEnumeration>
+				<Units></Units>
+				<Description><![CDATA[Updates firmware by using the firmware package stored in Package, or, by using the firmware downloaded from the Package URI. This Resource is only executable when the value of the State Resource is Downloaded.
+If multiple instances of the Advanced Firmware Update object are in the Downloaded state, the device MAY update multiple components in one go. In this case, the Linked Instances resource MUST list all other components that will be updated alongside the current one.
+The server MAY override this behavior by including an argument 0 in the Execute operation. If the argument is present with no value, the client MUST attempt to update only the component handled by the current instance. If the argument is present with a value containing a list of Advanced Firmware Update object instances specified as a Core Link Format (so that the argument may read, for example: 0='</33629/1>,</33629/2>'), the client MUST attempt to update the components handled by the current instance and the instances listed in the argument, and MUST NOT attempt to update any other components. If the client is not able to satisfy such a request, the update process shall fail with the Update Result resource set to 13.
+If the downloaded packages are incompatible with at least one of the other currently installed components, and compatible updates for them are not downloaded (i.e., the State resource in an instance corresponding to the conflicting component is not Downloaded), the update process shall also fail with the Update Result resource set to 13.
+When multiple components are upgraded as part of a single Update operation, the device SHOULD upgrade them in a transactional fashion (i.e., all are updated successfully, or all are reverted in case of error), and MUST perform the upgrade in a way that ensures that the device will not be rendered unbootable due to partial errors.]]></Description>
+			</Item>
+			<Item ID="3">
+				<Name>State</Name>
+        <Operations>R</Operations>
+        <MultipleInstances>Single</MultipleInstances>
+				<Mandatory>Mandatory</Mandatory>
+				<Type>Integer</Type>
+				<RangeEnumeration>0..3</RangeEnumeration>
+				<Units></Units>
+				<Description><![CDATA[Indicates current state with respect to this firmware update. This value is set by the LwM2M Client.
+0: Idle (before downloading or after successful updating)
+1: Downloading (The data sequence is on the way)
+2: Downloaded
+3: Updating
+If writing the firmware package to Package Resource has completed, or, if the device has downloaded the firmware package from the Package URI the state changes to Downloaded. The device MAY support packages containing code for multiple components in a single file, in which case downloading the package in any instance of the Advanced Firmware Update object that is valid for it, MUST set the State resource to 2 in instances handling all components that are affected by the downloaded package; if the State of any of such instances was different than 0, the package MUST be rejected and the Update Result resource set to 12.
+Writing an empty string to Package URI Resource or setting the Package Resource to NULL (‘\0’), resets the Advanced Firmware Update State Machine: the State Resource value is set to Idle and the Update Result Resource value is set to 0. The device should remove the downloaded firmware package when the state is reset to Idle.
+When in Downloaded state, and the executable Resource Update is triggered, the state changes to Updating if the update starts immediately. For devices that support a user interface and the deferred update functionality, the user may be allowed to defer the firmware update to a later time. In this case, the state stays in the Downloaded state and the Update Result is set to 11. Once a user accepts the firmware update, the state changes to Updating. When the user deferred the update, the device will continue operations normally until the user approves the firmware update or an automatic update starts. It will not block any operation on the device.
+If the Update Resource failed, the state may return to either Downloaded or Idle depending on the underlying reason of update failure, e.g. Integrity Check Failure results in the client moving to the Idle state. If performing the Update or Cancel operation was successful, the state changes to Idle. The firmware update state machine is illustrated in the respective LwM2M specification.]]></Description>
+			</Item>
+			<Item ID="5">
+				<Name>Update Result</Name>
+        <Operations>R</Operations>
+        <MultipleInstances>Single</MultipleInstances>
+				<Mandatory>Mandatory</Mandatory>
+				<Type>Integer</Type>
+				<RangeEnumeration>0..13</RangeEnumeration>
+				<Units></Units>
+				<Description><![CDATA[Contains the result of downloading or updating the firmware
+0: Initial value. Once the updating process is initiated (Download /Update), this Resource MUST be reset to Initial value.
+1: Firmware updated successfully.
+2: Not enough flash memory for the new firmware package.
+3: Out of RAM during the downloading process.
+4: Connection lost during the downloading process.
+5: Integrity check failure for new downloaded package.
+6: Unsupported package type.
+7: Invalid URI.
+8: Firmware update failed.
+9: Unsupported protocol. A LwM2M client indicates the failure to retrieve the firmware package using the URI provided in the Package URI resource by writing the value 9 to the /33629/0/5 (Update Result resource) when the URI contained a URI scheme unsupported by the client. Consequently, the LwM2M Client is unable to retrieve the firmware package using the URI provided by the LwM2M Server in the Package URI when it refers to an unsupported protocol.
+10: Firmware update cancelled. A Cancel operation has been executed successfully.
+11: Firmware update deferred.
+12: Conflicting state. Multi-component firmware package download rejected before entering the Downloaded state because it conflicts with an already downloaded package in a different object instance.
+13: Dependency error. The Update operation failed because the package requires some other component to be updated first or at the same time.]]></Description>
+			</Item>
+			<Item ID="6">
+				<Name>PkgName</Name>
+				<Operations>R</Operations>
+				<MultipleInstances>Single</MultipleInstances>
+				<Mandatory>Optional</Mandatory>
+				<Type>String</Type>
+				<RangeEnumeration>0..255</RangeEnumeration>
+				<Units></Units>
+				<Description><![CDATA[Name of the Firmware Package. If this resource is supported, it shall contain the name of the downloaded package when the State is 2 (Downloaded) or 3 (Updating); otherwise it MAY be empty.]]></Description>
+			</Item>
+			<Item ID="7">
+				<Name>PkgVersion</Name>
+				<Operations>R</Operations>
+				<MultipleInstances>Single</MultipleInstances>
+				<Mandatory>Optional</Mandatory>
+				<Type>String</Type>
+				<RangeEnumeration>0..255</RangeEnumeration>
+				<Units></Units>
+				<Description><![CDATA[Version of the Firmware package. If this resource is supported, it shall contain the version of the downloaded package when the State is 2 (Downloaded) or 3 (Updating); otherwise it MAY be empty.]]></Description>
+			</Item>
+			<Item ID="8">
+				<Name>Firmware Update Protocol Support</Name>
+				<Operations>R</Operations>
+				<MultipleInstances>Multiple</MultipleInstances>
+				<Mandatory>Optional</Mandatory>
+				<Type>Integer</Type>
+				<RangeEnumeration>0..5</RangeEnumeration>
+				<Units></Units>
+				<Description><![CDATA[This resource indicates what protocols the LwM2M Client implements to retrieve firmware packages. The LwM2M server uses this information to decide what URI to include in the Package URI. A LwM2M Server MUST NOT include a URI in the Package URI object that uses a protocol that is unsupported by the LwM2M client. For example, if a LwM2M client indicates that it supports CoAP and CoAPS then a LwM2M Server must not provide an HTTP URI in the Packet URI. The following values are defined by this version of the specification:
+0: CoAP (as defined in RFC 7252) with the additional support for block-wise transfer. CoAP is the default setting.
+1: CoAPS (as defined in RFC 7252) with the additional support for block-wise transfer
+2: HTTP 1.1 (as defined in RFC 7230)
+3: HTTPS 1.1 (as defined in RFC 7230)
+4: CoAP over TCP (as defined in RFC 8323)
+5: CoAP over TLS (as defined in RFC 8323)
+Additional values MAY be defined in the future. Any value not understood by the LwM2M Server MUST be ignored.
+The value of this resource SHOULD be the same for all instances of the Advanced Firmware Update object.]]></Description>
+			</Item>
+			<Item ID="9">
+				<Name>Firmware Update Delivery Method</Name>
+				<Operations>R</Operations>
+				<MultipleInstances>Single</MultipleInstances>
+				<Mandatory>Mandatory</Mandatory>
+				<Type>Integer</Type>
+				<RangeEnumeration>0..2</RangeEnumeration>
+				<Units></Units>
+				<Description><![CDATA[The LwM2M Client uses this resource to indicate its support for transferring firmware packages to the client either via the Package Resource (=push) or via the Package URI Resource (=pull) mechanism.
+0: Pull only
+1: Push only
+2: Both. In this case the LwM2M Server MAY choose the preferred mechanism for conveying the firmware package to the LwM2M Client.
+The value of this resource SHOULD be the same for all instances of the Advanced Firmware Update object.]]></Description>
+			</Item>
+			<Item ID="10">
+				<Name>Cancel</Name>
+				<Operations>E</Operations>
+				<MultipleInstances>Single</MultipleInstances>
+				<Mandatory>Optional</Mandatory>
+				<Type></Type>
+				<RangeEnumeration></RangeEnumeration>
+				<Units></Units>
+				<Description><![CDATA[Cancels firmware update.
+Cancel can be executed if the device has not initiated the Update process. If the device is in the process of installing the firmware or has already completed installation it MUST respond with Method Not Allowed error code.
+Upon successful Cancel operation, Update Result Resource is set to 10 and State is set to 0 by the device.]]></Description>
+			</Item>
+			<Item ID="11">
+				<Name>Severity</Name>
+				<Operations>RW</Operations>
+				<MultipleInstances>Single</MultipleInstances>
+				<Mandatory>Optional</Mandatory>
+				<Type>Integer</Type>
+				<RangeEnumeration>0..2</RangeEnumeration>
+				<Units></Units>
+				<Description><![CDATA[Severity of the firmware package.
+0: Critical
+1: Mandatory
+2: Optional
+This information is useful when the device provides option for the deferred update. Default value is 1.]]></Description>
+			</Item>
+			<Item ID="12">
+				<Name>Last State Change Time</Name>
+				<Operations>R</Operations>
+				<MultipleInstances>Single</MultipleInstances>
+				<Mandatory>Optional</Mandatory>
+				<Type>Time</Type>
+				<RangeEnumeration></RangeEnumeration>
+				<Units></Units>
+				<Description><![CDATA[This resource stores the time when the State resource is changed. Device updates this resource before making any change to the State.]]></Description>
+			</Item>
+			<Item ID="13">
+				<Name>Maximum Defer Period</Name>
+				<Operations>RW</Operations>
+				<MultipleInstances>Single</MultipleInstances>
+				<Mandatory>Optional</Mandatory>
+				<Type>Unsigned Integer</Type>
+				<RangeEnumeration></RangeEnumeration>
+				<Units>s</Units>
+				<Description><![CDATA[The number of seconds a user can defer the software update.
+When this time period is over, the device will not prompt the user for update and install it automatically.
+If the value is 0, a deferred update is not allowed.]]></Description>
+			</Item>
+			<Item ID="14">
+				<Name>Component Name</Name>
+				<Operations>R</Operations>
+				<MultipleInstances>Single</MultipleInstances>
+				<Mandatory>Mandatory</Mandatory>
+				<Type>String</Type>
+				<RangeEnumeration></RangeEnumeration>
+				<Units></Units>
+				<Description><![CDATA[Name of the component handled by this instance of the Advanced Firmware Update object.
+This should be a name clearly identifying the component for both humans and machines. The syntax of these names is implementation-specific, but might refer to terms such as “bootloader”, “application”, “modem firmware” etc.]]></Description>
+			</Item>
+			<Item ID="15">
+				<Name>Current Version</Name>
+				<Operations>R</Operations>
+				<MultipleInstances>Single</MultipleInstances>
+				<Mandatory>Mandatory</Mandatory>
+				<Type>String</Type>
+				<RangeEnumeration></RangeEnumeration>
+				<Units></Units>
+				<Description><![CDATA[Version number of the package that is currently installed and running for the component handled by this instance of the Advanced Firmware Update object.
+For the main component (the one that contains code for the core part of the device’s functionality), this value SHOULD be the same as the Firmware Version resource in the Device object (/3/0/3).]]></Description>
+			</Item>
+			<Item ID="16">
+				<Name>Linked Instances</Name>
+				<Operations>R</Operations>
+				<MultipleInstances>Multiple</MultipleInstances>
+				<Mandatory>Optional</Mandatory>
+				<Type>Objlnk</Type>
+				<RangeEnumeration></RangeEnumeration>
+				<Units></Units>
+				<Description><![CDATA[When multiple instances of the Advanced Firmware Update object are in the Downloaded state, this resource shall list all other instances that will be updated in a batch if the Update resource is executed on this instance with no arguments. Each of the instances listed MUST be in the Downloaded state.
+The resource MUST NOT contain references to any objects other than the Advanced Firmware Update object.]]></Description>
+			</Item>
+			<Item ID="17">
+				<Name>Conflicting Instances</Name>
+				<Operations>R</Operations>
+				<MultipleInstances>Multiple</MultipleInstances>
+				<Mandatory>Optional</Mandatory>
+				<Type>Objlnk</Type>
+				<RangeEnumeration></RangeEnumeration>
+				<Units></Units>
+				<Description><![CDATA[When the download or update fails and the Update Result resource is set to 12 or 13, this resource MUST be present and contain references to the Advanced Firmware Update object instances that caused the conflict.
+In other states, this resource MAY be absent or empty, or it MAY contain references to the Advanced Firmware Update object instances which are in a state conflicting with the possibility of successfully updating this instance.
+The resource MUST NOT contain references to any objects other than the Advanced Firmware Update object.]]></Description>
+			</Item>
+    </Resources>
+		<Description2><![CDATA[]]></Description2>
+	</Object>
+</LWM2M>

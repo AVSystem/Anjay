@@ -174,6 +174,10 @@ anjay_dm_resource_reset_t _anjay_mock_dm_resource_reset;
 anjay_dm_list_resource_instances_t _anjay_mock_dm_list_resource_instances;
 anjay_dm_resource_read_attrs_t _anjay_mock_dm_resource_read_attrs;
 anjay_dm_resource_write_attrs_t _anjay_mock_dm_resource_write_attrs;
+anjay_dm_transaction_begin_t _anjay_mock_dm_transaction_begin;
+anjay_dm_transaction_validate_t _anjay_mock_dm_transaction_validate;
+anjay_dm_transaction_commit_t _anjay_mock_dm_transaction_commit;
+anjay_dm_transaction_rollback_t _anjay_mock_dm_transaction_rollback;
 #ifdef ANJAY_WITH_LWM2M11
 anjay_dm_resource_instance_read_attrs_t
         _anjay_mock_dm_resource_instance_read_attrs;
@@ -193,44 +197,48 @@ anjay_dm_resource_instance_write_attrs_t
     .list_resource_instances = _anjay_mock_dm_list_resource_instances
 
 #if defined(ANJAY_WITH_LWM2M11)
-#    define ANJAY_MOCK_DM_HANDLERS                                           \
-        ANJAY_MOCK_DM_HANDLERS_BASIC,                                        \
-                .object_read_default_attrs =                                 \
-                        _anjay_mock_dm_object_read_default_attrs,            \
-                .object_write_default_attrs =                                \
-                        _anjay_mock_dm_object_write_default_attrs,           \
-                .instance_read_default_attrs =                               \
-                        _anjay_mock_dm_instance_read_default_attrs,          \
-                .instance_write_default_attrs =                              \
-                        _anjay_mock_dm_instance_write_default_attrs,         \
-                .resource_read_attrs = _anjay_mock_dm_resource_read_attrs,   \
-                .resource_write_attrs = _anjay_mock_dm_resource_write_attrs, \
-                .resource_instance_read_attrs =                              \
-                        _anjay_mock_dm_resource_instance_read_attrs,         \
-                .resource_instance_write_attrs =                             \
-                        _anjay_mock_dm_resource_instance_write_attrs,        \
-                .transaction_begin = anjay_dm_transaction_NOOP,              \
-                .transaction_validate = anjay_dm_transaction_NOOP,           \
-                .transaction_commit = anjay_dm_transaction_NOOP,             \
-                .transaction_rollback = anjay_dm_transaction_NOOP
+#    define ANJAY_MOCK_DM_HANDLERS_REST                                        \
+        .object_read_default_attrs = _anjay_mock_dm_object_read_default_attrs, \
+        .object_write_default_attrs =                                          \
+                _anjay_mock_dm_object_write_default_attrs,                     \
+        .instance_read_default_attrs =                                         \
+                _anjay_mock_dm_instance_read_default_attrs,                    \
+        .instance_write_default_attrs =                                        \
+                _anjay_mock_dm_instance_write_default_attrs,                   \
+        .resource_read_attrs = _anjay_mock_dm_resource_read_attrs,             \
+        .resource_write_attrs = _anjay_mock_dm_resource_write_attrs,           \
+        .resource_instance_read_attrs =                                        \
+                _anjay_mock_dm_resource_instance_read_attrs,                   \
+        .resource_instance_write_attrs =                                       \
+                _anjay_mock_dm_resource_instance_write_attrs
 #else // defined(ANJAY_WITH_LWM2M11)
-#    define ANJAY_MOCK_DM_HANDLERS                                           \
-        ANJAY_MOCK_DM_HANDLERS_BASIC,                                        \
-                .object_read_default_attrs =                                 \
-                        _anjay_mock_dm_object_read_default_attrs,            \
-                .object_write_default_attrs =                                \
-                        _anjay_mock_dm_object_write_default_attrs,           \
-                .instance_read_default_attrs =                               \
-                        _anjay_mock_dm_instance_read_default_attrs,          \
-                .instance_write_default_attrs =                              \
-                        _anjay_mock_dm_instance_write_default_attrs,         \
-                .resource_read_attrs = _anjay_mock_dm_resource_read_attrs,   \
-                .resource_write_attrs = _anjay_mock_dm_resource_write_attrs, \
-                .transaction_begin = anjay_dm_transaction_NOOP,              \
-                .transaction_validate = anjay_dm_transaction_NOOP,           \
-                .transaction_commit = anjay_dm_transaction_NOOP,             \
-                .transaction_rollback = anjay_dm_transaction_NOOP
+#    define ANJAY_MOCK_DM_HANDLERS_REST                                        \
+        .object_read_default_attrs = _anjay_mock_dm_object_read_default_attrs, \
+        .object_write_default_attrs =                                          \
+                _anjay_mock_dm_object_write_default_attrs,                     \
+        .instance_read_default_attrs =                                         \
+                _anjay_mock_dm_instance_read_default_attrs,                    \
+        .instance_write_default_attrs =                                        \
+                _anjay_mock_dm_instance_write_default_attrs,                   \
+        .resource_read_attrs = _anjay_mock_dm_resource_read_attrs,             \
+        .resource_write_attrs = _anjay_mock_dm_resource_write_attrs
 #endif // ANJAY_WITH_LWM2M11
+
+#define ANJAY_MOCK_DM_HANDLERS_TRANSACTION_NOOP        \
+    .transaction_begin = anjay_dm_transaction_NOOP,    \
+    .transaction_validate = anjay_dm_transaction_NOOP, \
+    .transaction_commit = anjay_dm_transaction_NOOP,   \
+    .transaction_rollback = anjay_dm_transaction_NOOP
+
+#define ANJAY_MOCK_DM_HANDLERS_TRANSACTION                       \
+    .transaction_begin = _anjay_mock_dm_transaction_begin,       \
+    .transaction_validate = _anjay_mock_dm_transaction_validate, \
+    .transaction_commit = _anjay_mock_dm_transaction_commit,     \
+    .transaction_rollback = _anjay_mock_dm_transaction_rollback
+
+#define ANJAY_MOCK_DM_HANDLERS                                 \
+    ANJAY_MOCK_DM_HANDLERS_BASIC, ANJAY_MOCK_DM_HANDLERS_REST, \
+            ANJAY_MOCK_DM_HANDLERS_TRANSACTION_NOOP
 
 void _anjay_mock_dm_expect_object_read_default_attrs(
         anjay_t *anjay,
@@ -353,6 +361,22 @@ void _anjay_mock_dm_expect_resource_instance_write_attrs(
         anjay_riid_t riid,
         anjay_ssid_t ssid,
         const anjay_dm_r_attributes_t *attrs,
+        int retval);
+void _anjay_mock_dm_expect_transaction_begin(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        int retval);
+void _anjay_mock_dm_expect_transaction_validate(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        int retval);
+void _anjay_mock_dm_expect_transaction_commit(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        int retval);
+void _anjay_mock_dm_expect_transaction_rollback(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
         int retval);
 void _anjay_mock_dm_expect_clean(void);
 void _anjay_mock_dm_expected_commands_clear(void);

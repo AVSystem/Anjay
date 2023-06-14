@@ -373,7 +373,6 @@ class NoResponseAfterFirstRequestBlock(ClientBlockRequest.Test()):
         self.block_recv_next(expected_seq_num=0)
         # ignore packet - client should retry
 
-        self.serv.set_timeout(timeout_s=5)
         self.block_recv()
 
 
@@ -390,7 +389,6 @@ class NoResponseAfterIntermediateRequestBlock(ClientBlockRequest.Test()):
         self.block_recv_next(expected_seq_num=(self.expected_num_blocks // 2))
         # ignore packet - client should retry
 
-        self.serv.set_timeout(timeout_s=5)
         self.block_recv(seq_num_begin=(self.expected_num_blocks // 2))
 
 
@@ -407,7 +405,6 @@ class NoResponseAfterLastRequestBlock(ClientBlockRequest.Test()):
         self.block_recv_next(expected_seq_num=(self.expected_num_blocks - 1))
         # ignore packet - client should retry
 
-        self.serv.set_timeout(timeout_s=5)
         self.block_recv(seq_num_begin=(self.expected_num_blocks - 1))
 
 

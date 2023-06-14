@@ -825,6 +825,7 @@ static void retry_deferred_job(avs_sched_t *sched, const void *ssid_) {
     ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
+#        ifndef ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
 bool _anjay_send_has_deferred(anjay_unlocked_t *anjay, anjay_ssid_t ssid) {
     assert(ssid != ANJAY_SSID_ANY);
     AVS_LIST(anjay_send_entry_t) it;
@@ -840,6 +841,7 @@ bool _anjay_send_has_deferred(anjay_unlocked_t *anjay, anjay_ssid_t ssid) {
     }
     return false;
 }
+#        endif // ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
 
 int _anjay_send_sched_retry_deferred(anjay_unlocked_t *anjay,
                                      anjay_ssid_t ssid) {

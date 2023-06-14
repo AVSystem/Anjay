@@ -338,7 +338,7 @@ identity.
 
     static avs_error_t configure_psk(tls_socket_impl_t *sock,
                                      const avs_net_psk_info_t *psk) {
-        if (!psk->key.desc.source != AVS_CRYPTO_DATA_SOURCE_BUFFER
+        if (psk->key.desc.source != AVS_CRYPTO_DATA_SOURCE_BUFFER
                 || psk->identity.desc.source != AVS_CRYPTO_DATA_SOURCE_BUFFER) {
             return avs_errno(AVS_EINVAL);
         }

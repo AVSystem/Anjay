@@ -27,6 +27,7 @@ add_custom_command(TARGET tutorial_examples
                         -DCMAKE_INSTALL_PREFIX="${ANJAY_TUTORIALS_ANJAY_INSTALL_DIR}"
                         -DWITH_LIBRARY_SHARED=OFF
                         -DWITH_DEMO=OFF
+                        -DWITH_MODULE_advanced_fw_update=ON
                         -DCMAKE_BUILD_TYPE=Debug
                    COMMAND ${CMAKE_COMMAND} --build . --target install -- -j${NPROC}
                    WORKING_DIRECTORY ${ANJAY_TUTORIALS_ANJAY_BUILD_DIR})

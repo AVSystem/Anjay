@@ -217,7 +217,7 @@ class Test241_ExecutableResourceRebootingTheDevice(DataModel.Test):
         #    successfully with the Server again (see LightweightM2M-1.0-
         #    int-101)
         self.serv.reset()
-        self.assertDemoRegisters(timeout_s=3)
+        self.assertDemoRegisters()
 
 
 class Test260_DiscoverCommand(DataModel.Test):

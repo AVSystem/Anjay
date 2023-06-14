@@ -771,11 +771,11 @@ int _anjay_bootstrap_notify_regular_connection_available(
         return 0;
     }
     int result = 0;
+    anjay_connection_ref_t bootstrap_connection = {
+        .server = _anjay_servers_find_active(anjay, ANJAY_SSID_BOOTSTRAP),
+        .conn_type = ANJAY_CONNECTION_PRIMARY
+    };
     if (anjay->bootstrap.in_progress) {
-        anjay_connection_ref_t bootstrap_connection = {
-            .server = _anjay_servers_find_active(anjay, ANJAY_SSID_BOOTSTRAP),
-            .conn_type = ANJAY_CONNECTION_PRIMARY
-        };
         (void) ((result = validate_bootstrap_configuration(
                          anjay, bootstrap_connection))
                 || (result = bootstrap_finish_impl(

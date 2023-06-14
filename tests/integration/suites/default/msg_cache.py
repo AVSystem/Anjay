@@ -17,8 +17,6 @@ class CacheTest(test_suite.Lwm2mSingleServerTest,
                 test_suite.Lwm2mDmOperations):
     def setUp(self):
         super().setUp(extra_cmdline_args=['--cache-size', '4096'])
-
-        self.serv.set_timeout(timeout_s=1)
         self.create_instance(self.serv, oid=OID.Test, iid=1)
 
     def runTest(self):
@@ -64,9 +62,6 @@ class MultipleServerCacheTest(test_suite.Lwm2mTest):
     def setUp(self):
         self.setup_demo_with_servers(servers=2,
                                      extra_cmdline_args=['--cache-size', '4096'])
-
-        self.servers[0].set_timeout(timeout_s=1)
-        self.servers[1].set_timeout(timeout_s=1)
 
     def tearDown(self):
         self.teardown_demo_with_servers()

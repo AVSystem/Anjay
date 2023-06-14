@@ -895,7 +895,6 @@ AVS_UNIT_TEST(notify, min_period) {
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
     anjay_sched_run(anjay);
-    anjay_sched_run(anjay);
 
     ////// PMIN REACHED //////
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(5, AVS_TIME_S));
@@ -914,7 +913,6 @@ AVS_UNIT_TEST(notify, min_period) {
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(10, AVS_TIME_S));
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_STRING(0, "Hi!"));
     anjay_sched_run(anjay);
@@ -1013,8 +1011,6 @@ AVS_UNIT_TEST(notify, epmin_less_than_pmax) {
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(10, AVS_TIME_S));
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
-    // We don't send notification yet because epmin didn't expire
 
     ////// EPMIN EXPIRED BUT RESOURCE VALUE REMAINS THE SAME //////
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(10, AVS_TIME_S));
@@ -1027,7 +1023,6 @@ AVS_UNIT_TEST(notify, epmin_less_than_pmax) {
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(10, AVS_TIME_S));
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
 
     ////// EPMIN EXPIRED AND RESOURCE VALUE CHANGED //////
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(10, AVS_TIME_S));
@@ -1075,7 +1070,6 @@ AVS_UNIT_TEST(notify, confirmable) {
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(5, AVS_TIME_S));
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 42));
     const coap_test_msg_t *notify_response =
@@ -1126,7 +1120,6 @@ AVS_UNIT_TEST(notify, extremes) {
     ////// LESS //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_FLOAT(0, 42.43));
     const coap_test_msg_t *notify_response =
@@ -1147,7 +1140,6 @@ AVS_UNIT_TEST(notify, extremes) {
     ////// EVEN LESS //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_FLOAT(0, 14.7));
     anjay_sched_run(anjay);
@@ -1163,7 +1155,6 @@ AVS_UNIT_TEST(notify, extremes) {
     ////// IN BETWEEN //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 695));
     const coap_test_msg_t *notify_response2 =
@@ -1184,7 +1175,6 @@ AVS_UNIT_TEST(notify, extremes) {
     ////// EQUAL - STILL NOT CROSSING //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 69));
     anjay_sched_run(anjay);
@@ -1200,7 +1190,6 @@ AVS_UNIT_TEST(notify, extremes) {
     ////// GREATER //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 1024));
     const coap_test_msg_t *notify_response3 =
@@ -1221,7 +1210,6 @@ AVS_UNIT_TEST(notify, extremes) {
     ////// STILL GREATER //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 999));
     anjay_sched_run(anjay);
@@ -1237,7 +1225,6 @@ AVS_UNIT_TEST(notify, extremes) {
     ////// LESS AGAIN //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_FLOAT(0, -69.75));
     const coap_test_msg_t *notify_response4 =
@@ -1288,7 +1275,6 @@ AVS_UNIT_TEST(notify, greater_only) {
     ////// STILL GREATER //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 9001));
     anjay_sched_run(anjay);
@@ -1304,7 +1290,6 @@ AVS_UNIT_TEST(notify, greater_only) {
     ////// LESS //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 42));
     const coap_test_msg_t *notify_response =
@@ -1325,7 +1310,6 @@ AVS_UNIT_TEST(notify, greater_only) {
     ////// GREATER AGAIN //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 77));
     const coap_test_msg_t *notify_response2 =
@@ -1376,7 +1360,6 @@ AVS_UNIT_TEST(notify, less_only) {
     ////// LESS //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 42));
     const coap_test_msg_t *notify_response =
@@ -1397,7 +1380,6 @@ AVS_UNIT_TEST(notify, less_only) {
     ////// STILL LESS //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 514));
     anjay_sched_run(anjay);
@@ -1413,7 +1395,6 @@ AVS_UNIT_TEST(notify, less_only) {
     ////// GREATER //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 9001));
     const coap_test_msg_t *notify_response2 =
@@ -1434,7 +1415,6 @@ AVS_UNIT_TEST(notify, less_only) {
     ////// LESS AGAIN //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 69));
     const coap_test_msg_t *notify_response3 =
@@ -1484,7 +1464,6 @@ AVS_UNIT_TEST(notify, step) {
     ////// TOO LITTLE INCREASE //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_FLOAT(0, 523.5));
     anjay_sched_run(anjay);
@@ -1500,7 +1479,6 @@ AVS_UNIT_TEST(notify, step) {
     ////// INCREASE BY EXACTLY stp //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 524));
     const coap_test_msg_t *notify_response0 =
@@ -1521,7 +1499,6 @@ AVS_UNIT_TEST(notify, step) {
     ////// INCREASE BY OVER stp //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_FLOAT(0, 540.048));
     const coap_test_msg_t *notify_response1 =
@@ -1542,7 +1519,6 @@ AVS_UNIT_TEST(notify, step) {
     ////// NON-NUMERIC VALUE //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_STRING(0, "trololo"));
     const coap_test_msg_t *notify_response2 =
@@ -1563,7 +1539,6 @@ AVS_UNIT_TEST(notify, step) {
     ////// BACK TO NUMBERS //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 42));
     const coap_test_msg_t *notify_response3 =
@@ -1584,7 +1559,6 @@ AVS_UNIT_TEST(notify, step) {
     ////// TOO LITTLE DECREASE //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_FLOAT(0, 32.001));
     anjay_sched_run(anjay);
@@ -1600,7 +1574,6 @@ AVS_UNIT_TEST(notify, step) {
     ////// DECREASE BY EXACTLY stp //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 31));
     const coap_test_msg_t *notify_response4 =
@@ -1621,7 +1594,6 @@ AVS_UNIT_TEST(notify, step) {
     ////// DECREASE BY MORE THAN stp //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 20));
     const coap_test_msg_t *notify_response5 =
@@ -1642,7 +1614,6 @@ AVS_UNIT_TEST(notify, step) {
     ////// INCREASE BY EXACTLY stp //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 30));
     const coap_test_msg_t *notify_response6 =
@@ -1806,7 +1777,6 @@ AVS_UNIT_TEST(notify, storing_when_inactive) {
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     DM_TEST_EXPECT_READ_NULL_ATTRS(34, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
 
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
 
@@ -1857,7 +1827,6 @@ AVS_UNIT_TEST(notify, storing_when_inactive) {
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     DM_TEST_EXPECT_READ_NULL_ATTRS(34, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
 
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
 
@@ -1922,7 +1891,6 @@ AVS_UNIT_TEST(notify, storing_when_inactive) {
                      CONTENT_FORMAT(PLAINTEXT), PAYLOAD("Rin"));
     avs_unit_mocksock_expect_output(mocksocks[0], notify_response3->content,
                                     notify_response3->length);
-    anjay_sched_run(anjay);
 
     const coap_test_msg_t *notify_response4 =
             COAP_MSG(NON, CONTENT, ID_TOKEN(0x0001, "SuccsTkn"), OBSERVE(2),
@@ -1960,7 +1928,6 @@ AVS_UNIT_TEST(notify, no_storing_when_disabled) {
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     DM_TEST_EXPECT_READ_NULL_ATTRS(34, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
 
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
 
@@ -1993,7 +1960,6 @@ AVS_UNIT_TEST(notify, no_storing_when_disabled) {
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     DM_TEST_EXPECT_READ_NULL_ATTRS(34, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
 
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
 
@@ -2048,7 +2014,6 @@ AVS_UNIT_TEST(notify, storing_on_send_error) {
     // first notification
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
 
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
 
@@ -2076,7 +2041,6 @@ AVS_UNIT_TEST(notify, storing_on_send_error) {
     // second notification
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
 
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
 
@@ -2128,7 +2092,6 @@ AVS_UNIT_TEST(notify, storing_on_send_error) {
                      OBSERVE(3), CONTENT_FORMAT(PLAINTEXT), PAYLOAD("Meiko"));
     avs_unit_mocksock_expect_output(mocksocks[0], notify_response->content,
                                     notify_response->length);
-    anjay_sched_run(anjay);
 
     const coap_test_msg_t *notify_response2 =
             COAP_MSG(NON, CONTENT, ID_TOKEN(MSG_ID_BASE + 3, "SuccsTkn"),
@@ -2147,7 +2110,6 @@ AVS_UNIT_TEST(notify, no_storing_on_send_error) {
     // first notification
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
 
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
 
@@ -2175,7 +2137,6 @@ AVS_UNIT_TEST(notify, no_storing_on_send_error) {
     // second notification
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
 
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
 
@@ -2235,7 +2196,6 @@ static void storing_of_errors_test_impl(bool storing_resource_value) {
     // first notification
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
 
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
 
@@ -2250,7 +2210,6 @@ static void storing_of_errors_test_impl(bool storing_resource_value) {
     // second notification - should not actually do anything
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
 
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
 
@@ -2291,7 +2250,6 @@ AVS_UNIT_TEST(notify, send_error) {
     // first notification
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    anjay_sched_run(anjay);
 
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
 
@@ -2313,7 +2271,6 @@ AVS_UNIT_TEST(notify, send_error) {
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, ANJAY_ID_INVALID, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Meiko"));
     avs_unit_mocksock_output_fail(mocksocks[0], avs_errno(AVS_ECONNRESET));
-    anjay_sched_run(anjay);
 
     _anjay_mocksock_expect_stats_zero(mocksocks[0]);
 #if defined(ANJAY_WITH_LWM2M11) && defined(ANJAY_WITH_BOOTSTRAP)

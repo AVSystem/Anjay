@@ -64,7 +64,10 @@ security_modified_notify(anjay_unlocked_t *anjay,
             last_iid = it->iid;
         }
     }
-    if (security->instance_set_changes.instance_set_changed) {
+    // NOTE: If anjay->update_immediately_on_dm_change is true,
+    // then this will be called from anjay_notify_perform_impl() itself
+    if (!anjay->update_immediately_on_dm_change
+            && security->instance_set_changes.instance_set_changed) {
         _anjay_update_ret(&ret, _anjay_schedule_reload_servers(anjay));
     }
     return ret;
@@ -74,7 +77,11 @@ static int server_modified_notify(anjay_unlocked_t *anjay,
                                   anjay_notify_queue_object_entry_t *server) {
     int ret = 0;
     if (server->instance_set_changes.instance_set_changed) {
-        _anjay_update_ret(&ret, _anjay_schedule_reload_servers(anjay));
+        // NOTE: If anjay->update_immediately_on_dm_change is true,
+        // then this will be called from anjay_notify_perform_impl() itself
+        if (!anjay->update_immediately_on_dm_change) {
+            _anjay_update_ret(&ret, _anjay_schedule_reload_servers(anjay));
+        }
 #ifdef ANJAY_WITH_SEND
         // servers may have been removed from data model
         // if so, abort their Send requests as well
@@ -125,20 +132,29 @@ static int anjay_notify_perform_impl(anjay_unlocked_t *anjay,
     if (!queue_ptr || !*queue_ptr) {
         return 0;
     }
+    bool instances_modified = false;
     int ret = 0;
     _anjay_update_ret(&ret, _anjay_sync_access_control(anjay, origin_ssid,
                                                        queue_ptr));
     AVS_LIST(anjay_notify_queue_object_entry_t) it;
     AVS_LIST_FOREACH(it, *queue_ptr) {
-        if (it->oid > ANJAY_DM_OID_SERVER) {
-            break;
-        } else if (it->oid == ANJAY_DM_OID_SECURITY) {
+        if (it->instance_set_changes.instance_set_changed) {
+            instances_modified = true;
+        }
+        if (it->oid == ANJAY_DM_OID_SECURITY) {
             _anjay_update_ret(&ret, security_modified_notify(anjay, it));
         } else if (server_notify && it->oid == ANJAY_DM_OID_SERVER) {
             _anjay_update_ret(&ret, server_modified_notify(anjay, it));
         }
     }
-    _anjay_update_ret(&ret, observe_notify(anjay, origin_ssid, *queue_ptr));
+    if (instances_modified && anjay->update_immediately_on_dm_change) {
+        _anjay_update_ret(&ret, _anjay_schedule_reload_servers(anjay));
+    }
+    _anjay_update_ret(&ret, observe_notify(anjay,
+                                           anjay->enable_self_notify
+                                                   ? ANJAY_SSID_BOOTSTRAP
+                                                   : origin_ssid,
+                                           *queue_ptr));
 #ifdef ANJAY_WITH_ATTR_STORAGE
     _anjay_update_ret(&ret, _anjay_attr_storage_notify(anjay, *queue_ptr));
 #endif // ANJAY_WITH_ATTR_STORAGE

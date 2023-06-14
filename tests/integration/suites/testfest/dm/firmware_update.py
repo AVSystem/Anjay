@@ -21,7 +21,7 @@ from .utils import DataModel, ValueValidator as VV
 
 class FirmwareUpdate:
     class Test(DataModel.Test):
-        def collect_values(self, path: Lwm2mPath, final_value, max_iterations=100, step_time=0.1):
+        def collect_values(self, path: Lwm2mPath, final_value, max_iterations=300, step_time=0.1):
             observed_values = []
             orig_timeout = self.serv.get_timeout()
             try:

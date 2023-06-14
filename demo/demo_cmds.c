@@ -14,6 +14,10 @@
 #    include "firmware_update.h"
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
 
+#ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+#    include "advanced_firmware_update.h"
+#endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+
 #include <ctype.h>
 #include <inttypes.h>
 #include <string.h>
@@ -39,6 +43,22 @@ static int parse_ssid(const char *text, anjay_ssid_t *out_ssid) {
     return 0;
 }
 
+static void cmd_send_register(anjay_demo_t *demo, const char *args_string) {
+    anjay_ssid_t ssid = ANJAY_SSID_ANY;
+    if (*args_string && parse_ssid(args_string, &ssid)) {
+        demo_log(ERROR, "invalid Short Server ID: %s", args_string);
+        return;
+    }
+
+    if (anjay_schedule_register(demo->anjay, ssid)) {
+        demo_log(ERROR, "could not schedule registration");
+    } else if (ssid == ANJAY_SSID_ANY) {
+        demo_log(INFO, "registration scheduled for all servers");
+    } else {
+        demo_log(INFO, "registration scheduled for server %" PRIu16, ssid);
+    }
+}
+
 static void cmd_send_update(anjay_demo_t *demo, const char *args_string) {
     anjay_ssid_t ssid = ANJAY_SSID_ANY;
     if (*args_string && parse_ssid(args_string, &ssid)) {
@@ -53,6 +73,19 @@ static void cmd_send_update(anjay_demo_t *demo, const char *args_string) {
     } else {
         demo_log(INFO, "registration update scheduled for server %" PRIu16,
                  ssid);
+    }
+}
+
+static void cmd_reconnect_server(anjay_demo_t *demo, const char *args_string) {
+    anjay_ssid_t ssid = ANJAY_SSID_ANY;
+    if (*args_string && parse_ssid(args_string, &ssid)) {
+        demo_log(ERROR, "invalid Short Server ID: %s", args_string);
+        return;
+    }
+
+    if (anjay_server_schedule_reconnect(demo->anjay, ssid)) {
+        demo_log(ERROR, "could not enable server with SSID %" PRIu16, ssid);
+        return;
     }
 }
 
@@ -113,6 +146,49 @@ static void cmd_set_fw_package_path(anjay_demo_t *demo,
     firmware_update_set_package_path(&demo->fw_update, path);
 }
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
+
+#ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+static void cmd_set_afu_package_path(anjay_demo_t *demo,
+                                     const char *args_string) {
+    const char *path = args_string;
+    while (isspace(*path)) {
+        ++path;
+    }
+
+    /* This allows setting package path only for first (APP) image */
+    advanced_fw_update_logic_t *fw_logic_app =
+            demo->advanced_fw_update_logic_table;
+    assert(fw_logic_app->iid == FW_UPDATE_IID_APP);
+    advanced_firmware_update_set_package_path(fw_logic_app, path);
+}
+
+static void cmd_get_afu_deadline(anjay_demo_t *demo, const char *args_string) {
+    (void) args_string;
+    int64_t update_deadline_timestamp = 0;
+    avs_time_real_to_scalar(&update_deadline_timestamp, AVS_TIME_S,
+                            anjay_advanced_fw_update_get_deadline(
+                                    demo->anjay, FW_UPDATE_IID_APP));
+    printf("AFU_APP_UPDATE_DEADLINE==%" PRId64 "\n", update_deadline_timestamp);
+}
+
+static void cmd_set_afu_result(anjay_demo_t *demo, const char *args_string) {
+    int result;
+    if (sscanf(args_string, " %d", &result) != 1) {
+        demo_log(ERROR, "Advanced Firmware Update result not specified");
+        return;
+    }
+    if (anjay_advanced_fw_update_set_state_and_result(
+                demo->anjay,
+                FW_UPDATE_IID_APP,
+                (anjay_advanced_fw_update_state_t)
+                        ANJAY_ADVANCED_FW_UPDATE_STATE_IDLE,
+                (anjay_advanced_fw_update_result_t) result)) {
+        demo_log(ERROR,
+                 "Advanced Firmware Update result set for APP image at runtime "
+                 "failed.");
+    }
+}
+#endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
 
 static void cmd_open_location_csv(anjay_demo_t *demo, const char *args_string) {
     const anjay_dm_object_def_t **location_obj =
@@ -1277,8 +1353,12 @@ struct cmd_handler_def {
     { (name), sizeof(name) - 1, (func), (args), (help) }
 static const struct cmd_handler_def COMMAND_HANDLERS[] = {
     // clang-format off
+    CMD_HANDLER("send-register", "[ssid=0]",
+                cmd_send_register, "Sends Register messages to LwM2M servers"),
     CMD_HANDLER("send-update", "[ssid=0]",
                 cmd_send_update, "Sends Update messages to LwM2M servers"),
+    CMD_HANDLER("reconnect-server", "ssid", cmd_reconnect_server,
+                "Reconnects a server with given SSID"),
     CMD_HANDLER("reconnect", "[transports...]", cmd_reconnect,
                 "Reconnects to LwM2M servers and sends Update messages"),
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
@@ -1286,6 +1366,17 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 "Sets the path where the firmware package will be saved when "
                 "Write /5/0/0 is performed"),
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+    CMD_HANDLER("set-afu-package-path", "", cmd_set_afu_package_path,
+                "Sets the path where the firmware package will be saved when "
+                "Write /" AVS_QUOTE_MACRO(ANJAY_ADVANCED_FW_UPDATE_OID) "/0/0 is performed. Only applied to instance 0."),
+    CMD_HANDLER("get-afu-deadline", "", cmd_get_afu_deadline,
+                "Gets the Advanced Firmware Update deadline (only for main APP "
+                "image)"),
+    CMD_HANDLER("set-afu-result", "RESULT", cmd_set_afu_result,
+                "Attempts to set Advanced Firmware Update Result of instance "
+                "/" AVS_QUOTE_MACRO(ANJAY_ADVANCED_FW_UPDATE_OID) "/0 (APP) at runtime"),
+#endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
     CMD_HANDLER("open-location-csv", "filename frequency=1",
                 cmd_open_location_csv,
                 "Opens a CSV file and starts using it for location information"),
@@ -1525,17 +1616,26 @@ static void handle_command(avs_sched_t *sched, const void *invocation_) {
     const demo_command_invocation_t *invocation =
             (const demo_command_invocation_t *) invocation_;
     if (invocation->cmd[0]) {
-        demo_log(INFO, "command: %s", invocation->cmd);
+        const struct cmd_handler_def *cmd = NULL;
 
         for (size_t idx = 0; idx < AVS_ARRAY_SIZE(COMMAND_HANDLERS); ++idx) {
-            const struct cmd_handler_def *cmd = &COMMAND_HANDLERS[idx];
+            const struct cmd_handler_def *candidate_cmd =
+                    &COMMAND_HANDLERS[idx];
 
-            if (strncmp(invocation->cmd, cmd->cmd_name, cmd->cmd_name_length)
+            if (strncmp(invocation->cmd, candidate_cmd->cmd_name,
+                        candidate_cmd->cmd_name_length)
                     == 0) {
-                cmd->handler(invocation->demo,
-                             invocation->cmd + cmd->cmd_name_length);
+                cmd = candidate_cmd;
                 break;
             }
+        }
+
+        if (cmd) {
+            demo_log(INFO, "command: %s", invocation->cmd);
+            cmd->handler(invocation->demo,
+                         invocation->cmd + cmd->cmd_name_length);
+        } else {
+            demo_log(ERROR, "unrecognized command: %s", invocation->cmd);
         }
     }
 

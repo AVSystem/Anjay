@@ -8,30 +8,17 @@
 # See the attached LICENSE file for details.
 
 
-COMMAND="@CMAKE_CTEST_COMMAND@ -E sensitive";
+COMMAND="@CMAKE_CTEST_COMMAND@";
 RERUNS=@TEST_RERUNS@;
 
-if [ "$1" == "-s" ]; then
-    COMMAND="@CMAKE_CTEST_COMMAND@ -R sensitive";
-    RERUNS=@TEST_SENSITIVE_RERUNS@;
-    if [ $RERUNS == 0 ]; then
-        $COMMAND --output-on-failure && exit 0;
-    else
-        $COMMAND && exit 0;
-    fi
-elif [ "$1" == "-h" ]; then
+if [ "$1" == "-h" ]; then
     COMMAND="@CMAKE_CTEST_COMMAND@ -R hsm";
-    if [ $RERUNS == 0 ]; then
-        $COMMAND --output-on-failure && exit 0;
-    else
-        $COMMAND && exit 0;
-    fi
+fi
+
+if [ $RERUNS == 0 ]; then
+    $COMMAND -j@NPROC@ --output-on-failure && exit 0;
 else
-    if [ $RERUNS == 0 ]; then
-        $COMMAND -j@NPROC@ --output-on-failure && exit 0;
-    else
-        $COMMAND -j@NPROC@ && exit 0;
-    fi
+    $COMMAND -j@NPROC@ && exit 0;
 fi
 
 if [ $RERUNS -gt 0 ]; then

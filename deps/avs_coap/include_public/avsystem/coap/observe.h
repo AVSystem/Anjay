@@ -195,6 +195,38 @@ avs_coap_observe_start(avs_coap_ctx_t *ctx,
                        void *handler_arg);
 
 /**
+ * Cancels an observation previously started using @ref avs_coap_observe_start .
+ *
+ * This function is called automatically by avs_coap when an observe
+ * cancellation request is received over the network, or when an attempt to
+ * deliver a confirmable notification times out. This function shall be called
+ * by the user only when an observation shall be cancelled manually.
+ *
+ * <strong>IMPORTANT:</strong> The remote endpoint is not notified of the
+ * cancellation in any way. Cancelling observations programmatically is likely
+ * to violate the RFC 7641 requirements, unless observe state is synchronized
+ * through a higher-layer protocol.
+ *
+ * <strong>NOTE:</strong> If notification exchanges started using
+ * @ref avs_coap_notify_async or @ref avs_coap_notify_streaming are still in
+ * progress, they will <strong>NOT</strong> be cancelled automatically.
+ *
+ * <strong>NOTE:</strong> This function will call the <c>cancel_handler</c>
+ * originally passed to @ref avs_coap_observe_start .
+ *
+ * @param ctx CoAP context to operate on.
+ *
+ * @param id  Unique observation ID (request token).
+ *
+ * @returns
+ *  - <c>AVS_OK</c> for success
+ *  - <c>avs_errno(AVS_EINVAL)</c> if an invalid @p ctx has been passed, or
+ *    @p id does not refer to any know observation
+ */
+avs_error_t avs_coap_observe_cancel(avs_coap_ctx_t *ctx,
+                                    avs_coap_observe_id_t id);
+
+/**
  * Sends a CoAP Notification in an asynchronous mode. This function returns
  * immediately.
  *

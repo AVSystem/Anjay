@@ -11,7 +11,7 @@ RUN apt-get update && \
     apt-get install -y python3-pip git build-essential libmbedtls-dev \
         libssl-dev zlib1g-dev python3 libpython3-dev wget python3-cryptography \
         python3-requests python3-packaging valgrind curl cmake tshark
-RUN pip3 install sphinx sphinx-rtd-theme
+RUN pip3 install sphinx sphinx-rtd-theme linuxdoc
 # NOTE: Newer versions don't install cleanly on Python 3.6
 RUN pip3 install aiocoap==0.4b3 cbor2==4.1.2
 # Solve issues with EPERM when running dumpcap

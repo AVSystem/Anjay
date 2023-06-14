@@ -282,7 +282,7 @@ get_coap_socket_transport(anjay_download_ctx_t *ctx) {
 }
 
 #    ifdef ANJAY_TEST
-#        include "tests/core/downloader/downloader_mock.h"
+#        include "tests/core/socket_mock.h"
 #    endif // ANJAY_TEST
 
 static void start_download_job(avs_sched_t *sched, const void *id_ptr) {

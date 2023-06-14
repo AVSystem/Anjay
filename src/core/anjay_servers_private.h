@@ -17,6 +17,7 @@
 
 #include <avsystem/commons/avs_persistence.h>
 #include <avsystem/commons/avs_time.h>
+#include <avsystem/commons/avs_utils.h>
 
 #include <avsystem/coap/ctx.h>
 
@@ -80,16 +81,10 @@ _anjay_conn_session_tokens_equal(anjay_conn_session_token_t left,
     return avs_time_monotonic_equal(left.value, right.value);
 }
 
-// copied from deps/avs_commons/http/src/headers.h
-// see description there for rationale; TODO: move this to public Commons API?
-// note that this _includes_ the terminating null byte
-#define ANJAY_UINT_STR_BUF_SIZE(type) ((12 * sizeof(type)) / 5 + 2)
-
 // 6.2.2 Object Version format:
 // "The Object Version of an Object is composed of 2 digits separated by a dot"
 // However, we're a bit lenient to support proper numbers and not just digits.
-#define ANJAY_DM_OBJECT_VERSION_BUF_LENGTH \
-    (2 * ANJAY_UINT_STR_BUF_SIZE(unsigned))
+#define ANJAY_DM_OBJECT_VERSION_BUF_LENGTH (2 * AVS_UINT_STR_BUF_SIZE(unsigned))
 
 typedef struct {
     anjay_oid_t oid;
@@ -463,12 +458,19 @@ void _anjay_server_on_fatal_coap_error(anjay_connection_ref_t conn_ref,
  */
 const anjay_url_t *_anjay_connection_uri(anjay_connection_ref_t ref);
 
+#ifdef ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
+#    define _anjay_connection_schedule_queue_mode_close(...) ((void) 0)
+#else  // ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
 /**
- * This function is called from _anjay_release_connection() - if the
- * connection is in queue mode, it schedules closing of the socket (suspending
- * the connection) after MAX_TRANSMIT_WAIT passes.
+ * This function schedules closing of the socket (suspending the connection)
+ * after MAX_TRANSMIT_WAIT passes. It is supposed to be called after finishing
+ * each interaction with a server - generally after each call to
+ * avs_coap_streaming_handle_incoming_packet(),
+ * avs_coap_client_send_async_request(), avs_coap_notify_async(), as well as
+ * after (re)connecting a socket even if no outgoing message is being sent.
  */
 void _anjay_connection_schedule_queue_mode_close(anjay_connection_ref_t ref);
+#endif // ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
 
 /**
  * Returns the socket associated with a given connection, if it exists and is in
@@ -503,10 +505,9 @@ void _anjay_connection_mark_stable(anjay_connection_ref_t ref);
 void _anjay_connection_bring_online(anjay_connection_ref_t ref);
 
 /**
- * Suspends the specified connection (or all connections in the server if
- * conn_ref.conn_type == ANJAY_CONNECTION_UNSET). Suspending the connection
- * means closing the socket, but not cleaning it up. The connection (and server)
- * is then still considered active, but not online.
+ * Suspends the specified connection. Suspending the connection means closing
+ * the socket, but not cleaning it up. The connection (and server) is then still
+ * considered active, but not online.
  */
 void _anjay_connection_suspend(anjay_connection_ref_t conn_ref);
 

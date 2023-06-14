@@ -184,11 +184,15 @@ typedef struct {
      */
     anjay_server_connection_nontransient_state_t nontransient_state;
 
+#ifndef ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
     /**
-     * Handle to scheduled queue_mode_close_socket() scheduler job. Scheduled
-     * by _anjay_connection_schedule_queue_mode_close().
+     * Handle to scheduled queue_mode_close_socket() scheduler job. Generally
+     * scheduled by _anjay_connection_schedule_queue_mode_close(), although it
+     * can also be rescheduled by itself (queue_mode_close_socket() function) to
+     * defer the action if CoAP exchanges are in progress.
      */
     avs_sched_handle_t queue_mode_close_socket_clb;
+#endif // ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
 } anjay_server_connection_t;
 
 typedef struct {

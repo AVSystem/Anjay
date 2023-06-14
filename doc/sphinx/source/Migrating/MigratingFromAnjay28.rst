@@ -305,3 +305,46 @@ This new API is used by the Security object implementation's features related
 to the ``anjay_security_object_install_with_hsm()``. If you don't use these
 features to store private keys in the hardware security engine, it is OK to
 provide a dummy implementation such as ``return avs_errno(AVS_ENOTSUP);``.
+
+Refactor of time handling in avs_sched and avs_coap
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+It is now enforced more strictly that time-based events shall happen when the
+clock reaches *at least* the expected value. Previously, the tasks scheduled via
+avs_sched were executed only when the clock reached a value *later* than the
+scheduled job execution time.
+
+This change will have no impact on your code if your platform has enough clock
+resolution so that two subsequent calls to ``avs_time_real_now()`` or
+``avs_time_monotonic_now()`` will *always* return different values. As a rule of
+thumb, this should be the case if your clock has a resolution no worse than
+about 1-2 orders of magnitude smaller than the CPU clock. For example, for a
+100 MHz CPU, a clock resolution of around 100-1000 ns (i.e., 1-10 MHz) should be
+sufficient, depending on the specific architecture.
+
+If your clock has a lower resolution, you may observe the following changes:
+
+* ``anjay_sched_run()`` is now properly guaranteed to execute at least one job
+  if the time reported by ``anjay_sched_time_to_next()`` passed. Previously this
+  could require waiting for another change of the numerical value of the clock,
+  which could cause undesirable active waiting in the event loop. This is the
+  motivating factor in introducing these changes.
+* Jobs scheduled using ``AVS_SCHED_NOW()`` during an execution of
+  ``anjay_sched_run()`` before the numerical value of the clock changes, *will*
+  be executed during the same run. The previous behavior more strictly enforced
+  the policy to not execute such jobs in the same run.
+
+If you are scheduling custom jobs through the avs_sched module, you may want or
+need to modify their logic accordingly to accommodate for these changes. In most
+typical use cases, no changes are expected to be necessary.
+
+Removal of avs_unit_memstream
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``avs_unit_memstream`` was a specific implementation of ``avs_stream_t`` within
+the avs_unit module that implemented a simple FIFO stream in a fixed-size memory
+area.
+
+This feature has been removed. Instead, you can use an
+``avs_stream_inbuf``/``avs_stream_outbuf`` pair, or an ``avs_stream_membuf``
+object.

@@ -39,13 +39,14 @@ static int deactivate_server(anjay_server_info_t *server) {
     assert(server);
 #ifndef ANJAY_WITHOUT_DEREGISTER
     if (server->ssid != ANJAY_SSID_BOOTSTRAP
-            && !_anjay_bootstrap_in_progress(server->anjay)
-            && _anjay_server_active(server)
-            && !_anjay_server_registration_expired(server)) {
-        // Return value intentionally ignored.
-        // There isn't much we can do in case it fails and De-Register is
-        // optional anyway. _anjay_serve_deregister logs the error cause.
-        _anjay_server_deregister(server);
+            && !_anjay_bootstrap_in_progress(server->anjay)) {
+        if (_anjay_server_active(server)
+                && !_anjay_server_registration_expired(server)) {
+            // Return value intentionally ignored.
+            // There isn't much we can do in case it fails and De-Register is
+            // optional anyway. _anjay_serve_deregister logs the error cause.
+            _anjay_server_deregister(server);
+        }
     }
 #endif // ANJAY_WITHOUT_DEREGISTER
     _anjay_server_clean_active_data(server);
@@ -239,6 +240,7 @@ void _anjay_server_on_server_communication_timeout(
                        server->anjay, server->ssid, AVS_TIME_DURATION_ZERO)) {
         server->refresh_failed = true;
     } else {
+        // defined(ANJAY_WITHOUT_TELIT_STABLE_CONNECTION_TIMEOUT_REG_FAILURE)
         _anjay_server_on_server_communication_error(server,
                                                     avs_errno(AVS_EBADF));
     }
@@ -274,7 +276,8 @@ void _anjay_server_on_refreshed(anjay_server_info_t *server,
             _anjay_get_server_connection(primary_ref);
     if (state == ANJAY_SERVER_CONNECTION_OFFLINE) {
         if (avs_is_err(err)) {
-            anjay_log(TRACE, _("could not initialize sockets for SSID ") "%u",
+            anjay_log(TRACE,
+                      _("could not initialize sockets for SSID ") "%" PRIu16,
                       server->ssid);
             _anjay_server_on_server_communication_error(server, err);
         } else if (_anjay_socket_transport_supported(server->anjay,
@@ -283,12 +286,12 @@ void _anjay_server_on_refreshed(anjay_server_info_t *server,
                               server->anjay, primary_conn->transport)) {
             assert(server->registration_info.queue_mode);
             anjay_log(TRACE,
-                      _("Server with SSID ") "%u" _(
+                      _("Server with SSID ") "%" PRIu16 _(
                               " is suspended due to queue mode"),
                       server->ssid);
             _anjay_server_reschedule_update_job(server);
         } else {
-            anjay_log(TRACE, _("Server with SSID ") "%u" _(" is offline"),
+            anjay_log(TRACE, _("Server with SSID ") "%" PRIu16 _(" is offline"),
                       server->ssid);
             if (!avs_time_real_valid(server->reactivate_time)) {
                 // make the server reactivate when it comes back online
@@ -556,7 +559,7 @@ void _anjay_disable_server_with_timeout_from_dm_sync(
     anjay_iid_t server_iid;
     if (_anjay_find_server_iid(server->anjay, server->ssid, &server_iid)) {
         anjay_log(DEBUG,
-                  _("no Server Object Instance with SSID = ") "%u" _(
+                  _("no Server Object Instance with SSID = ") "%" PRIu16 _(
                           ", disabling skipped"),
                   server->ssid);
     } else {
@@ -565,7 +568,15 @@ void _anjay_disable_server_with_timeout_from_dm_sync(
                                                        server_iid);
         server->reactivate_time =
                 avs_time_real_add(avs_time_real_now(), disable_timeout);
-        deactivate_server(server);
+        // defined(ANJAY_WITH_TELIT_CUSTOM_FEATURES)
+        server->disabled_explicitly = true;
+        if (deactivate_server(server)) {
+            anjay_log(ERROR, _("unable to deactivate server: ") "%" PRIu16,
+                      server->ssid);
+        } else {
+            anjay_log(INFO, _("server ") "%" PRIu16 _(" deactivated"),
+                      server->ssid);
+        }
     }
 }
 
@@ -579,7 +590,7 @@ static int disable_server_impl(anjay_unlocked_t *anjay,
            || disable_action
                       == ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_EXPLICIT_TIMEOUT);
     if (ssid == ANJAY_SSID_ANY) {
-        anjay_log(WARNING, _("invalid SSID: ") "%u", ssid);
+        anjay_log(WARNING, _("invalid SSID: ") "%" PRIu16, ssid);
         return -1;
     }
 
@@ -629,6 +640,8 @@ int anjay_disable_server(anjay_t *anjay_locked, anjay_ssid_t ssid) {
 
 void _anjay_disable_server_with_explicit_timeout_sync(
         anjay_server_info_t *server) {
+    // defined(ANJAY_WITH_TELIT_CUSTOM_FEATURES)
+    server->disabled_explicitly = true;
     if (deactivate_server(server)) {
         anjay_log(ERROR, _("unable to deactivate server: ") "%" PRIu16,
                   server->ssid);
@@ -667,7 +680,7 @@ int anjay_disable_server_with_timeout(anjay_t *anjay_locked,
 
 int _anjay_enable_server_unlocked(anjay_unlocked_t *anjay, anjay_ssid_t ssid) {
     if (ssid == ANJAY_SSID_ANY) {
-        anjay_log(WARNING, _("invalid SSID: ") "%u", ssid);
+        anjay_log(WARNING, _("invalid SSID: ") "%" PRIu16, ssid);
         return -1;
     }
 
@@ -675,7 +688,7 @@ int _anjay_enable_server_unlocked(anjay_unlocked_t *anjay, anjay_ssid_t ssid) {
             _anjay_servers_find_ptr(&anjay->servers, ssid);
 
     if (!server_ptr || !*server_ptr || _anjay_server_active(*server_ptr)) {
-        anjay_log(TRACE, _("not an inactive server: SSID = ") "%u", ssid);
+        anjay_log(TRACE, _("not an inactive server: SSID = ") "%" PRIu16, ssid);
         return -1;
     }
 
@@ -691,6 +704,7 @@ int _anjay_enable_server_unlocked(anjay_unlocked_t *anjay, anjay_ssid_t ssid) {
     }
 
     (*server_ptr)->reactivate_time = avs_time_real_now();
+    // defined(ANJAY_WITH_CORE_PERSISTENCE)
     return _anjay_server_sched_activate(*server_ptr);
 }
 
@@ -698,6 +712,35 @@ int anjay_enable_server(anjay_t *anjay_locked, anjay_ssid_t ssid) {
     int result = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     result = _anjay_enable_server_unlocked(anjay, ssid);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
+}
+
+int anjay_server_schedule_reconnect(anjay_t *anjay_locked, anjay_ssid_t ssid) {
+    if (ssid == ANJAY_SSID_ANY) {
+        anjay_log(WARNING, _("invalid SSID: ") "%" PRIu16, ssid);
+        return -1;
+    }
+
+    int result = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    AVS_LIST(anjay_server_info_t) *server_ptr =
+            _anjay_servers_find_ptr(&anjay->servers, ssid);
+
+    if (!server_ptr || !*server_ptr || !_anjay_server_active(*server_ptr)) {
+        anjay_log(TRACE, _("not an active server: SSID = ") "%" PRIu16, ssid);
+    } else {
+        anjay_connection_type_t conn_type;
+        ANJAY_CONNECTION_TYPE_FOREACH(conn_type) {
+            const anjay_connection_ref_t ref = {
+                .server = *server_ptr,
+                .conn_type = conn_type
+            };
+            _anjay_connection_suspend(ref);
+        }
+        result = _anjay_schedule_refresh_server(*server_ptr,
+                                                AVS_TIME_DURATION_ZERO);
+    }
     ANJAY_MUTEX_UNLOCK(anjay_locked);
     return result;
 }

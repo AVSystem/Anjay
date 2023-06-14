@@ -119,12 +119,12 @@ void anjay_dm_emit_res(anjay_dm_resource_list_ctx_t *ctx,
                        anjay_dm_resource_kind_t kind,
                        anjay_dm_resource_presence_t presence);
 
-/** Type used to return some content in response to a RPC. */
+/** Type used to return some content in response to a request from server. */
 typedef struct anjay_output_ctx_struct anjay_output_ctx_t;
 
-/** Type used to return a chunked blob of data in response to a RPC. Useful in
- * cases where the application needs to send more data than it can fit in
- * the memory. */
+/** Type used to return a chunked blob of data in response to a request from
+ * server. Useful in cases where the application needs to send more data than it
+ * can fit in the memory. */
 typedef struct anjay_ret_bytes_ctx_struct anjay_ret_bytes_ctx_t;
 
 /**
@@ -132,7 +132,7 @@ typedef struct anjay_ret_bytes_ctx_struct anjay_ret_bytes_ctx_t;
  * in conjunction with @ref anjay_ret_bytes_append to return a large blob of
  * data in multiple chunks.
  *
- * Example: file content in an RPC response.
+ * Example: file content in the response.
  *
  * @code
  * FILE *file;
@@ -271,7 +271,7 @@ static inline int anjay_ret_u32(anjay_output_ctx_t *ctx, uint32_t value) {
 }
 #endif // ANJAY_WITH_LWM2M11
 
-/*
+/**
  * Returns a 64-bit floating-point value from the data model handler.
  *
  * Note: the @p value will be sent as a 32-bit floating-point value if it is
@@ -409,7 +409,7 @@ int anjay_ret_psk_key_info(anjay_output_ctx_t *ctx,
                            avs_crypto_psk_key_info_t psk_key_info);
 #endif // ANJAY_WITH_SECURITY_STRUCTURED
 
-/** Type used to retrieve RPC content. */
+/** Type used to retrieve request content. */
 typedef struct anjay_input_ctx_struct anjay_input_ctx_t;
 
 #define ANJAY_EXECUTE_GET_ARG_END 1
@@ -482,7 +482,7 @@ int anjay_execute_get_arg_value(anjay_execute_ctx_t *ctx,
                                 size_t buf_size);
 
 /**
- * Reads a chunk of data blob from the RPC request message.
+ * Reads a chunk of data blob from the request message.
  *
  * Consecutive calls to this function will return successive chunks of
  * the data blob. Reaching end of the data is signaled by setting the
@@ -526,10 +526,10 @@ int anjay_get_bytes(anjay_input_ctx_t *ctx,
 
 #define ANJAY_BUFFER_TOO_SHORT 1
 /**
- * Reads a null-terminated string from the RPC request content. On success or
- * even when @ref ANJAY_BUFFER_TOO_SHORT is returned, the content inside
- * @p out_buf is always null-terminated. On failure, the contents of @p out_buf
- * are undefined.
+ * Reads a null-terminated string from the request content. On success or even
+ * when @ref ANJAY_BUFFER_TOO_SHORT is returned, the content inside @p out_buf
+ * is always null-terminated. On failure, the contents of @p out_buf are
+ * undefined.
  *
  * When the input buffer is not big enough to contain whole message content +
  * terminating nullbyte, ANJAY_BUFFER_TOO_SHORT is returned, after which further
@@ -547,7 +547,7 @@ int anjay_get_bytes(anjay_input_ctx_t *ctx,
 int anjay_get_string(anjay_input_ctx_t *ctx, char *out_buf, size_t buf_size);
 
 /**
- * Reads an integer as a 32-bit signed value from the RPC request content.
+ * Reads an integer as a 32-bit signed value from the request content.
  *
  * @param      ctx Input context to operate on.
  * @param[out] out Returned value. If the call is not successful, it is
@@ -558,7 +558,7 @@ int anjay_get_string(anjay_input_ctx_t *ctx, char *out_buf, size_t buf_size);
 int anjay_get_i32(anjay_input_ctx_t *ctx, int32_t *out);
 
 /**
- * Reads an integer as a 64-bit signed value from the RPC request content.
+ * Reads an integer as a 64-bit signed value from the request content.
  *
  * @param      ctx Input context to operate on.
  * @param[out] out Returned value. If the call is not successful, it is
@@ -570,7 +570,7 @@ int anjay_get_i64(anjay_input_ctx_t *ctx, int64_t *out);
 
 #ifdef ANJAY_WITH_LWM2M11
 /**
- * Reads an unsigned integer as a 32-bit unsigned value from the RPC request
+ * Reads an unsigned integer as a 32-bit unsigned value from the request
  * content.
  *
  * @param      ctx Input context to operate on.
@@ -582,7 +582,7 @@ int anjay_get_i64(anjay_input_ctx_t *ctx, int64_t *out);
 int anjay_get_u32(anjay_input_ctx_t *ctx, uint32_t *out);
 
 /**
- * Reads an unsigned integer as a 64-bit unsigned value from the RPC request
+ * Reads an unsigned integer as a 64-bit unsigned value from the request
  * content.
  *
  * @param      ctx Input context to operate on.
@@ -595,7 +595,7 @@ int anjay_get_u64(anjay_input_ctx_t *ctx, uint64_t *out);
 #endif // ANJAY_WITH_LWM2M11
 
 /**
- * Reads a floating-point value as a float from the RPC request content.
+ * Reads a floating-point value as a float from the request content.
  *
  * @param      ctx Input context to operate on.
  * @param[out] out Returned value. If the call is not successful, it is
@@ -606,7 +606,7 @@ int anjay_get_u64(anjay_input_ctx_t *ctx, uint64_t *out);
 int anjay_get_float(anjay_input_ctx_t *ctx, float *out);
 
 /**
- * Reads a floating-point value as a double from the RPC request content.
+ * Reads a floating-point value as a double from the request content.
  *
  * @param      ctx Input context to operate on.
  * @param[out] out Returned value. If the call is not successful, it is
@@ -617,7 +617,7 @@ int anjay_get_float(anjay_input_ctx_t *ctx, float *out);
 int anjay_get_double(anjay_input_ctx_t *ctx, double *out);
 
 /**
- * Reads a boolean value from the RPC request content.
+ * Reads a boolean value from the request content.
  *
  * @param      ctx Input context to operate on.
  * @param[out] out Returned value. If the call is not successful, it is
@@ -628,8 +628,8 @@ int anjay_get_double(anjay_input_ctx_t *ctx, double *out);
 int anjay_get_bool(anjay_input_ctx_t *ctx, bool *out);
 
 /**
- * Reads an object link (Object ID/Object Instance ID pair) from the RPC
- * request content.
+ * Reads an object link (Object ID/Object Instance ID pair) from the request
+ * content.
  *
  * @param      ctx     Input context to operate on.
  * @param[out] out_oid Object ID part of the returned value.

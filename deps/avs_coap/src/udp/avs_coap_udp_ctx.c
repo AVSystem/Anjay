@@ -1353,7 +1353,7 @@ static avs_error_t handle_empty(avs_coap_udp_ctx_t *ctx,
             avs_coap_observe_id_t observe_id = {
                 .token = *observe_token
             };
-            _avs_coap_observe_cancel((avs_coap_ctx_t *) ctx, &observe_id);
+            avs_coap_observe_cancel((avs_coap_ctx_t *) ctx, observe_id);
         }
 #    endif // WITH_AVS_COAP_OBSERVE
 

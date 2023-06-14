@@ -8,7 +8,7 @@
 cmake_minimum_required(VERSION 3.6.0)
 
 project(anjay C)
-set(ANJAY_VERSION "3.3.1" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "3.4.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -271,6 +271,7 @@ option(WITHOUT_IP_STICKINESS "Disable support for IP stickiness" OFF)
 cmake_dependent_option(WITH_SENML_JSON "Enable support for SenML JSON content format" ON WITH_LWM2M11 OFF)
 cmake_dependent_option(WITH_CBOR "Enable support for CBOR and SenML CBOR content formats" ON WITH_LWM2M11 OFF)
 cmake_dependent_option(WITH_SEND "Enable support for LwM2M 1.1 Send operation" ON "WITH_CBOR OR WITH_SENML_JSON" OFF)
+option(WITHOUT_QUEUE_MODE_AUTOCLOSE "Disable automatic closing of server connection sockets after MAX_TRANSMIT_WAIT of inactivity" OFF)
 
 cmake_dependent_option(WITH_OBSERVATION_STATUS "Enable support for anjay_resource_observation_status() API" ON "WITH_OBSERVE" OFF)
 cmake_dependent_option(WITH_COAP_DOWNLOAD "Enable support for CoAP(S) downloads" ON WITH_DOWNLOADER OFF)
@@ -330,11 +331,13 @@ cmake_dependent_option(WITHOUT_MODULE_fw_update_PUSH_MODE
                        "Disable support for PUSH mode Firmware Update"
                        OFF "WITH_MODULE_fw_update;WITH_DOWNLOADER" OFF)
 cmake_dependent_option(WITH_MODULE_factory_provisioning "Factory provisioning module" ON "WITH_BOOTSTRAP;WITH_CBOR" OFF)
+option(WITH_MODULE_advanced_fw_update "Advanced Firmware Update object module" OFF)
 
 ################# CODE #########################################################
 
 add_library(anjay
             include_public/anjay/access_control.h
+            include_public/anjay/advanced_fw_update.h
             include_public/anjay/anjay.h
             include_public/anjay/attr_storage.h
             include_public/anjay/core.h
@@ -473,6 +476,7 @@ add_library(anjay
             src/modules/access_control/anjay_access_control_persistence.c
             src/modules/access_control/anjay_mod_access_control.c
             src/modules/access_control/anjay_mod_access_control.h
+            src/modules/advanced_fw_update/anjay_advanced_fw_update.c
             src/modules/factory_provisioning/anjay_provisioning.c
             src/modules/fw_update/anjay_fw_update.c
             src/modules/ipso/anjay_ipso_3d_sensor.c
@@ -522,6 +526,7 @@ set(ANJAY_WITHOUT_IP_STICKINESS "${WITHOUT_IP_STICKINESS}")
 set(ANJAY_WITH_MODULE_ACCESS_CONTROL "${WITH_MODULE_access_control}")
 set(ANJAY_WITH_MODULE_IPSO_OBJECTS "${WITH_MODULE_ipso_objects}")
 set(ANJAY_WITH_MODULE_FW_UPDATE "${WITH_MODULE_fw_update}")
+set(ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE "${WITH_MODULE_advanced_fw_update}")
 set(ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE "${WITHOUT_MODULE_fw_update_PUSH_MODE}")
 set(ANJAY_WITH_MODULE_SECURITY "${WITH_MODULE_security}")
 set(ANJAY_WITH_MODULE_SERVER "${WITH_MODULE_server}")
@@ -539,6 +544,7 @@ set(ANJAY_WITH_LWM2M11 "${WITH_LWM2M11}")
 set(ANJAY_WITH_SECURITY_STRUCTURED "${WITH_SECURITY_STRUCTURED}")
 set(ANJAY_WITH_SEND "${WITH_SEND}")
 set(ANJAY_WITH_SENML_JSON "${WITH_SENML_JSON}")
+set(ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE "${WITHOUT_QUEUE_MODE_AUTOCLOSE}")
 
 configure_file(include_public/anjay/anjay_config.h.in
                include_public/anjay/anjay_config.h)
@@ -603,10 +609,11 @@ if(WITH_TEST)
                    $<TARGET_PROPERTY:anjay,SOURCES>
                    tests/core/coap/utils.c
                    tests/core/coap/utils.h
-                   tests/core/downloader/downloader_mock.h
                    tests/core/bootstrap_mock.h
                    tests/core/io/bigdata.h
                    tests/core/observe/observe_mock.h
+                   tests/core/socket_mock.c
+                   tests/core/socket_mock.h
                    tests/utils/dm.c
                    tests/utils/dm.h
                    tests/utils/mock_clock.c
@@ -624,6 +631,9 @@ if(WITH_TEST)
     endif()
     if(WITH_SEND)
         target_sources(anjay_test PRIVATE tests/core/lwm2m_send.c)
+    endif()
+    if(WITH_MODULE_factory_provisioning)
+        target_sources(anjay_test PRIVATE tests/modules/factory_provisioning/provisioning.c)
     endif()
     target_include_directories(anjay_test PRIVATE
                                "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -758,7 +768,7 @@ if(WITH_TEST)
 
     if(WITH_INTEGRATION_TESTS)
         set(TEST_RERUNS 3 CACHE STRING "Maximal number of times we try to rerun each testsuite")
-        set(TEST_SENSITIVE_RERUNS 3 CACHE STRING "Maximal number of times we try to rerun each sensitive testsuite")
+        option(TEST_KEEP_SUCCESS_LOGS "Store all logs from test cases, even if no error happened" ON)
         add_subdirectory(tests/integration)
     endif()
 else(WITH_TEST)
@@ -854,6 +864,10 @@ if(WITH_MODULE_ipso_objects)
 endif()
 if(WITH_MODULE_fw_update)
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/fw_update.h"
+            DESTINATION include/anjay)
+endif()
+if(WITH_MODULE_advanced_fw_update)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/advanced_fw_update.h"
             DESTINATION include/anjay)
 endif()
 if(WITH_MODULE_security)

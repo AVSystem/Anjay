@@ -23,6 +23,10 @@
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
 #    include "firmware_update.h"
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
+
+#ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+#    include "advanced_firmware_update.h"
+#endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
 #include "objects.h"
 
 typedef struct {
@@ -62,6 +66,10 @@ struct anjay_demo_struct {
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
     fw_update_logic_t fw_update;
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+    advanced_fw_update_logic_t
+            advanced_fw_update_logic_table[FW_UPDATE_IID_IMAGE_SLOTS];
+#endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
 
     AVS_LIST(anjay_demo_object_t) objects;
 

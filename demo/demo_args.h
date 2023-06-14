@@ -13,7 +13,14 @@
 #include <anjay/access_control.h>
 #include <anjay/anjay.h>
 #include <anjay/anjay_config.h>
-#include <anjay/fw_update.h>
+
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
+#    include <anjay/fw_update.h>
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
+
+#ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+#    include <anjay/advanced_fw_update.h>
+#endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
 
 #include "demo_utils.h"
 #include "objects.h"
@@ -51,8 +58,32 @@ typedef struct cmdline_args {
      * which the client is restarted while upgrade is still in progress.
      */
     anjay_fw_update_result_t fw_update_delayed_result;
-#endif // ANJAY_WITH_MODULE_FW_UPDATE
-
+#    ifdef ANJAY_WITH_SEND
+    bool fw_update_use_send;
+#    endif // ANJAY_WITH_SEND
+#endif     // ANJAY_WITH_MODULE_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+    const char *advanced_fw_updated_marker_path;
+    avs_net_security_info_t advanced_fw_security_info;
+    /**
+     * If nonzero (not @ref ANJAY_ADVANCED_FW_UPDATE_RESULT_INITIAL),
+     * Advanced Firmware Update object will be initialized in UPDATING state.
+     * In that case, @ref anjay_advanced_fw_update_set_state_and_result will be
+     * used after a while to trigger a transition to this update result.
+     * This simulates a FOTA procedure during which the client is restarted
+     * while upgrade is still in progress.
+     */
+    anjay_advanced_fw_update_result_t advanced_fw_update_delayed_result;
+#    ifdef ANJAY_WITH_SEND
+    bool advanced_fw_update_use_send;
+#    endif // ANJAY_WITH_SEND
+    /**
+     * This is a file path to file with original image. After additional
+     * image is downloaded, update can be performed. Updating additional
+     * image (other than main application) includes only files comparison.
+     */
+    const char *original_img_file_path;
+#endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
 #ifdef AVS_COMMONS_STREAM_WITH_FILE
 #    ifdef ANJAY_WITH_ATTR_STORAGE
     const char *attr_storage_file;
@@ -81,20 +112,30 @@ typedef struct cmdline_args {
     bool fwu_tx_params_modified;
     avs_coap_udp_tx_params_t fwu_tx_params;
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+    /**
+     * This flag allows to enable callback providing tx_params for firmware
+     * update only if some of parameters were changed by passing proper command
+     * line argument to demo. Otherwise tx_params should be inherited from
+     * Anjay.
+     */
+    bool advanced_fwu_tx_params_modified;
+    avs_coap_udp_tx_params_t advanced_fwu_tx_params;
+#endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
 #ifdef ANJAY_WITH_LWM2M11
     anjay_lwm2m_version_config_t lwm2m_version_config;
 #endif // ANJAY_WITH_LWM2M11
     size_t stored_notification_limit;
 
     bool prefer_hierarchical_formats;
+    bool update_immediately_on_dm_change;
+    bool enable_self_notify;
     bool use_connection_id;
+    bool start_offline;
 
     uint32_t *default_ciphersuites;
     size_t default_ciphersuites_count;
     bool prefer_same_socket_downloads;
-#ifdef ANJAY_WITH_SEND
-    bool fw_update_use_send;
-#endif // ANJAY_WITH_SEND
 #ifdef ANJAY_WITH_LWM2M11
     const char *pkix_trust_store;
     bool rebuild_client_cert_chain;
@@ -102,6 +143,9 @@ typedef struct cmdline_args {
 
     bool alternative_logger;
 
+#if defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+    avs_time_duration_t tcp_request_timeout;
+#endif // defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
 } cmdline_args_t;
 
 int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char **argv);

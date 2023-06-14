@@ -41,6 +41,8 @@ bool _anjay_server_registration_expired(anjay_server_info_t *server);
 int _anjay_schedule_socket_update(anjay_unlocked_t *anjay,
                                   anjay_iid_t security_iid);
 
+bool _anjay_server_connection_active(anjay_connection_ref_t ref);
+
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif // ANJAY_SERVERS_H

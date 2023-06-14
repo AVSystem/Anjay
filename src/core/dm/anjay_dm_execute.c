@@ -99,7 +99,7 @@ static int try_reading_next_arg(anjay_unlocked_execute_ctx_t *ctx) {
     return 0;
 }
 
-static int execute_get_arg_value_unlocked(anjay_unlocked_execute_ctx_t *ctx,
+int _anjay_execute_get_arg_value_unlocked(anjay_unlocked_execute_ctx_t *ctx,
                                           size_t *out_bytes_read,
                                           char *out_buf,
                                           size_t buf_size) {
@@ -151,13 +151,14 @@ static int skip_value(anjay_unlocked_execute_ctx_t *ctx) {
     if (ctx->state == STATE_READ_VALUE) {
         char buf[64];
         do {
-            ret = execute_get_arg_value_unlocked(ctx, NULL, buf, sizeof(buf));
+            ret = _anjay_execute_get_arg_value_unlocked(
+                    ctx, NULL, buf, sizeof(buf));
         } while (ret == ANJAY_BUFFER_TOO_SHORT);
     }
     return ret;
 }
 
-static int execute_get_next_arg_unlocked(anjay_unlocked_execute_ctx_t *ctx,
+int _anjay_execute_get_next_arg_unlocked(anjay_unlocked_execute_ctx_t *ctx,
                                          int *out_arg,
                                          bool *out_has_value) {
     if (skip_value(ctx)) {
@@ -186,7 +187,7 @@ int anjay_execute_get_next_arg(anjay_execute_ctx_t *ctx,
 #ifdef ANJAY_WITH_THREAD_SAFETY
     ANJAY_MUTEX_LOCK(anjay, ctx->anjay_locked);
 #endif // ANJAY_WITH_THREAD_SAFETY
-    result = execute_get_next_arg_unlocked(
+    result = _anjay_execute_get_next_arg_unlocked(
             _anjay_execute_get_unlocked(ctx), out_arg, out_has_value);
 #ifdef ANJAY_WITH_THREAD_SAFETY
     ANJAY_MUTEX_UNLOCK(ctx->anjay_locked);
@@ -202,10 +203,11 @@ int anjay_execute_get_arg_value(anjay_execute_ctx_t *ctx,
 #ifdef ANJAY_WITH_THREAD_SAFETY
     ANJAY_MUTEX_LOCK(anjay, ctx->anjay_locked);
 #endif // ANJAY_WITH_THREAD_SAFETY
-    result = execute_get_arg_value_unlocked(_anjay_execute_get_unlocked(ctx),
-                                            out_bytes_read,
-                                            out_buf,
-                                            buf_size);
+    result = _anjay_execute_get_arg_value_unlocked(_anjay_execute_get_unlocked(
+                                                           ctx),
+                                                   out_bytes_read,
+                                                   out_buf,
+                                                   buf_size);
 #ifdef ANJAY_WITH_THREAD_SAFETY
     ANJAY_MUTEX_UNLOCK(ctx->anjay_locked);
 #endif // ANJAY_WITH_THREAD_SAFETY

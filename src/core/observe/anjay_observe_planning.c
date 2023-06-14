@@ -41,7 +41,7 @@ static int foreach_relevant_connection_helper(anjay_unlocked_t *anjay,
             };
             AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr =
                     _anjay_observe_find_connection_state(ref);
-            if (conn_ptr && *conn_ptr
+            if (conn_ptr && *conn_ptr && _anjay_server_connection_active(ref)
                     && _anjay_socket_transport_included(
                                arg->transport_set,
                                _anjay_connection_transport(ref))) {

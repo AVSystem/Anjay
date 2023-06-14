@@ -293,15 +293,21 @@ AVS_UNIT_TEST(bootstrap_write, resource_with_mismatched_tlv_rid) {
 }
 
 AVS_UNIT_TEST(bootstrap_write, resource_error_with_create) {
-    DM_TEST_INIT_WITH_SSIDS(ANJAY_SSID_BOOTSTRAP);
-    DM_TEST_REQUEST(mocksocks[0], CON, PUT, ID(0xFA3E), PATH("42", "514", "7"),
+    const anjay_dm_object_def_t *const *obj_defs[] = { &OBJ_WITH_TRANSACTION,
+                                                       &FAKE_SECURITY,
+                                                       &FAKE_SERVER };
+    anjay_ssid_t ssids[] = { ANJAY_SSID_BOOTSTRAP };
+    DM_TEST_INIT_GENERIC(obj_defs, ssids, DM_TEST_CONFIGURATION());
+
+    DM_TEST_REQUEST(mocksocks[0], CON, PUT, ID(0xFA3E), PATH("69", "514", "7"),
                     CONTENT_FORMAT(PLAINTEXT), PAYLOAD("Hello"));
     _anjay_mock_dm_expect_list_instances(
-            anjay, &OBJ, 0,
+            anjay, &OBJ_WITH_TRANSACTION, 0,
             (const anjay_iid_t[]) { 14, 42, 69, ANJAY_ID_INVALID });
-    _anjay_mock_dm_expect_instance_create(anjay, &OBJ, 514, 0);
+    _anjay_mock_dm_expect_transaction_begin(anjay, &OBJ_WITH_TRANSACTION, 0);
+    _anjay_mock_dm_expect_instance_create(anjay, &OBJ_WITH_TRANSACTION, 514, 0);
     _anjay_mock_dm_expect_list_resources(
-            anjay, &OBJ, 514, 0,
+            anjay, &OBJ_WITH_TRANSACTION, 514, 0,
             (const anjay_mock_dm_res_entry_t[]) {
                     { 0, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
                     { 1, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
@@ -311,11 +317,11 @@ AVS_UNIT_TEST(bootstrap_write, resource_error_with_create) {
                     { 5, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
                     { 6, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
                     ANJAY_MOCK_DM_RES_END });
-    // TODO: should expect transaction_rollback here
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, NOT_FOUND, ID(0xFA3E),
                             NO_PAYLOAD);
     expect_has_buffered_data_check(mocksocks[0], false);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+    _anjay_mock_dm_expect_transaction_rollback(anjay, &OBJ_WITH_TRANSACTION, 0);
     DM_TEST_FINISH;
 }
 

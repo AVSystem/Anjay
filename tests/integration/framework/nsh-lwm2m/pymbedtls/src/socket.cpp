@@ -340,8 +340,12 @@ Socket::~Socket() {
 void Socket::perform_handshake(py::tuple host_port,
                                py::object handshake_timeouts_s_,
                                bool py_connect) {
-    client_host_and_port_ = host_port_to_std_tuple(host_port);
-    last_recv_host_and_port_ = host_port_to_std_tuple(host_port);
+    if (py_connect) {
+        call_method<void>(py_socket_, "connect", host_port);
+    }
+
+    last_recv_host_and_port_ = client_host_and_port_ = host_port_to_std_tuple(
+            call_method<py::tuple>(py_socket_, "getpeername"));
 
     if (!handshake_timeouts_s_.is_none()) {
         auto handshake_timeouts_s = py::cast<py::tuple>(handshake_timeouts_s_);
@@ -359,16 +363,21 @@ void Socket::perform_handshake(py::tuple host_port,
             throw mbedtls_error("mbedtls_ssl_sssion_reset failed", result);
         }
         string address = std::get<0>(client_host_and_port_);
-        result = mbedtls_ssl_set_client_transport_id(
-                &mbedtls_context_,
-                reinterpret_cast<const unsigned char *>(address.c_str()),
-                address.length());
-        if (result) {
-            throw mbedtls_error("mbedtls_ssl_set_client_transport_id failed",
-                                result);
-        }
-        if (py_connect) {
-            call_method<void>(py_socket_, "connect", client_host_and_port_);
+        if (type_ == SocketType::Client) {
+            result = mbedtls_ssl_set_hostname(&mbedtls_context_,
+                                              address.c_str());
+            if (result) {
+                throw mbedtls_error("mbedtls_ssl_set_hostname failed", result);
+            }
+        } else {
+            result = mbedtls_ssl_set_client_transport_id(
+                    &mbedtls_context_,
+                    reinterpret_cast<const unsigned char *>(address.c_str()),
+                    address.length());
+            if (result) {
+                throw mbedtls_error(
+                        "mbedtls_ssl_set_client_transport_id failed", result);
+            }
         }
         hs_result = do_handshake();
     } while (hs_result == HandshakeResult::HelloVerifyRequired);

@@ -7,24 +7,15 @@
 # Licensed under the AVSystem-5-clause License.
 # See the attached LICENSE file for details.
 
-import socket
-import time
-import unittest
-
 from framework.lwm2m_test import *
 
 
 class UpdateTest(test_suite.Lwm2mSingleServerTest):
     def runTest(self):
-        self.serv.set_timeout(timeout_s=1)
-
         # should send a correct Update
         self.communicate('send-update')
         pkt = self.serv.recv()
-        self.assertMsgEqual(Lwm2mUpdate(self.DEFAULT_REGISTER_ENDPOINT,
-                                        query=[],
-                                        content=b''),
-                            pkt)
+        self.assertMsgEqual(Lwm2mUpdate(self.DEFAULT_REGISTER_ENDPOINT, query=[], content=b''), pkt)
 
         self.serv.send(Lwm2mChanged.matching(pkt)())
 
@@ -64,8 +55,6 @@ class UpdateServerDownReconnectTest(test_suite.PcapEnabledTest, test_suite.Lwm2m
 
 class ReconnectTest(test_suite.Lwm2mDtlsSingleServerTest):
     def runTest(self):
-        self.serv.set_timeout(timeout_s=1)
-
         self.communicate('reconnect')
 
         # server is connected, so only a packet from the same remote port will pass this assertion
@@ -76,22 +65,17 @@ class UpdateFallbacksToRegisterAfterLifetimeExpiresTest(test_suite.Lwm2mSingleSe
     LIFETIME = 4
 
     def setUp(self):
-        super().setUp(auto_register=False,
-                      lifetime=self.LIFETIME,
-                      extra_cmdline_args=['--ack-random-factor', '1',
-                                          '--ack-timeout', '1',
+        super().setUp(auto_register=False, lifetime=self.LIFETIME,
+                      extra_cmdline_args=['--ack-random-factor', '1', '--ack-timeout', '1',
                                           '--max-retransmit', '1'])
         self.assertDemoRegisters(lifetime=self.LIFETIME)
 
     def runTest(self):
         self.assertDemoUpdatesRegistration(timeout_s=self.LIFETIME / 2 + 1)
 
-        self.assertDemoUpdatesRegistration(
-            timeout_s=self.LIFETIME / 2 + 1, respond=False)
-        self.assertDemoUpdatesRegistration(
-            timeout_s=self.LIFETIME / 2 + 1, respond=False)
-        self.assertDemoRegisters(
-            lifetime=self.LIFETIME, timeout_s=self.LIFETIME / 2 + 1)
+        self.assertDemoUpdatesRegistration(timeout_s=self.LIFETIME / 2 + 1, respond=False)
+        self.assertDemoUpdatesRegistration(timeout_s=self.LIFETIME / 2 + 1, respond=False)
+        self.assertDemoRegisters(lifetime=self.LIFETIME, timeout_s=self.LIFETIME / 2 + 1)
 
 
 class UpdateFallbacksToRegisterAfterCoapClientErrorResponse(test_suite.Lwm2mSingleServerTest):
@@ -100,8 +84,7 @@ class UpdateFallbacksToRegisterAfterCoapClientErrorResponse(test_suite.Lwm2mSing
             self.communicate('send-update')
 
             req = self.serv.recv()
-            self.assertMsgEqual(Lwm2mUpdate(self.DEFAULT_REGISTER_ENDPOINT,
-                                            content=b''), req)
+            self.assertMsgEqual(Lwm2mUpdate(self.DEFAULT_REGISTER_ENDPOINT, content=b''), req)
             self.serv.send(Lwm2mErrorResponse.matching(req)(code))
 
             self.assertDemoRegisters()
@@ -119,8 +102,6 @@ class ReconnectFailsWithCoapErrorCodeTest(test_suite.Lwm2mSingleServerTest):
         super().tearDown(auto_deregister=False)
 
     def runTest(self):
-        self.serv.set_timeout(timeout_s=1)
-
         # should send an Update with reconnect
         self.communicate('reconnect')
         self.serv.reset()
@@ -128,8 +109,7 @@ class ReconnectFailsWithCoapErrorCodeTest(test_suite.Lwm2mSingleServerTest):
         pkt = self.serv.recv()
         self.assertMsgEqual(Lwm2mRegister('/rd?lwm2m=1.0&ep=%s&lt=86400' % (DEMO_ENDPOINT_NAME,)),
                             pkt)
-        self.serv.send(Lwm2mErrorResponse.matching(pkt)(
-            code=coap.Code.RES_INTERNAL_SERVER_ERROR))
+        self.serv.send(Lwm2mErrorResponse.matching(pkt)(code=coap.Code.RES_INTERNAL_SERVER_ERROR))
 
         # client should abort
         with self.assertRaises(socket.timeout):
@@ -143,8 +123,6 @@ class ReconnectFailsWithConnectionRefusedTest(test_suite.Lwm2mDtlsSingleServerTe
         super().tearDown(auto_deregister=False)
 
     def runTest(self):
-        self.serv.set_timeout(timeout_s=1)
-
         # should try to resume DTLS session
         with self.serv.fake_close():
             self.communicate('reconnect')
@@ -164,10 +142,7 @@ class ConcurrentRequestWhileWaitingForResponse(test_suite.Lwm2mSingleServerTest,
         self.communicate('send-update')
 
         pkt = self.serv.recv()
-        self.assertMsgEqual(Lwm2mUpdate(self.DEFAULT_REGISTER_ENDPOINT,
-                                        query=[],
-                                        content=b''),
-                            pkt)
+        self.assertMsgEqual(Lwm2mUpdate(self.DEFAULT_REGISTER_ENDPOINT, query=[], content=b''), pkt)
 
         self.read_path(self.serv, ResPath.Device.Manufacturer)
 
@@ -192,9 +167,9 @@ class UpdateAfterLifetimeChange(test_suite.Lwm2mSingleServerTest):
 
 class NoUpdateDuringShutdownTest(test_suite.Lwm2mSingleServerTest):
     def runTest(self):
-        self.communicate('schedule-update-on-exit')
-        # tearDown() expects a De-Register operation and will fail on
-        # unexpected Update
+        self.communicate(
+            'schedule-update-on-exit')  # tearDown() expects a De-Register operation and will fail on  # unexpected Update
+
 
 class ExternalSetLifetimeForcesUpdate(test_suite.Lwm2mSingleServerTest):
     def runTest(self):
@@ -208,3 +183,22 @@ class ExternalSetLifetimeForcesUpdateOnlyIfChanged(test_suite.Lwm2mSingleServerT
         self.communicate('set-lifetime 1 86400')
         with self.assertRaises(socket.timeout):
             self.serv.recv(timeout_s=3)
+
+
+class UpdateImmediatelyDisabledTest(test_suite.Lwm2mSingleServerTest, test_suite.Lwm2mDmOperations):
+    def runTest(self):
+        self.create_instance(self.serv, OID.Test, iid=1)
+        # no Update message expected in this case
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=3)
+
+
+class UpdateImmediatelyEnabledTest(test_suite.Lwm2mSingleServerTest, test_suite.Lwm2mDmOperations):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--update-immediately-on-dm-change'])
+
+    def runTest(self):
+        self.create_instance(self.serv, OID.Test, iid=42)
+        # Update message shall be automatically generated
+        pkt = self.assertDemoUpdatesRegistration(self.serv, content=ANY)
+        self.assertIn(f'</{OID.Test}/42>'.encode(), pkt.content)

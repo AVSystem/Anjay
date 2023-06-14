@@ -6,7 +6,7 @@
 #
 # Licensed under the AVSystem-5-clause License.
 # See the attached LICENSE file for details.
-
+import base64
 import json
 
 from framework.lwm2m_test import *
@@ -102,6 +102,46 @@ class WriteCompositeNonexistingResourceInstance(Test.WriteComposite):
             {
                 'n': '/%d' % (1,),
                 'v': 73
+            }
+        ])
+
+
+class WriteCompositeBasenameOnly(Test.WriteComposite):
+    def runTest(self):
+        self.create_instance(self.serv, oid=OID.Test, iid=IID + 1)
+        self.create_instance(self.serv, oid=OID.Test, iid=IID + 2)
+        request = [
+            {
+                'vd': base64.encodebytes(b'test').strip().rstrip(b'=').decode(),
+                'bn': '/%d/%d/%d' % (OID.Test, IID, RID.Test.ResRawBytes)
+            },
+            {
+                'vd': base64.encodebytes(b'hurrdurr').strip().rstrip(b'=').decode(),
+                'bn': '/%d/%d/%d' % (OID.Test, IID + 1, RID.Test.ResRawBytes)
+            },
+            {
+                'vd': base64.encodebytes(b'herpderp').strip().rstrip(b'=').decode(),
+                'bn': '/%d/%d/%d' % (OID.Test, IID + 2, RID.Test.ResRawBytes)
+            }
+        ]
+
+        self.write_composite(self.serv, content=json.dumps(request),
+                             format=coap.ContentFormat.APPLICATION_LWM2M_SENML_JSON)
+        res = self.read_composite(self.serv, paths=[entry['bn'] for entry in request],
+                                  accept=coap.ContentFormat.APPLICATION_LWM2M_SENML_JSON)
+        self.assertEqual(json.loads(res.content.decode()), [
+            {
+                'bn': f'/{OID.Test}',
+                'n': f'/{IID}/{RID.Test.ResRawBytes}',
+                'vd': request[0]['vd']
+            },
+            {
+                'n': f'/{IID + 1}/{RID.Test.ResRawBytes}',
+                'vd': request[1]['vd']
+            },
+            {
+                'n': f'/{IID + 2}/{RID.Test.ResRawBytes}',
+                'vd': request[2]['vd']
             }
         ])
 

@@ -41,6 +41,7 @@ class BootstrapIncorrectData(BootstrapTest.Test):
         # discarded just before we get the new Client Hello.
 
         holdoff_s = 0
+        last_time = time.time()
         for attempt in range(num_attempts):
             # Create Security Object instance with deliberately wrong keys
             self.perform_typical_bootstrap(server_iid=1,
@@ -50,7 +51,8 @@ class BootstrapIncorrectData(BootstrapTest.Test):
                                            secure_key=self.PSK_KEY + b'durr',
                                            security_mode=SecurityMode.PreSharedKey,
                                            finish=False,
-                                           holdoff_s=holdoff_s)
+                                           holdoff_s=max(last_time + holdoff_s - time.time(), 0))
+            last_time = time.time()
 
             self.serv.reset()
             self.perform_bootstrap_finish()

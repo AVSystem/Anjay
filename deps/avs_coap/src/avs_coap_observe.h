@@ -54,9 +54,6 @@ _avs_coap_observe_setup_notify(avs_coap_ctx_t *ctx,
                                const avs_coap_observe_id_t *id,
                                avs_coap_observe_notify_t *out_notify);
 
-void _avs_coap_observe_cancel(avs_coap_ctx_t *ctx,
-                              const avs_coap_observe_id_t *id);
-
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif // AVS_COAP_SRC_OBSERVE_H

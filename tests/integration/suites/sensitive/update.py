@@ -20,7 +20,6 @@ class ReconnectBootstrapTest(test_suite.Lwm2mSingleServerTest):
         self.setup_demo_with_servers(servers=0, bootstrap_server=True)
 
     def runTest(self):
-        self.bootstrap_server.set_timeout(timeout_s=1)
         pkt = self.bootstrap_server.recv()
         self.assertMsgEqual(Lwm2mRequestBootstrap(endpoint_name=DEMO_ENDPOINT_NAME),
                             pkt)

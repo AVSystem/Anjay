@@ -506,11 +506,11 @@ The implementation above is a complete basic integration with the private key
 infrastructure, however it lacks a number of features that are supported by the
 ``avs_net`` API:
 
-* Lack of DANE support. **This means that this the Server Public Key LwM2M
-  resource is not supported, and will cause a failure if used.** This is
-  because LwM2M does not use standard certificate validation logic based on a
-  trust store, using a custom mechanism instead. However, that mechanism is
-  almost identical to the one used by `DANE
+* Lack of DANE support. **This means that the Server Public Key LwM2M resource
+  is not supported, and will cause a failure if used.** This is because LwM2M
+  does not use standard certificate validation logic based on a trust store,
+  using a custom mechanism instead. However, that mechanism is almost identical
+  to the one used by `DANE
   <https://en.wikipedia.org/wiki/DNS-based_Authentication_of_Named_Entities>`_,
   so it is implemented in terms of that mechanism in Anjay and ``avs_net``.
 

@@ -34,7 +34,8 @@ sys.path.insert(0, '@ANJAY_SOURCE_DIR@/doc/sphinx/extensions')
 extensions = ['snippet_source',
               'builders.snippet_source_linter',
               'builders.snippet_source_list_references',
-              'sphinx_rtd_theme']
+              'sphinx_rtd_theme',
+              'linuxdoc.rstFlatTable']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']

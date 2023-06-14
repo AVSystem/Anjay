@@ -13,9 +13,7 @@ from suites.default.bootstrap_client import BootstrapTest
 
 class BootstrapTransactionTest(test_suite.Lwm2mTest):
     def setUp(self):
-        self.setup_demo_with_servers(servers=1,
-                                     num_servers_passed=0,
-                                     bootstrap_server=True,
+        self.setup_demo_with_servers(servers=1, num_servers_passed=0, bootstrap_server=True,
                                      extra_cmdline_args=['--bootstrap-timeout', '-1'])
 
     def tearDown(self):
@@ -26,37 +24,34 @@ class BootstrapTransactionTest(test_suite.Lwm2mTest):
 
         # Create Server object
         req = Lwm2mWrite('/%d/1' % (OID.Server,),
-                         TLV.make_resource(RID.Server.Lifetime, 60).serialize()
-                         + TLV.make_resource(RID.Server.ShortServerID, 1).serialize()
-                         + TLV.make_resource(RID.Server.NotificationStoring, True).serialize()
-                         + TLV.make_resource(RID.Server.Binding, "U").serialize(),
+                         TLV.make_resource(RID.Server.Lifetime, 60).serialize() + TLV.make_resource(
+                             RID.Server.ShortServerID, 1).serialize() + TLV.make_resource(
+                             RID.Server.NotificationStoring, True).serialize() + TLV.make_resource(
+                             RID.Server.Binding, "U").serialize(),
                          format=coap.ContentFormat.APPLICATION_LWM2M_TLV)
         self.bootstrap_server.send(req)
-        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.bootstrap_server.recv())
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.bootstrap_server.recv())
 
         # Create Security object
         regular_serv_uri = 'coap://127.0.0.1:%d' % self.servers[0].get_listen_port()
 
-        req = Lwm2mWrite('/%d/2' % (OID.Security,),
-                         TLV.make_resource(RID.Security.ServerURI, regular_serv_uri).serialize()
-                         + TLV.make_resource(RID.Security.Bootstrap, 0).serialize()
-                         + TLV.make_resource(RID.Security.Mode, 3).serialize()
-                         + TLV.make_resource(RID.Security.ShortServerID, 1).serialize()
-                         + TLV.make_resource(RID.Security.PKOrIdentity, "").serialize()
-                         + TLV.make_resource(RID.Security.SecretKey, "").serialize(),
+        req = Lwm2mWrite('/%d/2' % (OID.Security,), TLV.make_resource(RID.Security.ServerURI,
+                                                                      regular_serv_uri).serialize() + TLV.make_resource(
+            RID.Security.Bootstrap, 0).serialize() + TLV.make_resource(RID.Security.Mode,
+                                                                       3).serialize() + TLV.make_resource(
+            RID.Security.ShortServerID, 1).serialize() + TLV.make_resource(
+            RID.Security.PKOrIdentity, "").serialize() + TLV.make_resource(RID.Security.SecretKey,
+                                                                           "").serialize(),
                          format=coap.ContentFormat.APPLICATION_LWM2M_TLV)
         self.bootstrap_server.send(req)
-        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.bootstrap_server.recv())
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.bootstrap_server.recv())
 
         # create incomplete Geo-Points object
         req = Lwm2mWrite('/%d/42' % (OID.GeoPoints,),
                          TLV.make_resource(RID.GeoPoints.Latitude, 42.0).serialize(),
                          format=coap.ContentFormat.APPLICATION_LWM2M_TLV)
         self.bootstrap_server.send(req)
-        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.bootstrap_server.recv())
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.bootstrap_server.recv())
 
         # send Bootstrap Finish
         req = Lwm2mBootstrapFinish()
@@ -73,17 +68,16 @@ class BootstrapTransactionTest(test_suite.Lwm2mTest):
                          TLV.make_resource(RID.GeoPoints.Longitude, 69.0).serialize(),
                          format=coap.ContentFormat.APPLICATION_LWM2M_TLV)
         self.bootstrap_server.send(req)
-        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.bootstrap_server.recv())
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.bootstrap_server.recv())
 
 
 class BootstrapTransactionPersistenceTest(test_suite.Lwm2mTest, test_suite.Lwm2mDmOperations):
     def setUp(self):
         self._dm_persistence_file = tempfile.NamedTemporaryFile()
-        self.setup_demo_with_servers(
-            servers=0, bootstrap_server=True,
-            extra_cmdline_args=['--bootstrap-timeout', '-1',
-                                '--dm-persistence-file', self._dm_persistence_file.name])
+        self.setup_demo_with_servers(servers=0, bootstrap_server=True,
+                                     extra_cmdline_args=['--bootstrap-timeout', '-1',
+                                                         '--dm-persistence-file',
+                                                         self._dm_persistence_file.name])
 
     def tearDown(self):
         try:
@@ -96,25 +90,23 @@ class BootstrapTransactionPersistenceTest(test_suite.Lwm2mTest, test_suite.Lwm2m
 
         # Create Server object without Binding
         req = Lwm2mWrite('/%d/1' % (OID.Server,),
-                         TLV.make_resource(RID.Server.Lifetime, 60).serialize()
-                         + TLV.make_resource(RID.Server.ShortServerID, 1).serialize()
-                         + TLV.make_resource(RID.Server.NotificationStoring, True).serialize(),
+                         TLV.make_resource(RID.Server.Lifetime, 60).serialize() + TLV.make_resource(
+                             RID.Server.ShortServerID, 1).serialize() + TLV.make_resource(
+                             RID.Server.NotificationStoring, True).serialize(),
                          format=coap.ContentFormat.APPLICATION_LWM2M_TLV)
         self.bootstrap_server.send(req)
-        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.bootstrap_server.recv())
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.bootstrap_server.recv())
 
         # Create Security object without URI
-        req = Lwm2mWrite('/%d/2' % (OID.Security,),
-                         TLV.make_resource(RID.Security.Bootstrap, 0).serialize()
-                         + TLV.make_resource(RID.Security.Mode, 3).serialize()
-                         + TLV.make_resource(RID.Security.ShortServerID, 1).serialize()
-                         + TLV.make_resource(RID.Security.PKOrIdentity, "").serialize()
-                         + TLV.make_resource(RID.Security.SecretKey, "").serialize(),
+        req = Lwm2mWrite('/%d/2' % (OID.Security,), TLV.make_resource(RID.Security.Bootstrap,
+                                                                      0).serialize() + TLV.make_resource(
+            RID.Security.Mode, 3).serialize() + TLV.make_resource(RID.Security.ShortServerID,
+                                                                  1).serialize() + TLV.make_resource(
+            RID.Security.PKOrIdentity, "").serialize() + TLV.make_resource(RID.Security.SecretKey,
+                                                                           "").serialize(),
                          format=coap.ContentFormat.APPLICATION_LWM2M_TLV)
         self.bootstrap_server.send(req)
-        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.bootstrap_server.recv())
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.bootstrap_server.recv())
 
         # send Bootstrap Finish
         req = Lwm2mBootstrapFinish()
@@ -127,10 +119,9 @@ class BootstrapTransactionPersistenceTest(test_suite.Lwm2mTest, test_suite.Lwm2m
 
         self.bootstrap_server.reset()
 
-        self._start_demo(['--dm-persistence-file', self._dm_persistence_file.name]
-                         + self.make_demo_args(DEMO_ENDPOINT_NAME, [],
-                                               '1.0', '1.0',
-                                               None))
+        self._start_demo(
+            ['--dm-persistence-file', self._dm_persistence_file.name] + self.make_demo_args(
+                DEMO_ENDPOINT_NAME, [], '1.0', '1.0', None))
 
         # Demo shall launch, with the initial server configuration
         self.assertDemoRequestsBootstrap()
@@ -166,10 +157,21 @@ class NotificationDuringBootstrap(BootstrapTest.Test, test_suite.Lwm2mDtlsSingle
 
         self.execute_resource(self.serv, OID.Server, 2, RID.Server.RequestBootstrapTrigger)
         self.assertDemoRequestsBootstrap()
-        self.serv.reset()
+        start_time = time.time()
 
+        notifications = 0
+        # Notifications generated before Request Bootstrap might still be sent
+        deadline = time.time() + 1
+        while True:
+            try:
+                self.assertIsInstance(self.serv.recv(deadline=deadline), Lwm2mNotify)
+                notifications += 1
+            except socket.timeout:
+                break
+
+        deadline += 4
         with self.assertRaises(socket.timeout):
-            print(self.serv.recv(timeout_s=5))
+            print(self.serv.recv(deadline=deadline))
 
         self.serv.reset()
 
@@ -184,16 +186,17 @@ class NotificationDuringBootstrap(BootstrapTest.Test, test_suite.Lwm2mDtlsSingle
                 self.assertIsInstance(self.serv.recv(timeout_s=0.8), Lwm2mNotify)
                 notifications += 1
             except socket.timeout:
+                end_time = time.time()
                 break
 
-        self.assertTrue(4 <= notifications <= 6)
+        self.assertTrue(
+            round(end_time - start_time - 2) <= notifications <= round(end_time - start_time + 2))
 
 
 class NotificationDuringBootstrapInQueueMode(BootstrapTest.Test,
                                              test_suite.Lwm2mDtlsSingleServerTest):
     def setUp(self):
-        super().setUp(num_servers_passed=1,
-                      extra_cmdline_args=['--binding=UQ'],
+        super().setUp(num_servers_passed=1, extra_cmdline_args=['--binding=UQ'],
                       auto_register=False)
         # demo will perform all DTLS handshakes before sending Register
         self.serv.listen()
@@ -205,10 +208,21 @@ class NotificationDuringBootstrapInQueueMode(BootstrapTest.Test,
 
         self.execute_resource(self.serv, OID.Server, 2, RID.Server.RequestBootstrapTrigger)
         self.assertDemoRequestsBootstrap()
-        self.serv.reset()
+        start_time = time.time()
 
+        notifications = 0
+        # Notifications generated before Request Bootstrap might still be sent
+        deadline = time.time() + 1
+        while True:
+            try:
+                self.assertIsInstance(self.serv.recv(deadline=deadline), Lwm2mNotify)
+                notifications += 1
+            except socket.timeout:
+                break
+
+        deadline += 4
         with self.assertRaises(socket.timeout):
-            print(self.serv.recv(timeout_s=5))
+            print(self.serv.recv(deadline=deadline))
 
         self.serv.reset()
 
@@ -217,15 +231,16 @@ class NotificationDuringBootstrapInQueueMode(BootstrapTest.Test,
         # demo will resume DTLS session without sending any LwM2M messages
         self.serv.listen()
 
-        notifications = 0
         while True:
             try:
                 self.assertIsInstance(self.serv.recv(timeout_s=0.8), Lwm2mNotify)
                 notifications += 1
             except socket.timeout:
+                end_time = time.time()
                 break
 
-        self.assertTrue(4 <= notifications <= 6)
+        self.assertTrue(
+            round(end_time - start_time - 2) <= notifications <= round(end_time - start_time + 2))
 
 
 class ChangeServersDuringBootstrap(BootstrapTest.Test):
@@ -243,9 +258,10 @@ class ChangeServersDuringBootstrap(BootstrapTest.Test):
             iid = i + 2
             self.write_instance(self.bootstrap_server, OID.AccessControl, i + 1000,
                                 TLV.make_resource(RID.AccessControl.TargetOID,
-                                                  OID.Server).serialize() +
-                                TLV.make_resource(RID.AccessControl.TargetIID, iid).serialize() +
-                                TLV.make_resource(RID.AccessControl.Owner, iid).serialize())
+                                                  OID.Server).serialize() + TLV.make_resource(
+                                    RID.AccessControl.TargetIID,
+                                    iid).serialize() + TLV.make_resource(RID.AccessControl.Owner,
+                                                                         iid).serialize())
         self.perform_bootstrap_finish()
 
         self.assertDemoRegisters(self.servers[0])

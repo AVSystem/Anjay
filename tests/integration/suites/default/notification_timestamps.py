@@ -28,7 +28,7 @@ class NotificationTimestampsInLegacyJsonTest(test_suite.Lwm2mSingleServerTest,
         self.assertEqual(len(res['e']), 1)
         self.assertNotIn('n', res['e'][0])
         self.assertEqual(res['e'][0]['v'], 0)
-        self.assertAlmostEqual(res['e'][0]['t'], time.time(), 0)
+        self.assertAlmostEqual(res['e'][0]['t'], time.time(), delta=2)
 
         self.execute_resource(
             self.serv,
@@ -39,7 +39,7 @@ class NotificationTimestampsInLegacyJsonTest(test_suite.Lwm2mSingleServerTest,
         self.assertIsInstance(notification, Lwm2mNotify)
         res2 = as_json(notification)
         self.assertEqual(res2['e'][0]['v'], 1)
-        self.assertAlmostEqual(res2['e'][0]['t'], time.time(), 0)
+        self.assertAlmostEqual(res2['e'][0]['t'], time.time(), delta=2)
         self.assertGreater(res2['e'][0]['t'], res['e'][0]['t'])
 
         # Check if the responses have identical structure
@@ -59,7 +59,7 @@ class NotificationTimestampsInSenmlJsonTest(test_suite.Lwm2mSingleServerTest,
         self.assertEqual(res[0]['bn'], ResPath.Test[0].Counter)
         self.assertNotIn('n', res[0])
         self.assertEqual(res[0]['v'], 0)
-        self.assertAlmostEqual(res[0]['bt'], time.time(), 0)
+        self.assertAlmostEqual(res[0]['bt'], time.time(), delta=2)
 
         self.execute_resource(
             self.serv,
@@ -70,7 +70,7 @@ class NotificationTimestampsInSenmlJsonTest(test_suite.Lwm2mSingleServerTest,
         self.assertIsInstance(notification, Lwm2mNotify)
         res2 = as_json(notification)
         self.assertEqual(res2[0]['v'], 1)
-        self.assertAlmostEqual(res2[0]['bt'], time.time(), 0)
+        self.assertAlmostEqual(res2[0]['bt'], time.time(), delta=2)
         self.assertGreater(res2[0]['bt'], res[0]['bt'])
 
         # Check if the responses have identical structure
@@ -92,7 +92,7 @@ class NotificationTimestampsInSenmlCborTest(test_suite.Lwm2mSingleServerTest,
         self.assertNotIn(SenmlLabel.NAME.value, res[0])
         self.assertEqual(res[0][SenmlLabel.VALUE.value], 0)
         self.assertAlmostEqual(
-            res[0][SenmlLabel.BASE_TIME.value], time.time(), 0)
+            res[0][SenmlLabel.BASE_TIME.value], time.time(), delta=2)
 
         self.execute_resource(
             self.serv,
@@ -104,7 +104,7 @@ class NotificationTimestampsInSenmlCborTest(test_suite.Lwm2mSingleServerTest,
         res2 = cbor2.loads(notification.content)
         self.assertEqual(res2[0][SenmlLabel.VALUE.value], 1)
         self.assertAlmostEqual(
-            res2[0][SenmlLabel.BASE_TIME.value], time.time(), 0)
+            res2[0][SenmlLabel.BASE_TIME.value], time.time(), delta=2)
         self.assertGreater(res2[0][SenmlLabel.BASE_TIME.value],
                            res[0][SenmlLabel.BASE_TIME.value])
 

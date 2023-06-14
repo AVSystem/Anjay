@@ -33,6 +33,14 @@ if (${ANJAY_WITH_MODULE_FW_UPDATE})
     set(SOURCES ${SOURCES} firmware_update.c)
 endif()
 
+if (${ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE})
+    set(SOURCES ${SOURCES}
+                advanced_firmware_update.c
+                advanced_firmware_update_app.c
+                advanced_firmware_update_addimg.c)
+
+endif()
+
 if(NOT WIN32)
     set(SOURCES ${SOURCES} objects/ip_ping.c)
 endif()
@@ -46,6 +54,10 @@ set(HEADERS
 
 if (${ANJAY_WITH_MODULE_FW_UPDATE})
     set(HEADERS ${HEADERS} firmware_update.h)
+endif()
+
+if (${ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE})
+    set(HEADERS ${HEADERS} advanced_firmware_update.h)
 endif()
 
 set(ALL_SOURCES ${SOURCES} ${HEADERS})

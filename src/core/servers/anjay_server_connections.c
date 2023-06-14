@@ -256,6 +256,11 @@ static int read_server_sni(anjay_unlocked_t *anjay,
 void _anjay_active_server_refresh(anjay_server_info_t *server) {
     anjay_log(TRACE, _("refreshing SSID ") "%u", server->ssid);
 
+    // defined(ANJAY_WITH_TELIT_CUSTOM_FEATURES)
+
+    // Refreshed server is not deemed explicitly disabled anymore
+    server->disabled_explicitly = false;
+
     int result = 0;
     anjay_iid_t security_iid = ANJAY_ID_INVALID;
     avs_url_t *uri = NULL;
@@ -451,6 +456,7 @@ void _anjay_connection_bring_online(anjay_connection_ref_t ref) {
     }
 }
 
+#ifndef ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
 static void queue_mode_close_socket(avs_sched_t *sched, const void *ref_ptr) {
     static const long RETRY_DELAY_S = 1;
     anjay_t *anjay_locked = _anjay_get_from_sched(sched);
@@ -502,6 +508,7 @@ void _anjay_connection_schedule_queue_mode_close(anjay_connection_ref_t ref) {
         anjay_log(ERROR, _("could not schedule queue mode operations"));
     }
 }
+#endif // ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
 
 const anjay_url_t *_anjay_connection_uri(anjay_connection_ref_t ref) {
     return &_anjay_get_server_connection(ref)->uri;

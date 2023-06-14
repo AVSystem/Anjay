@@ -64,7 +64,7 @@ class CoapDownload:
             self.communicate('trim-servers 0')
             self.assertDemoDeregisters()
             self.file_server = (coap_server or coap.Server())
-            self.file_server.set_timeout(5)
+            self.file_server.set_timeout(15)
             self.tempfile = tempfile.NamedTemporaryFile()
 
         def tearDown(self):

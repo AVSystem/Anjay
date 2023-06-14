@@ -18,7 +18,7 @@ import socket
 from typing import Optional
 
 from .lwm2m import coap
-from .firmware_package import FirmwareUpdateForcedError, make_firmware_package
+from .firmware_package import FirmwareUpdateForcedError, make_firmware_package, make_multiple_firmware_package
 
 if sys.version_info[0] == 3 and sys.version_info[1] < 7:
     # based on https://stackoverflow.com/a/18348004/2339636
@@ -99,6 +99,7 @@ class OID:
     IpPing = 33607
     GeoPoints = 33608
     DownloadDiagnostics = 33609
+    AdvancedFirmwareUpdate = 33629
 
 
 class RID:
@@ -321,6 +322,25 @@ class RID:
         BoolArray = 22
         ResInitBoolArray = 23
 
+    class AdvancedFirmwareUpdate:
+        Package = 0
+        PackageURI = 1
+        Update = 2
+        State = 3
+        UpdateResult = 5
+        PackageName = 6
+        PackageVersion = 7
+        FirmwareUpdateProtocolSupport = 8
+        FirmwareUpdateDeliveryMethod = 9
+        Cancel = 10
+        Severity = 11
+        LastStateChangeTime = 12
+        MaxDeferPeriod = 13
+        PartitionName = 14
+        CurrentVersion = 15
+        LinkedInstances = 16
+        ConflictingInstances = 17
+
     class Portfolio:
         Identity = 0
         GetAuthData = 1
@@ -462,6 +482,8 @@ class ResPath:
         RID.GeoPoints, oid=OID.GeoPoints, multi_instance=True)
     DownloadDiagnostics = _Lwm2mResourcePathHelper.from_rid_object(RID.DownloadDiagnostics,
                                                                    oid=OID.DownloadDiagnostics)
+    AdvancedFirmwareUpdate = _Lwm2mResourcePathHelper.from_rid_object(
+        RID.AdvancedFirmwareUpdate, oid=OID.AdvancedFirmwareUpdate, multi_instance=True)
     BinaryAppDataContainer = _Lwm2mResourcePathHelper.from_rid_object(
         RID.BinaryAppDataContainer, oid=OID.BinaryAppDataContainer, multi_instance=True)
     EventLog = _Lwm2mResourcePathHelper.from_rid_object(RID.EventLog, oid=OID.EventLog)
@@ -482,10 +504,10 @@ class TxParams(namedtuple('TxParams',
                            'max_latency'],
                           defaults=(2.0, 1.5, 4.0, 100.0))):
     def max_transmit_wait(self):
-        return self.ack_timeout * self.ack_random_factor * (2**(self.max_retransmit + 1) - 1)
+        return self.ack_timeout * self.ack_random_factor * (2 ** (self.max_retransmit + 1) - 1)
 
     def max_transmit_span(self):
-        return self.ack_timeout * (2**self.max_retransmit - 1) * self.ack_random_factor
+        return self.ack_timeout * (2 ** self.max_retransmit - 1) * self.ack_random_factor
 
     def exchange_lifetime(self):
         """
@@ -502,31 +524,7 @@ class TxParams(namedtuple('TxParams',
         return self.ack_random_factor * self.ack_timeout
 
     def last_retransmission_timeout(self):
-        return self.first_retransmission_timeout() * 2**self.max_retransmit
-
-
-class ResponseFilter:
-    def __init__(self, *filtered_types):
-        self.filtered_types = filtered_types
-        self.filtered_messages = []
-
-    def add_if_filtered(self, message):
-        if type(message) in self.filtered_types:
-            self.filtered_messages.append(message)
-            return True
-        return False
-
-    def filtered_recv(self, server, timeout_s):
-        begin = time.time()
-        res = server.recv(timeout_s=timeout_s)
-
-        while self.add_if_filtered(res):
-            timeout_left = timeout_s - (time.time() - begin)
-            if timeout_left < 0:
-                raise socket.timeout()
-            res = server.recv(timeout_s=timeout_left)
-
-        return res
+        return self.first_retransmission_timeout() * 2 ** self.max_retransmit
 
 
 DEMO_ENDPOINT_NAME = 'urn:dev:os:0023C7-000001'

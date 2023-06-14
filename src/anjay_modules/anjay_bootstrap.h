@@ -20,6 +20,8 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 
 bool _anjay_bootstrap_in_progress(anjay_unlocked_t *anjay);
 
+void _anjay_bootstrap_cleanup(anjay_unlocked_t *anjay);
+
 #    if defined(ANJAY_WITH_MODULE_FACTORY_PROVISIONING)
 avs_error_t _anjay_bootstrap_delete_everything(anjay_unlocked_t *anjay);
 
@@ -39,6 +41,8 @@ int _anjay_schedule_bootstrap_request_unlocked(anjay_unlocked_t *anjay);
 #else
 
 #    define _anjay_bootstrap_in_progress(anjay) ((void) (anjay), false)
+
+#    define _anjay_bootstrap_cleanup(anjay) ((void) 0)
 
 #endif
 

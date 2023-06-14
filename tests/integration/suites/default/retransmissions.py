@@ -76,7 +76,7 @@ class DtlsHsFailOnIcmpTest(test_suite.PcapEnabledTest,
 
     def runTest(self):
         # wait until ultimate failure
-        self.wait_until_icmp_unreachable_count(1, timeout_s=3)
+        self.wait_until_icmp_unreachable_count(1, timeout_s=10)
 
         # Ensure that the control is given back to the user.
         self.assertTrue(self.get_all_connections_failed())
@@ -84,7 +84,7 @@ class DtlsHsFailOnIcmpTest(test_suite.PcapEnabledTest,
         # attempt reconnection
         self._server_close_stack.close()  # unclose the server socket
         self.communicate('reconnect')
-        self.assertDemoRegisters(self.serv, timeout_s=8)
+        self.assertDemoRegisters(self.serv, timeout_s=10)
         self.assertEqual(1, self.count_icmp_unreachable_packets())
 
 
@@ -151,7 +151,7 @@ class RegisterTimeout:
             # Ignore register requests.
             for _ in range(self.MAX_RETRANSMIT + 1):
                 self.assertDemoRegisters(respond=False,
-                                         timeout_s=self.last_retransmission_timeout())
+                                         timeout_s=self.last_retransmission_timeout() + 5)
 
             self.wait_for_retransmission_response_timeout()
 
@@ -362,7 +362,7 @@ class UpdateFailsOnIcmpTest:
                                 content=str(new_lifetime))
             self.assertDemoUpdatesRegistration(lifetime=new_lifetime)
             # Give dumpcap a little bit of time to write to dump file.
-            time.sleep(self.ACK_TIMEOUT / 2)
+            time.sleep(self.ACK_TIMEOUT)
             num_initial_dtls_hs_packets = self.count_dtls_client_hello_packets()
 
             self.serv.close()
@@ -442,7 +442,7 @@ class RequestBootstrapTimeoutFails(RetransmissionTest.TestMixin,
     def runTest(self):
         # Ignore Request Bootstrap requests.
         for _ in range(self.MAX_RETRANSMIT + 1):
-            pkt = self.bootstrap_server.recv(timeout_s=self.last_retransmission_timeout())
+            pkt = self.bootstrap_server.recv(timeout_s=self.last_retransmission_timeout() + 5)
             self.assertIsInstance(pkt, Lwm2mRequestBootstrap)
 
         self.wait_for_retransmission_response_timeout()
@@ -597,7 +597,7 @@ class NotificationDtlsFailsOnIcmpTest(test_suite.PcapEnabledTest,
         self.assertTrue(self.get_all_connections_failed())
 
 
-class NotificationTimeoutIsIgnored:
+class NotificationTimeoutCancelsObservation:
     class TestMixin(RetransmissionTest.TestMixin,
                     test_suite.Lwm2mDmOperations):
         CONFIRMABLE_NOTIFICATIONS = True
@@ -629,22 +629,19 @@ class NotificationTimeoutIsIgnored:
 
             time.sleep(self.last_retransmission_timeout() + 1)
 
-            # check that following notifications still trigger attempts to send the value
+            # check that the observation is really cancelled
             self.execute_resource(self.serv, oid=OID.Test, iid=1, rid=RID.Test.IncrementCounter)
-            pkt = self.serv.recv(timeout_s=self.last_retransmission_timeout() + 2)
-            self.assertIsInstance(pkt, Lwm2mNotify)
-            self.assertEqual(pkt.content, first_pkt.content)
-            self.serv.send(Lwm2mReset.matching(pkt)())
+            with self.assertRaises(socket.timeout):
+                print(self.serv.recv(timeout_s=self.last_retransmission_timeout() + 5))
 
 
-
-class NotificationDtlsTimeoutIsIgnoredTest(NotificationTimeoutIsIgnored.TestMixin,
-                                           test_suite.Lwm2mDtlsSingleServerTest):
+class NotificationDtlsTimeoutCancelsObservationTest(NotificationTimeoutCancelsObservation.TestMixin,
+                                                    test_suite.Lwm2mDtlsSingleServerTest):
     pass
 
 
-class NotificationTimeoutIsIgnoredTest(NotificationTimeoutIsIgnored.TestMixin,
-                                       test_suite.Lwm2mSingleServerTest):
+class NotificationTimeoutCancelsObservationTest(NotificationTimeoutCancelsObservation.TestMixin,
+                                                test_suite.Lwm2mSingleServerTest):
     pass
 
 

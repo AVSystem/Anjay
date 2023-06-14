@@ -86,8 +86,8 @@ and present in a given Object Instance. A LwM2M Client may be able to handle a
 Resource that has no default value - in that case, the Resource is always
 *supported*, but becomes *present* only after a LwM2M Server sets its value
 first. Before that, it can be treated as non-existent - it will not be reported
-via the Discover RPC, for example. Examples include Default Minimum Period and
-Default Maximum Period Resources of the LwM2M Server object.
+via the Discover operation, for example. Examples include Default Minimum Period
+and Default Maximum Period Resources of the LwM2M Server object.
 
 In our case, Resources 0 and 1 are always present in the only Instance we have,
 so we can implement the ``test_resource_preset`` handler simply as:

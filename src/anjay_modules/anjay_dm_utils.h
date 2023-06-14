@@ -963,6 +963,18 @@ int _anjay_get_objlnk_unlocked(anjay_unlocked_input_ctx_t *ctx,
                                anjay_oid_t *out_oid,
                                anjay_iid_t *out_iid);
 
+int _anjay_execute_get_next_arg_unlocked(anjay_unlocked_execute_ctx_t *ctx,
+                                         int *out_arg,
+                                         bool *out_has_value);
+
+int _anjay_execute_get_arg_value_unlocked(anjay_unlocked_execute_ctx_t *ctx,
+                                          size_t *out_bytes_read,
+                                          char *out_buf,
+                                          size_t buf_size);
+
+AVS_LIST(const anjay_ssid_t)
+_anjay_server_get_ssids_unlocked(anjay_unlocked_t *anjay);
+
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif /* ANJAY_INCLUDE_ANJAY_MODULES_DM_H */

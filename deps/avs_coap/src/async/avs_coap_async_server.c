@@ -245,7 +245,7 @@ static void cancel_notification_on_error(avs_coap_ctx_t *ctx,
             AVS_COAP_CODE_STRING(response_code));
 
 #ifdef WITH_AVS_COAP_OBSERVE
-        _avs_coap_observe_cancel(ctx, &observe_id);
+        avs_coap_observe_cancel(ctx, observe_id);
 #endif // WITH_AVS_COAP_OBSERVE
         (void) ctx;
         (void) observe_id;
@@ -303,6 +303,17 @@ send_result_handler(avs_coap_ctx_t *ctx,
                                      },
                                      exchange->code);
     }
+#ifdef WITH_AVS_COAP_OBSERVE
+    else if (fail_err.category == AVS_COAP_ERR_CATEGORY
+             && fail_err.code == AVS_COAP_ERR_TIMEOUT) {
+        // According to RFC 7641, when trying to send a Confirmable notification
+        // ends in a timeout, the client "is considered no longer interested in
+        // the resource and is removed by the server from the list of observers"
+        avs_coap_observe_cancel(ctx, (avs_coap_observe_id_t) {
+                                         .token = exchange->token
+                                     });
+    }
+#endif // WITH_AVS_COAP_OBSERVE
 
     // exchange may have been canceled by user handler
     if (!_avs_coap_find_server_exchange_ptr_by_id(ctx, exchange_id)) {
@@ -392,9 +403,11 @@ avs_time_monotonic_t
 _avs_coap_async_server_abort_timedout_exchanges(avs_coap_ctx_t *ctx) {
     avs_coap_base_t *coap_base = _avs_coap_get_base(ctx);
     while (coap_base->server_exchanges
-           && avs_time_monotonic_before(coap_base->server_exchanges->by_type
-                                                .server.exchange_deadline,
-                                        avs_time_monotonic_now())) {
+           && avs_time_monotonic_valid(coap_base->server_exchanges->by_type
+                                               .server.exchange_deadline)
+           && !avs_time_monotonic_before(avs_time_monotonic_now(),
+                                         coap_base->server_exchanges->by_type
+                                                 .server.exchange_deadline)) {
         LOG(DEBUG, _("exchange ") "%s" _(" timed out"),
             AVS_UINT64_AS_STRING(coap_base->server_exchanges->id.value));
 
@@ -719,7 +732,7 @@ handle_observe_option(avs_coap_ctx_t *ctx,
         const avs_coap_observe_id_t observe_id = {
             .token = request->token
         };
-        _avs_coap_observe_cancel(ctx, &observe_id);
+        avs_coap_observe_cancel(ctx, observe_id);
     }
     return observe_value;
 }

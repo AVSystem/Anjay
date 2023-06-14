@@ -97,7 +97,7 @@ avs_coap_observe_start(avs_coap_ctx_t *ctx,
     }
 
     // make sure to *replace* existing observation with same ID if one exists
-    _avs_coap_observe_cancel(ctx, &id);
+    avs_coap_observe_cancel(ctx, id);
 
     LOG(DEBUG, _("Observe start: ") "%s", AVS_COAP_TOKEN_HEX(&id.token));
 
@@ -132,22 +132,26 @@ _avs_coap_observe_setup_notify(avs_coap_ctx_t *ctx,
     return AVS_OK;
 }
 
-void _avs_coap_observe_cancel(avs_coap_ctx_t *ctx,
-                              const avs_coap_observe_id_t *id) {
-    AVS_LIST(avs_coap_observe_t) *observe_ptr = find_observe_ptr_by_id(ctx, id);
+avs_error_t avs_coap_observe_cancel(avs_coap_ctx_t *ctx,
+                                    avs_coap_observe_id_t id) {
+    AVS_LIST(avs_coap_observe_t) *observe_ptr = NULL;
+    if (ctx) {
+        observe_ptr = find_observe_ptr_by_id(ctx, &id);
+    }
     if (!observe_ptr) {
         LOG(TRACE, _("observation ") "%s" _(" does not exist"),
-            AVS_COAP_TOKEN_HEX(&id->token));
-        return;
+            AVS_COAP_TOKEN_HEX(&id.token));
+        return avs_errno(AVS_EINVAL);
     }
 
-    LOG(DEBUG, _("Observe cancel: ") "%s", AVS_COAP_TOKEN_HEX(&id->token));
+    LOG(DEBUG, _("Observe cancel: ") "%s", AVS_COAP_TOKEN_HEX(&id.token));
 
     avs_coap_observe_t *observe = AVS_LIST_DETACH(observe_ptr);
     if (observe->cancel_handler) {
-        observe->cancel_handler(*id, observe->cancel_handler_arg);
+        observe->cancel_handler(id, observe->cancel_handler_arg);
     }
     AVS_LIST_DELETE(&observe);
+    return AVS_OK;
 }
 
 #    ifdef WITH_AVS_COAP_OBSERVE_PERSISTENCE

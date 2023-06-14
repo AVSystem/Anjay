@@ -112,7 +112,7 @@ bool _anjay_connection_ready_for_outgoing_message(anjay_connection_ref_t ref) {
     // server as inactive for notification purposes.
     anjay_unlocked_t *anjay = _anjay_from_server(ref.server);
     return !_anjay_bootstrap_in_progress(anjay)
-           && _anjay_server_active(ref.server)
+           && _anjay_server_connection_active(ref)
            && !_anjay_server_registration_expired(ref.server)
            && !_anjay_server_registration_info(ref.server)->update_forced;
 }
@@ -212,6 +212,14 @@ bool _anjay_server_is_disable_scheduled(anjay_server_info_t *server) {
                        == ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_TIMEOUT_FROM_DM
                || server->next_action
                           == ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_EXPLICIT_TIMEOUT);
+}
+
+bool _anjay_server_connection_active(anjay_connection_ref_t ref) {
+    if (_anjay_server_is_disable_scheduled(ref.server)) {
+        return false;
+    }
+    return !!_anjay_connection_internal_get_socket(
+            _anjay_get_server_connection(ref));
 }
 
 bool _anjay_server_active(anjay_server_info_t *server) {

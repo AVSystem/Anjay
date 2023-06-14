@@ -11,6 +11,7 @@
 #define ANJAY_UTILS_PRIVATE_H
 
 #include <avsystem/commons/avs_list.h>
+#include <avsystem/commons/avs_persistence.h>
 #include <avsystem/commons/avs_socket.h>
 #include <avsystem/commons/avs_utils.h>
 
@@ -126,6 +127,8 @@ bool _anjay_socket_transport_included(anjay_transport_set_t set,
 
 bool _anjay_socket_transport_is_online(anjay_unlocked_t *anjay,
                                        anjay_socket_transport_t transport);
+
+// || defined(ANJAY_WITH_CORE_PERSISTENCE))
 
 #define ANJAY_SMS_URI_SCHEME "tel"
 

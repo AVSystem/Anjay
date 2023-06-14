@@ -144,12 +144,14 @@ ${CMAKE_COMMAND} \
     -D WITH_DOC_CHECK=ON \
     -D WITH_URL_CHECK=ON \
     -D WITH_STATIC_ANALYSIS=${WITH_STATIC_ANALYSIS} \
+    -D WITH_MODULE_advanced_fw_update=ON \
     -D DTLS_BACKEND="${DTLS_BACKEND}" \
     -D AVS_LOG_WITH_TRACE=ON \
     -D WITH_EXAMPLES=${WITH_EXAMPLES} \
     -D CMAKE_C_FLAGS="${C_FLAGS} ${EXTRA_C_FLAGS}" \
     -D CMAKE_CXX_FLAGS="${EXTRA_C_FLAGS}" \
     -D ANJAY_VERSION="${ANJAY_VERSION}" \
+    -D NPROC="$((3 * $(nproc)))" \
     "${EXTRA_FLAGS[@]}" \
     -H"$(dirname "$0")" -B. &&
 make clean

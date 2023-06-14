@@ -27,6 +27,10 @@
 #include "anjay_connections_internal.h"
 #include "anjay_servers_internal.h"
 
+#ifdef ANJAY_TEST
+#    include "tests/core/socket_mock.h"
+#endif // ANJAY_TEST
+
 VISIBILITY_SOURCE_BEGIN
 
 #if defined(WITH_AVS_COAP_UDP) \

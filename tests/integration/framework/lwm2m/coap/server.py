@@ -8,15 +8,13 @@
 # See the attached LICENSE file for details.
 
 import contextlib
+import enum
 import socket
-import errno
+import time
 from typing import Tuple, Optional
 
 from .packet import Packet
 from .transport import Transport
-from .code import Code
-
-import enum
 
 
 class SecurityMode(enum.Enum):
@@ -39,17 +37,27 @@ class SecurityMode(enum.Enum):
             return 'nosec'
 
 
+def _calculate_deadline(timeout_s=-1, deadline=None):
+    if deadline is None and timeout_s is not None and timeout_s >= 0:
+        return time.time() + timeout_s
+    else:
+        return deadline
+
+
 @contextlib.contextmanager
-def _override_timeout(sock, timeout_s=-1):
-    skip_override = sock is None or (timeout_s is not None and timeout_s < 0)
+def _override_timeout(sock, *args, **kwargs):
+    deadline = _calculate_deadline(*args, **kwargs)
+    skip_override = sock is None or deadline is None
 
     if skip_override:
         yield
     else:
         orig_timeout_s = sock.gettimeout()
-        sock.settimeout(timeout_s)
-        yield
-        sock.settimeout(orig_timeout_s)
+        try:
+            sock.settimeout(max(deadline - time.time(), 0))
+            yield
+        finally:
+            sock.settimeout(orig_timeout_s)
 
 
 def _disconnect_socket(old_sock, family):
@@ -118,28 +126,28 @@ class Server(object):
         self.transport = transport
         self.reuse_port = reuse_port
         self.accepted_connection = False
+        self._filtered_messages = []
 
         self.reset(listen_port)
 
-    def listen(self, timeout_s=-1):
+    def listen(self, *args, **kwargs):
+        deadline = _calculate_deadline(*args, **kwargs)
+
         if self.transport == Transport.UDP:
             assert self.get_remote_addr() is None
-            with _override_timeout(self.socket, timeout_s):
-                _, remote_addr_port = self.socket.recvfrom(1, socket.MSG_PEEK)
+            with _override_timeout(self.socket, deadline=deadline):
+                raw_pkt, remote_addr_port = self.socket.recvfrom(65536)
 
             self.connect_to_client(remote_addr_port)
+            self._filtered_messages.append(raw_pkt)
         elif self.transport == Transport.TCP:
             self.socket.listen()
-            with _override_timeout(self.socket, timeout_s):
+            with _override_timeout(self.socket, deadline=deadline):
                 client_socket, _ = self.socket.accept()
                 if self.server_socket is not None:
                     self.server_socket.close()
                 self.server_socket = self.socket
                 self.socket = client_socket
-                pkt = self.recv()
-
-            assert pkt.code == Code.SIGNALING_CSM
-            self.send(Packet(code=Code.SIGNALING_CSM, token=b''))
         else:
             raise ValueError("Invalid transport: %r" % (self.transport,))
 
@@ -189,6 +197,7 @@ class Server(object):
                 self._raw_udp_socket, self.family)
 
     def _flush_recv_queue(self) -> None:
+        self._filtered_messages.clear()
         with _override_timeout(self._raw_udp_socket, 0):
             try:
                 while True:
@@ -212,6 +221,7 @@ class Server(object):
         if self.socket:
             self.socket.close()
             self.socket = None
+            self._filtered_messages.clear()
 
     def reset(self, listen_port=None) -> None:
         if listen_port is None:
@@ -221,30 +231,64 @@ class Server(object):
         if self.server_socket is not None:
             self.socket = self.server_socket
         else:
-            self.socket = socket.socket(self.family, socket.SOCK_STREAM if self.transport == Transport.TCP else socket.SOCK_DGRAM)
+            self.socket = socket.socket(self.family,
+                                        socket.SOCK_STREAM if self.transport == Transport.TCP else socket.SOCK_DGRAM)
             self.socket.setsockopt(
                 socket.SOL_SOCKET, socket.SO_REUSEPORT, 1 if self.reuse_port else 0)
-            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.socket.setsockopt(
+                socket.SOL_SOCKET, socket.SO_REUSEADDR, 1 if self.reuse_port else 0)
             self.socket.bind(('', listen_port))
         self.accepted_connection = False
 
     def send(self, coap_packet: Packet) -> None:
         self.socket.send(coap_packet.serialize(transport=self.transport))
 
-    def recv_raw(self, timeout_s: float = -1):
+    def recv_raw(self, timeout_s=-1, deadline=None, peek=False):
+        deadline = _calculate_deadline(timeout_s, deadline)
+
         # NOTE: get_remote_addr() can sometimes return None, if someone
         # decided to "unconnect" the socket from a certain client. It is
         # only done for testing connection_id.
         if not self.get_remote_addr() and not self.accepted_connection:
-            self.listen(timeout_s=timeout_s)
+            self.listen(deadline=deadline)
 
         self.accepted_connection = True
 
-        with _override_timeout(self.socket, timeout_s):
-            return self.socket.recv(65536)
+        if len(self._filtered_messages) > 0:
+            if peek:
+                return self._filtered_messages[0]
+            else:
+                return self._filtered_messages.pop(0)
 
-    def recv(self, timeout_s: float = -1) -> Packet:
-        return Packet.parse(self.recv_raw(timeout_s), transport=self.transport)
+        with _override_timeout(self.socket, deadline=deadline):
+            raw_pkt = self.socket.recv(65536)
+
+        if peek:
+            self._filtered_messages.append(raw_pkt)
+
+        return raw_pkt
+
+    def recv(self, timeout_s: float = -1, deadline=None, filter=None, peek=False) -> Packet:
+        deadline = _calculate_deadline(timeout_s, deadline)
+
+        if filter is None:
+            filter = lambda _: True
+
+        filtered_messages = []
+        while True:
+            try:
+                raw_pkt = self.recv_raw(deadline=deadline)
+            except BlockingIOError:
+                raise socket.timeout('timed out')
+            pkt = Packet.parse(raw_pkt, transport=self.transport)
+            filter_result = filter(pkt)
+            if peek or not filter_result:
+                filtered_messages.append(raw_pkt)
+            if filter_result:
+                break
+
+        self._filtered_messages += filtered_messages
+        return pkt
 
     def set_timeout(self, timeout_s: float) -> None:
         self.socket_timeout = timeout_s
@@ -327,14 +371,16 @@ class TlsServer(Server):
         if not isinstance(self.socket, ServerSocket):
             self.socket = ServerSocket(self._pymbedtls_context, self.socket)
 
-    def listen(self, timeout_s: float = -1) -> None:
+    def listen(self, *args, **kwargs) -> None:
+        deadline = _calculate_deadline(*args, **kwargs)
+
         from pymbedtls import ServerSocket
         assert isinstance(self.socket, ServerSocket)
 
         if self.transport == Transport.TCP:
             self.socket.py_socket.listen()
 
-        with _override_timeout(self.socket, timeout_s):
+        with _override_timeout(self.socket, deadline=deadline):
             client_socket = self.socket.accept()
             if self.socket_timeout is not None:
                 client_socket.settimeout(self.socket_timeout)
@@ -347,10 +393,6 @@ class TlsServer(Server):
                 self.server_socket.close()
             self.server_socket = self.socket
             self.socket = client_socket
-
-            pkt = self.recv()
-            assert pkt.code == Code.SIGNALING_CSM
-            self.send(Packet(code=Code.SIGNALING_CSM, token=b''))
         else:
             raise ValueError("Invalid transport: %r" % (self.transport,))
 

@@ -16,8 +16,6 @@ class DisableServerTest(test_suite.Lwm2mSingleServerTest):
         self.assertEqual(num, self.get_socket_count())
 
     def runTest(self):
-        self.serv.set_timeout(timeout_s=1)
-
         # Write Disable Timeout
         req = Lwm2mWrite(ResPath.Server[1].DisableTimeout, '6')
         self.serv.send(req)
@@ -35,6 +33,7 @@ class DisableServerTest(test_suite.Lwm2mSingleServerTest):
             print(self.serv.recv(timeout_s=5))
 
         self.assertSocketsPolled(0)
+        self.assertFalse(self.ongoing_registration_exists())
 
         # we should get another Register
         self.assertDemoRegisters(timeout_s=3)
@@ -83,6 +82,8 @@ class DisableServerRestartTest(test_suite.Lwm2mTest, test_suite.Lwm2mDmOperation
         self.execute_resource(self.servers[1], OID.Server, 1, RID.Server.Disable)
         with self.assertRaises(socket.timeout):
             print(self.servers[0].recv(timeout_s=5))
+
+        self.assertFalse(self.ongoing_registration_exists())
 
         # only now the server should re-register
         self.assertDemoRegisters(server=self.servers[0], timeout_s=3)

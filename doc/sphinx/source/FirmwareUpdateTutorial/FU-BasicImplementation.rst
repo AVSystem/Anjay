@@ -30,6 +30,8 @@ chapter. In the end, our project structure would look as follows:
 Note the ``firmware_update.c`` and ``firmware_update.h`` are introduced in this
 chapter.
 
+.. _anjay_fw_update_install:
+
 Installing the Firmware Update module
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

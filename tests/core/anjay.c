@@ -9,6 +9,8 @@
 
 #include <anjay_init.h>
 
+#include <avsystem/commons/avs_stream_membuf.h>
+
 #define AVS_UNIT_ENABLE_SHORT_ASSERTS
 #include <avsystem/commons/avs_unit_test.h>
 
@@ -17,8 +19,11 @@
 
 #include <avsystem/coap/ctx.h>
 
+#include "src/core/anjay_servers_inactive.h"
+#include "src/core/anjay_servers_reload.h"
 #include "src/core/servers/anjay_server_connections.h"
 #include "tests/core/coap/utils.h"
+#include "tests/core/socket_mock.h"
 #include "tests/utils/dm.h"
 #include "tests/utils/utils.h"
 
@@ -620,7 +625,9 @@ AVS_UNIT_TEST(queue_mode, change) {
         ASSERT_EQ(entries->ssid, 1);
         ASSERT_FALSE(entries->queue_mode);
     }
+#ifndef ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
     ASSERT_NULL(connection->queue_mode_close_socket_clb);
+#endif // ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
 
     ////// REFRESH BINDING MODE //////
     // query SSID in Server
@@ -805,9 +812,7 @@ AVS_UNIT_TEST(queue_mode, change) {
                      PAYLOAD("</1>,</42>"));
     avs_unit_mocksock_expect_output(mocksocks[0], update->content,
                                     update->length);
-    while (anjay_sched_calculate_wait_time_ms(anjay, INT_MAX) == 0) {
-        anjay_sched_run(anjay);
-    }
+    anjay_sched_run(anjay);
 
     const coap_test_msg_t *update_response =
             COAP_MSG(ACK, CHANGED, ID_TOKEN_RAW(0x0000, nth_token(0)),
@@ -817,6 +822,7 @@ AVS_UNIT_TEST(queue_mode, change) {
     expect_has_buffered_data_check(mocksocks[0], false);
     ASSERT_OK(anjay_serve(anjay, mocksocks[0]));
 
+#ifndef ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
     ASSERT_NOT_NULL(connection->queue_mode_close_socket_clb);
     // After 93s from now, the socket should be closed. We first wait for 92s,
     // ensure that the socket is still not closed, then wait one more second,
@@ -832,6 +838,7 @@ AVS_UNIT_TEST(queue_mode, change) {
     ASSERT_NULL(anjay_get_sockets(anjay));
     ASSERT_NULL(anjay_get_socket_entries(anjay));
     ASSERT_NULL(connection->queue_mode_close_socket_clb);
+#endif // ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
 
     DM_TEST_FINISH;
 }
@@ -845,7 +852,13 @@ AVS_UNIT_TEST(anjay_new, no_endpoint_name) {
     ASSERT_NULL(anjay_new(&configuration));
 }
 
-static const anjay_iid_t FAKE_SERVER_INSTANCES[] = { 1, ANJAY_ID_INVALID };
+static const anjay_mock_dm_res_entry_t FAKE_SECURITY_RESOURCES[] = {
+    { ANJAY_DM_RID_SECURITY_SERVER_URI, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT },
+    { ANJAY_DM_RID_SECURITY_MODE, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT },
+    { ANJAY_DM_RID_SECURITY_SSID, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT },
+    ANJAY_MOCK_DM_RES_END
+};
+
 static const anjay_mock_dm_res_entry_t FAKE_SERVER_RESOURCES[] = {
     { ANJAY_DM_RID_SERVER_SSID, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT },
     { ANJAY_DM_RID_SERVER_LIFETIME, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
@@ -853,37 +866,59 @@ static const anjay_mock_dm_res_entry_t FAKE_SERVER_RESOURCES[] = {
     ANJAY_MOCK_DM_RES_END
 };
 
-static void expect_refresh_server(anjay_t *anjay) {
+typedef enum {
+    RECONNECT_VERIFY = 0,
+    RECONNECT_SUSPENDED,
+    RECONNECT_FULL,
+    RECONNECT_NONE
+} expect_refresh_server_reconnect_mode_t;
+
+typedef struct {
+    int dummy;
+    expect_refresh_server_reconnect_mode_t with_reconnect;
+    anjay_ssid_t ssid;
+    size_t server_count;
+} expect_refresh_server_additional_args_t;
+
+static void
+expect_refresh_server__(anjay_t *anjay,
+                        const expect_refresh_server_additional_args_t *args) {
+    anjay_ssid_t ssid = args->ssid ? args->ssid : 1;
+    size_t server_count = args->server_count ? args->server_count : 1;
+    AVS_UNIT_ASSERT_TRUE(ssid <= server_count);
+
+    anjay_iid_t fake_server_instances[server_count + 1];
+    for (size_t i = 0; i < server_count; ++i) {
+        fake_server_instances[i] = (anjay_iid_t) (i + 1);
+    }
+    fake_server_instances[server_count] = ANJAY_ID_INVALID;
+
     _anjay_mock_dm_expect_list_instances(anjay, &FAKE_SERVER, 0,
-                                         FAKE_SERVER_INSTANCES);
+                                         fake_server_instances);
     // Read SSID
-    _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SERVER, 1, 0,
-                                         FAKE_SERVER_RESOURCES);
-    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
-                                        ANJAY_DM_RID_SERVER_SSID,
-                                        ANJAY_ID_INVALID, 0,
-                                        ANJAY_MOCK_DM_INT(0, 1));
+    for (anjay_ssid_t i = 1; i <= ssid; ++i) {
+        _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SERVER, i, 0,
+                                             FAKE_SERVER_RESOURCES);
+        _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, i,
+                                            ANJAY_DM_RID_SERVER_SSID,
+                                            ANJAY_ID_INVALID, 0,
+                                            ANJAY_MOCK_DM_INT(0, i));
+    }
     // Read Binding
-    _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SERVER, 1, 0,
+    _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SERVER, ssid, 0,
                                          FAKE_SERVER_RESOURCES);
-    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
+    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, ssid,
                                         ANJAY_DM_RID_SERVER_BINDING,
                                         ANJAY_ID_INVALID, 0,
                                         ANJAY_MOCK_DM_STRING(0, "U"));
 #ifdef ANJAY_WITH_LWM2M11
     // attempt to read Preferred Transport
-    _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SERVER, 1, 0,
+    _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SERVER, ssid, 0,
                                          FAKE_SERVER_RESOURCES);
 #endif // ANJAY_WITH_LWM2M11
     _anjay_mock_dm_expect_list_instances(
             anjay, &FAKE_SECURITY2, 0,
             (const anjay_iid_t[]) { 1, ANJAY_ID_INVALID });
-    const anjay_mock_dm_res_entry_t FAKE_SECURITY_RESOURCES[] = {
-        { ANJAY_DM_RID_SECURITY_SERVER_URI, ANJAY_DM_RES_R,
-          ANJAY_DM_RES_PRESENT },
-        { ANJAY_DM_RID_SECURITY_SSID, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT },
-        ANJAY_MOCK_DM_RES_END
-    };
     // attempt to read Bootstrap
     _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SECURITY2, 1, 0,
                                          FAKE_SECURITY_RESOURCES);
@@ -893,7 +928,7 @@ static void expect_refresh_server(anjay_t *anjay) {
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SECURITY2, 1,
                                         ANJAY_DM_RID_SECURITY_SSID,
                                         ANJAY_ID_INVALID, 0,
-                                        ANJAY_MOCK_DM_INT(0, 1));
+                                        ANJAY_MOCK_DM_INT(0, ssid));
     // Read Server URI
     _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SECURITY2, 1, 0,
                                          FAKE_SECURITY_RESOURCES);
@@ -905,45 +940,98 @@ static void expect_refresh_server(anjay_t *anjay) {
     _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SECURITY2, 1, 0,
                                          FAKE_SECURITY_RESOURCES);
 #endif // ANJAY_WITH_LWM2M11
+    if (args->with_reconnect == RECONNECT_NONE) {
+        return;
+    }
+    if (args->with_reconnect >= RECONNECT_FULL) {
+        _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SECURITY2, 1, 0,
+                                             FAKE_SECURITY_RESOURCES);
+        _anjay_mock_dm_expect_resource_read(
+                anjay, &FAKE_SECURITY2, 1, ANJAY_DM_RID_SECURITY_MODE,
+                ANJAY_ID_INVALID, 0,
+                ANJAY_MOCK_DM_INT(0, ANJAY_SECURITY_NOSEC));
+    }
     // Query the data model
     _anjay_mock_dm_expect_list_instances(anjay, &FAKE_SERVER, 0,
-                                         FAKE_SERVER_INSTANCES);
+                                         fake_server_instances);
     // attempt to read Bootstrap
     _anjay_mock_dm_expect_list_instances(anjay, &FAKE_SERVER, 0,
-                                         FAKE_SERVER_INSTANCES);
+                                         fake_server_instances);
     // Read SSID
-    _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SERVER, 1, 0,
-                                         FAKE_SERVER_RESOURCES);
-    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
-                                        ANJAY_DM_RID_SERVER_SSID,
-                                        ANJAY_ID_INVALID, 0,
-                                        ANJAY_MOCK_DM_INT(0, 1));
+    for (anjay_ssid_t i = 1; i <= ssid; ++i) {
+        _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SERVER, i, 0,
+                                             FAKE_SERVER_RESOURCES);
+        _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, i,
+                                            ANJAY_DM_RID_SERVER_SSID,
+                                            ANJAY_ID_INVALID, 0,
+                                            ANJAY_MOCK_DM_INT(0, i));
+    }
     // Read Lifetime
-    _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SERVER, 1, 0,
+    _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SERVER, ssid, 0,
                                          FAKE_SERVER_RESOURCES);
-    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
+    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, ssid,
                                         ANJAY_DM_RID_SERVER_LIFETIME,
                                         ANJAY_ID_INVALID, 0,
                                         ANJAY_MOCK_DM_INT(0, 86400));
 }
 
-static void force_update(anjay_t *anjay, avs_net_socket_t *mocksock) {
-    AVS_UNIT_ASSERT_SUCCESS(anjay_schedule_registration_update(anjay, 1));
-    expect_refresh_server(anjay);
-    anjay_sched_run(anjay);
+#define expect_refresh_server(...)                                             \
+    expect_refresh_server__(AVS_VARARG0(__VA_ARGS__),                          \
+                            &(const expect_refresh_server_additional_args_t) { \
+                                .dummy = 0 AVS_VARARG_REST(__VA_ARGS__)        \
+                            })
+
+typedef struct {
+    int dummy;
+    anjay_ssid_t ssid;
+    size_t server_count;
+    uint64_t token_seed;
+} force_update_additional_args_t;
+
+static void force_update__(anjay_t *anjay,
+                           avs_net_socket_t *mocksock,
+                           const force_update_additional_args_t *args) {
+    anjay_ssid_t ssid = args->ssid ? args->ssid : 1;
+    size_t server_count = args->server_count ? args->server_count : 1;
+    AVS_UNIT_ASSERT_TRUE(ssid <= server_count);
+
+    AVS_UNIT_ASSERT_SUCCESS(anjay_schedule_registration_update(anjay, ssid));
+    expect_refresh_server(anjay,
+                          .ssid = ssid,
+                          .server_count = server_count);
+    avs_stream_t *payload_memstream = avs_stream_membuf_create();
+    AVS_UNIT_ASSERT_NOT_NULL(payload_memstream);
+    for (anjay_iid_t i = 1; i <= server_count; ++i) {
+        AVS_UNIT_ASSERT_SUCCESS(avs_stream_write_f(
+                payload_memstream, "%s</1/%" PRIu16 ">", i > 1 ? "," : "", i));
+    }
+    void *payload = NULL;
+    size_t payload_size = 0;
+    AVS_UNIT_ASSERT_SUCCESS(avs_stream_membuf_take_ownership(
+            payload_memstream, &payload, &payload_size));
+    avs_stream_cleanup(&payload_memstream);
     const coap_test_msg_t *update_request =
-            COAP_MSG(CON, POST, ID_TOKEN_RAW(0x0000, nth_token(0)),
+            COAP_MSG(CON, POST,
+                     ID_TOKEN_RAW(0x0000, nth_token(args->token_seed)),
                      CONTENT_FORMAT(LINK_FORMAT), QUERY("lt=86400", "b=U"),
-                     PAYLOAD("</1/1>"));
+                     PAYLOAD_EXTERNAL(payload, payload_size));
     avs_unit_mocksock_expect_output(mocksock, update_request->content,
                                     update_request->length);
     anjay_sched_run(anjay);
-    DM_TEST_REQUEST(mocksock, ACK, CHANGED, ID_TOKEN_RAW(0x0000, nth_token(0)),
+    avs_free(payload);
+    DM_TEST_REQUEST(mocksock, ACK, CHANGED,
+                    ID_TOKEN_RAW(0x0000, nth_token(args->token_seed)),
                     NO_PAYLOAD);
     expect_has_buffered_data_check(mocksock, false);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksock));
     anjay_sched_run(anjay);
 }
+
+#define force_update(Anjay, ...)                               \
+    force_update__((Anjay), AVS_VARARG0(__VA_ARGS__),          \
+                   &(const force_update_additional_args_t) {   \
+                       .dummy = 0 AVS_VARARG_REST(__VA_ARGS__) \
+                   })
 
 AVS_UNIT_TEST(reconnect_after_update, test) {
     DM_TEST_INIT_WITH_OBJECTS(&FAKE_SECURITY2, &FAKE_SERVER);
@@ -965,8 +1053,9 @@ AVS_UNIT_TEST(reconnect_after_update, test) {
                                          .flag = true
                                      });
     // reload_servers_sched_job
-    _anjay_mock_dm_expect_list_instances(anjay, &FAKE_SERVER, 0,
-                                         FAKE_SERVER_INSTANCES);
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &FAKE_SERVER, 0,
+            (const anjay_iid_t[]) { 1, ANJAY_ID_INVALID });
     _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SERVER, 1, 0,
                                          FAKE_SERVER_RESOURCES);
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
@@ -979,7 +1068,6 @@ AVS_UNIT_TEST(reconnect_after_update, test) {
     _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SECURITY2, 1, 0,
                                          (const anjay_mock_dm_res_entry_t[]) {
                                                  ANJAY_MOCK_DM_RES_END });
-    anjay_sched_run(anjay);
 
     // retry_or_request_expired_job
     const coap_test_msg_t *update_request =
@@ -1000,5 +1088,319 @@ AVS_UNIT_TEST(reconnect_after_update, test) {
     AVS_UNIT_ASSERT_TRUE(anjay_sched_calculate_wait_time_ms(anjay, INT_MAX)
                          >= 1000);
 
+    DM_TEST_FINISH;
+}
+
+#ifdef ANJAY_WITH_LWM2M11
+#    define DM_REGISTER_TEST_CONFIGURATION                                    \
+        DM_TEST_CONFIGURATION(.lwm2m_version_config = &(                      \
+                                      const anjay_lwm2m_version_config_t) {   \
+                                  .minimum_version = ANJAY_LWM2M_VERSION_1_0, \
+                                  .maximum_version = ANJAY_LWM2M_VERSION_1_0  \
+                              })
+#else // ANJAY_WITH_LWM2M11
+#    define DM_REGISTER_TEST_CONFIGURATION DM_TEST_CONFIGURATION()
+#endif // ANJAY_WITH_LWM2M11
+
+#define DM_REGISTER_TEST_INIT_WITH_SSIDS(...)                                  \
+    const anjay_dm_object_def_t *const *obj_defs[] = { &FAKE_SECURITY2,        \
+                                                       &FAKE_SERVER };         \
+    anjay_ssid_t ssids[] = { __VA_ARGS__ };                                    \
+    DM_TEST_INIT_GENERIC(obj_defs, ssids, DM_REGISTER_TEST_CONFIGURATION);     \
+    do {                                                                       \
+        /* Do initial Updates first to update the registration expire times */ \
+        for (size_t _i = 0; _i < AVS_ARRAY_SIZE(ssids); ++_i) {                \
+            force_update(anjay, mocksocks[_i],                                 \
+                         .ssid = (anjay_ssid_t) (_i + 1),                      \
+                         .server_count = AVS_ARRAY_SIZE(ssids),                \
+                         .token_seed = _i);                                    \
+        }                                                                      \
+    } while (false)
+
+static void make_server_inactive(anjay_t *anjay,
+                                 anjay_ssid_t ssid,
+                                 avs_net_socket_t *mocksock) {
+    // Schedule server refresh and make it fail
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    anjay_server_info_t *server = _anjay_servers_find(anjay_unlocked, ssid);
+    AVS_UNIT_ASSERT_NOT_NULL(server);
+    _anjay_schedule_refresh_server(server, AVS_TIME_DURATION_ZERO);
+    ANJAY_MUTEX_UNLOCK(anjay);
+    _anjay_mock_dm_expect_list_instances(anjay, &FAKE_SERVER, -1,
+                                         (const anjay_iid_t[]) {
+                                                 ANJAY_ID_INVALID });
+    avs_unit_mocksock_expect_shutdown(mocksock);
+#ifdef ANJAY_WITH_NET_STATS
+    avs_unit_mocksock_expect_get_opt(mocksock, AVS_NET_SOCKET_OPT_BYTES_SENT,
+                                     (avs_net_socket_opt_value_t) {
+                                         .bytes_sent = 0
+                                     });
+    avs_unit_mocksock_expect_get_opt(mocksock,
+                                     AVS_NET_SOCKET_OPT_BYTES_RECEIVED,
+                                     (avs_net_socket_opt_value_t) {
+                                         .bytes_received = 0
+                                     });
+#endif // ANJAY_WITH_NET_STATS
+#ifdef ANJAY_WITH_LWM2M11
+    _anjay_mock_dm_expect_list_instances(anjay, &FAKE_SERVER, -1,
+                                         (const anjay_iid_t[]) {
+                                                 ANJAY_ID_INVALID });
+#endif // ANJAY_WITH_LWM2M11
+    anjay_sched_run(anjay);
+    AVS_UNIT_ASSERT_TRUE(anjay_sched_calculate_wait_time_ms(anjay, INT_MAX)
+                         >= 1000);
+}
+
+AVS_UNIT_TEST(reconnect_server, failures) {
+    DM_REGISTER_TEST_INIT_WITH_SSIDS(1);
+    // ANJAY_SSID_ANY
+    AVS_UNIT_ASSERT_FAILED(
+            anjay_server_schedule_reconnect(anjay, ANJAY_SSID_ANY));
+    // Nonexistent server
+    AVS_UNIT_ASSERT_FAILED(anjay_server_schedule_reconnect(anjay, 42));
+    // Inactive server
+    make_server_inactive(anjay, 1, mocksocks[0]);
+    AVS_UNIT_ASSERT_FAILED(anjay_server_schedule_reconnect(anjay, 1));
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(reconnect_server, fresh_session) {
+    DM_REGISTER_TEST_INIT_WITH_SSIDS(1);
+    avs_unit_mocksock_expect_shutdown(mocksocks[0]);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_server_schedule_reconnect(anjay, 1));
+    expect_refresh_server(anjay,
+                          .with_reconnect = RECONNECT_SUSPENDED);
+    avs_unit_mocksock_expect_connect(mocksocks[0], "", "");
+    avs_unit_mocksock_expect_local_port(mocksocks[0], "5683");
+    avs_unit_mocksock_expect_get_opt(mocksocks[0],
+                                     AVS_NET_SOCKET_OPT_SESSION_RESUMED,
+                                     (avs_net_socket_opt_value_t) {
+                                         .flag = false
+                                     });
+    const coap_test_msg_t *register_request =
+            COAP_MSG(CON, POST, ID_TOKEN_RAW(0x0000, nth_token(1)),
+                     CONTENT_FORMAT(LINK_FORMAT), PATH("rd"),
+                     QUERY("lwm2m=1.0", "ep=urn:dev:os:anjay-test", "lt=86400"),
+                     PAYLOAD("</1/1>"));
+    avs_unit_mocksock_expect_output(mocksocks[0], register_request->content,
+                                    register_request->length);
+    anjay_sched_run(anjay);
+    AVS_UNIT_ASSERT_TRUE(anjay_sched_calculate_wait_time_ms(anjay, INT_MAX)
+                         >= 1000);
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(reconnect_server, resumed_session) {
+    DM_REGISTER_TEST_INIT_WITH_SSIDS(1);
+    avs_unit_mocksock_expect_shutdown(mocksocks[0]);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_server_schedule_reconnect(anjay, 1));
+    expect_refresh_server(anjay);
+    avs_unit_mocksock_expect_connect(mocksocks[0], "", "");
+    avs_unit_mocksock_expect_local_port(mocksocks[0], "5683");
+    avs_unit_mocksock_expect_get_opt(mocksocks[0],
+                                     AVS_NET_SOCKET_OPT_SESSION_RESUMED,
+                                     (avs_net_socket_opt_value_t) {
+                                         .flag = true
+                                     });
+    anjay_sched_run(anjay);
+    AVS_UNIT_ASSERT_TRUE(anjay_sched_calculate_wait_time_ms(anjay, INT_MAX)
+                         >= 1000);
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(schedule_register, nonexistent) {
+    DM_REGISTER_TEST_INIT_WITH_SSIDS(1);
+    AVS_UNIT_ASSERT_FAILED(anjay_schedule_register(anjay, 42));
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(schedule_register, active_server) {
+    DM_REGISTER_TEST_INIT_WITH_SSIDS(1);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_schedule_register(anjay, 1));
+    expect_refresh_server(anjay);
+    const coap_test_msg_t *register_request =
+            COAP_MSG(CON, POST, ID_TOKEN_RAW(0x0001, nth_token(1)),
+                     CONTENT_FORMAT(LINK_FORMAT), PATH("rd"),
+                     QUERY("lwm2m=1.0", "ep=urn:dev:os:anjay-test", "lt=86400"),
+                     PAYLOAD("</1/1>"));
+    avs_unit_mocksock_expect_output(mocksocks[0], register_request->content,
+                                    register_request->length);
+    anjay_sched_run(anjay);
+    AVS_UNIT_ASSERT_TRUE(anjay_sched_calculate_wait_time_ms(anjay, INT_MAX)
+                         >= 1000);
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(schedule_register, reconnect_and_register) {
+    DM_REGISTER_TEST_INIT_WITH_SSIDS(1);
+    avs_unit_mocksock_expect_shutdown(mocksocks[0]);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_server_schedule_reconnect(anjay, 1));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_schedule_register(anjay, 1));
+    expect_refresh_server(anjay);
+    avs_unit_mocksock_expect_connect(mocksocks[0], "", "");
+    avs_unit_mocksock_expect_local_port(mocksocks[0], "5683");
+    avs_unit_mocksock_expect_get_opt(mocksocks[0],
+                                     AVS_NET_SOCKET_OPT_SESSION_RESUMED,
+                                     (avs_net_socket_opt_value_t) {
+                                         .flag = true
+                                     });
+    const coap_test_msg_t *register_request =
+            COAP_MSG(CON, POST, ID_TOKEN_RAW(0x0001, nth_token(1)),
+                     CONTENT_FORMAT(LINK_FORMAT), PATH("rd"),
+                     QUERY("lwm2m=1.0", "ep=urn:dev:os:anjay-test", "lt=86400"),
+                     PAYLOAD("</1/1>"));
+    avs_unit_mocksock_expect_output(mocksocks[0], register_request->content,
+                                    register_request->length);
+    anjay_sched_run(anjay);
+    AVS_UNIT_ASSERT_TRUE(anjay_sched_calculate_wait_time_ms(anjay, INT_MAX)
+                         >= 1000);
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(schedule_register, register_and_reconnect) {
+    DM_REGISTER_TEST_INIT_WITH_SSIDS(1);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_schedule_register(anjay, 1));
+    avs_unit_mocksock_expect_shutdown(mocksocks[0]);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_server_schedule_reconnect(anjay, 1));
+    expect_refresh_server(anjay);
+    avs_unit_mocksock_expect_connect(mocksocks[0], "", "");
+    avs_unit_mocksock_expect_local_port(mocksocks[0], "5683");
+    avs_unit_mocksock_expect_get_opt(mocksocks[0],
+                                     AVS_NET_SOCKET_OPT_SESSION_RESUMED,
+                                     (avs_net_socket_opt_value_t) {
+                                         .flag = true
+                                     });
+    const coap_test_msg_t *register_request =
+            COAP_MSG(CON, POST, ID_TOKEN_RAW(0x0001, nth_token(1)),
+                     CONTENT_FORMAT(LINK_FORMAT), PATH("rd"),
+                     QUERY("lwm2m=1.0", "ep=urn:dev:os:anjay-test", "lt=86400"),
+                     PAYLOAD("</1/1>"));
+    avs_unit_mocksock_expect_output(mocksocks[0], register_request->content,
+                                    register_request->length);
+    anjay_sched_run(anjay);
+    AVS_UNIT_ASSERT_TRUE(anjay_sched_calculate_wait_time_ms(anjay, INT_MAX)
+                         >= 1000);
+    DM_TEST_FINISH;
+}
+
+static avs_net_socket_t **recreate_mocksock_once_ptr;
+
+static avs_error_t
+recreate_udp_mocksock_once(avs_net_socket_t **socket,
+                           const avs_net_socket_configuration_t *config) {
+    (void) config;
+    AVS_UNIT_ASSERT_NULL(*socket);
+    *recreate_mocksock_once_ptr = _anjay_test_dm_create_socket(false);
+    *socket = *recreate_mocksock_once_ptr;
+    AVS_UNIT_MOCK(avs_net_udp_socket_create) = NULL;
+    recreate_mocksock_once_ptr = NULL;
+    avs_unit_mocksock_expect_connect(*socket, "127.0.0.1", "5683");
+    avs_unit_mocksock_expect_local_port(*socket, "5683");
+    avs_unit_mocksock_expect_get_opt(*socket,
+                                     AVS_NET_SOCKET_OPT_SESSION_RESUMED,
+                                     (avs_net_socket_opt_value_t) {
+                                         .flag = true
+                                     });
+    return AVS_OK;
+}
+
+AVS_UNIT_TEST(schedule_register,
+              inactive_server_doesnt_automatically_reregister) {
+    DM_REGISTER_TEST_INIT_WITH_SSIDS(1);
+    make_server_inactive(anjay, 1, mocksocks[0]);
+    AVS_UNIT_ASSERT_TRUE(anjay_sched_calculate_wait_time_ms(anjay, INT_MAX)
+                         >= 1000);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_enable_server(anjay, 1));
+    expect_refresh_server(anjay,
+                          .with_reconnect = RECONNECT_FULL);
+    recreate_mocksock_once_ptr = &mocksocks[0];
+    AVS_UNIT_MOCK(avs_net_udp_socket_create) = recreate_udp_mocksock_once;
+    anjay_sched_run(anjay);
+    AVS_UNIT_ASSERT_EQUAL(AVS_UNIT_MOCK_INVOCATIONS(avs_net_udp_socket_create),
+                          1);
+    anjay_sched_run(anjay);
+    AVS_UNIT_ASSERT_TRUE(anjay_sched_calculate_wait_time_ms(anjay, INT_MAX)
+                         >= 1000);
+    DM_TEST_FINISH;
+}
+
+static avs_error_t recreate_udp_mocksock_once_and_expect_register(
+        avs_net_socket_t **socket,
+        const avs_net_socket_configuration_t *config) {
+    AVS_UNIT_ASSERT_SUCCESS(recreate_udp_mocksock_once(socket, config));
+    const coap_test_msg_t *register_request =
+            COAP_MSG(CON, POST, ID_TOKEN_RAW(0x0000, nth_token(1)),
+                     CONTENT_FORMAT(LINK_FORMAT), PATH("rd"),
+                     QUERY("lwm2m=1.0", "ep=urn:dev:os:anjay-test", "lt=86400"),
+                     PAYLOAD("</1/1>"));
+    avs_unit_mocksock_expect_output(*socket, register_request->content,
+                                    register_request->length);
+    return AVS_OK;
+}
+
+AVS_UNIT_TEST(schedule_register, inactive_server) {
+    DM_REGISTER_TEST_INIT_WITH_SSIDS(1);
+    make_server_inactive(anjay, 1, mocksocks[0]);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_schedule_register(anjay, 1));
+    AVS_UNIT_ASSERT_TRUE(anjay_sched_calculate_wait_time_ms(anjay, INT_MAX)
+                         >= 1000);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_enable_server(anjay, 1));
+    expect_refresh_server(anjay,
+                          .with_reconnect = RECONNECT_FULL);
+    recreate_mocksock_once_ptr = &mocksocks[0];
+    AVS_UNIT_MOCK(avs_net_udp_socket_create) =
+            recreate_udp_mocksock_once_and_expect_register;
+    anjay_sched_run(anjay);
+    AVS_UNIT_ASSERT_TRUE(anjay_sched_calculate_wait_time_ms(anjay, INT_MAX)
+                         >= 1000);
+    AVS_UNIT_ASSERT_EQUAL(AVS_UNIT_MOCK_INVOCATIONS(avs_net_udp_socket_create),
+                          1);
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(schedule_register, inactive_server_enable_first) {
+    DM_REGISTER_TEST_INIT_WITH_SSIDS(1);
+    make_server_inactive(anjay, 1, mocksocks[0]);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_enable_server(anjay, 1));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_schedule_register(anjay, 1));
+    expect_refresh_server(anjay,
+                          .with_reconnect = RECONNECT_FULL);
+    recreate_mocksock_once_ptr = &mocksocks[0];
+    AVS_UNIT_MOCK(avs_net_udp_socket_create) =
+            recreate_udp_mocksock_once_and_expect_register;
+    anjay_sched_run(anjay);
+    AVS_UNIT_ASSERT_TRUE(anjay_sched_calculate_wait_time_ms(anjay, INT_MAX)
+                         >= 1000);
+    AVS_UNIT_ASSERT_EQUAL(AVS_UNIT_MOCK_INVOCATIONS(avs_net_udp_socket_create),
+                          1);
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(schedule_register, all_servers) {
+    DM_REGISTER_TEST_INIT_WITH_SSIDS(1, 2);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_schedule_register(anjay, ANJAY_SSID_ANY));
+    expect_refresh_server(anjay,
+                          .ssid = 1,
+                          .server_count = 2);
+    expect_refresh_server(anjay,
+                          .ssid = 2,
+                          .server_count = 2);
+    const coap_test_msg_t *register_request1 =
+            COAP_MSG(CON, POST, ID_TOKEN_RAW(0x0001, nth_token(2)),
+                     CONTENT_FORMAT(LINK_FORMAT), PATH("rd"),
+                     QUERY("lwm2m=1.0", "ep=urn:dev:os:anjay-test", "lt=86400"),
+                     PAYLOAD("</1/1>,</1/2>"));
+    avs_unit_mocksock_expect_output(mocksocks[0], register_request1->content,
+                                    register_request1->length);
+    const coap_test_msg_t *register_request2 =
+            COAP_MSG(CON, POST, ID_TOKEN_RAW(0x0001, nth_token(3)),
+                     CONTENT_FORMAT(LINK_FORMAT), PATH("rd"),
+                     QUERY("lwm2m=1.0", "ep=urn:dev:os:anjay-test", "lt=86400"),
+                     PAYLOAD("</1/1>,</1/2>"));
+    avs_unit_mocksock_expect_output(mocksocks[1], register_request2->content,
+                                    register_request2->length);
+    anjay_sched_run(anjay);
+    AVS_UNIT_ASSERT_TRUE(anjay_sched_calculate_wait_time_ms(anjay, INT_MAX)
+                         >= 1000);
     DM_TEST_FINISH;
 }

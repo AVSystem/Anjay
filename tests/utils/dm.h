@@ -21,7 +21,11 @@
 
 anjay_t *_anjay_test_dm_init(const anjay_configuration_t *config);
 
+void _anjay_test_dm_unsched_notify_clb(anjay_t *anjay);
+
 void _anjay_test_dm_unsched_reload_sockets(anjay_t *anjay);
+
+avs_net_socket_t *_anjay_test_dm_create_socket(bool connected);
 
 avs_net_socket_t *_anjay_test_dm_install_socket(anjay_t *anjay,
                                                 anjay_ssid_t ssid);
@@ -76,6 +80,14 @@ static const anjay_dm_object_def_t *const OBJ_WITH_RESET =
                           .instance_reset = _anjay_mock_dm_instance_reset }
         };
 
+static const anjay_dm_object_def_t *const OBJ_WITH_TRANSACTION = &(
+        const anjay_dm_object_def_t) {
+    .oid = 69,
+    .handlers = { ANJAY_MOCK_DM_HANDLERS_BASIC, ANJAY_MOCK_DM_HANDLERS_REST,
+                  ANJAY_MOCK_DM_HANDLERS_TRANSACTION,
+                  .instance_reset = _anjay_test_dm_instance_reset_NOOP }
+};
+
 static anjay_dm_object_def_t *const EXECUTE_OBJ = &(anjay_dm_object_def_t) {
     .oid = 128,
     .handlers = { ANJAY_MOCK_DM_HANDLERS }
@@ -88,10 +100,7 @@ static const anjay_dm_object_def_t *const FAKE_SECURITY =
                 .list_instances = _anjay_test_dm_fake_security_list_instances,
                 .list_resources = _anjay_test_dm_fake_security_list_resources,
                 .resource_read = _anjay_test_dm_fake_security_read,
-                .transaction_begin = anjay_dm_transaction_NOOP,
-                .transaction_validate = anjay_dm_transaction_NOOP,
-                .transaction_commit = anjay_dm_transaction_NOOP,
-                .transaction_rollback = anjay_dm_transaction_NOOP
+                ANJAY_MOCK_DM_HANDLERS_TRANSACTION_NOOP
             }
         };
 
@@ -114,44 +123,30 @@ static const anjay_dm_object_def_t *const FAKE_SERVER =
         .out_buffer_size = 4096, __VA_ARGS__      \
     }
 
-#define DM_TEST_INIT_OBJECTS__(ObjDefs, ...)                           \
-    reset_token_generator();                                           \
-    anjay_t *anjay = _anjay_test_dm_init((__VA_ARGS__));               \
-    do {                                                               \
-        for (size_t _i = 0; _i < AVS_ARRAY_SIZE((ObjDefs)); ++_i) {    \
-            AVS_UNIT_ASSERT_SUCCESS(                                   \
-                    anjay_register_object(anjay, (ObjDefs)[_i]));      \
-            if (((*(ObjDefs)[_i])->oid == ANJAY_DM_OID_SECURITY        \
-                 || (*(ObjDefs)[_i])->oid == ANJAY_DM_OID_SERVER)      \
-                    && (*(ObjDefs)[_i])->handlers.list_instances       \
-                                   == _anjay_mock_dm_list_instances) { \
-                _anjay_mock_dm_expect_list_instances(                  \
-                        anjay,                                         \
-                        (ObjDefs)[_i],                                 \
-                        0,                                             \
-                        (const anjay_iid_t[]) { ANJAY_ID_INVALID });   \
-            }                                                          \
-        }                                                              \
+#define DM_TEST_INIT_OBJECTS__(ObjDefs, ...)                        \
+    reset_token_generator();                                        \
+    anjay_t *anjay = _anjay_test_dm_init((__VA_ARGS__));            \
+    do {                                                            \
+        for (size_t _i = 0; _i < AVS_ARRAY_SIZE((ObjDefs)); ++_i) { \
+            AVS_UNIT_ASSERT_SUCCESS(                                \
+                    anjay_register_object(anjay, (ObjDefs)[_i]));   \
+        }                                                           \
     } while (false)
 
-#define DM_TEST_POST_INIT__                           \
-    do {                                              \
-        anjay_sched_run(anjay);                       \
-        _anjay_test_dm_unsched_reload_sockets(anjay); \
-    } while (anjay_sched_calculate_wait_time_ms(anjay, INT_MAX) == 0)
+#define DM_TEST_POST_INIT__                                                   \
+    _anjay_test_dm_unsched_notify_clb(anjay);                                 \
+    AVS_UNIT_ASSERT_EQUAL(anjay_sched_calculate_wait_time_ms(anjay, INT_MAX), \
+                          INT_MAX)
 
-#define DM_TEST_INIT_GENERIC(ObjDefs, Ssids, ...)                             \
-    DM_TEST_INIT_OBJECTS__(ObjDefs, __VA_ARGS__);                             \
-    avs_net_socket_t *mocksocks[AVS_ARRAY_SIZE((Ssids))];                     \
-    for (size_t _i = AVS_ARRAY_SIZE((Ssids)) - 1;                             \
-         _i < AVS_ARRAY_SIZE((Ssids));                                        \
-         --_i) {                                                              \
-        mocksocks[_i] = _anjay_test_dm_install_socket(anjay, (Ssids)[_i]);    \
-        avs_unit_mocksock_enable_recv_timeout_getsetopt(                      \
-                mocksocks[_i], avs_time_duration_from_scalar(1, AVS_TIME_S)); \
-        avs_unit_mocksock_enable_inner_mtu_getopt(mocksocks[_i], 1252);       \
-        avs_unit_mocksock_enable_state_getopt(mocksocks[_i]);                 \
-    }                                                                         \
+#define DM_TEST_INIT_GENERIC(ObjDefs, Ssids, ...)                          \
+    DM_TEST_INIT_OBJECTS__(ObjDefs, __VA_ARGS__);                          \
+    avs_net_socket_t *mocksocks[AVS_ARRAY_SIZE((Ssids))];                  \
+    for (size_t _i = AVS_ARRAY_SIZE((Ssids)) - 1;                          \
+         _i < AVS_ARRAY_SIZE((Ssids));                                     \
+         --_i) {                                                           \
+        mocksocks[_i] = _anjay_test_dm_install_socket(anjay, (Ssids)[_i]); \
+    }                                                                      \
+    (void) mocksocks;                                                      \
     DM_TEST_POST_INIT__
 
 #define DM_TEST_DEFAULT_OBJECTS                                  \

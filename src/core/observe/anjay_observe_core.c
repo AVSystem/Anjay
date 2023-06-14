@@ -230,18 +230,27 @@ detach_observation(anjay_observe_connection_entry_t *conn,
     remove_from_observed_paths(conn, observation);
 }
 
-void _anjay_observe_cleanup_connection(anjay_observe_connection_entry_t *conn) {
+static void
+cleanup_observation(anjay_observe_connection_entry_t *conn,
+                    AVS_SORTED_SET_ELEM(anjay_observation_t) observation) {
+    remove_from_observed_paths(conn, observation);
+    avs_sched_del(&observation->notify_task);
+    if (observation->last_sent) {
+        delete_value(_anjay_from_server(conn->conn_ref.server),
+                     &observation->last_sent);
+    }
+    assert(!observation->last_sent);
+}
+
+static void cleanup_connection_without_observations_set(
+        anjay_observe_connection_entry_t *conn) {
     anjay_unlocked_t *anjay = _anjay_from_server(conn->conn_ref.server);
     while (conn->unsent) {
         delete_value(anjay, &conn->unsent);
     }
-    AVS_SORTED_SET_DELETE(&conn->observations) {
-        remove_from_observed_paths(conn, *conn->observations);
-        avs_sched_del(&(*conn->observations)->notify_task);
-        if ((*conn->observations)->last_sent) {
-            delete_value(anjay, &(*conn->observations)->last_sent);
-        }
-        assert(!(*conn->observations)->last_sent);
+    AVS_SORTED_SET_ELEM(anjay_observation_t) observation;
+    AVS_SORTED_SET_FOREACH(observation, conn->observations) {
+        cleanup_observation(conn, observation);
     }
     if (conn->observed_paths) {
         assert(!AVS_SORTED_SET_FIRST(conn->observed_paths));
@@ -250,6 +259,55 @@ void _anjay_observe_cleanup_connection(anjay_observe_connection_entry_t *conn) {
     if (conn->flush_task) {
         avs_sched_del(&conn->flush_task);
     }
+}
+
+void _anjay_observe_cleanup_connection(anjay_observe_connection_entry_t *conn) {
+    cleanup_connection_without_observations_set(conn);
+    AVS_SORTED_SET_DELETE(&conn->observations);
+}
+
+static void
+cancel_ongoing_notify_exchange(anjay_observe_connection_entry_t *conn) {
+    avs_coap_ctx_t *coap = _anjay_connection_get_coap(conn->conn_ref);
+    if (coap && avs_coap_exchange_id_valid(conn->notify_exchange_id)) {
+        avs_coap_exchange_cancel(coap, conn->notify_exchange_id);
+    }
+    assert(!avs_coap_exchange_id_valid(conn->notify_exchange_id));
+    assert(!conn->serialization_state.membuf_stream);
+    assert(!conn->serialization_state.out_ctx);
+}
+
+void _anjay_observe_invalidate(anjay_connection_ref_t ref) {
+    AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr =
+            _anjay_observe_find_connection_state(ref);
+    if (!conn_ptr) {
+        return;
+    }
+    cancel_ongoing_notify_exchange(*conn_ptr);
+
+    // We clean up the observations but not remove the actual sorted set
+    // elements, so that we still have the tokens ready for the later phase.
+    cleanup_connection_without_observations_set(*conn_ptr);
+
+    // Detach the connection entry so that it won't be found by
+    // _anjay_observe_find_connection_state() in _anjay_observe_cancel_handler()
+    AVS_LIST(anjay_observe_connection_entry_t) conn = AVS_LIST_DETACH(conn_ptr);
+    avs_coap_ctx_t *coap = _anjay_connection_get_coap(ref);
+
+    // Now cancel the observations. We're doing it after having cleaned up all
+    // the state first - otherwise cancelling each observation would reschedule
+    // things related to the next scheduled one, might re-read attributes and
+    // such. That would be very suboptimal considering that we're removing all
+    // of them.
+    AVS_SORTED_SET_DELETE(&conn->observations) {
+        if (coap) {
+            avs_coap_observe_cancel(coap,
+                                    (avs_coap_observe_id_t) {
+                                        .token = (*conn->observations)->token
+                                    });
+        }
+    }
+    AVS_LIST_DELETE(&conn);
 }
 
 void _anjay_observe_cleanup(anjay_observe_state_t *observe) {
@@ -806,14 +864,7 @@ static void observe_remove_entry(anjay_connection_ref_t connection,
     if (!conn_ptr) {
         return;
     }
-    if (avs_coap_exchange_id_valid((*conn_ptr)->notify_exchange_id)) {
-        avs_coap_exchange_cancel(_anjay_connection_get_coap(
-                                         (*conn_ptr)->conn_ref),
-                                 (*conn_ptr)->notify_exchange_id);
-    }
-    assert(!avs_coap_exchange_id_valid((*conn_ptr)->notify_exchange_id));
-    assert(!(*conn_ptr)->serialization_state.membuf_stream);
-    assert(!(*conn_ptr)->serialization_state.out_ctx);
+    cancel_ongoing_notify_exchange(*conn_ptr);
     AVS_SORTED_SET_ELEM(anjay_observation_t) observation =
             AVS_SORTED_SET_FIND((*conn_ptr)->observations,
                                 _anjay_observation_query(token));
@@ -1555,11 +1606,13 @@ static void flush_next_unsent(anjay_observe_connection_entry_t *conn) {
         // defined(ANJAY_WITH_CORE_PERSISTENCE)
     }
     avs_coap_options_cleanup(&response.options);
+#    ifndef ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
     // on_entry_flushed() may have closed the socket already,
     // so we need to check if it's still open
     if (_anjay_connection_get_online_socket(conn_ref)) {
         _anjay_connection_schedule_queue_mode_close(conn_ref);
     }
+#    endif // ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
 
 #    ifdef ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
     if (avs_is_ok(err)) {
@@ -1599,6 +1652,7 @@ bool _anjay_observe_confirmable_in_delivery(anjay_connection_ref_t ref) {
            && avs_coap_exchange_id_valid((*conn_ptr)->notify_exchange_id);
 }
 
+#    ifndef ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
 bool _anjay_observe_needs_flushing(anjay_connection_ref_t ref) {
     AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr =
             _anjay_observe_find_connection_state(ref);
@@ -1608,6 +1662,7 @@ bool _anjay_observe_needs_flushing(anjay_connection_ref_t ref) {
     return (*conn_ptr)->unsent && !(*conn_ptr)->flush_task
            && !avs_coap_exchange_id_valid((*conn_ptr)->notify_exchange_id);
 }
+#    endif // ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
 
 int _anjay_observe_sched_flush(anjay_connection_ref_t ref) {
     anjay_log(TRACE,
@@ -1732,32 +1787,40 @@ static void trigger_observe(avs_sched_t *sched, const void *args_) {
             && _anjay_socket_transport_is_online(
                        _anjay_from_server(args->conn_state->conn_ref.server),
                        _anjay_connection_transport(args->conn_state->conn_ref));
-    if (ready_for_notifying
-            || notification_storing_enabled(args->conn_state->conn_ref)) {
-        int result =
-                update_notification_value(args->conn_state, args->observation);
-        if (result) {
-            insert_error(args->conn_state, args->observation, result);
-        }
-    }
-    if (args->conn_state->unsent) {
+    if (!ready_for_notifying
+            && _anjay_server_registration_expired(
+                       args->conn_state->conn_ref.server)) {
+        // Registration expired - notifications would be cleared at the time of
+        // Register anyway, so we might as well do it here to conserve memory
+        _anjay_observe_invalidate(args->conn_state->conn_ref);
+    } else {
         if (ready_for_notifying
-                && !avs_coap_exchange_id_valid(
-                           args->conn_state->notify_exchange_id)) {
-            avs_sched_del(&args->conn_state->flush_task);
-            assert(!args->conn_state->flush_task);
-            if (_anjay_connection_get_online_socket(
-                        args->conn_state->conn_ref)) {
-                flush_next_unsent(args->conn_state);
-            } else if (_anjay_server_registration_info(
-                               args->conn_state->conn_ref.server)
-                               ->queue_mode) {
-                _anjay_connection_bring_online(args->conn_state->conn_ref);
-                // once the connection is up, _anjay_observe_sched_flush()
-                // will be called; we're done here
-            } else if (!notification_storing_enabled(
-                               args->conn_state->conn_ref)) {
-                remove_all_unsent_values(args->conn_state);
+                || notification_storing_enabled(args->conn_state->conn_ref)) {
+            int result = update_notification_value(args->conn_state,
+                                                   args->observation);
+            if (result) {
+                insert_error(args->conn_state, args->observation, result);
+            }
+        }
+        if (args->conn_state->unsent) {
+            if (ready_for_notifying
+                    && !avs_coap_exchange_id_valid(
+                               args->conn_state->notify_exchange_id)) {
+                avs_sched_del(&args->conn_state->flush_task);
+                assert(!args->conn_state->flush_task);
+                if (_anjay_connection_get_online_socket(
+                            args->conn_state->conn_ref)) {
+                    flush_next_unsent(args->conn_state);
+                } else if (_anjay_server_registration_info(
+                                   args->conn_state->conn_ref.server)
+                                   ->queue_mode) {
+                    _anjay_connection_bring_online(args->conn_state->conn_ref);
+                    // once the connection is up, _anjay_observe_sched_flush()
+                    // will be called; we're done here
+                } else if (!notification_storing_enabled(
+                                   args->conn_state->conn_ref)) {
+                    remove_all_unsent_values(args->conn_state);
+                }
             }
         }
     }

@@ -12,12 +12,30 @@ from framework.lwm2m_test import *
 from . import access_control, retransmissions, firmware_update
 
 
+class QueueMode:
+    @staticmethod
+    def autoclose_disabled(test_case):
+        import subprocess
+        output = subprocess.run([test_case._get_demo_executable(), '-e', 'dummy', '-u', 'invalid'],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout.decode(
+            'utf-8')
+        return 'ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE = ON' in output
+
+    class Test(retransmissions.RetransmissionTest.TestMixin):
+        def setUp(self, *args, **kwargs):
+            self.autoclose_disabled = QueueMode.autoclose_disabled(self)
+            super().setUp(*args, **kwargs)
+
+
 class QueueModeBehaviour(retransmissions.RetransmissionTest.TestMixin,
                          access_control.AccessControl.Test):
     PSK_IDENTITY = b'test-identity'
     PSK_KEY = b'test-key'
 
     def setUp(self):
+        import unittest
+        if QueueMode.autoclose_disabled(self):
+            raise unittest.SkipTest('Queue mode autoclose disabled')
         super().setUp(servers=[
             Lwm2mServer(coap.DtlsServer(psk_key=self.PSK_KEY, psk_identity=self.PSK_IDENTITY)),
             Lwm2mServer(coap.DtlsServer(psk_key=self.PSK_KEY, psk_identity=self.PSK_IDENTITY))],
@@ -81,10 +99,11 @@ class QueueModePreferenceIneffectiveForLwm2m10(QueueModeBehaviour):
         super().runTest()
 
 
-class ForceQueueMode(retransmissions.RetransmissionTest.TestMixin,
-                     framework.test_suite.Lwm2mSingleServerTest):
+class ForceQueueMode(QueueMode.Test, framework.test_suite.Lwm2mSingleServerTest):
     def tearDown(self):
-        super().tearDown(auto_deregister=False)
+        auto_deregister = False
+        auto_deregister = self.autoclose_disabled
+        super().tearDown(auto_deregister=auto_deregister)
 
     def runTest(self):
         self.communicate('set-queue-mode-preference FORCE_QUEUE_MODE')
@@ -98,6 +117,8 @@ class ForceQueueMode(retransmissions.RetransmissionTest.TestMixin,
         self.communicate('send-update')
         self.assertDemoUpdatesRegistration()
 
+        if self.autoclose_disabled:
+            return
         # effectively queue mode, even though binding is "U"
         time.sleep(self.max_transmit_wait() - 2)
         self.assertEqual(self.get_socket_count(), 1)
@@ -126,6 +147,9 @@ class ForceOnlineMode(retransmissions.RetransmissionTest.TestMixin,
 class Lwm2m11QueueMode(retransmissions.RetransmissionTest.TestMixin,
                        framework.test_suite.Lwm2mDtlsSingleServerTest):
     def setUp(self):
+        import unittest
+        if QueueMode.autoclose_disabled(self):
+            raise unittest.SkipTest('Queue mode autoclose disabled')
         super().setUp(maximum_version='1.1')
 
     def runTest(self):
@@ -176,8 +200,7 @@ class Lwm2m11QueueMode(retransmissions.RetransmissionTest.TestMixin,
         self.assertEqual(self.get_socket_count(), 1)
 
 
-class Lwm2m11UQBinding(retransmissions.RetransmissionTest.TestMixin,
-                       framework.test_suite.Lwm2mDtlsSingleServerTest):
+class Lwm2m11UQBinding(QueueMode.Test, framework.test_suite.Lwm2mDtlsSingleServerTest):
     def setUp(self):
         # UQ binding is not LwM2M 1.1-compliant, but we support it anyway
         super().setUp(extra_cmdline_args=['--binding=UQ'], auto_register=False,
@@ -185,6 +208,8 @@ class Lwm2m11UQBinding(retransmissions.RetransmissionTest.TestMixin,
         self.assertDemoRegisters(self.serv, version='1.1', lwm2m11_queue_mode=True)
 
     def runTest(self):
+        if self.autoclose_disabled:
+            return
         # default: Prefer Online Mode, queue mode
         time.sleep(self.max_transmit_wait() - 2)
         self.assertEqual(self.get_socket_count(), 1)
@@ -226,6 +251,9 @@ class Lwm2m11UQBinding(retransmissions.RetransmissionTest.TestMixin,
 class QueueModeAfterManualReconnect(retransmissions.RetransmissionTest.TestMixin,
                                     firmware_update.SameSocketDownload.Test):
     def setUp(self):
+        import unittest
+        if QueueMode.autoclose_disabled(self):
+            raise unittest.SkipTest('Queue mode autoclose disabled')
         super().setUp(extra_cmdline_args=['--binding=UQ'], maximum_version='1.1', binding=None,
                       lwm2m11_queue_mode=True, psk_identity=b'test-identity', psk_key=b'test-key')
 
@@ -248,7 +276,16 @@ class QueueModeAfterManualReconnect(retransmissions.RetransmissionTest.TestMixin
         self.assertEqual(self.get_socket_count(), 0)
 
 
-class QueueModeAfterTimedOutSend(QueueModeAfterManualReconnect):
+class QueueModeAfterTimedOutSend(QueueMode.Test, firmware_update.SameSocketDownload.Test):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--binding=UQ'], maximum_version='1.1', binding=None,
+                      lwm2m11_queue_mode=True, psk_identity=b'test-identity', psk_key=b'test-key')
+
+    def tearDown(self):
+        auto_deregister = False
+        auto_deregister = self.autoclose_disabled
+        super().tearDown(auto_deregister=auto_deregister)
+
     def runTest(self):
         self.start_download()
         self.serv.recv()
@@ -273,6 +310,100 @@ class QueueModeAfterTimedOutSend(QueueModeAfterManualReconnect):
         timeout = expected_close - time.time() - 2
         if timeout > 0.0:
             time.sleep(timeout)
+        self.assertEqual(self.get_socket_count(), 1)
+        time.sleep(4)
+        if self.autoclose_disabled:
+            return
+        self.assertEqual(self.get_socket_count(), 0)
+
+
+class TlsQueueMode(framework.test_suite.Lwm2mSingleTcpServerTest):
+    PSK_IDENTITY = b'test-identity'
+    PSK_KEY = b'test-key'
+
+    def setUp(self, *args, **kwargs):
+        import unittest
+        if QueueMode.autoclose_disabled(self):
+            raise unittest.SkipTest('Queue mode autoclose disabled')
+        super().setUp(extra_cmdline_args=['--tcp-request-timeout', '5'],
+                      psk_identity=self.PSK_IDENTITY, psk_key=self.PSK_KEY, maximum_version='1.1',
+                      binding='T')
+
+    def runTest(self):
+        self.communicate('set-queue-mode-preference PREFER_QUEUE_MODE')
+        self.communicate('send-update')
+        self.assertDemoRegisters(version='1.1', binding='T', lwm2m11_queue_mode=True)
+        self.wait_until_socket_count(0, timeout_s=6)
+
+        time.sleep(1)
+        self.serv.reset()
+        self.communicate('send-update')
+        self.serv.listen(timeout_s=5)
+        self.read_log_until_match(b'statefully resumed connection', timeout_s=5)
+        # no CSM message here
+        self.assertDemoUpdatesRegistration()
+
+
+class NosecTcpQueueMode(framework.test_suite.Lwm2mSingleTcpServerTest):
+    def setUp(self, *args, **kwargs):
+        import unittest
+        if QueueMode.autoclose_disabled(self):
+            raise unittest.SkipTest('Queue mode autoclose disabled')
+        super().setUp(extra_cmdline_args=['--tcp-request-timeout', '5'], maximum_version='1.1',
+                      binding='T')
+
+    def runTest(self):
+        self.communicate('set-queue-mode-preference PREFER_QUEUE_MODE')
+        self.communicate('send-update')
+        self.assertDemoRegisters(version='1.1', binding='T', lwm2m11_queue_mode=True)
+        self.wait_until_socket_count(0, timeout_s=6)
+
+        time.sleep(1)
+        self.serv.reset()
+        self.communicate('send-update')
+        self.assertTcpCsm()
+        self.assertDemoRegisters(version='1.1', binding='T', lwm2m11_queue_mode=True)
+
+
+class ReconnectServerIgnoredDuringQueueMode(QueueModeAfterManualReconnect):
+    def runTest(self):
+        time.sleep(self.max_transmit_wait() - 2)
+        self.assertEqual(self.get_socket_count(), 1)
+        time.sleep(4)
+        self.assertEqual(self.get_socket_count(), 0)
+
+        self.communicate('reconnect-server 1')
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=5)
+
+
+class ReconnectServerDuringQueueMode(retransmissions.RetransmissionTest.TestMixin,
+                                          firmware_update.SameSocketDownload.Test):
+    def setUp(self):
+        import unittest
+        if not QueueMode.autoclose_disabled(self):
+            raise unittest.SkipTest('Queue mode autoclose enabled')
+        super().setUp(extra_cmdline_args=['--binding=UQ'], maximum_version='1.1', binding=None,
+                      lwm2m11_queue_mode=True, psk_identity=b'test-identity', psk_key=b'test-key')
+
+    def runTest(self):
+        time.sleep(self.max_transmit_wait() + 2)
+        self.assertEqual(self.get_socket_count(), 1)
+        self.communicate('reconnect-server 1')
+        self.assertDtlsReconnect()
+
+
+class ForceReregisterDuringQueueMode(QueueModeAfterManualReconnect):
+    def runTest(self):
+        time.sleep(self.max_transmit_wait() - 2)
+        self.assertEqual(self.get_socket_count(), 1)
+        time.sleep(4)
+        self.assertEqual(self.get_socket_count(), 0)
+
+        self.communicate('send-register 1')
+        self.assertDtlsReconnect()
+        self.assertDemoRegisters(version='1.1', lwm2m11_queue_mode=True)
+        time.sleep(self.max_transmit_wait() - 2)
         self.assertEqual(self.get_socket_count(), 1)
         time.sleep(4)
         self.assertEqual(self.get_socket_count(), 0)

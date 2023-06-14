@@ -51,6 +51,8 @@ FIRMWARE_SCRIPT_TEMPLATE = '#!/bin/sh\n%secho updated > "%s"\nrm "$0"\n'
 
 class FirmwareUpdate:
     class Test(test_suite.Lwm2mSingleServerTest):
+        FW_PKG_OPTS = {}
+
         def set_auto_deregister(self, auto_deregister):
             self.auto_deregister = auto_deregister
 
@@ -148,17 +150,16 @@ class FirmwareUpdate:
 
             self.fail('firmware still not downloaded')
 
-    class TestWithHttpServer(Test):
+    class TestWithHttpServerMixin:
         RESPONSE_DELAY = 0
         CHUNK_SIZE = sys.maxsize
         ETAGS = False
-        FW_PKG_OPTS = {}
 
         def get_firmware_uri(self):
             return 'http://127.0.0.1:%d%s' % (
                 self.http_server.server_address[1], FIRMWARE_PATH)
 
-        def provide_response(self, use_real_app=False):
+        def provide_response(self, use_real_app=False, other_content: bytes = None):
             with self._response_cv:
                 self.assertIsNone(self._response_content)
                 if use_real_app:
@@ -166,6 +167,9 @@ class FirmwareUpdate:
                         firmware = f.read()
                         self._response_content = make_firmware_package(
                             firmware, **self.FW_PKG_OPTS)
+                elif other_content:
+                    self._response_content = make_firmware_package(
+                        other_content, **self.FW_PKG_OPTS)
                 else:
                     self._response_content = make_firmware_package(
                         self.FIRMWARE_SCRIPT_CONTENT, **self.FW_PKG_OPTS)
@@ -199,7 +203,10 @@ class FirmwareUpdate:
 
                     for chunk in chunks(response_content):
                         time.sleep(test_case.RESPONSE_DELAY)
-                        self.wfile.write(chunk)
+                        try:
+                            self.wfile.write(chunk)
+                        except BrokenPipeError:
+                            pass
                         self.wfile.flush()
 
                 def log_request(self, code='-', size='-'):
@@ -233,7 +240,10 @@ class FirmwareUpdate:
                 self.http_server.shutdown()
                 self.server_thread.join()
 
-    class TestWithTlsServer(Test):
+    class TestWithHttpServer(TestWithHttpServerMixin, Test):
+        pass
+
+    class TestWithTlsServerMixin:
         @staticmethod
         def _generate_key():
             from cryptography.hazmat.backends import default_backend
@@ -275,9 +285,9 @@ class FirmwareUpdate:
         @staticmethod
         def _generate_cert_and_key(
                 cn='127.0.0.1', alt_ip='127.0.0.1', ca=False):
-            key = FirmwareUpdate.TestWithTlsServer._generate_key()
-            cert = FirmwareUpdate.TestWithTlsServer._generate_cert(key, key.public_key(), cn, cn,
-                                                                   alt_ip, ca)
+            key = FirmwareUpdate.TestWithTlsServerMixin._generate_key()
+            cert = FirmwareUpdate.TestWithTlsServerMixin._generate_cert(key, key.public_key(), cn, cn,
+                                                                        alt_ip, ca)
             return cert, key
 
         @staticmethod
@@ -285,7 +295,7 @@ class FirmwareUpdate:
                 cn='127.0.0.1', alt_ip='127.0.0.1', ca=False):
             from cryptography.hazmat.primitives import serialization
 
-            cert, key = FirmwareUpdate.TestWithTlsServer._generate_cert_and_key(
+            cert, key = FirmwareUpdate.TestWithTlsServerMixin._generate_cert_and_key(
                 cn, alt_ip, ca)
             cert_pem = cert.public_bytes(encoding=serialization.Encoding.PEM)
             key_pem = key.private_bytes(encoding=serialization.Encoding.PEM,
@@ -293,7 +303,7 @@ class FirmwareUpdate:
                                         encryption_algorithm=serialization.NoEncryption())
             return cert_pem, key_pem
 
-        def setUp(self, pass_cert_to_demo=True, **kwargs):
+        def setUp(self, pass_cert_to_demo=True, cmd_arg='', **kwargs):
             cert_kwargs = {}
             for key in ('cn', 'alt_ip'):
                 if key in kwargs:
@@ -317,7 +327,7 @@ class FirmwareUpdate:
                 extra_cmdline_args += kwargs['extra_cmdline_args']
                 del kwargs['extra_cmdline_args']
             if pass_cert_to_demo:
-                extra_cmdline_args += ['--fw-cert-file', self._cert_file]
+                extra_cmdline_args += [cmd_arg, self._cert_file]
             super().setUp(extra_cmdline_args=extra_cmdline_args, **kwargs)
 
         def tearDown(self):
@@ -334,7 +344,11 @@ class FirmwareUpdate:
                 unlink_without_err(self._cert_file)
                 unlink_without_err(self._key_file)
 
-    class TestWithHttpsServer(TestWithTlsServer, TestWithHttpServer):
+    class TestWithTlsServer(TestWithTlsServerMixin, Test):
+        def setUp(self, pass_cert_to_demo=True, cmd_arg='', **kwargs):
+            super().setUp(pass_cert_to_demo, cmd_arg='--fw-cert-file', **kwargs)
+
+    class TestWithHttpsServerMixin:
         def get_firmware_uri(self):
             http_uri = super().get_firmware_uri()
             assert http_uri[:5] == 'http:'
@@ -347,22 +361,37 @@ class FirmwareUpdate:
                                                  server_side=True)
             return http_server
 
-    class TestWithCoapServer(Test):
+    class TestWithHttpsServer(TestWithTlsServer, TestWithHttpsServerMixin, TestWithHttpServer):
+        pass
+
+    class TestWithCoapServerMixin:
         def setUp(self, coap_server=None, *args, **kwargs):
             super().setUp(*args, **kwargs)
 
-            self.server_thread = CoapFileServerThread(coap_server=coap_server)
-            self.server_thread.start()
+            if type(coap_server) is not list:
+                coap_server = [coap_server]
+
+            self.server_thread = []
+            for i, server in enumerate(coap_server):
+                self.server_thread.append(CoapFileServerThread(coap_server=server))
+                self.server_thread[i].start()
 
         @property
         def file_server(self):
-            return self.server_thread.file_server
+            return self.server_thread[0].file_server
+
+        def get_file_server(self, serv):
+            return self.server_thread[serv].file_server
 
         def tearDown(self):
             try:
                 super().tearDown()
             finally:
-                self.server_thread.join()
+                for s in self.server_thread:
+                    s.join()
+
+    class TestWithCoapServer(TestWithCoapServerMixin, Test):
+        pass
 
     class DemoArgsExtractorMixin:
         def _get_valgrind_args(self):
@@ -425,8 +454,7 @@ class FirmwareUpdate:
                                          make_firmware_package(self.FIRMWARE_SCRIPT_CONTENT))
                 self.fw_uri = file_server.get_resource_uri('/firmware')
 
-    class TestWithPartialHttpDownloadAndRestart(TestWithPartialDownloadAndRestart,
-                                                TestWithHttpServer):
+    class TestWithPartialHttpDownloadAndRestartMixin:
         def get_etag(self, response_content):
             return '"%d"' % zlib.crc32(response_content)
 
@@ -477,7 +505,10 @@ class FirmwareUpdate:
 
                     while offset < len(response_content):
                         chunk = response_content[offset:offset + 1024]
-                        self.wfile.write(chunk)
+                        try:
+                            self.wfile.write(chunk)
+                        except BrokenPipeError:
+                            pass
                         offset += len(chunk)
                         time.sleep(0.5)
 
@@ -492,6 +523,11 @@ class FirmwareUpdate:
                         super().handle_error(*args, **kwargs)
 
             return SilentServer(('', 0), FirmwareRequestHandler)
+
+    class TestWithPartialHttpDownloadAndRestart(TestWithPartialHttpDownloadAndRestartMixin,
+                                                TestWithPartialDownloadAndRestart,
+                                                TestWithHttpServer):
+        pass
 
 
 class FirmwareUpdatePackageTest(FirmwareUpdate.Test):
@@ -543,8 +579,6 @@ class FirmwareUpdateStateChangeTest(FirmwareUpdate.TestWithHttpServer):
         self.set_reset_machine(False)
 
     def runTest(self):
-        self.serv.set_timeout(timeout_s=1)
-
         # disable minimum notification period
         write_attrs_req = Lwm2mWriteAttributes(
             ResPath.FirmwareUpdate.State, query=['pmin=0'])
@@ -596,8 +630,6 @@ class FirmwareUpdateSendStateChangeTest(FirmwareUpdate.TestWithHttpServer):
         self.set_expect_send_after_state_machine_reset(True)
 
     def runTest(self):
-        self.serv.set_timeout(timeout_s=3)
-
         self.assertEqual(self.read_state(), UpdateState.IDLE)
 
         # Write /5/0/1 (Firmware URI)
@@ -1387,7 +1419,7 @@ class FirmwareUpdateResumeDownloadingOverHttpWithReconnect(
         self.serv.reset()
         self.communicate('reconnect')
         self.provide_response()
-        self.assertDemoRegisters(self.serv)
+        self.assertDemoRegisters(self.serv, timeout_s=5)
 
         # wait until client downloads the firmware
         deadline = time.time() + 20
@@ -1935,11 +1967,11 @@ class FirmwareDownloadSameSocketUpdateTimeoutNstart2(SameSocketDownload.Test):
                             self.serv.recv())
         self.start_download()
 
-        dl_get0_0 = self.serv.recv()
-        dl_get0_1 = self.serv.recv()  # retry
+        dl_get0_0 = self.serv.recv(filter=CoapGet._pkt_matches)
+        dl_get0_1 = self.serv.recv(filter=CoapGet._pkt_matches)  # retry
         self.handle_get(dl_get0_0)
         self.assertEqual(dl_get0_0.msg_id, dl_get0_1.msg_id)
-        dl_get1_0 = self.serv.recv()
+        dl_get1_0 = self.serv.recv(filter=CoapGet._pkt_matches)
 
         # lifetime expired, demo re-registers
         self.assertDemoRegisters(lifetime=self.LIFETIME)

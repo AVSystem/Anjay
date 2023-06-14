@@ -32,7 +32,6 @@ if sys.version_info[0] >= 3:
 
 ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
 UNITTEST_PATH = os.path.join(ROOT_DIR, 'suites')
-DEFAULT_SUITE_REGEX = r'^default\.'
 
 
 def traverse(tree, cls=None):
@@ -46,8 +45,22 @@ def traverse(tree, cls=None):
 
 
 def discover_test_suites(test_config):
+    if getattr(test_config, 'demo_path', None) is None:
+        try:
+            import pymbedtls
+        except ModuleNotFoundError:
+            # Fake pymbedtls module so that "runtest.py -l" works without setting PYTHONPATH
+            class FakePymbedtlsModule:
+                class Context:
+                    @staticmethod
+                    def supports_connection_id():
+                        return False
+
+            sys.modules['pymbedtls'] = FakePymbedtlsModule
+
     loader = unittest.TestLoader()
     loader.testMethodPrefix = 'runTest'
+
     suite = loader.discover(UNITTEST_PATH, pattern='*.py', top_level_dir=UNITTEST_PATH)
 
     for error in loader.errors:
@@ -88,12 +101,10 @@ def run_tests(suites, config):
     errors = sum(r.testsErrors for r in test_runner.results)
     failures = sum(r.testsFailed for r in test_runner.results)
 
-    print('\nFinished in %f s; %s%d/%d successes%s, %s%d/%d errors%s, %s%d/%d failures%s\n'
-          % (seconds_elapsed,
-             COLOR_GREEN if successes == all_tests else COLOR_YELLOW, successes, all_tests,
-             COLOR_DEFAULT,
-             COLOR_RED if errors else COLOR_GREEN, errors, all_tests, COLOR_DEFAULT,
-             COLOR_RED if failures else COLOR_GREEN, failures, all_tests, COLOR_DEFAULT))
+    print('\nFinished in %f s; %s%d/%d successes%s, %s%d/%d errors%s, %s%d/%d failures%s\n' % (
+        seconds_elapsed, COLOR_GREEN if successes == all_tests else COLOR_YELLOW, successes,
+        all_tests, COLOR_DEFAULT, COLOR_RED if errors else COLOR_GREEN, errors, all_tests,
+        COLOR_DEFAULT, COLOR_RED if failures else COLOR_GREEN, failures, all_tests, COLOR_DEFAULT))
 
     return test_runner.results
 
@@ -177,42 +188,36 @@ if __name__ == "__main__":
         =================
         {regex_match_rules_help}
     '''.format(regex_match_rules_help=textwrap.indent(
-        textwrap.dedent(
-            test_or_suite_matches_query_regex.__doc__),
-        prefix=' ' * 8))),
+        textwrap.dedent(test_or_suite_matches_query_regex.__doc__), prefix=' ' * 8))),
         formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument('--list', '-l',
-                        action='store_true',
+    parser.add_argument('--list', '-l', action='store_true',
                         help='only list matching test cases, do not execute them')
-    parser.add_argument('--client', '-c',
-                        type=str, required=True,
-                        help='path to the demo application to use')
-    parser.add_argument('--keep-success-logs',
-                        action='store_true',
+    parser.add_argument('--client', '-c', type=str, help='path to the demo application to use')
+    parser.add_argument('--keep-success-logs', action='store_true',
                         help='keep logs from all tests, including ones that passed')
-    parser.add_argument('--target-logs-path', type=str,
-                        help='path where to leave the logs stored')
-    parser.add_argument('query_regex',
-                        type=str, default=DEFAULT_SUITE_REGEX, nargs='?',
+    parser.add_argument('--target-logs-path', type=str, help='path where to leave the logs stored')
+    parser.add_argument('query_regex', type=str, default='', nargs='?',
                         help='regex used to filter test cases. See REGEX MATCH RULES for details.')
 
     cmdline_args = parser.parse_args(sys.argv[1:])
 
     with tempfile.TemporaryDirectory() as tmp_log_dir:
         class TestConfig:
-            demo_cmd = os.path.basename(cmdline_args.client)
-            demo_path = os.path.abspath(os.path.dirname(cmdline_args.client))
+            if cmdline_args.client is not None:
+                demo_cmd = os.path.basename(cmdline_args.client)
+                demo_path = os.path.abspath(os.path.dirname(cmdline_args.client))
+                target_logs_path = os.path.abspath(
+                    cmdline_args.target_logs_path or os.path.join(demo_path,
+                                                                  '../test/integration/log'))
+
             logs_path = tmp_log_dir
             suite_root_path = os.path.abspath(UNITTEST_PATH)
 
-            target_logs_path = os.path.abspath(
-                cmdline_args.target_logs_path or os.path.join(demo_path, '../test/integration/log'))
-
 
         def config_to_string(cfg):
-            config = sorted((k, v) for k, v in cfg.__dict__.items()
-                            if not k.startswith('_'))  # skip builtins
+            config = sorted(
+                (k, v) for k, v in cfg.__dict__.items() if not k.startswith('_'))  # skip builtins
 
             max_key_len = max(len(k) for k, _ in config)
 
@@ -232,6 +237,9 @@ if __name__ == "__main__":
 
         result = None
         if not cmdline_args.list:
+            if cmdline_args.client is None:
+                parser.error('--client/c is required unless -l/--list is specified')
+
             sys.stderr.write('%s\n\n' % config_to_string(TestConfig))
 
             try:

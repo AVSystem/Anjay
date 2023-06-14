@@ -154,8 +154,8 @@ Note that the resource instances MUST be returned in a strictly ascending,
 sorted order. We will keep the resource instances in sorted order, so this
 implementation satisfies this contract.
 
-Handling Multiple Instance Resources in Read RPC
-------------------------------------------------
+Handling Multiple Instance Resources in Read operation
+------------------------------------------------------
 
 ``resource_read`` handler is being called by Anjay for each Resource Instance
 referenced by the server, giving the control to the user. Thus, the read handler
@@ -225,8 +225,8 @@ as it only needs to clear the resource:
     }
 
 
-Handling Multiple Instance Resources in Write RPC
--------------------------------------------------
+Handling Multiple Instance Resources in Write operation
+-------------------------------------------------------
 
 Now we are ready to actually implement the write operation. We will create a
 helper function for actually updating the Resource Instance list with a newly

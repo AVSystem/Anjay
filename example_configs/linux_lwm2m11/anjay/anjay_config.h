@@ -257,6 +257,12 @@
 /* #undef ANJAY_WITH_CORE_PERSISTENCE */
 
 /**
+ * Disable automatic closing of server connection sockets after
+ * MAX_TRANSMIT_WAIT of inactivity.
+ */
+/* #undef ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE */
+
+/**
  * Enable support for CoAP Content-Format numerical values 1541-1544 that have
  * been used before final LwM2M TS 1.0.
  */
@@ -501,6 +507,12 @@
 #define ANJAY_WITH_MODULE_FW_UPDATE
 
 /**
+ * Enable advanced_fw_update module (implementation of the 33629 custom
+ * Advanced Firmware Update object).
+ */
+/* #undef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE */
+
+/**
  * Disable support for PUSH mode Firmware Update.
  *
  * Only meaningful if <c>ANJAY_WITH_MODULE_FW_UPDATE</c> is enabled. Requires
@@ -545,7 +557,7 @@
  * <c>AVS_COMMONS_WITH_AVS_PERSISTENCE</c> to be enabled in avs_commons
  * configuration.
  *
- * IMPORTANT: Only available with the boostrapper feature. Ignored in the open
+ * IMPORTANT: Only available with the bootstrapper feature. Ignored in the open
  * source version.
  */
 /* #undef ANJAY_WITH_MODULE_BOOTSTRAPPER */

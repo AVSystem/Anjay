@@ -10,6 +10,7 @@
 set -e
 
 EXCEPTIONS=(
+    "^\./\.git/"
     "^\./examples/"
     "^\./test_ghactions"
     "/doc/sphinx/html/"

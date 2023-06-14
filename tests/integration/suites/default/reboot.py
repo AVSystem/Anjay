@@ -16,8 +16,6 @@ class RebootSendsResponseTest(test_suite.Lwm2mSingleServerTest):
         return []
 
     def runTest(self):
-        self.serv.set_timeout(timeout_s=1)
-
         # should send a response before rebooting
         req = Lwm2mExecute(ResPath.Device.Reboot)
         self.serv.send(req)

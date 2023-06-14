@@ -19,3 +19,4 @@ Firmware Update Tutorial
    FirmwareUpdateTutorial/FU-SecureDownloads
    FirmwareUpdateTutorial/FU-PoorConnectivity
    FirmwareUpdateTutorial/FU-DownloadResumption
+   FirmwareUpdateTutorial/FU-AdvancedFirmwareUpdate

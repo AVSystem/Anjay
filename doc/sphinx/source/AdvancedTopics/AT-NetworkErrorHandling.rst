@@ -13,23 +13,22 @@ Like any software that needs to communicate with other hosts over the network,
 Anjay needs to be prepared to handle communication errors. This page documents
 the library's behavior during various error conditions.
 
-Outgoing RPC error handling table
----------------------------------
+Outgoing request error handling table
+-------------------------------------
 
 The following table describes the behavior of Anjay when various error
-conditions happen while performing each of the client-initiated RPC methods.
+conditions happen while performing each of the client-initiated operations.
 
 +-----------------+------------------+------------------+------------------+-------------+-------------------+
 |                 | Request          | Register         | Update           | De-register | Notify            |
 |                 | Bootstrap        |                  |                  |             | (confirmable)     |
 +=================+==================+==================+==================+=============+===================+
-| **Timeout       | Retry DTLS       | Retry DTLS       | Fall back        | Ignored     | Ignored; will be  |
-| (DTLS)** [#t]_  | handshake [#hs]_ | handshake [#hs]_ | to Register      |             | retried whenever  |
-+-----------------+------------------+------------------+                  |             | next notification |
-| **Timeout       | Abort all        | :ref:`Abort      |                  |             | (either           |
-| (NoSec)** [#t]_ | communication    | registration     |                  |             | confirmable or    |
-|                 | [#a]_            | <err-abort-reg>` |                  |             | not) is scheduled |
-+-----------------+                  |                  +------------------+             +-------------------+
+| **Timeout       | Retry DTLS       | Retry DTLS       | Fall back        | Ignored     | Cancel            |
+| (DTLS)** [#t]_  | handshake [#hs]_ | handshake [#hs]_ | to Register      |             | observation       |
++-----------------+------------------+------------------+                  |             |                   |
+| **Timeout       | Abort all        | :ref:`Abort      |                  |             |                   |
+| (NoSec)** [#t]_ | communication    | registration     |                  |             |                   |
++-----------------+ [#a]_            | <err-abort-reg>` +------------------+             +-------------------+
 | **Network       |                  |                  | Fall back to     |             | Fall back to      |
 | (e.g. ICMP)     |                  |                  | Client-Initiated |             | Client-Initiated  |
 | error**         |                  |                  | Bootstrap [#bs]_ |             | Bootstrap [#bs]_  |
@@ -114,9 +113,9 @@ Other error conditions
          `anjay_configuration_t <../api/structanjay__configuration.html>`_.
 
 .. [#hs] To prevent infinite loop of handshakes, DTLS handshake is only retried
-         if the failed RPC was **not** performed immediately after the previous
-         handshake; otherwise the behavior described in "Timeout (NoSec)" is
-         used.
+         if the failed operation was **not** performed immediately after the
+         previous handshake; otherwise the behavior described in "Timeout
+         (NoSec)" is used.
 
 .. [#a]  Communication with all servers will be aborted and
          `anjay_all_connections_failed()

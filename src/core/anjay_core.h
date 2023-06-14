@@ -141,6 +141,8 @@ struct
     anjay_downloader_t downloader;
 #endif // ANJAY_WITH_DOWNLOADER
     bool prefer_hierarchical_formats;
+    bool update_immediately_on_dm_change;
+    bool enable_self_notify;
 #ifdef ANJAY_WITH_NET_STATS
     closed_connections_stats_t closed_connections_stats;
 #endif // ANJAY_WITH_NET_STATS

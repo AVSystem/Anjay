@@ -167,6 +167,17 @@ struct anjay_server_info_struct {
     avs_time_real_t reactivate_time;
 
     /**
+     * True if the server is explicitly disabled by:
+     * - LwM2M Server executing Disable resource on Server object
+     * - user calling @ref anjay_disable_server
+     * - user calling @ref anjay_disable_server_with_timeout
+     *
+     * This allows to find out whether server's <c>reactivate_time</c>
+     * should be loaded from core persistence or not.
+     */
+    bool disabled_explicitly;
+
+    /**
      * True if, and only if, the last activation attempt was unsuccessful, for
      * whatever reason - not necessarily those included in num_icmp_failures
      * logic.
