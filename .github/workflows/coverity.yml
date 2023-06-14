@@ -12,12 +12,14 @@ on:
 jobs:
   coverity:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:ubuntu-16.04
+    container: avsystemembedded/anjay-travis:ubuntu-22.04-1.1
     env:
       # NOTE: These need to be configured in GitHub Actions GUI
       COVERITY_EMAIL: ${{ secrets.COVERITY_EMAIL }}
       COVERITY_SCAN_TOKEN: ${{ secrets.COVERITY_SCAN_TOKEN }}
     steps:
+      # NOTE: workaround for https://github.com/actions/checkout/issues/760
+      - run: git config --global safe.directory '*'
       # NOTE: v2 requires Git 2.18 for submodules, it's not present in the image
       - uses: actions/checkout@v1
         with:
