@@ -211,16 +211,22 @@ try_bind_to_last_local_port(anjay_server_connection_t *connection,
                             const char *local_addr) {
     avs_error_t err = avs_errno(AVS_EBADF);
     if (*connection->nontransient_state.last_local_port) {
+        if (avs_is_ok(avs_net_socket_bind(
+                    _anjay_connection_internal_get_socket(connection),
+                    local_addr,
+                    connection->nontransient_state.last_local_port))) {
+            return AVS_OK;
+        }
+        // Binding to a specific address family may not work if a different
+        // family has been forced. Let's try without the local address.
         if (avs_is_ok((
                     err = avs_net_socket_bind(
                             _anjay_connection_internal_get_socket(connection),
-                            local_addr,
+                            NULL,
                             connection->nontransient_state.last_local_port)))) {
             return AVS_OK;
         }
-        anjay_log(WARNING,
-                  _("could not bind socket to last known address ") "[%s]:%s",
-                  local_addr ? local_addr : "",
+        anjay_log(WARNING, _("could not bind socket to port ") "%s",
                   connection->nontransient_state.last_local_port);
     }
     return err;

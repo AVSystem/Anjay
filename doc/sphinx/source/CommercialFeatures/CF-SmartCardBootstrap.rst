@@ -6,8 +6,8 @@
    Licensed under the AVSystem-5-clause License.
    See the attached LICENSE file for details.
 
-Bootstrapper (smart card bootstrap)
-===================================
+Bootstrapper and SIM bootstrap
+==============================
 
 .. contents:: :local:
 
@@ -28,11 +28,21 @@ between Smartcard and LwM2M Device Storage in `Appendix H
 <http://www.openmobilealliance.org/release/LightweightM2M/V1_1_1-20190617-A/HTML-Version/OMA-TS-LightweightM2M_Core-V1_1_1-20190617-A.html#16-0-Appendix-H-Secure-channel-between-Smartcard-and-LwM2M-Device-Storage-for-secure-Bootstrap-Data-provisioning-Normative>`_
 thereof.
 
-While communicating with the smart card is considered outside the scope for the
-Anjay library, the "bootstrapper" feature, available commercially, implements a
-parser for the file format described in `section G.3.4 of the Appendix G
-<http://www.openmobilealliance.org/release/LightweightM2M/V1_1_1-20190617-A/HTML-Version/OMA-TS-LightweightM2M_Core-V1_1_1-20190617-A.html#15-3-4-0-G34-EF-LwM2M_Bootstrap>`_
-mentioned above.
+The "bootstrapper" feature, available as a commercial extension to the Anjay
+library, includes two modules that aid in implementing this part of the
+specification:
+
+* ``bootstrapper`` implements a parser for the file format described in
+  `section G.3.4 of the Appendix G
+  <http://www.openmobilealliance.org/release/LightweightM2M/V1_1_1-20190617-A/HTML-Version/OMA-TS-LightweightM2M_Core-V1_1_1-20190617-A.html#15-3-4-0-G34-EF-LwM2M_Bootstrap>`_
+  mentioned above
+* ``sim_bootstrap`` implements the flow of `ISO/IEC 7816-4
+  <https://www.iso.org/obp/ui/#iso:std:iso-iec:7816:-4:ed-4:v1:en>`_ commands
+  necessary to retrieve the aforementioned file
+
+With the above features in place, all that's left to implement is actual
+communication with the smart card, typically sending and receiving ``AT+CSIM``
+commands to a cellular modem.
 
 Bootstrapping from smart card has a number of advantages, including:
 
@@ -64,7 +74,42 @@ be used. The user will need to provide an implementation of ``avs_stream_t``
 that allows the Anjay code to read the file contained on the smartcard. The
 ``avs_stream_simple_input_create()`` function from the `avs_stream_simple_io.h
 <https://github.com/AVSystem/avs_commons/blob/master/include_public/avsystem/commons/avs_stream_simple_io.h>`_
-header is likely to be the easiest way to provide such an implementation.
+header is likely to be the easiest way to provide such an implementation, aside
+from using the SIM bootstrap module described below.
+
+Enabling and configuring the sim_bootstrap module
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Similarly, to enable the sim_bootstrap module, you can enable the
+``ANJAY_WITH_MODULE_SIM_BOOTSTRAP`` macro in the ``anjay_config.h`` file or, if
+using CMake, enable the corresponding ``WITH_MODULE_sim_bootstrap`` CMake
+option. This requires that the bootstrapper feature is also enabled.
+
+By default, the module will access the PKCS#15 application directory file and
+search it for the EF(DODF-bootstrap) file in a way that is compliant with LwM2M
+TS Appendix G mentioned above.
+
+However, you can override the OID of the file to look for, by defining the
+``ANJAY_MODULE_SIM_BOOTSTRAP_DATA_OID_OVERRIDE_HEX`` macro in ``anjay_config.h``
+or setting the corresponding ``MODULE_sim_bootstrap_DATA_OID_OVERRIDE_HEX``
+CMake option. It shall be set to a string containing hexlified DER
+representation of the desired OID. The default, standards-compliant value is
+``"672b0901"`` (which corresponds to OID 2.23.43.9.1), but you may need to
+change it to a different value, for example some cards are known to use a
+mistakenly encoded value of ``"0604672b0901"``.
+
+Alternatively, you might define the
+``ANJAY_MODULE_SIM_BOOTSTRAP_HARDCODED_FILE_ID`` macro (or set the
+``MODULE_sim_bootstrap_HARDCODED_FILE_ID`` CMake option) to bypass the directory
+search entirely and set a hardcoded file ID, e.g. ``0x6432``.
+
+Once the module is enabled and configured, you can use the
+`anjay_sim_bootstrap_stream_create()
+<../api/sim__bootstrap_8h.html#a7cd497f30bfc7d36c6f0efb1db1d5a19>`_ function to
+create an input stream suitable for passing to ``anjay_bootstrapper()``. In the
+simplest case, you can also use the `anjay_sim_bootstrap_perform()
+<../api/sim__bootstrap_8h.html#aa94114321f3af6532babde1efd9bdcec>`_ function
+that combines both calls and automatically closes the stream as well.
 
 Bootstrap information generator tool
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -191,10 +236,11 @@ Example code
    commercial version of Anjay that includes the bootstrapper feature.
 
 The example is loosely based on the :doc:`../BasicClient/BC-MandatoryObjects`
-tutorial. However, since the bootstrap information will be loaded from a file,
-the ``setup_security_object()`` and ``setup_server_object()`` functions are no
-longer necessary, and the calls to them can be replaced with direct calls to
-`anjay_security_object_install()
+tutorial, and additionally borrows much of the modem communication code from
+:doc:`CF-NIDD`. Since the bootstrap information will be loaded from a smart
+card, the ``setup_security_object()`` and ``setup_server_object()`` functions
+are no longer necessary, and the calls to them can be replaced with direct calls
+to `anjay_security_object_install()
 <../api/security_8h.html#a5fffaeedfc5c2933e58ac1446fd0401d>`_ and
 `anjay_server_object_install()
 <../api/server_8h.html#a36a369c0d7d1b2ad42c898ac47b75765>`_:
@@ -205,8 +251,7 @@ longer necessary, and the calls to them can be replaced with direct calls to
 
     int main(int argc, char *argv[]) {
         if (argc != 3) {
-            avs_log(tutorial, ERROR, "usage: %s ENDPOINT_NAME BOOTSTRAP_INFO_FILE",
-                    argv[0]);
+            avs_log(tutorial, ERROR, "usage: %s ENDPOINT_NAME MODEM_PATH", argv[0]);
             return -1;
         }
 
@@ -231,7 +276,7 @@ longer necessary, and the calls to them can be replaced with direct calls to
         }
 
         if (!result) {
-            result = bootstrap_from_file(anjay, argv[2]);
+            result = bootstrap_from_sim(anjay, argv[2]);
         }
 
         if (!result) {
@@ -246,40 +291,140 @@ longer necessary, and the calls to them can be replaced with direct calls to
 As you can see, the command line now expects a second argument with a name of
 the file containing the bootstrap information.
 
-This file is loaded using the ``bootstrap_from_file()`` function, implemented as
+This file is loaded using the ``bootstrap_from_sim()`` function, implemented as
 follows:
 
 .. highlight:: c
 .. snippet-source:: examples/commercial-features/CF-SmartCardBootstrap/src/main.c
 
-    static int bootstrap_from_file(anjay_t *anjay, const char *filename) {
-        avs_log(tutorial, INFO, "Attempting to bootstrap from file");
+    typedef struct {
+        avs_buffer_t *buffer;
+    } fifo_t;
 
-        avs_stream_t *file_stream =
-                avs_stream_file_create(filename, AVS_STREAM_FILE_READ);
+    // ...
 
-        if (!file_stream) {
-            avs_log(tutorial, ERROR, "Could not open file");
+    typedef struct {
+        fifo_t fifo;
+        int pts_fd;
+    } modem_ctx_t;
+
+    // ...
+
+    static int sim_perform_command(void *modem_ctx_,
+                                   const void *cmd,
+                                   size_t cmd_length,
+                                   void *out_buf,
+                                   size_t out_buf_size,
+                                   size_t *out_response_size) {
+        modem_ctx_t *modem_ctx = (modem_ctx_t *) modem_ctx_;
+        char req_buf[REQ_BUF_SIZE];
+        char resp_buf[RESP_BUF_SIZE] = "";
+
+        char *req_buf_ptr = req_buf;
+        char *const req_buf_end = req_buf + sizeof(req_buf);
+        int result = avs_simple_snprintf(req_buf_ptr,
+                                         (size_t) (req_buf_end - req_buf_ptr),
+                                         "AT+CSIM=%" PRIu32 ",\"",
+                                         (uint32_t) (2 * cmd_length));
+        if (result < 0) {
+            return result;
+        }
+        req_buf_ptr += result;
+        if ((size_t) (req_buf_end - req_buf_ptr) < 2 * cmd_length) {
             return -1;
         }
-
-        int result = 0;
-        if (avs_is_err(anjay_bootstrapper(anjay, file_stream))) {
-            avs_log(tutorial, ERROR, "Could not bootstrap from file");
-            result = -1;
+        if ((result = avs_hexlify(req_buf_ptr, (size_t) (req_buf_end - req_buf_ptr),
+                                  NULL, cmd, cmd_length))) {
+            return result;
         }
+        req_buf_ptr += 2 * cmd_length;
+        if ((result = avs_simple_snprintf(
+                     req_buf_ptr, (size_t) (req_buf_end - req_buf_ptr), "\"\r\n"))
+                < 0) {
+            return result;
+        }
+        req_buf_ptr += result;
+        ssize_t written =
+                write(modem_ctx->pts_fd, req_buf, (size_t) (req_buf_ptr - req_buf));
+        if (written != (ssize_t) (req_buf_ptr - req_buf)) {
+            return -1;
+        }
+        avs_time_monotonic_t deadline = avs_time_monotonic_add(
+                avs_time_monotonic_now(),
+                avs_time_duration_from_scalar(5, AVS_TIME_S));
+        bool csim_resp_received = false;
+        bool ok_received = false;
+        while (!ok_received) {
+            if (modem_getline(modem_ctx, resp_buf, sizeof(resp_buf), deadline)) {
+                return -1;
+            }
+            const char *resp_terminator = memchr(resp_buf, '\0', sizeof(resp_buf));
+            if (!resp_terminator) {
+                return -1;
+            }
+            if (memcmp(resp_buf, CSIM_RESP, strlen(CSIM_RESP)) == 0) {
+                if (csim_resp_received) {
+                    return -1;
+                }
+                errno = 0;
+                char *endptr = NULL;
+                long long resp_reported_length =
+                        strtoll(resp_buf + strlen(CSIM_RESP), &endptr, 10);
+                if (errno || !endptr || endptr[0] != ',' || endptr[1] != '"'
+                        || resp_reported_length < 0
+                        || endptr + resp_reported_length + 2 >= resp_terminator
+                        || endptr[resp_reported_length + 2] != '"'
+                        || avs_unhexlify(out_response_size, (uint8_t *) out_buf,
+                                         out_buf_size, endptr + 2,
+                                         (size_t) resp_reported_length)) {
+                    return -1;
+                }
+                csim_resp_received = true;
+            } else if (strcmp(resp_buf, "OK") == 0) {
+                ok_received = true;
+            }
+        }
+        return csim_resp_received ? 0 : -1;
+    }
 
-        avs_stream_cleanup(&file_stream);
+    static int bootstrap_from_sim(anjay_t *anjay, const char *modem_device) {
+        modem_ctx_t modem_ctx = {
+            .pts_fd = -1
+        };
+        int result = -1;
+
+        avs_log(tutorial, INFO, "Attempting to bootstrap from SIM card");
+
+        if (fifo_init(&modem_ctx.fifo)) {
+            avs_log(tutorial, ERROR, "could not initialize FIFO");
+            goto finish;
+        }
+        if ((modem_ctx.pts_fd = open(modem_device, O_RDWR)) < 0) {
+            avs_log(tutorial, ERROR, "could not open modem device %s: %s",
+                    modem_device, strerror(errno));
+            goto finish;
+        }
+        if (avs_is_err(anjay_sim_bootstrap_perform(anjay, sim_perform_command,
+                                                   &modem_ctx))) {
+            avs_log(tutorial, ERROR, "Could not bootstrap from SIM card");
+            goto finish;
+        }
+        result = 0;
+    finish:
+        if (modem_ctx.pts_fd >= 0) {
+            close(modem_ctx.pts_fd);
+        }
+        fifo_destroy(&modem_ctx.fifo);
         return result;
     }
 
-This shares similarities with the ``restore_objects_if_possible()`` function
-from the :doc:`../AdvancedTopics/AT-Persistence` tutorial.
+The ``sim_perform_command()`` function is a callback that is passed to the
+``sim_bootstrap`` module logic, and performs the ``AT+CSIM`` command over a
+serial port. The ``modem_getline()`` function it calls is almost identical to
+the one originally implemented for :doc:`CF-NIDD`.
 
-As mentioned in the :ref:`cf-smart-card-bootstrap-enabling` section above, to
-perform bootstrap using an actual smart card, the
-``avs_stream_simple_input_create()`` function from the `avs_stream_simple_io.h
-<https://github.com/AVSystem/avs_commons/blob/master/include_public/avsystem/commons/avs_stream_simple_io.h>`_
-header could be used instead of the ``avs_stream_file_create()`` call that is
-used here to access regular file system.
+The ``bootstrap_from_sim()`` function itself is a wrapper over
+`anjay_sim_bootstrap_perform()
+<../api/sim__bootstrap_8h.html#aa94114321f3af6532babde1efd9bdcec>`_ that
+additionally initializes and closes the card communication channel.
 

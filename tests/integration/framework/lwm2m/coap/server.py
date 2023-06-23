@@ -94,10 +94,12 @@ def _disconnect_socket(old_sock, family):
     """
     new_sock = socket.socket(family, socket.SOCK_DGRAM, 0)
 
-    orig_reuse_addr = old_sock.getsockopt(
-        socket.SOL_SOCKET, socket.SO_REUSEADDR)
-    orig_reuse_port = old_sock.getsockopt(
-        socket.SOL_SOCKET, socket.SO_REUSEPORT)
+    orig_reuse_addr = old_sock.getsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR)
+    orig_reuse_port = old_sock.getsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT)
+
+    orig_ipv6only = None
+    if family == socket.AF_INET6 and hasattr(socket, 'IPV6_V6ONLY'):
+        orig_ipv6only = old_sock.getsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY)
 
     # temporarily set REUSEADDR and REUSEPORT to allow new socket to bind
     # to the same port
@@ -107,6 +109,9 @@ def _disconnect_socket(old_sock, family):
 
     set_sock_reuse(new_sock, 1, 1)
     set_sock_reuse(old_sock, 1, 1)
+
+    if orig_ipv6only is not None:
+        new_sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, orig_ipv6only)
 
     new_sock.bind(old_sock.getsockname())
     old_sock.close()
@@ -123,6 +128,7 @@ class Server(object):
         self.socket = None
         self.server_socket = None
         self.family = socket.AF_INET6 if use_ipv6 else socket.AF_INET
+        self.ipv6_only = (str(use_ipv6).lower() == 'only')
         self.transport = transport
         self.reuse_port = reuse_port
         self.accepted_connection = False
@@ -193,8 +199,7 @@ class Server(object):
             self._raw_udp_socket.connect(self._prev_remote_endpoint)
             self._prev_remote_endpoint = None
         else:
-            self._raw_udp_socket = _disconnect_socket(
-                self._raw_udp_socket, self.family)
+            self._raw_udp_socket = _disconnect_socket(self._raw_udp_socket, self.family)
 
     def _flush_recv_queue(self) -> None:
         self._filtered_messages.clear()
@@ -233,10 +238,13 @@ class Server(object):
         else:
             self.socket = socket.socket(self.family,
                                         socket.SOCK_STREAM if self.transport == Transport.TCP else socket.SOCK_DGRAM)
-            self.socket.setsockopt(
-                socket.SOL_SOCKET, socket.SO_REUSEPORT, 1 if self.reuse_port else 0)
-            self.socket.setsockopt(
-                socket.SOL_SOCKET, socket.SO_REUSEADDR, 1 if self.reuse_port else 0)
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT,
+                                   1 if self.reuse_port else 0)
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,
+                                   1 if self.reuse_port else 0)
+            if self.family == socket.AF_INET6 and hasattr(socket, 'IPV6_V6ONLY'):
+                self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY,
+                                       1 if self.ipv6_only else 0)
             self.socket.bind(('', listen_port))
         self.accepted_connection = False
 
@@ -320,14 +328,13 @@ class Server(object):
 
 
 class TlsServer(Server):
-    def __init__(self, psk_identity=None, psk_key=None, ca_path=None, ca_file=None,
-                 crt_file=None, key_file=None, listen_port=0, debug=False, use_ipv6=False,
-                 reuse_port=False, connection_id='', ciphersuites=None, transport=Transport.TCP):
+    def __init__(self, psk_identity=None, psk_key=None, ca_path=None, ca_file=None, crt_file=None,
+                 key_file=None, listen_port=0, debug=False, use_ipv6=False, reuse_port=False,
+                 connection_id='', ciphersuites=None, transport=Transport.TCP):
         use_psk = (psk_identity and psk_key)
         use_certs = any((ca_path, ca_file, crt_file, key_file))
         if use_psk and use_certs:
-            raise ValueError(
-                "Cannot use PSK and Certificates at the same time")
+            raise ValueError("Cannot use PSK and Certificates at the same time")
 
         try:
             from pymbedtls import PskSecurity, CertSecurity, Context
@@ -342,8 +349,7 @@ class TlsServer(Server):
         elif use_certs:
             security = CertSecurity(ca_path, ca_file, crt_file, key_file)
         else:
-            raise ValueError(
-                "Neither PSK nor Certificates were configured for use with DTLS")
+            raise ValueError("Neither PSK nor Certificates were configured for use with DTLS")
 
         if ciphersuites is not None:
             security.set_ciphersuites(ciphersuites)
@@ -354,8 +360,7 @@ class TlsServer(Server):
         super().__init__(listen_port, use_ipv6, reuse_port=reuse_port, transport=transport)
 
     def connect_to_client(self, remote_addr: Tuple[str, int]) -> None:
-        raise NotImplementedError(
-            'connect_to_client() not supported for DTLS servers')
+        raise NotImplementedError('connect_to_client() not supported for DTLS servers')
 
     @property
     def _raw_udp_socket(self) -> None:

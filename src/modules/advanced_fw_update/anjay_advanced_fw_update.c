@@ -933,8 +933,8 @@ static int enqueue_download(anjay_unlocked_t *anjay,
 
 cleanup:
     fw_log(ERROR, _("Out of memory"));
-    avs_free((void *) (intptr_t) new_download->url);
     if (new_download) {
+        avs_free((void *) (intptr_t) new_download->url);
         AVS_LIST_DELETE(&new_download);
     }
     return -1;

@@ -14,15 +14,16 @@ import sys
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
-ConfigFileVariableType = enum.Enum('ConfigFileVariableType', 'VALUE FLAG')
+ConfigFileVariableType = enum.Enum('ConfigFileVariableType', 'FLAG VALUE OPT_VALUE')
 
 
 def default_config_files(project_root=PROJECT_ROOT):
-    return [os.path.join(project_root, 'deps', 'avs_commons', 'include_public',
-                         'avsystem', 'commons', 'avs_commons_config.h.in'),
-            os.path.join(project_root, 'deps', 'avs_coap', 'include_public',
-                         'avsystem', 'coap', 'avs_coap_config.h.in'),
-            os.path.join(project_root, 'include_public', 'anjay', 'anjay_config.h.in')]
+    return [
+        os.path.join(project_root, 'deps', 'avs_commons', 'include_public', 'avsystem', 'commons',
+                     'avs_commons_config.h.in'),
+        os.path.join(project_root, 'deps', 'avs_coap', 'include_public', 'avsystem', 'coap',
+                     'avs_coap_config.h.in'),
+        os.path.join(project_root, 'include_public', 'anjay', 'anjay_config.h.in')]
 
 
 def default_config_log_file(project_root=PROJECT_ROOT):
@@ -45,10 +46,17 @@ def enumerate_variables(config_files):
         with open(config_file) as f:
             for line in f:
                 stripped = line.strip()
-                match = re.match(r'#[ \t]*define[ \t]+([A-Za-z_0-9]+)[ \t]+@([A-Za-z_0-9]+)@',
+                match = re.match(r'#[ \t]*define[ \t]+([A-Za-z_0-9]+)[ \t]+[^@]*@([A-Za-z_0-9]+)@',
                                  stripped)
                 if match:
                     emit(config_file, match.group(1), ConfigFileVariableType.VALUE)
+                    continue
+
+                match = re.match(
+                    r'#[ \t]*cmakedefine[ \t]+([A-Za-z_0-9]+)[ \t]+[^@]*@([A-Za-z_0-9]+)@',
+                    stripped)
+                if match:
+                    emit(config_file, match.group(1), ConfigFileVariableType.OPT_VALUE)
                     continue
 
                 match = re.match(r'#[ \t]*cmakedefine[ \t]+([A-Za-z_0-9]+)', stripped)
@@ -66,12 +74,19 @@ def enumerate_variables(config_files):
 def _generate_body(variables):
     lines = []
     for name, type in sorted(variables.items()):
-        if type == ConfigFileVariableType.VALUE:
-            lines.append(
-                '    _anjay_log(anjay, TRACE, "%s = " AVS_QUOTE_MACRO(%s));' % (name, name))
-        else:
+        if type == ConfigFileVariableType.FLAG:
             lines.append('#ifdef ' + name)
             lines.append('    _anjay_log(anjay, TRACE, "%s = ON");' % (name,))
+            lines.append('#else // ' + name)
+            lines.append('    _anjay_log(anjay, TRACE, "%s = OFF");' % (name,))
+            lines.append('#endif // ' + name)
+        elif type == ConfigFileVariableType.VALUE:
+            lines.append(
+                '    _anjay_log(anjay, TRACE, "%s = " AVS_QUOTE_MACRO(%s));' % (name, name))
+        elif type == ConfigFileVariableType.OPT_VALUE:
+            lines.append('#ifdef ' + name)
+            lines.append(
+                '    _anjay_log(anjay, TRACE, "%s = " AVS_QUOTE_MACRO(%s));' % (name, name))
             lines.append('#else // ' + name)
             lines.append('    _anjay_log(anjay, TRACE, "%s = OFF");' % (name,))
             lines.append('#endif // ' + name)
@@ -126,9 +141,8 @@ def _main():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('command', choices=['validate', 'update', 'list_flags'])
     parser.add_argument('-c', '--config-files',
-                        help='%r-separated list of *.h.in files to enumerate variables from'
-                             % (os.pathsep,),
-                        default=default_config_files())
+                        help='%r-separated list of *.h.in files to enumerate variables from' % (
+                            os.pathsep,), default=default_config_files())
     parser.add_argument('-l', '--config-log-file', help='anjay_config_log.h file to operate on',
                         default=default_config_log_file())
     args = parser.parse_args()

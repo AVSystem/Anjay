@@ -17,14 +17,14 @@ ca82847266e70bd9728611eda7b1a19e  deps/avs_commons/src/net/avs_net_impl.h
 4613be67a0c66ba130fe5601e75ef5f0  examples/commercial-features/CF-EST-PKCS11/src/main.c
 bcefabd7777e025ed9b0503b81365a59  examples/commercial-features/CF-EST/src/main.c
 0500194428e4129e06a8dd5fec2da08e  examples/commercial-features/CF-NIDD/src/main.c
-4e6bd88507be2ec8dc27ca08cb319ac8  examples/commercial-features/CF-NIDD/src/nidd_demo_driver.c
+671d403eecc85d842c0faec745e8889c  examples/commercial-features/CF-NIDD/src/nidd_demo_driver.c
 f7b0898ab6ee5fe363e45f010468c8bc  examples/commercial-features/CF-OSCORE/src/main.c
 63981c17cad5eec1151b88e40655f780  examples/commercial-features/CF-PKCS11/src/main.c
 fabf0d50997dac05e8b3ddc63db092c9  examples/commercial-features/CF-PSA-bootstrap/src/main.c
 4202016537ea33e39cdf82cce280c3cd  examples/commercial-features/CF-PSA-management/src/main.c
 1ae4a0f3eec2e64d3377c681a7ce51c9  examples/commercial-features/CF-PSA-PKI/src/main.c
 9e6292087532b87f0865b691a5f9a0db  examples/commercial-features/CF-PSA-PSK/src/main.c
-25dc50d72d98e0faf95e193c3255cbb7  examples/commercial-features/CF-SmartCardBootstrap/src/main.c
+d95709d6755012199650d59a4250516c  examples/commercial-features/CF-SmartCardBootstrap/src/main.c
 5ab384142e2cf91735e367fa4c8be9c3  examples/commercial-features/CF-SMS-PSK/src/main.c
 991f1cd2582963c8174bb4cd20e2bb29  examples/commercial-features/CF-SMS/src/main.c
 3e324c15570ac568c5efc079dd5139ba  examples/commercial-features/CF-SMS-UDP/src/main.c

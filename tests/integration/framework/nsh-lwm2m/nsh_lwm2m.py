@@ -13,8 +13,8 @@ assert sys.version_info >= (3, 5), "Python < 3.5 is unsupported"
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-sys.path = [os.path.join(SCRIPT_DIR, 'powercmd'), SCRIPT_DIR,
-            os.path.dirname(SCRIPT_DIR)] + sys.path
+sys.path = [os.path.join(SCRIPT_DIR, 'powercmd'), SCRIPT_DIR, os.path.dirname(SCRIPT_DIR),
+            os.path.dirname(os.path.dirname(SCRIPT_DIR))] + sys.path
 
 from lwm2m.coap.server import SecurityMode
 from lwm2m.server import Lwm2mServer

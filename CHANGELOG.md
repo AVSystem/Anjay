@@ -1,5 +1,21 @@
 # Changelog
 
+## 3.4.1 (June 23rd, 2023)
+
+### Features
+
+- (commercial feature only) New ``sim_bootstrap`` module that implements the
+  logic necessary to extract the EF(DODF-bootstrap) file contents from a smart
+  card
+
+### Bugfixes
+
+- Fixed a potential crash in case of a specific out-of-memory condition in
+  Advanced Firmware Update
+- Fixed `anjay_config_log.h` so that all non-binary configuration options are
+  properly logged
+- Fixed a regression from 3.4.0 that prevented ``nsh_lwm2m.py`` from launching
+
 ## 3.4.0 (June 14th, 2023)
 
 ### Features

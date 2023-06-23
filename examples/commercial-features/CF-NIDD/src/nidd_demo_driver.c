@@ -118,17 +118,16 @@ static void fifo_strip_nullbytes(fifo_t *fifo) {
 }
 
 static avs_error_t fifo_push_read(fifo_t *fifo, int fd) {
-    size_t space_left = avs_buffer_space_left(fifo->buffer);
-    assert(space_left > 0); // This shall be handled in fifo_pop_line()
-    ssize_t bytes_read =
-            read(fd, avs_buffer_raw_insert_ptr(fifo->buffer), space_left);
+    // This shall be handled in fifo_pop_line()
+    assert(avs_buffer_space_left(fifo->buffer) > 0);
+    ssize_t bytes_read = read(fd, avs_buffer_raw_insert_ptr(fifo->buffer), 1);
     if (bytes_read < 0) {
         return avs_errno(AVS_EIO);
     } else if (bytes_read == 0) {
         return AVS_EOF;
     } else {
-        assert((size_t) bytes_read <= space_left);
-        avs_buffer_advance_ptr(fifo->buffer, (size_t) bytes_read);
+        assert(bytes_read == 1);
+        avs_buffer_advance_ptr(fifo->buffer, 1);
         fifo_strip_nullbytes(fifo);
         return AVS_OK;
     }

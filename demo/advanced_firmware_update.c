@@ -120,7 +120,7 @@ handle_multipackage(FILE *f,
                 return -1;
             }
             mm.package_len[i] = avs_convert_be32(mm.package_len[i]);
-            if (mm.package_len == 0) {
+            if (mm.package_len[i] == 0) {
                 demo_log(
                         ERROR,
                         "Zero-length packages within multipackage not allowed");
@@ -133,7 +133,10 @@ handle_multipackage(FILE *f,
     } else {
         /* It is not multipackage, move stream to the beginning to easily handle
          * like standard package */
-        fseek(f, 0L, SEEK_SET);
+        if (fseek(f, 0L, SEEK_SET)) {
+            demo_log(ERROR, "Could not seek in the multipackage file");
+            return -1;
+        }
     }
     return 0;
 }

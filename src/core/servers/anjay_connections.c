@@ -364,8 +364,8 @@ avs_error_t _anjay_server_connection_internal_bring_online(
     }
 
     bool session_resumed;
-    avs_error_t err = def->connect_socket(server->anjay, connection);
-    if (avs_is_err(err)) {
+    avs_error_t err = AVS_OK;
+    if (avs_is_err((err = def->connect_socket(server->anjay, connection)))) {
         goto error;
     }
 

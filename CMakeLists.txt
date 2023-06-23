@@ -8,7 +8,7 @@
 cmake_minimum_required(VERSION 3.6.0)
 
 project(anjay C)
-set(ANJAY_VERSION "3.4.0" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "3.4.1" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -495,7 +495,8 @@ add_library(anjay
             src/modules/server/anjay_server_transaction.c
             src/modules/server/anjay_server_transaction.h
             src/modules/server/anjay_server_utils.c
-            src/modules/server/anjay_server_utils.h)
+            src/modules/server/anjay_server_utils.h
+            )
 
 target_include_directories(anjay PUBLIC
                            $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include_public>
