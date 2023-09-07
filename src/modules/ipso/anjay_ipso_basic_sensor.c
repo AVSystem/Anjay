@@ -108,7 +108,6 @@ basic_sensor_list_instances(anjay_unlocked_t *anjay,
     (void) anjay;
 
     anjay_ipso_basic_sensor_t *obj = get_obj(&obj_ptr);
-    assert(obj);
 
     for (anjay_iid_t iid = 0; iid < obj->num_instances; iid++) {
         if (obj->instances[iid].initialized) {
@@ -127,7 +126,6 @@ basic_sensor_list_resources(anjay_unlocked_t *anjay,
     (void) anjay;
 
     anjay_ipso_basic_sensor_t *obj = get_obj(&obj_ptr);
-    assert(obj);
     assert(iid < obj->num_instances);
     anjay_ipso_basic_sensor_instance_t *inst = &obj->instances[iid];
     assert(inst->initialized);
@@ -212,7 +210,6 @@ static int basic_sensor_resource_read(anjay_unlocked_t *anjay,
     (void) riid;
 
     anjay_ipso_basic_sensor_t *obj = get_obj(&obj_ptr);
-    assert(obj);
     assert(iid < obj->num_instances);
     anjay_ipso_basic_sensor_instance_t *inst = &obj->instances[iid];
     assert(inst->initialized);
@@ -268,7 +265,6 @@ basic_sensor_resource_execute(anjay_unlocked_t *anjay,
     (void) anjay;
 
     anjay_ipso_basic_sensor_t *obj = get_obj(&obj_ptr);
-    assert(obj);
     assert(iid < obj->num_instances);
     anjay_ipso_basic_sensor_instance_t *inst = &obj->instances[iid];
     assert(inst->initialized);

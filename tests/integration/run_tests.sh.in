@@ -11,23 +11,28 @@
 COMMAND="@CMAKE_CTEST_COMMAND@";
 RERUNS=@TEST_RERUNS@;
 
+CREATE_XLSX_REPORTS="python3 @CMAKE_SOURCE_DIR@/tests/integration/framework/create_xlsx_test_report.py \
+                                -d @CMAKE_SOURCE_DIR@/output/test/integration/log/test/"
+
 if [ "$1" == "-h" ]; then
     COMMAND="@CMAKE_CTEST_COMMAND@ -R hsm";
 fi
 
 if [ $RERUNS == 0 ]; then
-    $COMMAND -j@NPROC@ --output-on-failure && exit 0;
+    $COMMAND -j@NPROC@ --output-on-failure && $CREATE_XLSX_REPORTS && exit 0;
 else
-    $COMMAND -j@NPROC@ && exit 0;
+    $COMMAND -j@NPROC@ && $CREATE_XLSX_REPORTS && exit 0;
 fi
 
 if [ $RERUNS -gt 0 ]; then
     if  [ $RERUNS -gt 1 ]; then
         for i in $(seq 1 $(($RERUNS-1))); do
-            $COMMAND --rerun-failed && exit 0;
+            $COMMAND --rerun-failed && $CREATE_XLSX_REPORTS && exit 0;
         done;
     fi
-    $COMMAND --rerun-failed --output-on-failure && exit 0;
+    $COMMAND --rerun-failed --output-on-failure && $CREATE_XLSX_REPORTS && exit 0;
 fi
+
+$CREATE_XLSX_REPORTS
 
 exit 1

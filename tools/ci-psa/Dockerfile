@@ -6,10 +6,10 @@
 # See the attached LICENSE file for details.
 
 
-FROM ubuntu:21.10
+FROM ubuntu:22.04
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -yq git build-essential cmake zlib1g-dev doxygen python3 libpython3-dev libssl-dev python3-pip python3-sphinx clang-tools valgrind opensc libengine-pkcs11-openssl docker.io nodejs curl jq automake
-RUN pip3 install sphinx_rtd_theme cbor2 dpkt gitpython cryptography
+RUN pip3 install sphinx_rtd_theme cbor2 dpkt gitpython cryptography openpyxl
 
 RUN $(which echo) -e "                                                      \n\
                                                                             \n\

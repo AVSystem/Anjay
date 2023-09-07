@@ -98,7 +98,6 @@ static void delete_value(anjay_unlocked_t *anjay,
         }
     }
     AVS_LIST_DELETE(value_ptr);
-    // defined(ANJAY_WITH_CORE_PERSISTENCE)
 }
 
 static inline const anjay_observe_path_entry_t *
@@ -559,7 +558,6 @@ static int insert_new_value(anjay_observe_connection_entry_t *conn_state,
         conn_state->unsent = res_value;
     }
     observation->last_unsent = res_value;
-    // defined(ANJAY_WITH_CORE_PERSISTENCE)
     return 0;
 }
 
@@ -1239,7 +1237,6 @@ static int observe_handle(anjay_connection_ref_t ref,
             delete_connection_if_empty(conn_ptr);
         }
     }
-    // defined(ANJAY_WITH_CORE_PERSISTENCE)
     delete_batch_array(&batches, paths->count);
 
     if (result && !send_result) {
@@ -1537,17 +1534,20 @@ handle_notify_delivery(avs_coap_ctx_t *coap, avs_error_t err, void *conn_) {
     anjay_observe_connection_entry_t *conn =
             (anjay_observe_connection_entry_t *) conn_;
 
+    bool is_error = is_error_value(conn->unsent);
     conn->notify_exchange_id = AVS_COAP_EXCHANGE_ID_INVALID;
     cleanup_serialization_state(&conn->serialization_state);
     if (avs_is_ok(err)) {
-        assert(!is_error_value(conn->unsent));
+        _anjay_connection_mark_stable(conn->conn_ref);
         if (conn->unsent->reliability_hint
                 == AVS_COAP_NOTIFY_PREFER_CONFIRMABLE) {
             conn->unsent->ref->last_confirmable = avs_time_real_now();
         }
         value_sent(conn);
     }
-    on_entry_flushed(conn, err);
+    if (!is_error || avs_is_err(err)) {
+        on_entry_flushed(conn, err);
+    }
 }
 
 static void flush_next_unsent(anjay_observe_connection_entry_t *conn) {
@@ -1589,21 +1589,32 @@ static void flush_next_unsent(anjay_observe_connection_entry_t *conn) {
         }
         if (avs_is_err(err)) {
             on_entry_flushed(conn, err);
-        } else if (avs_is_err(
-                           (err = avs_coap_notify_async(
-                                    coap, &conn->notify_exchange_id,
-                                    (avs_coap_observe_id_t) {
-                                        .token = observation->token
-                                    },
-                                    &response, conn->unsent->reliability_hint,
-                                    payload_writer, conn,
-                                    handle_notify_delivery, conn)))) {
-            if (connection_exists(anjay, conn)) {
-                cleanup_serialization_state(&conn->serialization_state);
-                on_entry_flushed(conn, err);
+        } else {
+            // NOTE: handle_notify_delivery() or _anjay_observe_cancel_handler()
+            // may be called by avs_coap_notify_async(), which may invalidate
+            // conn. That's also why we need this intermediate exchange_id
+            avs_coap_exchange_id_t exchange_id = AVS_COAP_EXCHANGE_ID_INVALID;
+            err = avs_coap_notify_async(coap, &exchange_id,
+                                        (avs_coap_observe_id_t) {
+                                            .token = observation->token
+                                        },
+                                        &response,
+                                        conn->unsent->reliability_hint,
+                                        payload_writer, conn,
+                                        handle_notify_delivery, conn);
+            if (avs_is_err(err)) {
+                if (connection_exists(anjay, conn)) {
+                    cleanup_serialization_state(&conn->serialization_state);
+                    on_entry_flushed(conn, err);
+                }
+            } else {
+                if (connection_exists(anjay, conn)) {
+                    assert(!avs_coap_exchange_id_valid(
+                            conn->notify_exchange_id));
+                    conn->notify_exchange_id = exchange_id;
+                }
             }
         }
-        // defined(ANJAY_WITH_CORE_PERSISTENCE)
     }
     avs_coap_options_cleanup(&response.options);
 #    ifndef ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
@@ -1616,7 +1627,7 @@ static void flush_next_unsent(anjay_observe_connection_entry_t *conn) {
 
 #    ifdef ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
     if (avs_is_ok(err)) {
-        _anjay_server_set_last_communication_time(conn->conn_ref.server);
+        _anjay_server_set_last_communication_time(conn_ref.server);
     }
 #    endif // ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
 }

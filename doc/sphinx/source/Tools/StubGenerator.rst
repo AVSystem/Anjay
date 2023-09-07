@@ -238,7 +238,6 @@ The source of the example object looks like this:
                                anjay_iid_t iid) {
         (void) anjay;
         some_object_name_object_t *obj = get_obj(obj_ptr);
-        assert(obj);
 
         return add_instance(obj, iid) ? 0 : ANJAY_ERR_INTERNAL;
     }
@@ -248,7 +247,6 @@ The source of the example object looks like this:
                                anjay_iid_t iid) {
         (void) anjay;
         some_object_name_object_t *obj = get_obj(obj_ptr);
-        assert(obj);
 
         AVS_LIST(some_object_name_instance_t) *it;
         AVS_LIST_FOREACH_PTR(it, &obj->instances) {
@@ -271,7 +269,6 @@ The source of the example object looks like this:
         (void) anjay;
 
         some_object_name_object_t *obj = get_obj(obj_ptr);
-        assert(obj);
         some_object_name_instance_t *inst = find_instance(obj, iid);
         assert(inst);
 
@@ -305,7 +302,6 @@ The source of the example object looks like this:
         (void) anjay;
 
         some_object_name_object_t *obj = get_obj(obj_ptr);
-        assert(obj);
         some_object_name_instance_t *inst = find_instance(obj, iid);
         assert(inst);
 
@@ -336,7 +332,6 @@ The source of the example object looks like this:
         (void) anjay;
 
         some_object_name_object_t *obj = get_obj(obj_ptr);
-        assert(obj);
         some_object_name_instance_t *inst = find_instance(obj, iid);
         assert(inst);
 
@@ -371,7 +366,6 @@ The source of the example object looks like this:
         (void) anjay;
 
         some_object_name_object_t *obj = get_obj(obj_ptr);
-        assert(obj);
         some_object_name_instance_t *inst = find_instance(obj, iid);
         assert(inst);
 
@@ -392,7 +386,6 @@ The source of the example object looks like this:
         (void) anjay;
 
         some_object_name_object_t *obj = get_obj(obj_ptr);
-        assert(obj);
         some_object_name_instance_t *inst = find_instance(obj, iid);
         assert(inst);
 
@@ -472,7 +465,7 @@ The source of the example object looks like this:
   instance and then the memory is deallocated.
 
 * Each handler (apart from ``instance_create`` and ``instance_remove``) taking
-  ``anjay_iid_t iid`` as an argument utilizes auxiliary ``find_instance`` 
+  ``anjay_iid_t iid`` as an argument utilizes auxiliary ``find_instance``
   function to get the pointer to the instance.
 
 * All allocated instances are deallocated in ``some_object_name_object_release``
@@ -565,7 +558,6 @@ The resulting code is following:
         (void) anjay;
 
         some_object_name_object_t *obj = get_obj(obj_ptr);
-        assert(obj);
         assert(iid < AVS_ARRAY_SIZE(obj->instances));
         some_object_name_instance_t *inst = &obj->instances[iid];
 
@@ -601,7 +593,6 @@ The resulting code is following:
         (void) anjay;
 
         some_object_name_object_t *obj = get_obj(obj_ptr);
-        assert(obj);
         assert(iid < AVS_ARRAY_SIZE(obj->instances));
         some_object_name_instance_t *inst = &obj->instances[iid];
 
@@ -632,7 +623,6 @@ The resulting code is following:
         (void) anjay;
 
         some_object_name_object_t *obj = get_obj(obj_ptr);
-        assert(obj);
         assert(iid < AVS_ARRAY_SIZE(obj->instances));
         some_object_name_instance_t *inst = &obj->instances[iid];
 
@@ -667,7 +657,6 @@ The resulting code is following:
         (void) anjay;
 
         some_object_name_object_t *obj = get_obj(obj_ptr);
-        assert(obj);
         assert(iid < AVS_ARRAY_SIZE(obj->instances));
         some_object_name_instance_t *inst = &obj->instances[iid];
 
@@ -688,7 +677,6 @@ The resulting code is following:
         (void) anjay;
 
         some_object_name_object_t *obj = get_obj(obj_ptr);
-        assert(obj);
         assert(iid < AVS_ARRAY_SIZE(obj->instances));
         some_object_name_instance_t *inst = &obj->instances[iid];
 
@@ -774,7 +762,7 @@ To create a C++ template of the same object with 10 static instances run:
 
 The main difference between the two is that the former approach uses the `C++
 wrapper of AVS_LIST <https://github.com/AVSystem/avs_commons/blob/master/include_public/avsystem/commons/avs_list_cxx.hpp>`_,
-and the latter one takes advantage of 
+and the latter one takes advantage of
 `std::array <https://en.cppreference.com/w/cpp/container/array>`_ container.
 
 After generating the object template

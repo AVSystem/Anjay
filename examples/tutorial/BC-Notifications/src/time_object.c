@@ -131,7 +131,6 @@ static int instance_create(anjay_t *anjay,
                            anjay_iid_t iid) {
     (void) anjay;
     time_object_t *obj = get_obj(obj_ptr);
-    assert(obj);
 
     return add_instance(obj, iid) ? 0 : ANJAY_ERR_INTERNAL;
 }
@@ -141,7 +140,6 @@ static int instance_remove(anjay_t *anjay,
                            anjay_iid_t iid) {
     (void) anjay;
     time_object_t *obj = get_obj(obj_ptr);
-    assert(obj);
 
     AVS_LIST(time_instance_t) *it;
     AVS_LIST_FOREACH_PTR(it, &obj->instances) {
@@ -164,7 +162,6 @@ static int instance_reset(anjay_t *anjay,
     (void) anjay;
 
     time_object_t *obj = get_obj(obj_ptr);
-    assert(obj);
     time_instance_t *inst = find_instance(obj, iid);
     assert(inst);
 
@@ -199,7 +196,6 @@ static int resource_read(anjay_t *anjay,
     (void) anjay;
 
     time_object_t *obj = get_obj(obj_ptr);
-    assert(obj);
     time_instance_t *inst = find_instance(obj, iid);
     assert(inst);
 
@@ -232,7 +228,6 @@ static int resource_write(anjay_t *anjay,
     (void) anjay;
 
     time_object_t *obj = get_obj(obj_ptr);
-    assert(obj);
     time_instance_t *inst = find_instance(obj, iid);
     assert(inst);
 

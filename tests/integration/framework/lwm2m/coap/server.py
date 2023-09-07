@@ -9,6 +9,7 @@
 
 import contextlib
 import enum
+import errno
 import socket
 import time
 from typing import Tuple, Optional
@@ -57,7 +58,14 @@ def _override_timeout(sock, *args, **kwargs):
             sock.settimeout(max(deadline - time.time(), 0))
             yield
         finally:
-            sock.settimeout(orig_timeout_s)
+            try:
+                sock.settimeout(orig_timeout_s)
+            except OSError as e:
+                if e.errno == errno.EBADF:
+                    # sock has been closed during yield, ignore
+                    pass
+                else:
+                    raise
 
 
 def _disconnect_socket(old_sock, family):
@@ -251,7 +259,7 @@ class Server(object):
     def send(self, coap_packet: Packet) -> None:
         self.socket.send(coap_packet.serialize(transport=self.transport))
 
-    def recv_raw(self, timeout_s=-1, deadline=None, peek=False):
+    def recv_raw(self, timeout_s=-1, deadline=None, peek=False, bufsize=65536):
         deadline = _calculate_deadline(timeout_s, deadline)
 
         # NOTE: get_remote_addr() can sometimes return None, if someone
@@ -269,7 +277,7 @@ class Server(object):
                 return self._filtered_messages.pop(0)
 
         with _override_timeout(self.socket, deadline=deadline):
-            raw_pkt = self.socket.recv(65536)
+            raw_pkt = self.socket.recv(bufsize)
 
         if peek:
             self._filtered_messages.append(raw_pkt)
@@ -285,10 +293,26 @@ class Server(object):
         filtered_messages = []
         while True:
             try:
-                raw_pkt = self.recv_raw(deadline=deadline)
+                if self.transport == Transport.TCP:
+                    raw_pkt = b''
+
+                    def pkt_iterator():
+                        nonlocal raw_pkt
+                        while True:
+                            data = self.recv_raw(deadline=deadline, bufsize=1)
+                            if len(data) == 0:
+                                break
+                            raw_pkt += data
+                            for b in data:
+                                yield b
+
+                    pkt_source = pkt_iterator()
+                else:
+                    raw_pkt = self.recv_raw(deadline=deadline)
+                    pkt_source = raw_pkt
+                pkt = Packet.parse(pkt_source, transport=self.transport)
             except BlockingIOError:
                 raise socket.timeout('timed out')
-            pkt = Packet.parse(raw_pkt, transport=self.transport)
             filter_result = filter(pkt)
             if peek or not filter_result:
                 filtered_messages.append(raw_pkt)

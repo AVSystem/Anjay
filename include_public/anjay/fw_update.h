@@ -453,6 +453,9 @@ typedef int anjay_fw_update_get_security_config_t(
  * If this handler is not implemented at all (with the corresponding field set
  * to <c>NULL</c>), <c>udp_tx_params</c> from <c>anjay_t</c> object are used.
  *
+ * <strong>NOTE:</strong> This callback is called even for non-CoAP downloads,
+ * but the returned transmission parameters are ignored in that case.
+ *
  * @param user_ptr      Opaque pointer to user data, as passed to
  *                      @ref anjay_fw_update_install .
  *
@@ -609,6 +612,44 @@ int anjay_fw_update_install(
  * @returns 0 on success, or a negative value in case of error.
  */
 int anjay_fw_update_set_result(anjay_t *anjay, anjay_fw_update_result_t result);
+
+#ifdef ANJAY_WITH_DOWNLOADER
+/**
+ * Suspends the operation of PULL-mode downloads in the Firmware Update module.
+ *
+ * This will have the effect of suspending any ongoing downloads (see
+ * @ref anjay_download_suspend for details), as well as preventing new downloads
+ * from being started.
+ *
+ * When PULL-mode downloads are suspended, @ref anjay_fw_update_stream_open_t
+ * will <strong>NOT</strong> be called when a download request is issued.
+ * However, @ref anjay_fw_update_get_security_config_t and
+ * @ref anjay_fw_update_get_coap_tx_params_t will be called. You may call
+ * @ref anjay_fw_update_pull_reconnect from one of these functions if you decide
+ * to accept the download immediately after all.
+ *
+ * @param anjay Anjay object to operate on.
+ */
+void anjay_fw_update_pull_suspend(anjay_t *anjay);
+
+/**
+ * Reconnects any ongoing PULL-mode downloads in the Firmware Update module.
+ * Which could be disconnected due to connection loss or deliberate suspend.
+ * In the latter case, when PULL-mode downloads are suspended (see
+ * @ref anjay_fw_update_pull_suspend), resumes normal operation.
+ *
+ * If an ongoing PULL-mode download exists, this will call
+ * @ref anjay_download_reconnect internally, so you may want to reference the
+ * documentation of that function for details.
+ *
+ * @param anjay Anjay object to operate on.
+ *
+ * @returns 0 for success; -1 if @p anjay does not have the Firmware Update
+ *          object installed or if the call to @ref anjay_download_reconnect
+ *          fails.
+ */
+int anjay_fw_update_pull_reconnect(anjay_t *anjay);
+#endif // ANJAY_WITH_DOWNLOADER
 
 #ifdef __cplusplus
 }

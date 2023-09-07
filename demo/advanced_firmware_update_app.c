@@ -13,16 +13,14 @@
 #include <errno.h>
 #include <unistd.h>
 
+#define RESTART_DELAY_SEC 3
+
 static advanced_fw_update_logic_t *fw_global;
 
 static int fw_stream_open(anjay_iid_t iid, void *fw_) {
     (void) iid;
     return fw_update_common_open(iid, fw_);
 }
-
-struct execute_new_app_args {
-    advanced_fw_update_logic_t *fw;
-};
 
 static int prepare_and_validate_update(advanced_fw_update_logic_t *fw) {
     demo_log(INFO,
@@ -45,23 +43,13 @@ static int prepare_and_validate_update(advanced_fw_update_logic_t *fw) {
     return 0;
 }
 
-static void execute_new_app(avs_sched_t *sched, const void *args_) {
-    (void) sched;
-    const struct execute_new_app_args *args =
-            (const struct execute_new_app_args *) args_;
-    demo_log(INFO, "App image going to execv from %s",
-             args->fw->next_target_path);
-    execv(args->fw->next_target_path, argv_get());
-    demo_log(ERROR, "execv failed (%s)", strerror(errno));
-}
-
-static int update(advanced_fw_update_logic_t *fw) {
-    /* This function only works with APP so fw always points to fw_table: */
-    advanced_fw_update_logic_t *fw_table = (advanced_fw_update_logic_t *) fw;
-    demo_log(INFO, "*** FIRMWARE UPDATE: %s ***", fw->next_target_path);
+static int write_persistence(advanced_fw_update_logic_t *fw_table) {
+    advanced_fw_update_logic_t *fw =
+            (advanced_fw_update_logic_t *) &fw_table[FW_UPDATE_IID_APP];
     states_results_paths_t states_results_paths;
     if (advanced_firmware_update_read_states_results_paths(
                 fw_table, &states_results_paths)) {
+        demo_log(ERROR, "Can't read states/results/paths.");
         return -1;
     }
     states_results_paths.inst_states[FW_UPDATE_IID_APP] =
@@ -79,11 +67,42 @@ static int update(advanced_fw_update_logic_t *fw) {
                                                              fw->iid),
                        fw->current_ver)) {
         advanced_firmware_update_delete_persistence_file(fw);
+        demo_log(ERROR, "Can't write persistence file.");
         return -1;
     }
+    return 0;
+}
+
+struct execute_new_app_args {
+    advanced_fw_update_logic_t *fw_table;
+};
+
+static void execute_new_app(avs_sched_t *sched, const void *args_) {
+    (void) sched;
+    const struct execute_new_app_args *args =
+            (const struct execute_new_app_args *) args_;
+    advanced_fw_update_logic_t *fw =
+            (advanced_fw_update_logic_t *) &args->fw_table[FW_UPDATE_IID_APP];
+    if (write_persistence(args->fw_table)) {
+        demo_log(ERROR, "Can't persist state. Execute new app failed.");
+        return;
+    }
+    demo_log(INFO, "App image going to execv from %s", fw->next_target_path);
+    execv(fw->next_target_path, argv_get());
+    demo_log(ERROR, "execv failed (%s)", strerror(errno));
+}
+
+static int update(advanced_fw_update_logic_t *fw) {
+    /* This function only works with APP so fw always points to fw_table: */
+    advanced_fw_update_logic_t *fw_table = (advanced_fw_update_logic_t *) fw;
+    demo_log(INFO, "*** FIRMWARE UPDATE: %s ***", fw->next_target_path);
     if (fw->metadata.force_error_case) {
         demo_log(INFO, "force_error_case present and set to: %d",
                  (int) fw->metadata.force_error_case);
+        if (write_persistence(fw_table)) {
+            demo_log(ERROR, "Can't persist state. Update failed.");
+            return -1;
+        }
     }
     switch (fw->metadata.force_error_case) {
     case FORCE_ERROR_FAILED_UPDATE:
@@ -125,23 +144,29 @@ static int update(advanced_fw_update_logic_t *fw) {
         break;
     }
     struct execute_new_app_args args = {
-        .fw = fw,
+        .fw_table = fw_table,
     };
-    if (AVS_SCHED_NOW(anjay_get_scheduler(fw->anjay), &fw->update_job,
-                      execute_new_app, &args, sizeof(args))) {
+    if (AVS_SCHED_DELAYED(anjay_get_scheduler(fw->anjay), &fw->update_job,
+                          avs_time_duration_from_scalar(RESTART_DELAY_SEC,
+                                                        AVS_TIME_S),
+                          execute_new_app, &args, sizeof(args))) {
         demo_log(WARNING, "Could not schedule the upgrade job");
         return ANJAY_ERR_INTERNAL;
     }
     return 0;
 }
 
-static avs_coap_udp_tx_params_t advanced_fw_get_coap_tx_params_wrapper(
+static avs_coap_udp_tx_params_t fw_get_coap_tx_params(
         anjay_iid_t iid, void *user_ptr, const char *download_uri) {
     (void) iid;
+    (void) download_uri;
     advanced_fw_update_logic_t *fw_table =
             (advanced_fw_update_logic_t *) user_ptr;
     advanced_fw_update_logic_t *fw = &fw_table[FW_UPDATE_IID_APP];
-    return fw_get_coap_tx_params(fw, download_uri);
+    if (fw->auto_suspend) {
+        anjay_advanced_fw_update_pull_reconnect(fw->anjay);
+    }
+    return fw->coap_tx_params;
 }
 
 static anjay_advanced_fw_update_handlers_t handlers = {
@@ -151,8 +176,7 @@ static anjay_advanced_fw_update_handlers_t handlers = {
     .reset = fw_update_common_reset,
     .get_pkg_version = fw_update_common_get_pkg_version,
     .get_current_version = fw_update_common_get_current_version,
-    .perform_upgrade = fw_update_common_perform_upgrade,
-    .get_coap_tx_params = advanced_fw_get_coap_tx_params_wrapper
+    .perform_upgrade = fw_update_common_perform_upgrade
 };
 
 static int fw_get_security_config(anjay_iid_t iid,
@@ -173,7 +197,8 @@ int advanced_firmware_update_application_install(
         advanced_fw_update_logic_t *fw_table,
         anjay_advanced_fw_update_initial_state_t *init_state,
         const avs_net_security_info_t *security_info,
-        const avs_coap_udp_tx_params_t *tx_params) {
+        const avs_coap_udp_tx_params_t *tx_params,
+        bool auto_suspend) {
     advanced_fw_update_logic_t *fw_logic = &fw_table[FW_UPDATE_IID_APP];
 
     if (security_info) {
@@ -184,8 +209,14 @@ int advanced_firmware_update_application_install(
         handlers.get_security_config = NULL;
     }
 
-    if (tx_params) {
-        fw_set_coap_tx_params(tx_params);
+    if (tx_params || auto_suspend) {
+        if (tx_params) {
+            fw_logic->coap_tx_params = *tx_params;
+        } else if (auto_suspend) {
+            fw_logic->coap_tx_params = AVS_COAP_DEFAULT_UDP_TX_PARAMS;
+        }
+        fw_logic->auto_suspend = auto_suspend;
+        handlers.get_coap_tx_params = fw_get_coap_tx_params;
     } else {
         handlers.get_coap_tx_params = NULL;
     }

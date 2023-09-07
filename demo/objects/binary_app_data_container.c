@@ -131,7 +131,6 @@ static int instance_create(anjay_t *anjay,
                            anjay_iid_t iid) {
     (void) anjay;
     binary_app_data_container_t *obj = get_obj(obj_ptr);
-    assert(obj);
 
     AVS_LIST(binary_app_data_container_instance_t) created =
             AVS_LIST_NEW_ELEMENT(binary_app_data_container_instance_t);
@@ -161,7 +160,6 @@ static int instance_remove(anjay_t *anjay,
                            anjay_iid_t iid) {
     (void) anjay;
     binary_app_data_container_t *obj = get_obj(obj_ptr);
-    assert(obj);
 
     AVS_LIST(binary_app_data_container_instance_t) *it;
     AVS_LIST_FOREACH_PTR(it, &obj->instances) {
@@ -184,7 +182,6 @@ static int instance_reset(anjay_t *anjay,
     (void) anjay;
 
     binary_app_data_container_t *obj = get_obj(obj_ptr);
-    assert(obj);
     binary_app_data_container_instance_t *inst = find_instance(obj, iid);
     assert(inst);
 
@@ -213,7 +210,6 @@ static int resource_read(anjay_t *anjay,
     (void) anjay;
 
     binary_app_data_container_t *obj = get_obj(obj_ptr);
-    assert(obj);
     binary_app_data_container_instance_t *inst = find_instance(obj, iid);
     assert(inst);
 
@@ -270,7 +266,6 @@ static int resource_write(anjay_t *anjay,
     (void) anjay;
 
     binary_app_data_container_t *obj = get_obj(obj_ptr);
-    assert(obj);
     binary_app_data_container_instance_t *inst = find_instance(obj, iid);
     assert(inst);
 
@@ -320,7 +315,6 @@ static int resource_reset(anjay_t *anjay,
     (void) anjay;
 
     binary_app_data_container_t *obj = get_obj(obj_ptr);
-    assert(obj);
     binary_app_data_container_instance_t *inst = find_instance(obj, iid);
     assert(inst);
 
@@ -343,7 +337,6 @@ static int list_resource_instances(anjay_t *anjay,
     (void) ctx;
 
     binary_app_data_container_t *obj = get_obj(obj_ptr);
-    assert(obj);
     binary_app_data_container_instance_t *inst = find_instance(obj, iid);
     assert(inst);
 
@@ -499,7 +492,6 @@ int binary_app_data_container_write(anjay_t *anjay,
     }
 
     binary_app_data_container_t *obj = get_obj(def);
-    assert(obj);
     binary_app_data_container_instance_t *inst = find_instance(obj, iid);
     if (!inst) {
         demo_log(ERROR, "No such instance: %" PRIu16, iid);

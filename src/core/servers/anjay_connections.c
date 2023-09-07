@@ -337,7 +337,10 @@ int _anjay_connection_ensure_coap_context(anjay_server_info_t *server,
     const anjay_connection_type_definition_t *def =
             get_connection_type_def(conn->transport);
     assert(def);
-    int result = def->ensure_coap_context(server->anjay, conn);
+    int result = def->ensure_coap_context((anjay_connection_ref_t) {
+        .server = server,
+        .conn_type = conn_type
+    });
     if (!result) {
         update_exchange_timeout(server, conn_type);
     }
@@ -358,7 +361,6 @@ avs_error_t _anjay_server_connection_internal_bring_online(
 
     if (_anjay_connection_is_online(connection)) {
         anjay_log(DEBUG, _("socket already connected"));
-        connection->state = ANJAY_SERVER_CONNECTION_STABLE;
         connection->needs_observe_flush = true;
         return AVS_OK;
     }
@@ -499,7 +501,6 @@ recreate_socket(anjay_unlocked_t *anjay,
             avs_net_socket_shutdown(connection->conn_socket_);
             avs_net_socket_close(connection->conn_socket_);
         }
-        // defined(ANJAY_WITH_CORE_PERSISTENCE)
     }
     _anjay_security_config_cache_cleanup(&security_config_cache);
     return err;
@@ -582,7 +583,6 @@ static avs_error_t refresh_connection(anjay_server_info_t *server,
         } else {
             // Disabled trigger connection does not matter much,
             // so treat it as stable
-            // defined(ANJAY_WITH_CORE_PERSISTENCE)
             _anjay_connection_internal_clean_socket(server->anjay,
                                                     out_connection);
             out_connection->state = ANJAY_SERVER_CONNECTION_STABLE;
@@ -655,14 +655,12 @@ void _anjay_server_connections_refresh(
         connection_cleanup(server->anjay, primary_conn);
         primary_conn->transport = server_info.transport_info->transport;
         server->registration_info.expire_time = AVS_TIME_REAL_INVALID;
-        // defined(ANJAY_WITH_CORE_PERSISTENCE)
     }
 
     anjay_connection_type_t conn_type;
     ANJAY_CONNECTION_TYPE_FOREACH(conn_type) {
         anjay_server_connection_t *connection =
                 _anjay_connection_get(&server->connections, conn_type);
-        connection->state = ANJAY_SERVER_CONNECTION_IN_PROGRESS;
 #ifndef ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE
         avs_sched_del(&connection->queue_mode_close_socket_clb);
 #endif // ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE

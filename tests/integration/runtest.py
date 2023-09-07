@@ -88,12 +88,10 @@ def run_tests(suites, config):
         if suite.countTestCases() == 0:
             continue
 
-        log_dir = os.path.join(config.logs_path, 'test')
-        ensure_dir(log_dir)
-        log_filename = os.path.join(log_dir, '%s.log' % (get_suite_name(suite),))
+        logdir = os.path.join(config.logs_path, 'test', get_suite_name(suite))
+        ensure_dir(logdir)
 
-        with open(log_filename, 'w') as logfile:
-            test_runner.run(suite, logfile)
+        test_runner.run(suite, logdir)
 
     seconds_elapsed = time.time() - start_time
     all_tests = sum(r.testsRun for r in test_runner.results)

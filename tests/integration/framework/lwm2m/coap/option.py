@@ -73,33 +73,31 @@ class Option(OptionLike):
     @staticmethod
     def parse_ext_value(short_value, data):
         if short_value < 13:
-            return short_value, 0
+            return short_value
         elif short_value == 13:
-            return 13 + struct.unpack('!B', data[:1])[0], 1
+            return 13 + struct.unpack('!B', bytes([next(data)]))[0]
         elif short_value == 14:
-            return 13 + 256 + struct.unpack('!H', data[:2])[0], 2
+            return 13 + 256 + struct.unpack('!H', bytes([next(data) for i in range(2)]))[0]
         elif short_value == 15:
             raise ValueError('reserved short value')
 
     @staticmethod
-    def parse(data, prev_opt_number):
-        short_delta_length, = struct.unpack('!B', data[:1])
+    def parse(data_, prev_opt_number):
+        short_delta_length, = struct.unpack('!B', bytes([next(data_)]))
         short_delta = (short_delta_length >> 4) & 0x0F
         short_length = short_delta_length & 0x0F
 
-        at = 1
-        number_delta, bytes_parsed = Option.parse_ext_value(short_delta, data[at:at + 2])
+        number_delta = Option.parse_ext_value(short_delta, data_)
         number = prev_opt_number + number_delta
-        at += bytes_parsed
 
-        length, bytes_parsed = Option.parse_ext_value(short_length, data[at:at + 2])
-        at += bytes_parsed
+        length = Option.parse_ext_value(short_length, data_)
 
-        if len(data) < at + length:
+        try:
+            content = bytes([next(data_) for i in range(length)])
+        except StopIteration:
             raise ValueError('incomplete option')
 
-        content = bytes(data[at:at + length])
-        return Option.get_class_by_number(number)(number, content), at + length
+        return Option.get_class_by_number(number)(number, content)
 
     @staticmethod
     def serialize_ext_value(value):

@@ -79,9 +79,8 @@ avs_error_t restore_etag(avs_persistence_context_t *ctx, anjay_etag_t **etag);
 #endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
        // defined(AVS_COMMONS_STREAM_WITH_FILE)
 
-void fw_set_coap_tx_params(const avs_coap_udp_tx_params_t *tx_params);
-
-avs_coap_udp_tx_params_t fw_get_coap_tx_params(void *user_ptr,
-                                               const char *download_uri);
+typedef struct {
+    char data[1]; // actually a VLA, but struct cannot be empty
+} anjay_demo_allocated_buffer_t;
 
 #endif // DEMO_UTILS_H

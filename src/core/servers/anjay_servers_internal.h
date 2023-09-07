@@ -26,6 +26,9 @@ typedef struct {
     avs_coap_exchange_id_t exchange_id;
     anjay_lwm2m_version_t attempted_version;
     anjay_update_parameters_t new_params;
+#ifdef ANJAY_WITH_LWM2M11
+    bool lwm2m11_queue_mode;
+#endif // ANJAY_WITH_LWM2M11
 } anjay_registration_async_exchange_state_t;
 
 typedef enum {

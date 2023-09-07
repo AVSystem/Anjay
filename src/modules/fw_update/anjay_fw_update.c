@@ -19,7 +19,10 @@
 
 #    include <string.h>
 
-#    include <anjay/download.h>
+#    ifdef ANJAY_WITH_DOWNLOADER
+#        include <anjay/download.h>
+#    endif // ANJAY_WITH_DOWNLOADER
+
 #    include <anjay/fw_update.h>
 
 #    ifdef ANJAY_WITH_SEND
@@ -76,12 +79,15 @@ typedef struct fw_repr {
     fw_update_state_t state;
     anjay_fw_update_result_t result;
     const char *package_uri;
+    avs_sched_handle_t update_job;
+#    ifdef ANJAY_WITH_DOWNLOADER
     bool retry_download_on_expired;
     anjay_download_handle_t download_handle;
-    avs_sched_handle_t update_job;
     bool prefer_same_socket_downloads;
+    bool downloads_suspended;
     avs_sched_handle_t resume_download_job;
     avs_time_monotonic_t resume_download_deadline;
+#    endif // ANJAY_WITH_DOWNLOADER
 #    ifdef ANJAY_WITH_SEND
     bool use_lwm2m_send;
 #    endif // ANJAY_WITH_SEND
@@ -703,6 +709,9 @@ static int schedule_download(anjay_unlocked_t *anjay,
         return -1;
     }
 
+    if (fw->downloads_suspended) {
+        _anjay_download_suspend_unlocked(anjay, fw->download_handle);
+    }
     fw->retry_download_on_expired = (etag != NULL);
     update_state_and_update_result(anjay, fw, UPDATE_STATE_DOWNLOADING,
                                    ANJAY_FW_UPDATE_RESULT_INITIAL);
@@ -888,6 +897,7 @@ static int write_firmware(anjay_unlocked_t *anjay,
 }
 #    endif // ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE
 
+#    ifdef ANJAY_WITH_DOWNLOADER
 static void cancel_existing_download_if_in_progress(anjay_unlocked_t *anjay,
                                                     fw_repr_t *fw) {
     if (fw->state == UPDATE_STATE_DOWNLOADING) {
@@ -903,6 +913,7 @@ static void cancel_existing_download_if_in_progress(anjay_unlocked_t *anjay,
         assert(!fw->download_handle);
     }
 }
+#    endif // ANJAY_WITH_DOWNLOADER
 
 static int fw_write(anjay_unlocked_t *anjay,
                     const anjay_dm_installed_object_t obj_ptr,
@@ -918,7 +929,7 @@ static int fw_write(anjay_unlocked_t *anjay,
     case FW_RES_PACKAGE: {
 #    ifdef ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE
         return ANJAY_ERR_BAD_REQUEST;
-#    else  // ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE
+#    else // ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE
         assert(riid == ANJAY_ID_INVALID);
         int result = 0;
         if (fw->state == UPDATE_STATE_UPDATING) {
@@ -933,12 +944,14 @@ static int fw_write(anjay_unlocked_t *anjay,
         } else {
             result = expect_single_nullbyte(ctx);
             if (!result) {
+#        ifdef ANJAY_WITH_DOWNLOADER
                 cancel_existing_download_if_in_progress(anjay, fw);
+#        endif // ANJAY_WITH_DOWNLOADER
                 reset(anjay, fw);
             }
         }
         return result;
-#    endif // ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE
+#    endif     // ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE
     }
     case FW_RES_PACKAGE_URI: {
         assert(riid == ANJAY_ID_INVALID);
@@ -955,7 +968,9 @@ static int fw_write(anjay_unlocked_t *anjay,
                 return ANJAY_ERR_METHOD_NOT_ALLOWED;
             }
 
+#    ifdef ANJAY_WITH_DOWNLOADER
             cancel_existing_download_if_in_progress(anjay, fw);
+#    endif // ANJAY_WITH_DOWNLOADER
 
             avs_free((void *) (intptr_t) fw->package_uri);
             fw->package_uri = NULL;
@@ -1143,7 +1158,9 @@ static void send_result_after_fw_update(anjay_unlocked_t *anjay,
 static void fw_delete(void *fw_) {
     fw_repr_t *fw = (fw_repr_t *) fw_;
     avs_sched_del(&fw->update_job);
+#    ifdef ANJAY_WITH_DOWNLOADER
     avs_sched_del(&fw->resume_download_job);
+#    endif // ANJAY_WITH_DOWNLOADER
     avs_free((void *) (intptr_t) fw->package_uri);
     // NOTE: fw itself will be freed when cleaning the objects list
 }
@@ -1155,8 +1172,10 @@ initialize_fw_repr(anjay_unlocked_t *anjay,
     if (!initial_state) {
         return 0;
     }
+#    ifdef ANJAY_WITH_DOWNLOADER
     repr->prefer_same_socket_downloads =
             initial_state->prefer_same_socket_downloads;
+#    endif // ANJAY_WITH_DOWNLOADER
 #    ifdef ANJAY_WITH_SEND
     repr->use_lwm2m_send = initial_state->use_lwm2m_send;
 #    endif // ANJAY_WITH_SEND
@@ -1319,5 +1338,48 @@ int anjay_fw_update_set_result(anjay_t *anjay_locked,
     ANJAY_MUTEX_UNLOCK(anjay_locked);
     return retval;
 }
+
+#    ifdef ANJAY_WITH_DOWNLOADER
+void anjay_fw_update_pull_suspend(anjay_t *anjay_locked) {
+    assert(anjay_locked);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    const anjay_dm_installed_object_t *obj =
+            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_FIRMWARE_UPDATE);
+    if (!obj) {
+        fw_log(WARNING, _("Firmware Update object not installed"));
+    } else {
+        fw_repr_t *fw = get_fw(*obj);
+        assert(fw);
+        if (fw->download_handle) {
+            _anjay_download_suspend_unlocked(anjay, fw->download_handle);
+        }
+        fw->downloads_suspended = true;
+    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+}
+
+int anjay_fw_update_pull_reconnect(anjay_t *anjay_locked) {
+    assert(anjay_locked);
+    int result = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    const anjay_dm_installed_object_t *obj =
+            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_FIRMWARE_UPDATE);
+    if (!obj) {
+        fw_log(WARNING, _("Firmware Update object not installed"));
+    } else {
+        fw_repr_t *fw = get_fw(*obj);
+        assert(fw);
+        fw->downloads_suspended = false;
+        if (fw->download_handle) {
+            result = _anjay_download_reconnect_unlocked(anjay,
+                                                        fw->download_handle);
+        } else {
+            result = 0;
+        }
+    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
+}
+#    endif // ANJAY_WITH_DOWNLOADER
 
 #endif // ANJAY_WITH_MODULE_FW_UPDATE

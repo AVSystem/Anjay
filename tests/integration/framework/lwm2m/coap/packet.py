@@ -6,7 +6,8 @@
 #
 # Licensed under the AVSystem-5-clause License.
 # See the attached LICENSE file for details.
-
+import collections.abc
+import itertools
 import operator
 import struct
 import logging
@@ -75,35 +76,28 @@ class RandomTokenGenerator:
 
 _TOKEN_GENERATOR = RandomTokenGenerator()
 
-def _parse_tcp_header(packet):
-    if len(packet) < 2:
-        raise ValueError("invalid CoAP message: %s" % hexlify(packet))
-    len_tkl = packet[0]
+def _parse_tcp_header(bytestream):
+    len_tkl = next(bytestream)
     short_len = len_tkl >> 4
     token_length = len_tkl & 0x0F
-
-    curr_offset = 1
 
     if short_len <= 12:
         length = short_len
     elif short_len == 13:
-        length = packet[1] + 13
-        curr_offset += 1
+        length = next(bytestream) + 13
     elif short_len == 14:
-        length = int.from_bytes(packet[1:3], byteorder='big') + 269
-        curr_offset += 2
+        length_bytes = bytes([next(bytestream) for i in range(2)])
+        length = int.from_bytes(length_bytes, byteorder='big') + 269
     else:
-        length = int.from_bytes(packet[1:5], byteorder='big') + 65805
-        curr_offset += 4
+        length_bytes = bytes([next(bytestream) for i in range(4)])
+        length = int.from_bytes(length_bytes, byteorder='big') + 65805
 
-    code = Code.from_byte(packet[curr_offset])
-    curr_offset += 1
-    return Header(code, None, None, None, token_length), curr_offset
+    code = Code.from_byte(next(bytestream))
+    return Header(code, None, None, None, token_length), length + token_length
 
-def _parse_udp_header(packet):
-    if len(packet) < 4:
-        raise ValueError("invalid CoAP message: %s" % hexlify(packet))
-    version_type_token_length, code, msg_id = struct.unpack('!BBH', packet[:4])
+def _parse_udp_header(bytestream):
+    header = bytes([next(bytestream) for i in range(4)])
+    version_type_token_length, code, msg_id = struct.unpack('!BBH', header)
 
     code = Code.from_byte(code)
     version = (version_type_token_length >> 6) & 0x03
@@ -113,9 +107,7 @@ def _parse_udp_header(packet):
     if version != 1:
         raise ValueError("invalid CoAP version: %d, expected 1" % version)
 
-    at = 4
-
-    return Header(code, version, type, msg_id, token_length), at
+    return Header(code, version, type, msg_id, token_length)
 
 class Packet(object):
     def __init__(self, type=None, code=1, msg_id=0, token=b'', options=None, content=b'', version=1):
@@ -181,36 +173,43 @@ class Packet(object):
 
     @staticmethod
     def parse(self, transport=Transport.UDP):
-        packet = memoryview(self)
-        if transport == Transport.UDP:
-            header, offset = _parse_udp_header(packet)
-        elif transport == Transport.TCP:
-            header, offset = _parse_tcp_header(packet)
-        else:
-            raise ValueError("Invalid transport: %r" % (transport,))
+        bytestream = self
+        if not isinstance(bytestream, collections.abc.Iterator):
+            bytestream = iter(bytestream)
+
+        try:
+            if transport == Transport.UDP:
+                header = _parse_udp_header(bytestream)
+            elif transport == Transport.TCP:
+                header, length = _parse_tcp_header(bytestream)
+                bytestream = itertools.islice(bytestream, length)
+            else:
+                raise ValueError("Invalid transport: %r" % (transport,))
+        except StopIteration:
+            raise ValueError("invalid CoAP message: %s" % (hexlify(self),))
 
         if header.token_length > 8:
             raise ValueError("invalid CoAP token length: %d, expected <= 8" % header.token_length)
 
-        token = packet[offset:offset+header.token_length]
-        offset += header.token_length
+        token = bytes([next(bytestream) for i in range(header.token_length)])
 
         options = []
         content = b''
 
-        while offset < len(packet):
-            if packet[offset] == 0xFF:
-                content = packet[offset + 1:]
+        while True:
+            try:
+                byte = next(bytestream)
+            except StopIteration:
+                break
+            if byte == 0xFF:
+                content = bytes(bytestream)
                 if not content:
                     raise ValueError('payload marker at end of packet is invalid')
-                offset = len(packet)
+                break
             else:
-                opt, bytes_parsed = Option.parse(packet[offset:], options[-1].number if options else 0)
+                bytestream = itertools.chain((byte,), bytestream)
+                opt = Option.parse(bytestream, options[-1].number if options else 0)
                 options.append(opt)
-                offset += bytes_parsed
-
-        if offset != len(packet):
-            raise ValueError("CoAP packet malformed starting at offset %d: %s" % (offset, hexlify(packet[offset:])))
 
         pkt = Packet(header.type, header.code, header.id, token, options, content, header.version)
         if transport == Transport.UDP:

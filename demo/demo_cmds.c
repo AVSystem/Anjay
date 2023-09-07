@@ -24,7 +24,12 @@
 
 #include <anjay/attr_storage.h>
 #include <anjay/ipso_objects.h>
-#include <anjay/security.h>
+
+#ifdef WITH_DEMO_USE_STANDALONE_OBJECTS
+#    include "../standalone/security/standalone_security.h"
+#else // WITH_DEMO_USE_STANDALONE_OBJECTS
+#    include <anjay/security.h>
+#endif // WITH_DEMO_USE_STANDALONE_OBJECTS
 
 #ifdef ANJAY_WITH_SEND
 #    include <anjay/lwm2m_send.h>
@@ -188,6 +193,16 @@ static void cmd_set_afu_result(anjay_demo_t *demo, const char *args_string) {
                  "failed.");
     }
 }
+
+static void cmd_afu_suspend(anjay_demo_t *demo, const char *args_string) {
+    (void) args_string;
+    anjay_advanced_fw_update_pull_suspend(demo->anjay);
+}
+
+static void cmd_afu_reconnect(anjay_demo_t *demo, const char *args_string) {
+    (void) args_string;
+    anjay_advanced_fw_update_pull_reconnect(demo->anjay);
+}
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
 
 static void cmd_open_location_csv(anjay_demo_t *demo, const char *args_string) {
@@ -228,14 +243,14 @@ static int add_server(anjay_demo_t *demo, const char *uri) {
         return -1;
     }
     size_t uri_size = strlen(uri) + 1;
-    AVS_LIST(anjay_demo_string_t) copied_uri =
-            (AVS_LIST(anjay_demo_string_t)) AVS_LIST_NEW_BUFFER(uri_size);
+    AVS_LIST(anjay_demo_allocated_buffer_t) copied_uri = (AVS_LIST(
+            anjay_demo_allocated_buffer_t)) AVS_LIST_NEW_BUFFER(uri_size);
     if (!copied_uri) {
         demo_log(ERROR, "Out of memory");
         return -1;
     }
     memcpy(copied_uri->data, uri, uri_size);
-    AVS_LIST_INSERT(&demo->allocated_strings, copied_uri);
+    AVS_LIST_INSERT(&demo->allocated_buffers, copied_uri);
 
     server_entry_t *entry = &demo->connection_args->servers[num_servers];
     *entry = demo->connection_args->servers[num_servers - 1];
@@ -643,6 +658,9 @@ static void cmd_download(anjay_demo_t *demo, const char *args_string) {
     if (avs_is_err(anjay_download(demo->anjay, &cfg, &user_data->handle))) {
         demo_log(ERROR, "could not schedule download");
         demo_download_user_data_destroy(user_data);
+    } else {
+        printf("DOWNLOAD_HANDLE==%" PRIxPTR "\n",
+               (uintptr_t) user_data->handle);
     }
 }
 
@@ -1021,6 +1039,17 @@ static void cmd_set_fw_update_result(anjay_demo_t *demo,
     anjay_fw_update_set_result(demo->anjay, (anjay_fw_update_result_t) result);
 }
 
+static void cmd_fw_update_suspend(anjay_demo_t *demo, const char *args_string) {
+    (void) args_string;
+    anjay_fw_update_pull_suspend(demo->anjay);
+}
+
+static void cmd_fw_update_reconnect(anjay_demo_t *demo,
+                                    const char *args_string) {
+    (void) args_string;
+    anjay_fw_update_pull_reconnect(demo->anjay);
+}
+
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
 
 static void cmd_ongoing_registration_exists(anjay_demo_t *demo,
@@ -1037,7 +1066,14 @@ static void cmd_set_lifetime(anjay_demo_t *demo, const char *args_string) {
         demo_log(ERROR, "The command requires both Instance ID and Lifetime");
         return;
     }
-    if (anjay_server_object_set_lifetime(demo->anjay, iid, lifetime)) {
+    if (
+#ifdef WITH_DEMO_USE_STANDALONE_OBJECTS
+                standalone_server_object_set_lifetime(demo->server_obj_ptr, iid,
+                                                      lifetime)
+#else  // WITH_DEMO_USE_STANDALONE_OBJECTS
+                anjay_server_object_set_lifetime(demo->anjay, iid, lifetime)
+#endif // WITH_DEMO_USE_STANDALONE_OBJECTS
+    ) {
         demo_log(ERROR, "Could not set server lifetime to the desired value");
     }
 }
@@ -1376,6 +1412,13 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
     CMD_HANDLER("set-afu-result", "RESULT", cmd_set_afu_result,
                 "Attempts to set Advanced Firmware Update Result of instance "
                 "/" AVS_QUOTE_MACRO(ANJAY_ADVANCED_FW_UPDATE_OID) "/0 (APP) at runtime"),
+    CMD_HANDLER("afu-suspend", "", cmd_afu_suspend,
+                "Suspends the operation of PULL-mode downloads in the Advanced "
+                "Firmware Update module"),
+    CMD_HANDLER("afu-reconnect", "", cmd_afu_reconnect,
+                "Reconnects any ongoing PULL-mode downloads in the Advanced "
+                "Firmware Update module and if PULL-mode downloads are "
+                "suspended, resumes normal operation"),
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
     CMD_HANDLER("open-location-csv", "filename frequency=1",
                 cmd_open_location_csv,
@@ -1462,6 +1505,13 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
     CMD_HANDLER("set-fw-update-result", "RESULT", cmd_set_fw_update_result,
                 "Attempts to set Firmware Update Result at runtime"),
+    CMD_HANDLER("fw-update-suspend", "", cmd_fw_update_suspend,
+                "Suspends the operation of PULL-mode downloads in the Firmware "
+                "Update module"),
+    CMD_HANDLER("fw-update-reconnect", "", cmd_fw_update_reconnect,
+                "Reconnects any ongoing PULL-mode downloads in the Firmware "
+                "Update module and if PULL-mode downloads are suspended, "
+                "resumes normal operation"),
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
     CMD_HANDLER("ongoing-registration-exists", "",
                 cmd_ongoing_registration_exists,

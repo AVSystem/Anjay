@@ -208,6 +208,12 @@ typedef void *anjay_download_handle_t;
  * Request packet retransmissions are managed by Anjay scheduler, and sent by
  * @ref anjay_sched_run whenever required.
  *
+ * No network activity is performed immediately during the call to
+ * <c>anjay_download()</c>. Instead, the TCP and/or (D)TLS handshakes and the
+ * first request packet, will be sent during subsequent calls to
+ * @ref anjay_sched_run. This also means that you can create a postponed
+ * download by calling @ref anjay_download_suspend immediately afterwards.
+ *
  * @param anjay      Anjay object that will manage the download process.
  * @param config     Download configuration.
  * @param out_handle Pointer to a variable that will be set to a download
@@ -285,6 +291,48 @@ anjay_download_set_next_block_offset(anjay_t *anjay,
  *                  @ref anjay_download.
  */
 void anjay_download_abort(anjay_t *anjay, anjay_download_handle_t dl_handle);
+
+/**
+ * Suspends a download identified by @p dl_handle. Does nothing if @p dl_handle
+ * does not represent a valid download handle.
+ *
+ * The suspend operation is performed immediately and synchronously. The socket
+ * is disconnected, but the rest of the download context is kept intact. The
+ * download can be resumed by calling @p anjay_download_reconnect.
+ *
+ * If the download is already suspended due to the transport being offline (see
+ * @ref anjay_transport_set_online), no immediate action is performed, but the
+ * download is marked in such a way that it will not be automatically resumed
+ * until an explicit call to @ref anjay_download_reconnect.
+ *
+ * @param anjay     Anjay object managing the download process.
+ * @param dl_handle Download handle previously returned by
+ *                  @ref anjay_download.
+ */
+void anjay_download_suspend(anjay_t *anjay, anjay_download_handle_t dl_handle);
+
+/**
+ * Reconnects a download identified by @p dl_handle while retaining the download
+ * progress.
+ *
+ * If the download has been previously suspended using
+ * @ref anjay_download_suspend, it will be resumed. If the download is suspended
+ * due to the transport being offline (see @ref anjay_transport_set_online), no
+ * immediate action is performed, but the suspended state as per @ref
+ * anjay_download_suspend will be cleared.
+ *
+ * This function only schedules the actual reconnect operation. The socket will
+ * be actually reconnected during subsequent calls to @ref anjay_sched_run.
+ *
+ * @param anjay     Anjay object managing the download process.
+ * @param dl_handle Download handle previously returned by
+ *                  @ref anjay_download.
+ *
+ * @returns 0 for success; -1 if @p dl_handle does not represent a valid
+ *          download handle, or if the reconnect job could not be scheduled
+ *          (e.g. due to an out-of-memory condition).
+ */
+int anjay_download_reconnect(anjay_t *anjay, anjay_download_handle_t dl_handle);
 
 #ifdef __cplusplus
 } /* extern "C" */

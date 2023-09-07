@@ -106,8 +106,8 @@ properly guarded by a mutex:
 .. highlight:: c
 .. snippet-source:: examples/tutorial/BC-ThreadSafety/src/time_object.c
     :caption: time_object.c
-    :emphasize-lines: 4,46,77,82,131-137,147,161,172,176,207,232,246,260,269,
-                      274,283,288,312-318,326-333,338-344,352,356-357,367,381
+    :emphasize-lines: 4,46,77,81,129-135,144,158,168,172,202,227,240,254,263,
+                      268,277,282,306-312,320-327,332-338,346,350-351,361,375
 
     #include <assert.h>
     #include <stdbool.h>
@@ -183,7 +183,6 @@ properly guarded by a mutex:
                               anjay_dm_list_ctx_t *ctx) {
         (void) anjay;
         time_object_t *obj = get_obj(obj_ptr);
-        assert(obj);
 
         pthread_mutex_lock(&obj->mutex);
         AVS_LIST(time_instance_t) it;
@@ -237,7 +236,6 @@ properly guarded by a mutex:
                                anjay_iid_t iid) {
         (void) anjay;
         time_object_t *obj = get_obj(obj_ptr);
-        assert(obj);
 
         pthread_mutex_lock(&obj->mutex);
         int result = 0;
@@ -253,7 +251,6 @@ properly guarded by a mutex:
                                anjay_iid_t iid) {
         (void) anjay;
         time_object_t *obj = get_obj(obj_ptr);
-        assert(obj);
 
         pthread_mutex_lock(&obj->mutex);
         int result = ANJAY_ERR_NOT_FOUND;
@@ -278,7 +275,6 @@ properly guarded by a mutex:
                               anjay_iid_t iid) {
         (void) anjay;
         time_object_t *obj = get_obj(obj_ptr);
-        assert(obj);
 
         pthread_mutex_lock(&obj->mutex);
         time_instance_t *inst = find_instance(obj, iid);
@@ -313,7 +309,6 @@ properly guarded by a mutex:
                              anjay_output_ctx_t *ctx) {
         (void) anjay;
         time_object_t *obj = get_obj(obj_ptr);
-        assert(obj);
 
         pthread_mutex_lock(&obj->mutex);
         time_instance_t *inst = find_instance(obj, iid);
@@ -352,7 +347,6 @@ properly guarded by a mutex:
                               anjay_input_ctx_t *ctx) {
         (void) anjay;
         time_object_t *obj = get_obj(obj_ptr);
-        assert(obj);
 
         pthread_mutex_lock(&obj->mutex);
         time_instance_t *inst = find_instance(obj, iid);

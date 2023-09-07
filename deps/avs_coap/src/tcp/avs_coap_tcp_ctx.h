@@ -61,6 +61,14 @@ typedef struct avs_coap_tcp_ctx_struct {
 avs_error_t _avs_coap_tcp_send_msg(avs_coap_tcp_ctx_t *ctx,
                                    const avs_coap_borrowed_msg_t *msg);
 
+static inline int
+_avs_coap_tcp_update_recv_deadline(avs_coap_tcp_ctx_t *ctx,
+                                   avs_time_monotonic_t *inout_deadline) {
+    *inout_deadline = avs_time_monotonic_add(avs_time_monotonic_now(),
+                                             ctx->request_timeout);
+    return 0;
+}
+
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif // AVS_COAP_SRC_TCP_CTX_H

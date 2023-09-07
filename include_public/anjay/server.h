@@ -104,7 +104,9 @@ void anjay_server_object_purge(anjay_t *anjay);
  *
  * <strong>NOTE:</strong> If Anjay is compiled with thread safety enabled, the
  * list that is returned is normally accessed with the Anjay mutex locked. You
- * will need to ensure thread safety yourself if using this function.
+ * will need to ensure thread safety yourself if using this function. It is
+ * recommended to only call it from callback functions called from within Anjay,
+ * or in scheduler jobs.
  *
  * @param anjay Anjay instance with Server Object installed.
  *

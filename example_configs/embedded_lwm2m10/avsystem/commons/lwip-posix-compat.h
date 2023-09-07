@@ -27,6 +27,9 @@
 
 #include "lwipopts.h"
 
+/* Provides lwIP's alternative errno header, used in avs_net_impl.c */
+#include "lwip/errno.h"
+
 /* Provides htons/ntohs/htonl/ntohl */
 #include "lwip/inet.h"
 

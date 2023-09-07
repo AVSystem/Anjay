@@ -154,10 +154,14 @@ handle_http_packet_with_locked_buffer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr,
         }
         nonblock_read_ready = avs_stream_nonblock_read_ready(ctx->stream);
     } while (nonblock_read_ready);
-    int result = AVS_RESCHED_DELAYED(&ctx->next_action_job,
-                                     AVS_NET_SOCKET_DEFAULT_RECV_TIMEOUT);
-    assert(!result);
-    (void) result;
+    // NOTE: ctx->next_action_job might be NULL
+    // if anjay_download_suspend() was called
+    if (ctx->next_action_job) {
+        int result = AVS_RESCHED_DELAYED(&ctx->next_action_job,
+                                         AVS_NET_SOCKET_DEFAULT_RECV_TIMEOUT);
+        assert(!result);
+        (void) result;
+    }
 }
 
 static void handle_http_packet(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {

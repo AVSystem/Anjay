@@ -92,6 +92,12 @@ _anjay_downloader_set_next_block_offset(anjay_downloader_t *dl,
 void _anjay_downloader_abort(anjay_downloader_t *dl,
                              anjay_download_handle_t handle);
 
+void _anjay_downloader_suspend(anjay_downloader_t *dl,
+                               anjay_download_handle_t handle);
+
+int _anjay_downloader_sched_reconnect_by_handle(anjay_downloader_t *dl,
+                                                anjay_download_handle_t handle);
+
 bool _anjay_downloader_same_socket_transfer_ongoing(anjay_downloader_t *dl,
                                                     avs_net_socket_t *socket);
 
@@ -101,8 +107,8 @@ void _anjay_downloader_suspend_same_socket(anjay_downloader_t *dl,
 void _anjay_downloader_abort_same_socket(anjay_downloader_t *dl,
                                          avs_net_socket_t *socket);
 
-int _anjay_downloader_sched_reconnect(anjay_downloader_t *dl,
-                                      anjay_transport_set_t transport_set);
+int _anjay_downloader_sched_reconnect_by_transports(
+        anjay_downloader_t *dl, anjay_transport_set_t transport_set);
 
 int _anjay_downloader_sync_online_transports(anjay_downloader_t *dl);
 

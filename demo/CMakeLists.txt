@@ -8,6 +8,8 @@
 cmake_minimum_required(VERSION 3.1)
 project(lwm2m_demo C)
 
+option(WITH_DEMO_USE_STANDALONE_OBJECTS "Use standalone versions of built-in objects in demo" OFF)
+
 set(SOURCES
     demo.c
     demo_args.c
@@ -28,6 +30,11 @@ set(SOURCES
     objects/location.c
     objects/portfolio.c
     objects/test.c)
+
+if(WITH_DEMO_USE_STANDALONE_OBJECTS)
+    file(GLOB STANDALONE_SOURCES ../standalone/*/*.c)
+    set(SOURCES ${SOURCES} ${STANDALONE_SOURCES})
+endif()
 
 if (${ANJAY_WITH_MODULE_FW_UPDATE})
     set(SOURCES ${SOURCES} firmware_update.c)
@@ -52,6 +59,11 @@ set(HEADERS
     demo_utils.h
     objects.h)
 
+if(WITH_DEMO_USE_STANDALONE_OBJECTS)
+    file(GLOB STANDALONE_HEADERS ../standalone/*/*.h)
+    set(HEADERS ${HEADERS} ${STANDALONE_HEADERS})
+endif()
+
 if (${ANJAY_WITH_MODULE_FW_UPDATE})
     set(HEADERS ${HEADERS} firmware_update.h)
 endif()
@@ -70,6 +82,10 @@ find_package(Threads REQUIRED)
 
 add_executable(demo ${ALL_SOURCES})
 target_link_libraries(demo PRIVATE anjay m ${CMAKE_THREAD_LIBS_INIT})
+
+if(WITH_DEMO_USE_STANDALONE_OBJECTS)
+    target_compile_definitions(demo PRIVATE WITH_DEMO_USE_STANDALONE_OBJECTS)
+endif()
 
 
 add_custom_target(demo_firmware

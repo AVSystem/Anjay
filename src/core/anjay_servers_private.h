@@ -287,7 +287,7 @@ int _anjay_servers_foreach_active(anjay_unlocked_t *anjay,
  *        message)
  *      - will send REGISTER message if the server has no valid registration
  *        (i.e. it's new or its session has been replaced instead of resumed),
- *        or if the aforementioned attept to send Update failed (Updates
+ *        or if the aforementioned attempt to send Update failed (Updates
  *        automatically degenerate to Registers within this function, and
  *        internal structures tracking registration state are updated
  *        accordingly) - NOTE THAT THIS IS THE **ONLY** PLACE IN THE ENTIRE CODE
@@ -490,7 +490,14 @@ bool _anjay_connection_ready_for_outgoing_message(anjay_connection_ref_t ref);
  * connection as "stable", which makes it eligible for reconnection if
  * communication error occurs from now on.
  *
- * It is called from _anjay_server_on_refreshed().
+ * It is generally called whenever an incoming message is received on a given
+ * connection. Specifically:
+ * - from handle_register_response() and receive_update_response() in
+ *   anjay_register.c
+ * - from _anjay_server_on_refreshed() in anjay_activate.c for the Bootstrap
+ *   Server connection
+ * - from handle_notify_delivery() in anjay_observe_core.c
+ * - from response_handler() in anjay_lwm2m_send.c
  */
 void _anjay_connection_mark_stable(anjay_connection_ref_t ref);
 

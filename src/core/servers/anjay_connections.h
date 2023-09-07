@@ -33,10 +33,10 @@ typedef struct {
 
 typedef enum {
     /**
-     * _anjay_connections_refresh() has just been called, and the connection has
+     * Server connection object has just been created, and the connection has
      * not yet reached a usable state.
      */
-    ANJAY_SERVER_CONNECTION_IN_PROGRESS,
+    ANJAY_SERVER_CONNECTION_INVALID,
 
     /**
      * If _anjay_server_on_refreshed() is called with server connection in this

@@ -388,8 +388,8 @@ int anjay_transport_schedule_reconnect(anjay_t *anjay_locked,
         result = _anjay_servers_sched_reactivate_all_given_up(anjay);
 #ifdef ANJAY_WITH_DOWNLOADER
         if (!result) {
-            result = _anjay_downloader_sched_reconnect(&anjay->downloader,
-                                                       transport_set);
+            result = _anjay_downloader_sched_reconnect_by_transports(
+                    &anjay->downloader, transport_set);
         }
 #endif // ANJAY_WITH_DOWNLOADER
     }

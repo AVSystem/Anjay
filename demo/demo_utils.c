@@ -276,16 +276,3 @@ avs_error_t restore_etag(avs_persistence_context_t *ctx, anjay_etag_t **etag) {
 }
 #endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
        // defined(AVS_COMMONS_STREAM_WITH_FILE)
-
-avs_coap_udp_tx_params_t g_tx_params;
-
-void fw_set_coap_tx_params(const avs_coap_udp_tx_params_t *tx_params) {
-    g_tx_params = *tx_params;
-}
-
-avs_coap_udp_tx_params_t fw_get_coap_tx_params(void *user_ptr,
-                                               const char *download_uri) {
-    (void) user_ptr;
-    (void) download_uri;
-    return g_tx_params;
-}

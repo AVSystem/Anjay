@@ -26,15 +26,13 @@
 #    include "avs_coap_ctx_vtable.h"
 #    include "options/avs_coap_option.h"
 
-#    include "udp/avs_coap_udp_header.h"
-#    include "udp/avs_coap_udp_msg.h"
-#    include "udp/avs_coap_udp_msg_cache.h"
-
 #    define MODULE_NAME coap_udp
 #    include <avs_coap_x_log_config.h>
 
+#    include "udp/avs_coap_udp_ctx.h"
+#    include "udp/avs_coap_udp_msg_cache.h"
+
 #    include "avs_coap_common_utils.h"
-#    include "avs_coap_ctx.h"
 #    include "options/avs_coap_options.h"
 #    include "udp/avs_coap_udp_tx_params.h"
 
@@ -50,74 +48,7 @@ void _avs_unit_mock_constructor_avs_coap_udp_initial_retry_state(void) {
 }
 #    endif // AVS_UNIT_TESTING
 
-/**
- * Owning wrapper around an unconfirmed outgoing CoAP/UDP message.
- *
- * List of CoAP/UDP exchanges is kept sorted by (hold, next_retransmit) tuple:
- *
- * - up to NSTART first entries are "not held", i.e. are currently being
- *   retransmitted,
- *
- * - if more than NSTART exchanges were created, the rest is "held",
- *   i.e. not transmitted at all to honor NSTART defined by RFC7252.
- *
- * Whenever an exchange is retransmitted, next_retransmit is updated to the
- * time of a next retransmission, and the exchange entry moved to appropriate
- * place in the exchange list to keep described ordering.
- */
-typedef struct {
-    /** Handler to call when context is done with the message */
-    avs_coap_send_result_handler_t *send_result_handler;
-    /** Opaque argument to pass to send_result_handler */
-    void *send_result_handler_arg;
-
-    avs_coap_retry_state_t retry_state;
-
-    /** If true, exchange retransmissions are disabled due to NSTART */
-    bool hold;
-
-    /** Time at which this packet has to be retransmitted next time. */
-    avs_time_monotonic_t next_retransmit;
-
-    /** CoAP message view. Points to @ref avs_coap_udp_exchange_t#packet . */
-    avs_coap_udp_msg_t msg;
-
-    /** Number of initialized bytes in @ref avs_coap_udp_exchange_t#packet . */
-    size_t packet_size;
-
-    /** Serialized packet data. */
-    uint8_t packet[];
-} avs_coap_udp_unconfirmed_msg_t;
-
 #    ifdef WITH_AVS_COAP_OBSERVE
-typedef struct {
-    uint16_t msg_id;
-    avs_coap_token_t token;
-} avs_coap_udp_sent_notify_t;
-
-/**
- * Fixed-size cache with queue semantics used to store (message ID, token)
- * pairs of recently sent notification messages.
- *
- * RFC 7641 defines Reset response to sent notification to be a preferred
- * method of cancelling an established observation. This cache allows us to
- * match incoming Reset messages to established observations so that we can
- * cancel them.
- *
- * Technically, entries in this cache should expire after MAX_TRANSMIT_WAIT
- * since the first retransmission, but we keep them around as long as there
- * is enough space and we don't try to reuse the same message ID. That means
- * some Reset messages may not cancel observations if notifications are
- * generated at a high rate, or that Reset messages that come later are still
- * handled as valid observe cancellation.
- *
- * This implementation trades correctness in all cases for simplicity.
- */
-typedef struct {
-    avs_coap_udp_sent_notify_t entries[AVS_COAP_UDP_NOTIFY_CACHE_SIZE];
-    size_t size;
-} avs_coap_udp_notify_cache_t;
-
 AVS_STATIC_ASSERT(AVS_COAP_UDP_NOTIFY_CACHE_SIZE > 0,
                   notify_cache_must_have_at_least_one_element);
 
@@ -177,39 +108,6 @@ static inline void coap_udp_notify_cache_put(avs_coap_udp_notify_cache_t *cache,
     ++cache->size;
 }
 #    endif // WITH_AVS_COAP_OBSERVE
-
-typedef struct {
-    const struct avs_coap_ctx_vtable *vtable;
-
-    avs_coap_base_t base;
-
-    AVS_LIST(avs_coap_udp_unconfirmed_msg_t) unconfirmed_messages;
-
-    avs_net_socket_t *socket;
-    size_t last_mtu;
-    size_t forced_incoming_mtu;
-    avs_coap_udp_tx_params_t tx_params;
-
-    avs_coap_stats_t stats;
-
-    uint16_t last_msg_id;
-
-    /**
-     * Any Piggybacked response we send MUST echo message ID of received
-     * request. Its ID/token pair is stored here to ensure that.
-     */
-    struct {
-        /** true if we're currently processing a request */
-        bool exists;
-        uint16_t msg_id;
-        avs_coap_token_t token;
-    } current_request;
-
-    avs_coap_udp_response_cache_t *response_cache;
-#    ifdef WITH_AVS_COAP_OBSERVE
-    avs_coap_udp_notify_cache_t notify_cache;
-#    endif // WITH_AVS_COAP_OBSERVE
-} avs_coap_udp_ctx_t;
 
 AVS_STATIC_ASSERT(offsetof(avs_coap_udp_ctx_t, vtable) == 0,
                   vtable_field_must_be_first_in_udp_ctx_t);
@@ -411,19 +309,6 @@ static avs_error_t coap_udp_send_serialized_msg(avs_coap_udp_ctx_t *ctx,
     return err;
 }
 
-static avs_time_monotonic_t get_first_retransmit_time(avs_coap_udp_ctx_t *ctx) {
-    avs_coap_retry_state_t initial_state = {
-        .retry_count = 0,
-        .recv_timeout = AVS_TIME_DURATION_ZERO
-    };
-    if (avs_is_err(_avs_coap_udp_initial_retry_state(
-                &ctx->tx_params, ctx->base.prng_ctx, &initial_state))) {
-        return AVS_TIME_MONOTONIC_INVALID;
-    }
-    return avs_time_monotonic_add(avs_time_monotonic_now(),
-                                  initial_state.recv_timeout);
-}
-
 static AVS_LIST(avs_coap_udp_unconfirmed_msg_t) *
 find_unconfirmed_insert_ptr(avs_coap_udp_ctx_t *ctx,
                             const avs_coap_udp_unconfirmed_msg_t *new_elem) {
@@ -538,13 +423,14 @@ static void resume_next_unconfirmed(avs_coap_udp_ctx_t *ctx) {
         return;
     }
 
-    avs_time_monotonic_t next_retransmit = get_first_retransmit_time(ctx);
+    avs_time_monotonic_t next_retransmit = avs_time_monotonic_add(
+            avs_time_monotonic_now(),
+            (*unconfirmed_ptr)->retry_state.recv_timeout);
     if (!avs_time_monotonic_valid(next_retransmit)) {
         LOG(ERROR,
-            _("unable to schedule retransmit: get_first_retransmit_time() "
-              "returned invalid time; either the monotonic clock "
-              "malfunctioned, UDP tx params are too large to handle or "
-              "PRNG failed"));
+            _("unable to schedule retransmit: calculated retransmit time is "
+              "invalid; either the monotonic clock, UDP tx params are too "
+              "large to handle or PRNG failed"));
 
         // We can't rely on getting valid times for any held job. Fail all
         // of them immediately.
@@ -561,10 +447,9 @@ static void resume_next_unconfirmed(avs_coap_udp_ctx_t *ctx) {
             // AVS_LIST_SIZE(ctx->unconfirmed_messages) recursive calls .
             //
             // Note: this loop may be infinite in the most degenerate case
-            // where get_first_retransmit_time returns an invalid time **just
-            // once** (call above) and every response handler calls
-            // avs_coap_client_send_async_request, adding a new held entry to
-            // the context.
+            // where next_retransmit is an invalid time **just once** and every
+            // response handler calls avs_coap_client_send_async_request, adding
+            // a new held entry to the context.
             avs_coap_udp_unconfirmed_msg_t *unconfirmed =
                     AVS_LIST_DETACH(&held_messages);
             (void) call_send_result_handler(
@@ -817,8 +702,7 @@ retransmit_next_message_without_reschedule(avs_coap_udp_ctx_t *ctx) {
         return;
     }
 
-    if (_avs_coap_udp_all_retries_sent(&unconfirmed->retry_state,
-                                       &ctx->tx_params)) {
+    if (_avs_coap_udp_all_retries_sent(&unconfirmed->retry_state)) {
         LOG(DEBUG,
             _("msg ") "%s" _(": MAX_RETRANSMIT reached without response from "
                              "the server"),
@@ -830,7 +714,7 @@ retransmit_next_message_without_reschedule(avs_coap_udp_ctx_t *ctx) {
         return;
     }
 
-    if (_avs_coap_udp_update_retry_state(&unconfirmed->retry_state)) {
+    if (_avs_coap_udp_update_retry_state(ctx, &unconfirmed->retry_state)) {
         fail_unconfirmed(ctx, &ctx->unconfirmed_messages, NULL,
                          _avs_coap_err(AVS_COAP_ERR_TIME_INVALID));
         return;
@@ -838,7 +722,8 @@ retransmit_next_message_without_reschedule(avs_coap_udp_ctx_t *ctx) {
 
     LOG(DEBUG, _("msg ") "%s" _(": retry ") "%u/%u",
         AVS_COAP_TOKEN_HEX(&unconfirmed->msg.token),
-        unconfirmed->retry_state.retry_count, ctx->tx_params.max_retransmit);
+        ctx->tx_params.max_retransmit - unconfirmed->retry_state.retries_left,
+        ctx->tx_params.max_retransmit);
 
     avs_error_t err = coap_udp_send_serialized_msg(ctx, &unconfirmed->msg,
                                                    unconfirmed->packet,
@@ -899,9 +784,12 @@ enqueue_unconfirmed(avs_coap_udp_ctx_t *ctx,
 
     // use current time for all held jobs to not cause accidental reordering
     // due to ACK_RANDOM_FACTOR
-    avs_time_monotonic_t next_retransmit =
-            unconfirmed->hold ? avs_time_monotonic_now()
-                              : get_first_retransmit_time(ctx);
+    avs_time_monotonic_t next_retransmit = avs_time_monotonic_now();
+    if (!unconfirmed->hold) {
+        next_retransmit =
+                avs_time_monotonic_add(next_retransmit,
+                                       unconfirmed->retry_state.recv_timeout);
+    }
     if (!avs_time_monotonic_valid(unconfirmed->next_retransmit)) {
         LOG(ERROR,
             _("unable to enqueue msg: next_retransmit time invalid; "
@@ -955,8 +843,7 @@ static avs_error_t create_unconfirmed(
     avs_error_t err;
 
     if (avs_is_err((err = _avs_coap_udp_initial_retry_state(
-                            &ctx->tx_params, ctx->base.prng_ctx,
-                            &unconfirmed_msg->retry_state)))) {
+                            ctx, &unconfirmed_msg->retry_state)))) {
         LOG(ERROR, _("PRNG failed"));
         AVS_LIST_CLEAR(&unconfirmed_msg);
         return err;
@@ -1300,7 +1187,7 @@ ack_request(avs_coap_udp_ctx_t *ctx,
     avs_coap_udp_unconfirmed_msg_t *unconfirmed =
             AVS_LIST_DETACH(unconfirmed_ptr);
     // disable further retransmissions
-    unconfirmed->retry_state.retry_count = UINT_MAX;
+    unconfirmed->retry_state.retries_left = 0;
     unconfirmed->next_retransmit = next_retransmit;
 
     AVS_LIST_INSERT(find_unconfirmed_insert_ptr(ctx, unconfirmed), unconfirmed);

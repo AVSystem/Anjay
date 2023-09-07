@@ -307,6 +307,9 @@ static void fw_reset(void *fw_) {
     fw->package_uri = NULL;
     maybe_delete_firmware_file(fw);
     delete_persistence_file(fw);
+    if (fw->auto_suspend) {
+        anjay_fw_update_pull_suspend(fw->anjay);
+    }
 }
 
 static int fw_stream_open(void *fw_,
@@ -367,6 +370,9 @@ static int fw_stream_write(void *fw_, const void *data, size_t length) {
 
 static int fw_stream_finish(void *fw_) {
     fw_update_logic_t *fw = (fw_update_logic_t *) fw_;
+    if (fw->auto_suspend) {
+        anjay_fw_update_pull_suspend(fw->anjay);
+    }
     if (!fw->stream) {
         demo_log(ERROR, "stream not open");
         return -1;
@@ -462,6 +468,16 @@ static int fw_get_security_config(void *fw_,
     return 0;
 }
 
+static avs_coap_udp_tx_params_t
+fw_get_coap_tx_params(void *fw_, const char *download_uri) {
+    fw_update_logic_t *fw = (fw_update_logic_t *) fw_;
+    (void) download_uri;
+    if (fw->auto_suspend) {
+        anjay_fw_update_pull_reconnect(fw->anjay);
+    }
+    return fw->coap_tx_params;
+}
+
 static anjay_fw_update_handlers_t FW_UPDATE_HANDLERS = {
     .stream_open = fw_stream_open,
     .stream_write = fw_stream_write,
@@ -469,8 +485,7 @@ static anjay_fw_update_handlers_t FW_UPDATE_HANDLERS = {
     .reset = fw_reset,
     .get_name = fw_get_name,
     .get_version = fw_get_version,
-    .perform_upgrade = fw_perform_upgrade,
-    .get_coap_tx_params = fw_get_coap_tx_params
+    .perform_upgrade = fw_perform_upgrade
 };
 
 static bool is_valid_result(int8_t result) {
@@ -559,12 +574,11 @@ int firmware_update_install(anjay_t *anjay,
                             const avs_net_security_info_t *security_info,
                             const avs_coap_udp_tx_params_t *tx_params,
                             anjay_fw_update_result_t delayed_result,
-                            bool prefer_same_socket_downloads
+                            bool prefer_same_socket_downloads,
 #ifdef ANJAY_WITH_SEND
-                            ,
-                            bool use_lwm2m_send
+                            bool use_lwm2m_send,
 #endif // ANJAY_WITH_SEND
-) {
+                            bool auto_suspend) {
     int result = -1;
 
     fw->anjay = anjay;
@@ -576,8 +590,14 @@ int firmware_update_install(anjay_t *anjay,
         FW_UPDATE_HANDLERS.get_security_config = NULL;
     }
 
-    if (tx_params) {
-        fw_set_coap_tx_params(tx_params);
+    if (tx_params || auto_suspend) {
+        if (tx_params) {
+            fw->coap_tx_params = *tx_params;
+        } else {
+            fw->coap_tx_params = AVS_COAP_DEFAULT_UDP_TX_PARAMS;
+        }
+        fw->auto_suspend = auto_suspend;
+        FW_UPDATE_HANDLERS.get_coap_tx_params = fw_get_coap_tx_params;
     } else {
         FW_UPDATE_HANDLERS.get_coap_tx_params = NULL;
     }
@@ -643,6 +663,9 @@ int firmware_update_install(anjay_t *anjay,
     }
 
     result = anjay_fw_update_install(anjay, &FW_UPDATE_HANDLERS, fw, &state);
+    if (!result && auto_suspend) {
+        anjay_fw_update_pull_suspend(anjay);
+    }
 
 exit:
     avs_free(data.uri);

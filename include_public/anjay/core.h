@@ -316,7 +316,8 @@ typedef struct anjay_configuration {
      */
     avs_ssl_additional_configuration_clb_t *additional_tls_config_clb;
 
-#if defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+#if defined(WITH_AVS_COAP_TCP) \
+        && (defined(ANJAY_WITH_LWM2M11) || defined(ANJAY_WITH_COAP_DOWNLOAD))
     /**
      * Maximum expected TCP options size. CoAP messages with options longer
      * than this value will be rejected.
@@ -333,7 +334,8 @@ typedef struct anjay_configuration {
      * value of 30s is used.
      */
     avs_time_duration_t coap_tcp_request_timeout;
-#endif // defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+#endif // defined(WITH_AVS_COAP_TCP) && (defined(ANJAY_WITH_LWM2M11) ||
+       // defined(ANJAY_WITH_COAP_DOWNLOAD))
 
 #ifdef ANJAY_WITH_LWM2M11
     /**
@@ -442,8 +444,14 @@ anjay_t *anjay_new(const anjay_configuration_t *config);
 /**
  * Cleans up all resources and releases the Anjay object.
  *
- * NOTE: It shall be called <strong>before</strong> freeing LwM2M Objects
- * registered within the <c>anjay</c> object.
+ * <strong>NOTE:</strong> It shall be called <strong>before</strong> freeing
+ * LwM2M Objects registered within the <c>anjay</c> object.
+ *
+ * <strong>NOTE:</strong> The <c>anjay</c> pointer is invalidated during the
+ * call to this function. If Anjay is compiled with thread safety enabled, all
+ * the intermediary cleanup code is properly synchronized, but you should still
+ * make sure that no other thread is able to access the <c>anjay</c> object
+ * before calling this function, to avoid its usage after <em>free</em>.
  *
  * @param anjay Anjay object to delete. MUST NOT be @c NULL .
  */
@@ -476,6 +484,19 @@ void anjay_delete(anjay_t *anjay);
  *     }
  * }
  * @endcode
+ *
+ * <strong>NOTE:</strong> The returned list will be invalidated by any
+ * subsequent call to <c>anjay_get_sockets()</c> or
+ * @ref anjay_get_socket_entries . If you need to call these functions from
+ * multiple threads, you need to implement additional synchronization to achieve
+ * thread safety.
+ *
+ * The socket object pointers themselves may additionally be invalidated by a
+ * call to @ref anjay_sched_run, @ref anjay_serve, @ref anjay_serve_any or
+ * during the execution of @ref anjay_event_loop_run or
+ * @ref anjay_event_loop_run_with_error_handling . For this reason, it is
+ * recommended to only call this function from callback functions called from
+ * within Anjay, in scheduler jobs, or as part of a custom event loop.
  *
  * @param anjay Anjay object to operate on.
  *
@@ -547,6 +568,18 @@ typedef struct {
  * @ref anjay_get_sockets - but includes additional data that describes the
  * socket in addition to the socket itself. See @ref anjay_socket_entry_t for
  * details.
+ *
+ * <strong>NOTE:</strong> The returned list will be invalidated by any
+ * subsequent call to @ref anjay_get_sockets or <c>anjay_get_socket_entries</c>.
+ * If you need to call these functions from multiple threads, you need to
+ * implement additional synchronization to achieve thread safety.
+ *
+ * The socket object pointers themselves may additionally be invalidated by a
+ * call to @ref anjay_sched_run, @ref anjay_serve, @ref anjay_serve_any or
+ * during the execution of @ref anjay_event_loop_run or
+ * @ref anjay_event_loop_run_with_error_handling . For this reason, it is
+ * recommended to only call this function from callback functions called from
+ * within Anjay, in scheduler jobs, or as part of a custom event loop.
  *
  * @param anjay Anjay object to operate on.
  *
@@ -1311,6 +1344,11 @@ typedef struct {
  * @ref anjay_fw_update_get_security_config_t implementations. If you need this
  * information for a longer period, you will need to manually create a deep
  * copy.
+ *
+ * In particular, you may need to implement additional synchronization to
+ * achieve thread safety if calling this function from multiple threads.
+ * Instead, it is recommended to only call it from callback functions called
+ * from within Anjay, or in scheduler jobs.
  */
 int anjay_security_config_from_dm(anjay_t *anjay,
                                   anjay_security_config_t *out_config,

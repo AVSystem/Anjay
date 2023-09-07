@@ -148,7 +148,6 @@ static int instance_create(anjay_t *anjay,
                            anjay_iid_t iid) {
     (void) anjay;
     {{ obj_repr_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 
     return add_instance(obj, iid) ? 0 : ANJAY_ERR_INTERNAL;
 }
@@ -158,7 +157,6 @@ static int instance_remove(anjay_t *anjay,
                            anjay_iid_t iid) {
     (void) anjay;
     {{ obj_repr_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 
     AVS_LIST({{ obj_inst_type }}) *it;
     AVS_LIST_FOREACH_PTR(it, &obj->instances) {
@@ -186,7 +184,6 @@ static int instance_reset(anjay_t *anjay,
 {% endif %}
 
     {{ obj_repr_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     {{ obj_inst_type }} *inst = find_instance(obj, iid);
     assert(inst);
@@ -227,7 +224,6 @@ static int resource_read(anjay_t *anjay,
 {% endif %}
 
     {{ obj_repr_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     {{ obj_inst_type }} *inst = find_instance(obj, iid);
     assert(inst);
@@ -261,7 +257,6 @@ static int resource_write(anjay_t *anjay,
 {% endif %}
 
     {{ obj_repr_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     {{ obj_inst_type }} *inst = find_instance(obj, iid);
     assert(inst);
@@ -295,7 +290,6 @@ static int resource_execute(anjay_t *anjay,
     (void) arg_ctx;
 
     {{ obj_repr_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     {{ obj_inst_type }} *inst = find_instance(obj, iid);
     assert(inst);
@@ -328,7 +322,6 @@ static int resource_reset(anjay_t *anjay,
 {% endif %}
 
     {{ obj_repr_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     {{ obj_inst_type }} *inst = find_instance(obj, iid);
     assert(inst);
@@ -362,7 +355,6 @@ static int list_resource_instances(anjay_t *anjay,
 {% endif %}
 
     {{ obj_repr_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     {{ obj_inst_type }} *inst = find_instance(obj, iid);
     assert(inst);
@@ -502,7 +494,6 @@ static int instance_reset(anjay_t *anjay,
 {% endif %}
 
     {{ obj_repr_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     assert(iid < AVS_ARRAY_SIZE(obj->instances));
     {{ obj_inst_type }} *inst = &obj->instances[iid];
@@ -545,7 +536,6 @@ static int resource_read(anjay_t *anjay,
 {% endif %}
 
     {{ obj_repr_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     assert(iid < AVS_ARRAY_SIZE(obj->instances));
     {{ obj_inst_type }} *inst = &obj->instances[iid];
@@ -579,7 +569,6 @@ static int resource_write(anjay_t *anjay,
 {% endif %}
 
     {{ obj_repr_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     assert(iid < AVS_ARRAY_SIZE(obj->instances));
     {{ obj_inst_type }} *inst = &obj->instances[iid];
@@ -613,7 +602,6 @@ static int resource_execute(anjay_t *anjay,
     (void) arg_ctx;
 
     {{ obj_repr_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     assert(iid < AVS_ARRAY_SIZE(obj->instances));
     {{ obj_inst_type }} *inst = &obj->instances[iid];
@@ -646,7 +634,6 @@ static int resource_reset(anjay_t *anjay,
 {% endif %}
 
     {{ obj_repr_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     assert(iid < AVS_ARRAY_SIZE(obj->instances));
     {{ obj_inst_type }} *inst = &obj->instances[iid];
@@ -680,7 +667,6 @@ static int list_resource_instances(anjay_t *anjay,
 {% endif %}
 
     {{ obj_repr_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     assert(iid < AVS_ARRAY_SIZE(obj->instances));
     {{ obj_inst_type }} *inst = &obj->instances[iid];
@@ -859,7 +845,6 @@ int instance_create(anjay_t *,
                     const anjay_dm_object_def_t *const *obj_ptr,
                     anjay_iid_t iid) {
     {{ obj_cxx_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 
     return add_instance(obj, iid) ? 0 : ANJAY_ERR_INTERNAL;
 }
@@ -868,7 +853,6 @@ int instance_remove(anjay_t *,
                     const anjay_dm_object_def_t *const *obj_ptr,
                     anjay_iid_t iid) {
     {{ obj_cxx_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 
     auto erase_it = std::find_if(obj->instances.begin(), obj->instances.end(),
                                  [iid](const {{ obj_inst_cxx_type }} &inst) {
@@ -889,7 +873,6 @@ int instance_reset(anjay_t *,
 {% endif %}
 
     {{ obj_cxx_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     {{ obj_inst_cxx_type }} *inst = find_instance(obj, iid);
     assert(inst);
@@ -925,7 +908,6 @@ int resource_read(anjay_t *,
 {% endif %}
 
     {{ obj_cxx_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     {{ obj_inst_cxx_type }} *inst = find_instance(obj, iid);
     assert(inst);
@@ -958,7 +940,6 @@ int resource_write(anjay_t *,
 {% endif %}
 
     {{ obj_cxx_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     {{ obj_inst_cxx_type }} *inst = find_instance(obj, iid);
     assert(inst);
@@ -990,7 +971,6 @@ int resource_execute(anjay_t *,
 {% endif %}
 
     {{ obj_cxx_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     {{ obj_inst_cxx_type }} *inst = find_instance(obj, iid);
     assert(inst);
@@ -1022,7 +1002,6 @@ int resource_reset(anjay_t *,
 {% endif %}
 
     {{ obj_cxx_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     {{ obj_inst_cxx_type }} *inst = find_instance(obj, iid);
     assert(inst);
@@ -1055,7 +1034,6 @@ int list_resource_instances(anjay_t *,
 {% endif %}
 
     {{ obj_cxx_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     {{ obj_inst_cxx_type }} *inst = find_instance(obj, iid);
     assert(inst);
@@ -1186,7 +1164,6 @@ int list_instances(anjay_t *,
                    const anjay_dm_object_def_t *const *obj_ptr,
                    anjay_dm_list_ctx_t *ctx) {
     {{ obj_cxx_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
     for (anjay_iid_t iid = 0; iid < obj->instances.size(); iid++) {
         anjay_dm_emit(ctx, iid);
     }
@@ -1204,7 +1181,6 @@ int instance_reset(anjay_t *,
 {% endif %}
 
     {{ obj_cxx_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     assert(iid < obj->instances.size());
     {{ obj_inst_cxx_type }} &inst = obj->instances[iid];
@@ -1242,7 +1218,6 @@ int resource_read(anjay_t *,
 {% endif %}
 
     {{ obj_cxx_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     assert(iid < obj->instances.size());
     {{ obj_inst_cxx_type }} &inst = obj->instances[iid];
@@ -1275,7 +1250,6 @@ int resource_write(anjay_t *,
 {% endif %}
 
     {{ obj_cxx_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     assert(iid < obj->instances.size());
     {{ obj_inst_cxx_type }} &inst = obj->instances[iid];
@@ -1307,7 +1281,6 @@ int resource_execute(anjay_t *,
 {% endif %}
 
     {{ obj_cxx_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     assert(iid < obj->instances.size());
     {{ obj_inst_cxx_type }} &inst = obj->instances[iid];
@@ -1339,7 +1312,6 @@ int resource_reset(anjay_t *,
 {% endif %}
 
     {{ obj_cxx_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     assert(iid < obj->instances.size());
     {{ obj_inst_cxx_type }} &inst = obj->instances[iid];
@@ -1372,7 +1344,6 @@ int list_resource_instances(anjay_t *,
 {% endif %}
 
     {{ obj_cxx_type }} *obj = get_obj(obj_ptr);
-    assert(obj);
 {% if obj.multiple %}
     assert(iid < obj->instances.size());
     {{ obj_inst_cxx_type }} &inst = obj->instances[iid];

@@ -44,6 +44,7 @@ IGNORE_PATTERNS = list(map(re.compile, [
     'example_configs/',
     '^examples/',
     '__pycache__',
+    '^standalone/',
     '^tests/fuzz/test_cases/',
     '^tools/provisioning-tool/configs/',
     '^valgrind_test\.supp$',

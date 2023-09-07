@@ -42,6 +42,7 @@ receive_message(avs_coap_ctx_t *ctx, avs_coap_borrowed_msg_t *out_request) {
     assert(!coap_base->in_buffer_in_use);
     coap_base->in_buffer_in_use = true;
     uint8_t *buf = avs_shared_buffer_acquire(coap_base->in_buffer);
+    memset(out_request, 0, sizeof(*out_request));
     avs_error_t err = ctx->vtable->receive_message(
             ctx, buf, coap_base->in_buffer->capacity, out_request);
     avs_shared_buffer_release(coap_base->in_buffer);

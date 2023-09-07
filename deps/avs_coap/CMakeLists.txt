@@ -131,6 +131,7 @@ set(SOURCES
     src/options/avs_coap_options.h
 
     src/udp/avs_coap_udp_ctx.c
+    src/udp/avs_coap_udp_ctx.h
     src/udp/avs_coap_udp_header.h
     src/udp/avs_coap_udp_msg.h
     src/udp/avs_coap_udp_msg.c
@@ -195,6 +196,7 @@ if(WITH_TEST)
     set(TEST_SOURCES
         tests/tcp/async_client.c
         tests/tcp/async_server.c
+        tests/tcp/csm.c
         tests/tcp/ctx.c
         tests/tcp/header.c
         tests/tcp/payload_escaper.c

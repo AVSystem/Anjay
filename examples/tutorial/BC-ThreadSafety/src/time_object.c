@@ -83,7 +83,6 @@ static int list_instances(anjay_t *anjay,
                           anjay_dm_list_ctx_t *ctx) {
     (void) anjay;
     time_object_t *obj = get_obj(obj_ptr);
-    assert(obj);
 
     pthread_mutex_lock(&obj->mutex);
     AVS_LIST(time_instance_t) it;
@@ -137,7 +136,6 @@ static int instance_create(anjay_t *anjay,
                            anjay_iid_t iid) {
     (void) anjay;
     time_object_t *obj = get_obj(obj_ptr);
-    assert(obj);
 
     pthread_mutex_lock(&obj->mutex);
     int result = 0;
@@ -153,7 +151,6 @@ static int instance_remove(anjay_t *anjay,
                            anjay_iid_t iid) {
     (void) anjay;
     time_object_t *obj = get_obj(obj_ptr);
-    assert(obj);
 
     pthread_mutex_lock(&obj->mutex);
     int result = ANJAY_ERR_NOT_FOUND;
@@ -178,7 +175,6 @@ static int instance_reset(anjay_t *anjay,
                           anjay_iid_t iid) {
     (void) anjay;
     time_object_t *obj = get_obj(obj_ptr);
-    assert(obj);
 
     pthread_mutex_lock(&obj->mutex);
     time_instance_t *inst = find_instance(obj, iid);
@@ -213,7 +209,6 @@ static int resource_read(anjay_t *anjay,
                          anjay_output_ctx_t *ctx) {
     (void) anjay;
     time_object_t *obj = get_obj(obj_ptr);
-    assert(obj);
 
     pthread_mutex_lock(&obj->mutex);
     time_instance_t *inst = find_instance(obj, iid);
@@ -252,7 +247,6 @@ static int resource_write(anjay_t *anjay,
                           anjay_input_ctx_t *ctx) {
     (void) anjay;
     time_object_t *obj = get_obj(obj_ptr);
-    assert(obj);
 
     pthread_mutex_lock(&obj->mutex);
     time_instance_t *inst = find_instance(obj, iid);

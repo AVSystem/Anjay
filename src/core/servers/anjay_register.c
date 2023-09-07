@@ -472,10 +472,18 @@ static bool should_use_queue_mode(anjay_server_info_t *server,
 
 #ifdef ANJAY_WITH_LWM2M11
 static bool lwm2m11_queue_mode_changed(anjay_server_info_t *server) {
-    if (server->registration_info.lwm2m_version >= ANJAY_LWM2M_VERSION_1_1
-            && should_use_queue_mode(server,
-                                     server->registration_info.lwm2m_version)
-                           != server->registration_info.queue_mode) {
+    if (server->registration_info.lwm2m_version < ANJAY_LWM2M_VERSION_1_1) {
+        return false;
+    }
+    bool is_currently_using_queue_mode =
+            avs_coap_exchange_id_valid(
+                    server->registration_exchange_state.exchange_id)
+                    ? server->registration_exchange_state.lwm2m11_queue_mode
+                    : server->registration_info.queue_mode;
+    bool should_use_queue_mode_now =
+            should_use_queue_mode(server,
+                                  server->registration_info.lwm2m_version);
+    if (is_currently_using_queue_mode != should_use_queue_mode_now) {
         anjay_log(DEBUG,
                   _("State of 1.1-style queue mode changed for SSID = ") "%u" _(
                           ", forcing re-register"),
@@ -622,6 +630,12 @@ handle_register_response(anjay_server_info_t *server,
                          anjay_update_parameters_t *move_params,
                          anjay_registration_result_t result,
                          avs_error_t err) {
+    if (avs_is_ok(err)) {
+        _anjay_connection_mark_stable((anjay_connection_ref_t) {
+            .server = server,
+            .conn_type = ANJAY_CONNECTION_PRIMARY
+        });
+    }
     if (result != ANJAY_REGISTRATION_SUCCESS) {
         anjay_log(WARNING, _("could not register to server ") "%u",
                   _anjay_server_ssid(server));
@@ -727,7 +741,6 @@ static void move_assign_update_params(anjay_update_parameters_t *out,
 static void send_register(anjay_server_info_t *server,
                           avs_coap_ctx_t *coap,
                           anjay_lwm2m_version_t lwm2m_version,
-                          bool lwm2m11_queue_mode,
                           anjay_update_parameters_t *move_params) {
     const anjay_url_t *const connection_uri =
             _anjay_connection_uri((anjay_connection_ref_t) {
@@ -742,12 +755,23 @@ static void send_register(anjay_server_info_t *server,
     get_binding_mode_for_version(server, lwm2m_version,
                                  &move_params->binding_mode);
 
+#ifdef ANJAY_WITH_LWM2M11
+    bool queue_mode = should_use_queue_mode(server, lwm2m_version);
+    bool lwm2m11_queue_mode =
+            (queue_mode && lwm2m_version >= ANJAY_LWM2M_VERSION_1_1);
+#endif // ANJAY_WITH_LWM2M11
+
     avs_error_t err;
     if (avs_is_err((err = avs_coap_options_dynamic_init(&request.options)))
             || avs_is_err((err = setup_register_request_options(
                                    &request.options, lwm2m_version,
                                    server->anjay->endpoint_name, NULL,
-                                   connection_uri, lwm2m11_queue_mode,
+                                   connection_uri,
+#ifdef ANJAY_WITH_LWM2M11
+                                   lwm2m11_queue_mode,
+#else  // ANJAY_WITH_LWM2M11
+                                   false,
+#endif // ANJAY_WITH_LWM2M11
                                    move_params->lifetime_s,
                                    &move_params->binding_mode)))) {
         _anjay_server_on_updated_registration(
@@ -768,6 +792,9 @@ static void send_register(anjay_server_info_t *server,
     server->registration_exchange_state.attempted_version = lwm2m_version;
     move_assign_update_params(&server->registration_exchange_state.new_params,
                               move_params);
+#ifdef ANJAY_WITH_LWM2M11
+    server->registration_exchange_state.lwm2m11_queue_mode = lwm2m11_queue_mode;
+#endif // ANJAY_WITH_LWM2M11
     if (avs_is_err(
                 (err = avs_coap_client_send_async_request(
                          coap, &server->registration_exchange_state.exchange_id,
@@ -801,20 +828,8 @@ static void register_with_version(anjay_server_info_t *server,
         _anjay_server_on_updated_registration(
                 server, ANJAY_REGISTRATION_ERROR_OTHER, avs_errno(AVS_EBADF));
     } else {
-#ifdef ANJAY_WITH_LWM2M11
-        bool queue_mode = should_use_queue_mode(server, lwm2m_version);
-        bool lwm2m11_queue_mode =
-                (queue_mode && lwm2m_version >= ANJAY_LWM2M_VERSION_1_1);
-#endif // ANJAY_WITH_LWM2M11
-
         send_register(server, _anjay_connection_get_coap(connection),
-                      lwm2m_version,
-#ifdef ANJAY_WITH_LWM2M11
-                      lwm2m11_queue_mode,
-#else  // ANJAY_WITH_LWM2M11
-                      false,
-#endif // ANJAY_WITH_LWM2M11
-                      move_params);
+                      lwm2m_version, move_params);
         _anjay_connection_schedule_queue_mode_close((anjay_connection_ref_t) {
             .server = server,
             .conn_type = ANJAY_CONNECTION_PRIMARY
@@ -932,7 +947,6 @@ on_registration_update_result(anjay_server_info_t *server,
                           _("; trying to re-register"),
                   server->ssid);
         server->registration_info.expire_time = AVS_TIME_REAL_INVALID;
-        // defined(ANJAY_WITH_CORE_PERSISTENCE)
         do_register(server, move_params);
         break;
 
@@ -942,7 +956,6 @@ on_registration_update_result(anjay_server_info_t *server,
                           "; needs re-registration"),
                   server->ssid);
         server->registration_info.expire_time = AVS_TIME_REAL_INVALID;
-        // defined(ANJAY_WITH_CORE_PERSISTENCE)
         do_register(server, move_params);
         break;
 
@@ -984,6 +997,13 @@ receive_update_response(avs_coap_ctx_t *coap,
     anjay_registration_result_t result = ANJAY_REGISTRATION_ERROR_OTHER;
     if (request_state != AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT) {
         state->exchange_id = AVS_COAP_EXCHANGE_ID_INVALID;
+    }
+
+    if (request_state != AVS_COAP_CLIENT_REQUEST_CANCEL && avs_is_ok(err)) {
+        _anjay_connection_mark_stable((anjay_connection_ref_t) {
+            .server = server,
+            .conn_type = ANJAY_CONNECTION_PRIMARY
+        });
     }
 
     switch (request_state) {
@@ -1051,6 +1071,11 @@ static void send_update(anjay_server_info_t *server,
             old_info->lwm2m_version;
     move_assign_update_params(&server->registration_exchange_state.new_params,
                               move_params);
+#ifdef ANJAY_WITH_LWM2M11
+    server->registration_exchange_state.lwm2m11_queue_mode =
+            (old_info->queue_mode
+             && old_info->lwm2m_version >= ANJAY_LWM2M_VERSION_1_1);
+#endif // ANJAY_WITH_LWM2M11
     if (avs_is_err((
                 err = avs_coap_client_send_async_request(
                         coap, &server->registration_exchange_state.exchange_id,
@@ -1074,14 +1099,10 @@ end:
     avs_coap_options_cleanup(&request.options);
 }
 
-static bool
-needs_registration_update(anjay_server_info_t *server,
-                          const anjay_update_parameters_t *new_params) {
-    const anjay_registration_info_t *info =
-            _anjay_server_registration_info(server);
-    const anjay_update_parameters_t *old_params = &info->last_update_params;
-    return info->update_forced
-           || old_params->lifetime_s != new_params->lifetime_s
+static bool params_require_registration_update(
+        const anjay_update_parameters_t *old_params,
+        const anjay_update_parameters_t *new_params) {
+    return old_params->lifetime_s != new_params->lifetime_s
            || strcmp(old_params->binding_mode.data,
                      new_params->binding_mode.data)
            || !dm_caches_equal(old_params->dm, new_params->dm);
@@ -1133,8 +1154,25 @@ void _anjay_server_ensure_valid_registration(anjay_server_info_t *server) {
             needs_reregistration = true;
         }
 #endif // ANJAY_WITH_LWM2M11
-        bool needs_update = !needs_reregistration
-                            && needs_registration_update(server, &new_params);
+        bool needs_update = false;
+        if (!needs_reregistration) {
+            const anjay_registration_info_t *info =
+                    _anjay_server_registration_info(server);
+            if (info->update_forced) {
+                needs_update = true;
+            } else {
+                const anjay_update_parameters_t *current_params;
+                if (registration_or_update_in_progress) {
+                    current_params =
+                            &server->registration_exchange_state.new_params;
+                } else {
+                    current_params = &info->last_update_params;
+                }
+                needs_update =
+                        params_require_registration_update(current_params,
+                                                           &new_params);
+            }
+        }
         if (needs_reregistration
                 || (registration_or_update_in_progress && registration_expired
                     && needs_update)) {
@@ -1287,7 +1325,6 @@ void _anjay_server_update_registration_info(
             get_registration_expire_time(info->last_update_params.lifetime_s);
     info->update_forced = false;
     info->session_token = _anjay_server_primary_session_token(server);
-    // defined(ANJAY_WITH_CORE_PERSISTENCE)
 }
 
 static int

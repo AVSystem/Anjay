@@ -99,9 +99,7 @@ If POSIX socket API is not available:
       used to keep the bound port stable if possible
     - ``get_local_port`` - used to keep the bound port stable if possible
     - ``get_remote_host`` - required for CoAP message cache to work
-    - ``get_remote_hostname`` - required for ability to suspend CoAP downloads
-    - ``get_remote_port`` - required for CoAP message cache to work and for
-      ability to suspend CoAP downloads
+    - ``get_remote_port`` - required for CoAP message cache to work
     - ``shutdown`` - required for ability to suspend CoAP downloads
 
   - ``_avs_net_create_tcp_socket`` - only required if the ``fw_update`` module

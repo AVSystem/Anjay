@@ -8,7 +8,7 @@
 cmake_minimum_required(VERSION 3.6.0)
 
 project(anjay C)
-set(ANJAY_VERSION "3.4.1" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "3.5.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -105,7 +105,10 @@ set(ANJAY_DEFAULT_SEND_FORMAT AVS_COAP_FORMAT_NONE CACHE STRING
 
 ################# FEATURES THAT REQUIRE LIBRARY CONFIGURATION ##################
 
+option(WITH_AVS_PERSISTENCE "Enable support for persisting objects data" ON)
+
 option(WITH_BOOTSTRAP "Enable LwM2M Bootstrap Interface support" ON)
+option(WITHOUT_TLV "Disable support for TLV content format" OFF)
 option(WITH_DOWNLOADER "Enable support for downloader API" ON)
 cmake_dependent_option(WITH_HTTP_DOWNLOAD "Enable support for HTTP(S) downloads" OFF "WITH_DOWNLOADER" OFF)
 option(WITH_LWM2M11 "Enable support for LwM2M 1.1" ON)
@@ -127,6 +130,9 @@ if(WITH_HTTP_DOWNLOAD)
 endif()
 if(WITH_AVS_PERSISTENCE)
     list(APPEND AVS_COMMONS_COMPONENTS persistence)
+endif()
+if(WITH_MODULE_sim_bootstrap)
+    list(APPEND AVS_COMMONS_COMPONENTS stream_md5)
 endif()
 if(NOT DEFINED WITH_AVS_RBTREE OR WITH_AVS_RBTREE)
     set(WITH_AVS_RBTREE ON CACHE INTERNAL "")
@@ -203,18 +209,13 @@ else()
     message(STATUS "DTLS backend: ${_DTLS_BACKEND_LOWERCASE}")
 endif()
 
-if(NOT WITH_LWM2M11)
-    set(WITH_AVS_COAP_TCP OFF CACHE "" INTERNAL)
-endif()
-
-cmake_dependent_option(WITH_AVS_COAP_TCP "Enable CoAP over TCP support" ON WITH_LWM2M11 OFF)
+option(WITH_AVS_COAP_TCP "Enable CoAP over TCP support" "${WITH_LWM2M11}")
 
 
 
 set(ENABLE_ADVANCED_CRYPTO OFF)
 
 option(WITH_AVS_LOG "Enable logging support" ON)
-option(WITH_AVS_PERSISTENCE "Enable support for persisting objects data" ON)
 
 if(NOT WITH_LOCAL_AVS_COMMONS)
     set(WITH_SCHEDULER_THREAD_SAFE "${WITH_THREAD_SAFETY}" CACHE INTERNAL "")
@@ -264,7 +265,6 @@ cmake_dependent_option(WITH_CON_ATTR "Enable support for the Confirmable Notific
 option(WITH_LEGACY_CONTENT_FORMAT_SUPPORT
        "Enable support for pre-LwM2M 1.0 CoAP Content-Format values (1541-1543)" OFF)
 option(WITH_LWM2M_JSON "Enable support for LwM2M 1.0 JSON (output only)" ON)
-option(WITHOUT_TLV "Disable support for TLV content format" OFF)
 option(WITHOUT_PLAINTEXT "Disable support for Plain Text content format" OFF)
 option(WITHOUT_DEREGISTER "Disable use of the Deregister message" OFF)
 option(WITHOUT_IP_STICKINESS "Disable support for IP stickiness" OFF)

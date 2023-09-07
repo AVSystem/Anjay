@@ -700,10 +700,10 @@ void anjay_server_object_purge(anjay_t *anjay_locked) {
     ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
-AVS_LIST(const anjay_ssid_t)
-_anjay_server_get_ssids_unlocked(anjay_unlocked_t *anjay) {
-    assert(anjay);
+AVS_LIST(const anjay_ssid_t) anjay_server_get_ssids(anjay_t *anjay_locked) {
+    assert(anjay_locked);
     AVS_LIST(server_instance_t) source = NULL;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *server_obj =
             _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
     server_repr_t *repr = _anjay_serv_get(*server_obj);
@@ -712,6 +712,7 @@ _anjay_server_get_ssids_unlocked(anjay_unlocked_t *anjay) {
     } else {
         source = repr->instances;
     }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
     // We rely on the fact that the "ssid" field is first in server_instance_t,
     // which means that both "source" and "&source->ssid" point to exactly the
     // same memory location. The "next" pointer location in AVS_LIST is
@@ -719,15 +720,6 @@ _anjay_server_get_ssids_unlocked(anjay_unlocked_t *anjay) {
     AVS_STATIC_ASSERT(offsetof(server_instance_t, ssid) == 0,
                       instance_ssid_is_first_field);
     return &source->ssid;
-}
-
-AVS_LIST(const anjay_ssid_t) anjay_server_get_ssids(anjay_t *anjay_locked) {
-    assert(anjay_locked);
-    AVS_LIST(const anjay_ssid_t) source = NULL;
-    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
-    source = _anjay_server_get_ssids_unlocked(anjay);
-    ANJAY_MUTEX_UNLOCK(anjay_locked);
-    return source;
 }
 
 bool anjay_server_object_is_modified(anjay_t *anjay_locked) {

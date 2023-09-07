@@ -273,11 +273,6 @@ send_result_handler(avs_coap_ctx_t *ctx,
         return AVS_COAP_RESPONSE_ACCEPTED;
     }
 
-    avs_coap_server_exchange_data_t *server = &exchange->by_type.server;
-    AVS_ASSERT(server->delivery_handler,
-               "send_result_handler called for an exchange without "
-               "user-defined delivery handler; this should not happen");
-
     switch (send_result) {
     case AVS_COAP_SEND_RESULT_PARTIAL_CONTENT:
     case AVS_COAP_SEND_RESULT_OK:
@@ -296,12 +291,22 @@ send_result_handler(avs_coap_ctx_t *ctx,
     }
 #endif // WITH_AVS_COAP_BLOCK
 
+    avs_coap_server_exchange_data_t *server = &exchange->by_type.server;
+    AVS_ASSERT(server->delivery_handler,
+               "send_result_handler called for an exchange without "
+               "user-defined delivery handler; this should not happen");
+
+    uint8_t code = exchange->code;
+    avs_coap_token_t token = exchange->token;
+
+    server->delivery_handler(ctx, fail_err, server->delivery_handler_arg);
+
     if (avs_is_ok(fail_err)) {
         cancel_notification_on_error(ctx,
                                      (avs_coap_observe_id_t) {
-                                         .token = exchange->token
+                                         .token = token
                                      },
-                                     exchange->code);
+                                     code);
     }
 #ifdef WITH_AVS_COAP_OBSERVE
     else if (fail_err.category == AVS_COAP_ERR_CATEGORY
@@ -310,19 +315,13 @@ send_result_handler(avs_coap_ctx_t *ctx,
         // ends in a timeout, the client "is considered no longer interested in
         // the resource and is removed by the server from the list of observers"
         avs_coap_observe_cancel(ctx, (avs_coap_observe_id_t) {
-                                         .token = exchange->token
+                                         .token = token
                                      });
     }
 #endif // WITH_AVS_COAP_OBSERVE
 
-    // exchange may have been canceled by user handler
-    if (!_avs_coap_find_server_exchange_ptr_by_id(ctx, exchange_id)) {
-        return AVS_COAP_RESPONSE_ACCEPTED;
-    }
-
-    server->delivery_handler(ctx, fail_err, server->delivery_handler_arg);
-
-    // delivery status handler might have canceled the exchange as well
+    // delivery status handler or observe cancel handler
+    // might have canceled the exchange
     AVS_LIST(avs_coap_exchange_t) *exchange_ptr =
             _avs_coap_find_server_exchange_ptr_by_id(ctx, exchange_id);
     if (!exchange_ptr) {

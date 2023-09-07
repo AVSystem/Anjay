@@ -108,7 +108,6 @@ static int instance_reset(anjay_t *anjay,
     (void) iid;
 
     event_log_t *obj = get_obj(obj_ptr);
-    assert(obj);
     assert(iid == 0);
 
     obj->log_running = false;
@@ -147,7 +146,6 @@ static int resource_read(anjay_t *anjay,
     (void) riid;
 
     event_log_t *obj = get_obj(obj_ptr);
-    assert(obj);
     assert(iid == 0);
 
     switch (rid) {
@@ -181,7 +179,6 @@ static int resource_write(anjay_t *anjay,
     (void) riid;
 
     event_log_t *obj = get_obj(obj_ptr);
-    assert(obj);
     assert(iid == 0);
 
     switch (rid) {
@@ -331,7 +328,6 @@ static int resource_execute(anjay_t *anjay,
     (void) iid;
 
     event_log_t *obj = get_obj(obj_ptr);
-    assert(obj);
     assert(iid == 0);
 
     switch (rid) {

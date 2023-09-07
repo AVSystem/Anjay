@@ -247,8 +247,9 @@
  * (<c>anjay_new_from_core_persistence()</c> and
  * <c>anjay_delete_with_core_persistence()</c> APIs).
  *
- * Requires <c>ANJAY_WITH_OBSERVE</c> to be enabled, and
- * <c>AVS_COMMONS_WITH_AVS_PERSISTENCE</c> to be enabled in avs_commons
+ * Requires <c>ANJAY_WITH_OBSERVE</c> to be enabled,
+ * <c>AVS_COMMONS_WITH_AVS_PERSISTENCE</c> to be enabled in avs_commons, and
+ * <c>WITH_AVS_COAP_OBSERVE_PERSISTENCE</c> to be enabled in avs_coap
  * configuration.
  *
  * IMPORTANT: Only available as a commercial feature. Ignored in the open

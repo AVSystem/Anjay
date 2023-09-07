@@ -33,9 +33,9 @@ typedef struct {
     void *handle_result_arg;
 } avs_coap_tcp_response_handler_t;
 
-AVS_LIST(avs_coap_tcp_pending_request_t) *_avs_coap_tcp_create_pending_request(
+avs_error_t _avs_coap_tcp_create_pending_request(
         struct avs_coap_tcp_ctx_struct *ctx,
-        AVS_LIST(avs_coap_tcp_pending_request_t) *pending_requests,
+        AVS_LIST(avs_coap_tcp_pending_request_t) **out_request,
         const avs_coap_token_t *token,
         avs_coap_send_result_handler_t *handler,
         void *handler_arg);

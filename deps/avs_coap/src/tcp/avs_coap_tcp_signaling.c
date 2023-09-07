@@ -29,7 +29,7 @@ VISIBILITY_SOURCE_BEGIN
 
 static avs_error_t handle_csm(avs_coap_tcp_csm_t *csm,
                               const avs_coap_borrowed_msg_t *msg) {
-    csm->received = true;
+    csm->recv_deadline = AVS_TIME_MONOTONIC_INVALID;
     bool size_updated = false;
     bool block_updated = false;
     const avs_coap_options_t *opts = &msg->options;

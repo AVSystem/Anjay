@@ -128,7 +128,6 @@ query_server_communication_retry_params(anjay_server_info_t *server) {
 
 void _anjay_server_on_failure(anjay_server_info_t *server,
                               const char *debug_msg) {
-    // defined(ANJAY_WITH_CORE_PERSISTENCE)
     _anjay_server_clean_active_data(server);
     server->refresh_failed = true;
 
@@ -240,7 +239,6 @@ void _anjay_server_on_server_communication_timeout(
                        server->anjay, server->ssid, AVS_TIME_DURATION_ZERO)) {
         server->refresh_failed = true;
     } else {
-        // defined(ANJAY_WITHOUT_TELIT_STABLE_CONNECTION_TIMEOUT_REG_FAILURE)
         _anjay_server_on_server_communication_error(server,
                                                     avs_errno(AVS_EBADF));
     }
@@ -258,7 +256,6 @@ void _anjay_server_on_fatal_coap_error(anjay_connection_ref_t conn_ref,
             && _anjay_server_registration_expired(conn_ref.server)) {
         _anjay_server_on_server_communication_error(conn_ref.server, err);
     } else {
-        // defined(ANJAY_WITH_CORE_PERSISTENCE)
         _anjay_connection_internal_clean_socket(conn_ref.server->anjay, conn);
         _anjay_active_server_refresh(conn_ref.server);
     }
@@ -568,7 +565,6 @@ void _anjay_disable_server_with_timeout_from_dm_sync(
                                                        server_iid);
         server->reactivate_time =
                 avs_time_real_add(avs_time_real_now(), disable_timeout);
-        // defined(ANJAY_WITH_TELIT_CUSTOM_FEATURES)
         server->disabled_explicitly = true;
         if (deactivate_server(server)) {
             anjay_log(ERROR, _("unable to deactivate server: ") "%" PRIu16,
@@ -617,7 +613,6 @@ static int disable_server_impl(anjay_unlocked_t *anjay,
         server->reactivate_time =
                 avs_time_real_add(avs_time_real_now(), timeout);
     }
-    // defined(ANJAY_WITH_CORE_PERSISTENCE)
     return 0;
 }
 
@@ -640,7 +635,6 @@ int anjay_disable_server(anjay_t *anjay_locked, anjay_ssid_t ssid) {
 
 void _anjay_disable_server_with_explicit_timeout_sync(
         anjay_server_info_t *server) {
-    // defined(ANJAY_WITH_TELIT_CUSTOM_FEATURES)
     server->disabled_explicitly = true;
     if (deactivate_server(server)) {
         anjay_log(ERROR, _("unable to deactivate server: ") "%" PRIu16,
@@ -704,7 +698,6 @@ int _anjay_enable_server_unlocked(anjay_unlocked_t *anjay, anjay_ssid_t ssid) {
     }
 
     (*server_ptr)->reactivate_time = avs_time_real_now();
-    // defined(ANJAY_WITH_CORE_PERSISTENCE)
     return _anjay_server_sched_activate(*server_ptr);
 }
 

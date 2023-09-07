@@ -208,13 +208,13 @@ class Lwm2mAsserts:
             self.bootstrap_server.send(Lwm2mErrorResponse.matching(
                 pkt)(code=respond_with_error_code))
 
-    def assertDtlsReconnect(self, server=None, timeout_s=-1, deadline=None):
+    def assertDtlsReconnect(self, server=None, timeout_s=-1, deadline=None, expected_error='0x6780'):
         serv = server or self.serv
 
         with self.assertRaises(RuntimeError) as raised:
             serv.recv(timeout_s=timeout_s, deadline=deadline)
         # -0x6780 == MBEDTLS_ERR_SSL_CLIENT_RECONNECT
-        self.assertIn('0x6780', raised.exception.args[0])
+        self.assertIn(expected_error, raised.exception.args[0])
 
     def assertPktIsDtlsClientHello(self, pkt, seq_number=ANY):
         if seq_number is not ANY and seq_number >= 2 ** 48:

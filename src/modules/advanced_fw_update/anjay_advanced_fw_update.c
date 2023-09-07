@@ -20,7 +20,10 @@
 #    include <avsystem/coap/code.h>
 
 #    include <anjay/dm.h>
-#    include <anjay/download.h>
+
+#    ifdef ANJAY_WITH_DOWNLOADER
+#        include <anjay/download.h>
+#    endif // ANJAY_WITH_DOWNLOADER
 
 #    ifdef ANJAY_WITH_SEND
 #        include <anjay/lwm2m_send.h>
@@ -71,10 +74,12 @@ typedef struct {
     anjay_advanced_fw_update_state_t state;
     anjay_advanced_fw_update_result_t result;
     const char *package_uri;
-    bool retry_download_on_expired;
     avs_sched_handle_t update_job;
+#    ifdef ANJAY_WITH_DOWNLOADER
+    bool retry_download_on_expired;
     avs_sched_handle_t resume_download_job;
     avs_time_monotonic_t resume_download_deadline;
+#    endif // ANJAY_WITH_DOWNLOADER
     anjay_advanced_fw_update_severity_t severity;
     avs_time_real_t last_state_change_time;
     int max_defer_period;
@@ -91,7 +96,9 @@ typedef struct {
     anjay_dm_installed_object_t def_ptr;
     const anjay_unlocked_dm_object_def_t *def;
 
+#    ifdef ANJAY_WITH_DOWNLOADER
     bool prefer_same_socket_downloads;
+#    endif // ANJAY_WITH_DOWNLOADER
 #    ifdef ANJAY_WITH_SEND
     bool use_lwm2m_send;
 #    endif // ANJAY_WITH_SEND
@@ -99,8 +106,11 @@ typedef struct {
     anjay_iid_t *supplemental_iid_cache;
     size_t supplemental_iid_cache_count;
 
+#    ifdef ANJAY_WITH_DOWNLOADER
     anjay_download_handle_t download_handle;
+    bool downloads_suspended;
     AVS_LIST(anjay_download_config_t) download_queue;
+#    endif // ANJAY_WITH_DOWNLOADER
 
     AVS_LIST(advanced_fw_instance_t) instances;
 } advanced_fw_repr_t;
@@ -122,18 +132,36 @@ get_fw(const anjay_dm_installed_object_t obj_ptr) {
 #        define SEND_FW_RES_PATH(Iid, Res) \
             SEND_RES_PATH(ANJAY_ADVANCED_FW_UPDATE_OID, Iid, ADV_FW_RES_##Res)
 
+static int perform_send(anjay_unlocked_t *anjay,
+                        const anjay_dm_installed_object_t *obj,
+                        anjay_iid_t iid,
+                        void *batch) {
+    (void) obj;
+    anjay_ssid_t ssid;
+    const anjay_uri_path_t ssid_path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SERVER, iid,
+                               ANJAY_DM_RID_SERVER_SSID);
+
+    if (_anjay_dm_read_resource_u16(anjay, &ssid_path, &ssid)) {
+        return 0;
+    }
+
+    if (_anjay_send_deferrable_unlocked(
+                anjay, ssid, (anjay_send_batch_t *) batch, NULL, NULL)
+            != ANJAY_SEND_OK) {
+        fw_log(WARNING, _("failed to perform Send, SSID: ") "%" PRIu16, ssid);
+    }
+
+    return 0;
+}
+
 static void send_batch_to_all_servers(anjay_unlocked_t *anjay,
                                       anjay_send_batch_t *batch) {
-    AVS_LIST(const anjay_ssid_t) ssids =
-            _anjay_server_get_ssids_unlocked(anjay);
-    AVS_LIST(const anjay_ssid_t) ssid;
-    AVS_LIST_FOREACH(ssid, ssids) {
-        if (_anjay_send_deferrable_unlocked(anjay, *ssid, batch, NULL, NULL)
-                != ANJAY_SEND_OK) {
-            fw_log(WARNING,
-                   _("failed to perform Send, SSID: ") "%" PRIu16,
-                   *ssid);
-        }
+    const anjay_dm_installed_object_t *obj =
+            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SERVER);
+
+    if (_anjay_dm_foreach_instance(anjay, obj, perform_send, batch)) {
+        fw_log(ERROR, _("failed to perform Send to all servers"));
     }
 }
 
@@ -194,7 +222,7 @@ static int set_update_result(anjay_unlocked_t *anjay,
                              anjay_advanced_fw_update_result_t new_result) {
     if (inst->result != new_result) {
         fw_log(DEBUG,
-               _("Firmware Update Instance ") "%" PRIu16 _(
+               _("Advanced Firmware Update Instance ") "%" PRIu16 _(
                        " Result change: ") "%d" _(" -> ") "%d",
                inst->iid, (int) inst->result, (int) new_result);
         inst->result = new_result;
@@ -211,7 +239,7 @@ static int set_state(anjay_unlocked_t *anjay,
     if (inst->state != new_state) {
         inst->last_state_change_time = avs_time_real_now();
         fw_log(DEBUG,
-               _("Firmware Update Instance ") "%" PRIu16 _(
+               _("Advanced Firmware Update Instance ") "%" PRIu16 _(
                        " State change: ") "%d" _(" -> ") "%d",
                inst->iid, (int) inst->state, (int) new_state);
         inst->state = new_state;
@@ -458,7 +486,8 @@ static void reset_state(anjay_unlocked_t *anjay,
     update_state_and_update_result(anjay, fw, inst,
                                    ANJAY_ADVANCED_FW_UPDATE_STATE_IDLE,
                                    ANJAY_ADVANCED_FW_UPDATE_RESULT_INITIAL);
-    fw_log(INFO, _("Firmware Object Instance ") "%" PRIu16 _(" state reset"),
+    fw_log(INFO,
+           _("Advanced Firmware Object Instance ") "%" PRIu16 _(" state reset"),
            inst->iid);
 }
 
@@ -712,7 +741,7 @@ static avs_error_t download_write_block(anjay_t *anjay_locked,
     const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
-        fw_log(WARNING, _("Firmware Update object not installed"));
+        fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
         advanced_fw_repr_t *fw = get_fw(*obj);
         advanced_fw_instance_t *inst = (advanced_fw_instance_t *) inst_;
@@ -778,6 +807,9 @@ static int schedule_download_now(anjay_unlocked_t *anjay,
 #        endif // ANJAY_WITH_SEND
         return -1;
     }
+    if (fw->downloads_suspended) {
+        _anjay_download_suspend_unlocked(anjay, fw->download_handle);
+    }
     inst->retry_download_on_expired = (false);
     update_state_and_update_result(anjay, fw, inst,
                                    ANJAY_ADVANCED_FW_UPDATE_STATE_DOWNLOADING,
@@ -809,7 +841,7 @@ static void download_finished(anjay_t *anjay_locked,
     const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
-        fw_log(WARNING, _("Firmware Update object not installed"));
+        fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
         advanced_fw_repr_t *fw = get_fw(*obj);
         advanced_fw_instance_t *inst = (advanced_fw_instance_t *) inst_;
@@ -1069,6 +1101,7 @@ static int write_firmware(anjay_unlocked_t *anjay,
     return result;
 }
 
+#    ifdef ANJAY_WITH_DOWNLOADER
 static void
 cancel_existing_download_if_in_progress(anjay_unlocked_t *anjay,
                                         advanced_fw_repr_t *fw,
@@ -1086,6 +1119,7 @@ cancel_existing_download_if_in_progress(anjay_unlocked_t *anjay,
         assert(!fw->download_handle);
     }
 }
+#    endif // ANJAY_WITH_DOWNLOADER
 
 static int fw_write(anjay_unlocked_t *anjay,
                     const anjay_dm_installed_object_t obj_ptr,
@@ -1105,13 +1139,18 @@ static int fw_write(anjay_unlocked_t *anjay,
         assert(riid == ANJAY_ID_INVALID);
 
         int result = 0;
+#    ifdef ANJAY_WITH_DOWNLOADER
         bool is_any_in_progress = is_any_download_in_progress(fw);
+#    endif // ANJAY_WITH_DOWNLOADER
 
         if (inst->state == ANJAY_ADVANCED_FW_UPDATE_STATE_UPDATING) {
             fw_log(WARNING, _("cannot set Package resource while updating"));
             return ANJAY_ERR_METHOD_NOT_ALLOWED;
         } else if (inst->state == ANJAY_ADVANCED_FW_UPDATE_STATE_IDLE
-                   && !is_any_in_progress) {
+#    ifdef ANJAY_WITH_DOWNLOADER
+                   && !is_any_in_progress
+#    endif // ANJAY_WITH_DOWNLOADER
+        ) {
             bool is_reset_request = false;
 
             result = write_firmware(anjay, fw, inst, ctx, &is_reset_request);
@@ -1121,14 +1160,19 @@ static int fw_write(anjay_unlocked_t *anjay,
         } else {
             result = expect_single_nullbyte(ctx);
             if (!result) {
+#    ifdef ANJAY_WITH_DOWNLOADER
                 cancel_existing_download_if_in_progress(anjay, fw, inst);
+#    endif // ANJAY_WITH_DOWNLOADER
                 reset_state(anjay, fw, inst);
-            } else if (is_any_in_progress) {
+            }
+#    ifdef ANJAY_WITH_DOWNLOADER
+            else if (is_any_in_progress) {
                 fw_log(ERROR, _("There is a download already in progress or in "
                                 "queue. Rejecting push mode download due do "
                                 "implementation limitation"));
                 return ANJAY_ERR_METHOD_NOT_ALLOWED;
             }
+#    endif // ANJAY_WITH_DOWNLOADER
         }
         return result;
     }
@@ -1147,7 +1191,9 @@ static int fw_write(anjay_unlocked_t *anjay,
                 return ANJAY_ERR_METHOD_NOT_ALLOWED;
             }
 
+#    ifdef ANJAY_WITH_DOWNLOADER
             cancel_existing_download_if_in_progress(anjay, fw, inst);
+#    endif // ANJAY_WITH_DOWNLOADER
 
             avs_free((void *) (intptr_t) inst->package_uri);
             inst->package_uri = NULL;
@@ -1325,7 +1371,7 @@ static int sort_supplemental_iid_cache(advanced_fw_repr_t *fw) {
     // The count should be usually low enough for it to not be a performance
     // hog.
     for (size_t i = 1; i < fw->supplemental_iid_cache_count; ++i) {
-        for (ptrdiff_t j = (ptrdiff_t) i; j >= 0; --j) {
+        for (ptrdiff_t j = (ptrdiff_t) i; j > 0; --j) {
             if (fw->supplemental_iid_cache[j - 1]
                     == fw->supplemental_iid_cache[j]) {
                 fw_log(ERROR, _("Duplicate instances specified in "
@@ -1358,7 +1404,8 @@ static int handle_fw_execute_args(advanced_fw_repr_t *fw,
     }
 
     if (arg != 0) {
-        fw_log(ERROR, _("Invalid Firmware Update argument: ") "%d", arg);
+        fw_log(ERROR, _("Invalid Advanced Firmware Update argument: ") "%d",
+               arg);
         return ANJAY_ERR_BAD_REQUEST;
     }
 
@@ -1384,7 +1431,8 @@ static int handle_fw_execute_args(advanced_fw_repr_t *fw,
                     sizeof(arg_buf) - arg_buf_offset);
             if (result && result != ANJAY_BUFFER_TOO_SHORT) {
                 fw_log(ERROR,
-                       _("Error while reading Firmware Update arguments"));
+                       _("Error while reading Advanced Firmware Update "
+                         "arguments"));
                 goto finish;
             }
         }
@@ -1409,7 +1457,7 @@ static int handle_fw_execute_args(advanced_fw_repr_t *fw,
         }
 
         if (!supplemental_inst) {
-            fw_log(ERROR, _("Invalid argument for Firmware Update"));
+            fw_log(ERROR, _("Invalid argument for Advanced Firmware Update"));
             result = ANJAY_ERR_BAD_REQUEST;
             goto finish;
         }
@@ -1417,9 +1465,10 @@ static int handle_fw_execute_args(advanced_fw_repr_t *fw,
         if (supplemental_inst->state
                 != ANJAY_ADVANCED_FW_UPDATE_STATE_DOWNLOADED) {
             fw_log(WARNING,
-                   _("Firmware Update including supplemental instance ") "%" PRIu16
-                           _(" requested, but firmware not yet downloaded "
-                             "(state = ") "%d" _(")"),
+                   _("Advanced Firmware Update including supplemental "
+                     "instance ") "%" PRIu16 _(" requested, but firmware not "
+                                               "yet downloaded (state "
+                                               "= ") "%d" _(")"),
                    supplemental_iid, supplemental_inst->state);
             result = ANJAY_ERR_METHOD_NOT_ALLOWED;
             goto finish;
@@ -1441,7 +1490,7 @@ static int handle_fw_execute_args(advanced_fw_repr_t *fw,
             arg_buf_offset += arg_buf_bytes_read;
             arg_buf_offset -= (size_t) char_count + 1;
         } else {
-            fw_log(ERROR, _("Invalid argument for Firmware Update"));
+            fw_log(ERROR, _("Invalid argument for Advanced Firmware Update"));
             result = ANJAY_ERR_BAD_REQUEST;
             goto finish;
         }
@@ -1475,7 +1524,8 @@ static int handle_fw_execute_args(advanced_fw_repr_t *fw,
     if (!result
             && _anjay_execute_get_next_arg_unlocked(ctx, &arg, &arg_has_value)
                            != ANJAY_EXECUTE_GET_ARG_END) {
-        fw_log(ERROR, _("Superfluous Firmware Update argument: ") "%d", arg);
+        fw_log(ERROR, _("Superfluous Advanced Firmware Update argument: ") "%d",
+               arg);
         result = ANJAY_ERR_BAD_REQUEST;
     }
 
@@ -1501,7 +1551,7 @@ static int fw_execute(anjay_unlocked_t *anjay,
     case ADV_FW_RES_UPDATE: {
         if (inst->state != ANJAY_ADVANCED_FW_UPDATE_STATE_DOWNLOADED) {
             fw_log(WARNING,
-                   _("Firmware Update for instance ") "%" PRIu16 _(
+                   _("Advanced Firmware Update for instance ") "%" PRIu16 _(
                            " requested, but firmware not yet downloaded "
                            "(state = ") "%d" _(")"),
                    iid, inst->state);
@@ -1542,13 +1592,15 @@ static int fw_execute(anjay_unlocked_t *anjay,
         if (inst->state != ANJAY_ADVANCED_FW_UPDATE_STATE_DOWNLOADING
                 && inst->state != ANJAY_ADVANCED_FW_UPDATE_STATE_DOWNLOADED) {
             fw_log(WARNING,
-                   _("Firmware Update Cancel requested, but the firmware is "
-                     "being installed or has already been installed "
-                     "(state = ") "%d" _(")"),
+                   _("Advanced Firmware Update Cancel requested, but the "
+                     "firmware is being installed or has already been "
+                     "installed (state = ") "%d" _(")"),
                    inst->state);
             return ANJAY_ERR_METHOD_NOT_ALLOWED;
         }
+#    ifdef ANJAY_WITH_DOWNLOADER
         cancel_existing_download_if_in_progress(anjay, fw, inst);
+#    endif // ANJAY_WITH_DOWNLOADER
         reset_user_state(anjay, inst);
         update_state_and_update_result(
                 anjay, fw, inst, ANJAY_ADVANCED_FW_UPDATE_STATE_IDLE,
@@ -1645,6 +1697,7 @@ static AVS_LIST(advanced_fw_instance_t) initialize_fw_instance(
         }
 #    else  // ANJAY_WITH_DOWNLOADER
         (void) anjay;
+        (void) fw;
         fw_log(WARNING,
                _("Unable to resume download: PULL download not supported"));
 #    endif // ANJAY_WITH_DOWNLOADER
@@ -1672,15 +1725,19 @@ static void fw_delete(void *fw_) {
     AVS_LIST_CLEAR(&fw->instances) {
         AVS_LIST(advanced_fw_instance_t) inst = fw->instances;
         avs_sched_del(&inst->update_job);
+#    ifdef ANJAY_WITH_DOWNLOADER
         avs_sched_del(&inst->resume_download_job);
+#    endif // ANJAY_WITH_DOWNLOADER
         avs_free(inst->linked_instances);
         avs_free(inst->conflicting_instances);
         avs_free((void *) (intptr_t) inst->package_uri);
     }
+#    ifdef ANJAY_WITH_DOWNLOADER
     AVS_LIST_CLEAR(&fw->download_queue) {
         avs_free((void *) (intptr_t) fw->download_queue->url);
         avs_free((void *) fw->download_queue->coap_tx_params);
     }
+#    endif // ANJAY_WITH_DOWNLOADER
     // NOTE: fw itself will be freed when cleaning the objects list
 }
 
@@ -1697,8 +1754,10 @@ int anjay_advanced_fw_update_install(
     } else {
         repr->def = &FIRMWARE_UPDATE;
         if (config) {
+#    ifdef ANJAY_WITH_DOWNLOADER
             repr->prefer_same_socket_downloads =
                     config->prefer_same_socket_downloads;
+#    endif // ANJAY_WITH_DOWNLOADER
 #    ifdef ANJAY_WITH_SEND
             repr->use_lwm2m_send = config->use_lwm2m_send;
 #    endif // ANJAY_WITH_SEND
@@ -1738,7 +1797,7 @@ int anjay_advanced_fw_update_instance_add(
     const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
-        fw_log(WARNING, _("Firmware Update object not installed"));
+        fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
         advanced_fw_repr_t *fw = get_fw(*obj);
 
@@ -1837,7 +1896,7 @@ int anjay_advanced_fw_update_set_state_and_result(
     const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
-        fw_log(WARNING, _("Firmware Update object not installed"));
+        fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
         advanced_fw_repr_t *fw = get_fw(*obj);
 
@@ -1848,8 +1907,9 @@ int anjay_advanced_fw_update_set_state_and_result(
             fw_log(ERROR, _("Instance does not exist"));
         } else if (!is_state_change_allowed(inst->state, state, result)) {
             fw_log(WARNING,
-                   _("Firmware Update State and Result change from ") "%d/%d" _(
-                           " to ") "%d/%d" _(" is not allowed"),
+                   _("Advanced Firmware Update State and Result change "
+                     "from ") "%d/%d" _(" to ") "%d/%d" _(" is not "
+                                                          "allowed"),
                    (int) inst->state, (int) inst->result, (int) state,
                    (int) result);
         } else {
@@ -1875,7 +1935,7 @@ int anjay_advanced_fw_update_get_state(
     const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
-        fw_log(WARNING, _("Firmware Update object not installed"));
+        fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
         advanced_fw_repr_t *fw = get_fw(*obj);
 
@@ -1904,7 +1964,7 @@ int anjay_advanced_fw_update_get_result(
     const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
-        fw_log(WARNING, _("Firmware Update object not installed"));
+        fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
         advanced_fw_repr_t *fw = get_fw(*obj);
 
@@ -1995,7 +2055,7 @@ int anjay_advanced_fw_update_set_linked_instances(
     const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
-        fw_log(WARNING, _("Firmware Update object not installed"));
+        fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
         advanced_fw_repr_t *fw = get_fw(*obj);
 
@@ -2038,7 +2098,7 @@ int anjay_advanced_fw_update_get_linked_instances(
     const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
-        fw_log(WARNING, _("Firmware Update object not installed"));
+        fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
         advanced_fw_repr_t *fw = get_fw(*obj);
 
@@ -2068,7 +2128,7 @@ int anjay_advanced_fw_update_set_conflicting_instances(
     const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
-        fw_log(WARNING, _("Firmware Update object not installed"));
+        fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
         advanced_fw_repr_t *fw = get_fw(*obj);
 
@@ -2110,7 +2170,7 @@ int anjay_advanced_fw_update_get_conflicting_instances(
     const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
-        fw_log(WARNING, _("Firmware Update object not installed"));
+        fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
         advanced_fw_repr_t *fw = get_fw(*obj);
 
@@ -2137,7 +2197,7 @@ avs_time_real_t anjay_advanced_fw_update_get_deadline(anjay_t *anjay_locked,
     const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
-        fw_log(WARNING, _("Firmware Update object not installed"));
+        fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
         advanced_fw_repr_t *fw = get_fw(*obj);
 
@@ -2163,7 +2223,7 @@ anjay_advanced_fw_update_get_severity(anjay_t *anjay_locked, anjay_iid_t iid) {
     const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
-        fw_log(WARNING, _("Firmware Update object not installed"));
+        fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
         advanced_fw_repr_t *fw = get_fw(*obj);
 
@@ -2189,7 +2249,7 @@ anjay_advanced_fw_update_get_last_state_change_time(anjay_t *anjay_locked,
     const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
-        fw_log(WARNING, _("Firmware Update object not installed"));
+        fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
         advanced_fw_repr_t *fw = get_fw(*obj);
 
@@ -2205,5 +2265,48 @@ anjay_advanced_fw_update_get_last_state_change_time(anjay_t *anjay_locked,
     ANJAY_MUTEX_UNLOCK(anjay_locked);
     return result;
 }
+
+#    ifdef ANJAY_WITH_DOWNLOADER
+void anjay_advanced_fw_update_pull_suspend(anjay_t *anjay_locked) {
+    assert(anjay_locked);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    const anjay_dm_installed_object_t *obj =
+            _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
+    if (!obj) {
+        fw_log(WARNING, _("Advanced Firmware Update object not installed"));
+    } else {
+        advanced_fw_repr_t *fw = get_fw(*obj);
+        assert(fw);
+        if (fw->download_handle) {
+            _anjay_download_suspend_unlocked(anjay, fw->download_handle);
+        }
+        fw->downloads_suspended = true;
+    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+}
+
+int anjay_advanced_fw_update_pull_reconnect(anjay_t *anjay_locked) {
+    assert(anjay_locked);
+    int result = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    const anjay_dm_installed_object_t *obj =
+            _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
+    if (!obj) {
+        fw_log(WARNING, _("Advanced Firmware Update object not installed"));
+    } else {
+        advanced_fw_repr_t *fw = get_fw(*obj);
+        assert(fw);
+        fw->downloads_suspended = false;
+        if (fw->download_handle) {
+            result = _anjay_download_reconnect_unlocked(anjay,
+                                                        fw->download_handle);
+        } else {
+            result = 0;
+        }
+    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
+}
+#    endif // ANJAY_WITH_DOWNLOADER
 
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE

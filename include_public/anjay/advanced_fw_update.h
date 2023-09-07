@@ -470,6 +470,9 @@ typedef int anjay_advanced_fw_update_get_security_config_t(
  * If this handler is not implemented at all (with the corresponding field set
  * to <c>NULL</c>), <c>udp_tx_params</c> from <c>anjay_t</c> object are used.
  *
+ * <strong>NOTE:</strong> This callback is called even for non-CoAP downloads,
+ * but the returned transmission parameters are ignored in that case.
+ *
  * @param iid           Instance ID of an Advanced Firmware Object which query
  *                      tx_params.
  *
@@ -736,6 +739,12 @@ int anjay_advanced_fw_update_set_linked_instances(
  * performing upgrade of a @p iid instance. See AVSystem specification of
  * Advanced Firmware Update for details.
  *
+ * <strong>NOTE:</strong> The returned array points directly into the internal
+ * structures of Anjay; however, it may only be modified by a call to
+ * @ref anjay_advanced_fw_update_set_linked_instances . Nevertheless, if your
+ * code calls the "get" and "set" functions from different threads, the calls
+ * need to be additionally synchronized to achieve thread safety.
+ *
  * @param anjay                 Anjay object to operate on.
  *
  * @param iid                   Instance ID of an Advanced Firmware Object.
@@ -796,6 +805,12 @@ int anjay_advanced_fw_update_set_conflicting_instances(
  * Firmware Update object instances that caused the conflict. See LwM2M
  * specification for details.
  *
+ * <strong>NOTE:</strong> The returned array points directly into the internal
+ * structures of Anjay; however, it may only be modified by a call to
+ * @ref anjay_advanced_fw_update_set_conflicting_instances . Nevertheless, if
+ * your code calls the "get" and "set" functions from different threads, the
+ * calls need to be additionally synchronized to achieve thread safety.
+ *
  * @param anjay                 Anjay object to operate on.
  *
  * @param iid                   Instance ID of an Advanced Firmware Object.
@@ -854,6 +869,45 @@ anjay_advanced_fw_update_get_severity(anjay_t *anjay, anjay_iid_t iid);
 avs_time_real_t
 anjay_advanced_fw_update_get_last_state_change_time(anjay_t *anjay,
                                                     anjay_iid_t iid);
+
+#ifdef ANJAY_WITH_DOWNLOADER
+/**
+ * Suspends the operation of PULL-mode downloads in the Advanced Firmware Update
+ * module.
+ *
+ * This will have the effect of suspending any ongoing downloads (see
+ * @ref anjay_download_suspend for details), as well as preventing new downloads
+ * from being started.
+ *
+ * When PULL-mode downloads are suspended,
+ * @ref anjay_advanced_fw_update_stream_open_t will <strong>NOT</strong> be
+ * called when a download request is issued. However,
+ * @ref anjay_advanced_fw_update_get_security_config_t and
+ * @ref anjay_advanced_fw_update_get_coap_tx_params_t will be called. You may
+ * call @ref anjay_advanced_fw_update_pull_reconnect from one of these functions
+ * if you decide to accept the download immediately after all.
+ *
+ * @param anjay Anjay object to operate on.
+ */
+void anjay_advanced_fw_update_pull_suspend(anjay_t *anjay);
+
+/**
+ * Reconnects any ongoing PULL-mode downloads in the Advanced Firmware Update
+ * module. Additionally, if PULL-mode downloads are suspended (see
+ * @ref anjay_advanced_fw_update_pull_suspend), resumes normal operation.
+ *
+ * If an ongoing PULL-mode download exists, this will call
+ * @ref anjay_download_reconnect internally, so you may want to reference the
+ * documentation of that function for details.
+ *
+ * @param anjay Anjay object to operate on.
+ *
+ * @returns 0 for success; -1 if @p anjay does not have the Firmware Update
+ *          object installed or if the call to @ref anjay_download_reconnect
+ *          fails.
+ */
+int anjay_advanced_fw_update_pull_reconnect(anjay_t *anjay);
+#endif // ANJAY_WITH_DOWNLOADER
 
 #ifdef __cplusplus
 }

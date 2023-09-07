@@ -88,8 +88,6 @@ struct
     anjay_security_config_cache_t security_config_from_dm_cache;
     uint16_t udp_listen_port;
 
-    // defined(ANJAY_WITH_CORE_PERSISTENCE)
-
     /**
      * List of known LwM2M servers we may want to be connected to. This is
      * semantically a map, keyed (and ordered) by SSID.
@@ -119,11 +117,13 @@ struct
     avs_net_dtls_handshake_timeouts_t udp_dtls_hs_tx_params;
     avs_net_socket_tls_ciphersuites_t default_tls_ciphersuites;
 
-#if defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+#ifdef WITH_AVS_COAP_TCP
+#    if defined(ANJAY_WITH_LWM2M11) || defined(ANJAY_WITH_COAP_DOWNLOAD)
     size_t coap_tcp_max_options_size;
     avs_time_duration_t coap_tcp_request_timeout;
     avs_time_duration_t tcp_exchange_timeout;
-#endif // defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+#    endif // defined(ANJAY_WITH_LWM2M11) || defined(ANJAY_WITH_COAP_DOWNLOAD)
+#endif     // WITH_AVS_COAP_TCP
 
     anjay_scheduled_notify_t scheduled_notify;
 

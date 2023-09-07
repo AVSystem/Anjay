@@ -74,6 +74,8 @@ struct advanced_fw_update_logic {
     const char *persistence_file;
     FILE *stream;
     avs_net_security_info_t security_info;
+    avs_coap_udp_tx_params_t coap_tx_params;
+    bool auto_suspend;
     int (*check_yourself)(struct advanced_fw_update_logic *);
     int (*update_yourself)(struct advanced_fw_update_logic *);
     avs_sched_handle_t update_job;
@@ -85,7 +87,8 @@ int advanced_firmware_update_application_install(
         advanced_fw_update_logic_t *fw_logic,
         anjay_advanced_fw_update_initial_state_t *init_state,
         const avs_net_security_info_t *security_info,
-        const avs_coap_udp_tx_params_t *tx_params);
+        const avs_coap_udp_tx_params_t *tx_params,
+        bool auto_suspend);
 int advanced_firmware_update_app_perform(advanced_fw_update_logic_t *fw);
 const char *advanced_firmware_update_app_get_pkg_version(anjay_iid_t iid,
                                                          void *fw_);
@@ -114,12 +117,11 @@ int advanced_firmware_update_install(
         const avs_coap_udp_tx_params_t *tx_params,
         anjay_advanced_fw_update_result_t delayed_result,
         bool prefer_same_socket_downloads,
-        const char *original_img_file_path
+        const char *original_img_file_path,
 #ifdef ANJAY_WITH_SEND
-        ,
-        bool use_lwm2m_send
+        bool use_lwm2m_send,
 #endif // ANJAY_WITH_SEND
-);
+        bool auto_suspend);
 
 void advanced_firmware_update_uninstall(advanced_fw_update_logic_t *fw_table);
 int fw_update_common_open(anjay_iid_t iid, void *fw_);

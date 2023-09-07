@@ -32,24 +32,24 @@ static const avs_coap_udp_tx_params_t DETERMINISTIC_TX_PARAMS = {
 };
 
 AVS_UNIT_TEST(udp_tx_params, correct_backoff) {
-    avs_crypto_prng_ctx_t *prng_ctx = avs_crypto_prng_new(NULL, NULL);
+    avs_coap_udp_ctx_t ctx = {
+        .base.prng_ctx = avs_crypto_prng_new(NULL, NULL),
+        .tx_params = DETERMINISTIC_TX_PARAMS
+    };
     avs_coap_retry_state_t state;
-    ASSERT_OK(_avs_coap_udp_initial_retry_state(&DETERMINISTIC_TX_PARAMS,
-                                                prng_ctx, &state));
+    ASSERT_OK(_avs_coap_udp_initial_retry_state(&ctx, &state));
     size_t backoff_s = (size_t) DETERMINISTIC_TX_PARAMS.ack_timeout.seconds;
-    ASSERT_EQ(state.retry_count, 0);
+    ASSERT_EQ(state.retries_left, 4);
     ASSERT_EQ(state.recv_timeout.seconds, backoff_s);
 
     for (size_t i = 0; i < DETERMINISTIC_TX_PARAMS.max_retransmit; ++i) {
-        ASSERT_FALSE(_avs_coap_udp_all_retries_sent(&state,
-                                                    &DETERMINISTIC_TX_PARAMS));
-        ASSERT_OK(_avs_coap_udp_update_retry_state(&state));
+        ASSERT_FALSE(_avs_coap_udp_all_retries_sent(&state));
+        ASSERT_OK(_avs_coap_udp_update_retry_state(&ctx, &state));
         backoff_s *= 2;
         ASSERT_EQ(state.recv_timeout.seconds, backoff_s);
     }
-    ASSERT_TRUE(
-            _avs_coap_udp_all_retries_sent(&state, &DETERMINISTIC_TX_PARAMS));
-    avs_crypto_prng_free(&prng_ctx);
+    ASSERT_TRUE(_avs_coap_udp_all_retries_sent(&state));
+    avs_crypto_prng_free(&ctx.base.prng_ctx);
 }
 
 static void assert_tx_params_equal(const avs_coap_udp_tx_params_t *actual,
@@ -166,19 +166,16 @@ static inline double avg_factor(double factor) {
 }
 
 static avs_error_t
-fake_avs_coap_udp_initial_retry_state(const avs_coap_udp_tx_params_t *tx_params,
-                                      avs_crypto_prng_ctx_t *prng_ctx,
+fake_avs_coap_udp_initial_retry_state(avs_coap_udp_ctx_t *ctx,
                                       avs_coap_retry_state_t *out_retry_state) {
-    (void) prng_ctx;
-
-    if (!tx_params || !out_retry_state) {
+    if (!ctx || !out_retry_state) {
         return avs_errno(AVS_EINVAL);
     }
 
-    out_retry_state->retry_count = 0;
-    out_retry_state->recv_timeout =
-            avs_time_duration_fmul(tx_params->ack_timeout,
-                                   avg_factor(tx_params->ack_random_factor));
+    out_retry_state->retries_left = 0;
+    out_retry_state->recv_timeout = avs_time_duration_fmul(
+            ctx->tx_params.ack_timeout,
+            avg_factor(ctx->tx_params.ack_random_factor));
 
     return AVS_OK;
 }

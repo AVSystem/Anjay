@@ -129,6 +129,9 @@ if [ "$BREW_OPENSSL" ]; then
     EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DOPENSSL_ROOT_DIR=$BREW_OPENSSL"
 fi
 
+# sysctl for macOS, nproc for most of everything else, echo 1 as a last resort
+NPROC="$((nproc || sysctl -n hw.logicalcpu || echo 1) 2>/dev/null)"
+
 rm -f CMakeCache.txt
 rm -rf CMakeFiles
 ${CMAKE_COMMAND} \
@@ -151,7 +154,7 @@ ${CMAKE_COMMAND} \
     -D CMAKE_C_FLAGS="${C_FLAGS} ${EXTRA_C_FLAGS}" \
     -D CMAKE_CXX_FLAGS="${EXTRA_C_FLAGS}" \
     -D ANJAY_VERSION="${ANJAY_VERSION}" \
-    -D NPROC="$((3 * $(nproc)))" \
+    -D NPROC="$((3 * NPROC))" \
     "${EXTRA_FLAGS[@]}" \
     -H"$(dirname "$0")" -B. &&
 make clean

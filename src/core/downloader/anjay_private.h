@@ -43,6 +43,7 @@ typedef struct {
     anjay_download_finished_handler_t *on_download_finished;
     void *user_data;
 
+    bool administratively_suspended;
     // This download re-uses socket of the already existing connection.
     bool same_socket_download;
 } anjay_download_ctx_common_t;
@@ -55,8 +56,10 @@ _anjay_downloader_get_anjay(anjay_downloader_t *dl) {
 AVS_LIST(anjay_download_ctx_t) *
 _anjay_downloader_find_ctx_ptr_by_id(anjay_downloader_t *dl, uintptr_t id);
 
-void _anjay_downloader_abort_transfer(AVS_LIST(anjay_download_ctx_t) *ctx,
+void _anjay_downloader_abort_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr,
                                       anjay_download_status_t status);
+
+int _anjay_downloader_sched_reconnect_ctx(anjay_download_ctx_t *ctx);
 
 avs_error_t
 _anjay_downloader_call_on_next_block(anjay_download_ctx_common_t *ctx,

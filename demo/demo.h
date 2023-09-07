@@ -29,10 +29,6 @@
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
 #include "objects.h"
 
-typedef struct {
-    char data[1]; // actually a VLA, but struct cannot be empty
-} anjay_demo_string_t;
-
 typedef int anjay_demo_object_get_instances_t(const anjay_dm_object_def_t **,
                                               AVS_LIST(anjay_iid_t) *);
 typedef void anjay_demo_object_deleter_t(const anjay_dm_object_def_t **);
@@ -51,7 +47,7 @@ typedef void anjay_update_handler_t(anjay_t *anjay);
 struct anjay_demo_struct {
     anjay_t *anjay;
 
-    AVS_LIST(anjay_demo_string_t) allocated_strings;
+    AVS_LIST(anjay_demo_allocated_buffer_t) allocated_buffers;
     server_connection_args_t *connection_args;
 #ifdef AVS_COMMONS_STREAM_WITH_FILE
 #    ifdef ANJAY_WITH_ATTR_STORAGE
@@ -70,6 +66,11 @@ struct anjay_demo_struct {
     advanced_fw_update_logic_t
             advanced_fw_update_logic_table[FW_UPDATE_IID_IMAGE_SLOTS];
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+
+#ifdef WITH_DEMO_USE_STANDALONE_OBJECTS
+    const anjay_dm_object_def_t **security_obj_ptr;
+    const anjay_dm_object_def_t **server_obj_ptr;
+#endif // WITH_DEMO_USE_STANDALONE_OBJECTS
 
     AVS_LIST(anjay_demo_object_t) objects;
 

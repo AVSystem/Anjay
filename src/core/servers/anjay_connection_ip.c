@@ -25,6 +25,7 @@
 #define ANJAY_SERVERS_INTERNALS
 
 #include "anjay_connections_internal.h"
+#include "anjay_server_connections.h"
 #include "anjay_servers_internal.h"
 
 #ifdef ANJAY_TEST
@@ -141,7 +142,6 @@ static avs_error_t connect_socket(anjay_unlocked_t *anjay,
     if (strcmp(local_port, connection->nontransient_state.last_local_port)
             != 0) {
         strcpy(connection->nontransient_state.last_local_port, local_port);
-        // defined(ANJAY_WITH_CORE_PERSISTENCE)
     }
     return AVS_OK;
 }
@@ -149,8 +149,10 @@ static avs_error_t connect_socket(anjay_unlocked_t *anjay,
           || (defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)) */
 
 #if defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
-static int ensure_tcp_coap_context(anjay_unlocked_t *anjay,
-                                   anjay_server_connection_t *connection) {
+
+static int ensure_tcp_coap_context(anjay_connection_ref_t ref) {
+    anjay_unlocked_t *anjay = _anjay_from_server(ref.server);
+    anjay_server_connection_t *connection = _anjay_get_server_connection(ref);
     if (!connection->coap_ctx) {
         connection->coap_ctx = avs_coap_tcp_ctx_create(
                 _anjay_get_coap_sched(anjay), anjay->in_shared_buffer,
@@ -164,11 +166,14 @@ static int ensure_tcp_coap_context(anjay_unlocked_t *anjay,
 
     return 0;
 }
+
 #endif // defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
 
 #ifdef WITH_AVS_COAP_UDP
-static int ensure_udp_coap_context(anjay_unlocked_t *anjay,
-                                   anjay_server_connection_t *connection) {
+
+static int ensure_udp_coap_context(anjay_connection_ref_t ref) {
+    anjay_unlocked_t *anjay = _anjay_from_server(ref.server);
+    anjay_server_connection_t *connection = _anjay_get_server_connection(ref);
     if (!connection->coap_ctx) {
         connection->coap_ctx = avs_coap_udp_ctx_create(
                 _anjay_get_coap_sched(anjay), &anjay->udp_tx_params,
@@ -294,6 +299,7 @@ const anjay_connection_type_definition_t ANJAY_CONNECTION_DEF_UDP = {
     .ensure_coap_context = ensure_udp_coap_context,
     .connect_socket = connect_udp_socket
 };
+
 #endif // WITH_AVS_COAP_UDP
 
 #if defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)

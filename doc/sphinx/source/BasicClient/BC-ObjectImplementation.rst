@@ -133,7 +133,7 @@ case.
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/BC-ObjectImplementation/src/time_object.c
-    :emphasize-lines: 11
+    :emphasize-lines: 10
 
     static int instance_reset(anjay_t *anjay,
                               const anjay_dm_object_def_t *const *obj_ptr,
@@ -141,7 +141,6 @@ case.
         (void) anjay;
 
         time_object_t *obj = get_obj(obj_ptr);
-        assert(obj);
         time_instance_t *inst = find_instance(obj, iid);
         assert(inst);
 
@@ -192,7 +191,7 @@ We may use ``avs_time_real_now()`` to get the current time.
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/BC-ObjectImplementation/src/time_object.c
-    :emphasize-lines: 15-27
+    :emphasize-lines: 14-26
 
     static int resource_read(anjay_t *anjay,
                              const anjay_dm_object_def_t *const *obj_ptr,
@@ -203,7 +202,6 @@ We may use ``avs_time_real_now()`` to get the current time.
         (void) anjay;
 
         time_object_t *obj = get_obj(obj_ptr);
-        assert(obj);
         time_instance_t *inst = find_instance(obj, iid);
         assert(inst);
 
@@ -232,7 +230,7 @@ allowed only on Application Type resource.
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/BC-ObjectImplementation/src/time_object.c
-    :emphasize-lines: 15-18
+    :emphasize-lines: 14-17
 
     static int resource_write(anjay_t *anjay,
                               const anjay_dm_object_def_t *const *obj_ptr,
@@ -243,7 +241,6 @@ allowed only on Application Type resource.
         (void) anjay;
 
         time_object_t *obj = get_obj(obj_ptr);
-        assert(obj);
         time_instance_t *inst = find_instance(obj, iid);
         assert(inst);
 

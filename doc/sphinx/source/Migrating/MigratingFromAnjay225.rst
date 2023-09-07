@@ -203,65 +203,83 @@ If you are using ``avs_coap`` APIs directly (e.g. when communicating over raw
 CoAP protocol), please note that following breaking changes in the ``avs_coap``
 component:
 
-* In line with Anjay and ``avs_commons``, to improve file name uniqueness, the
-  ``avsystem/coap/config.h`` file has been renamed to
-  ``avsystem/coap/avs_coap_config.h``.
+avs_coap header rename
+^^^^^^^^^^^^^^^^^^^^^^
 
-*  Moreover, context creation functions now take an explicit PRNG context
-   argument:
+In line with Anjay and ``avs_commons``, to improve file name uniqueness, the
+``avsystem/coap/config.h`` file has been renamed to
+``avsystem/coap/avs_coap_config.h``.
 
-   * **UDP context creation**
+Context creation API change
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-     - **Old API:**
-       ::
+Context creation functions now take an explicit PRNG context argument:
 
-           avs_coap_ctx_t *
-           avs_coap_udp_ctx_create(avs_sched_t *sched,
-                                   const avs_coap_udp_tx_params_t *udp_tx_params,
-                                   avs_shared_buffer_t *in_buffer,
-                                   avs_shared_buffer_t *out_buffer,
-                                   avs_coap_udp_response_cache_t *cache);
+* **UDP context creation**
 
-     - **New API:**
+  - **Old API:**
+    ::
 
-       .. snippet-source:: deps/avs_coap/include_public/avsystem/coap/udp.h
-         :emphasize-lines: 7
+        avs_coap_ctx_t *
+        avs_coap_udp_ctx_create(avs_sched_t *sched,
+                                const avs_coap_udp_tx_params_t *udp_tx_params,
+                                avs_shared_buffer_t *in_buffer,
+                                avs_shared_buffer_t *out_buffer,
+                                avs_coap_udp_response_cache_t *cache);
 
-           avs_coap_ctx_t *
-           avs_coap_udp_ctx_create(avs_sched_t *sched,
-                                   const avs_coap_udp_tx_params_t *udp_tx_params,
-                                   avs_shared_buffer_t *in_buffer,
-                                   avs_shared_buffer_t *out_buffer,
-                                   avs_coap_udp_response_cache_t *cache,
-                                   avs_crypto_prng_ctx_t *prng_ctx);
+  - **New API:**
 
-   * **TCP context creation**
+    .. snippet-source:: deps/avs_coap/include_public/avsystem/coap/udp.h
+      :emphasize-lines: 7
 
-     - **Old API:**
-       ::
+        avs_coap_ctx_t *
+        avs_coap_udp_ctx_create(avs_sched_t *sched,
+                                const avs_coap_udp_tx_params_t *udp_tx_params,
+                                avs_shared_buffer_t *in_buffer,
+                                avs_shared_buffer_t *out_buffer,
+                                avs_coap_udp_response_cache_t *cache,
+                                avs_crypto_prng_ctx_t *prng_ctx);
 
-           avs_coap_ctx_t *avs_coap_tcp_ctx_create(avs_sched_t *sched,
-                                                   avs_shared_buffer_t *in_buffer,
-                                                   avs_shared_buffer_t *out_buffer,
-                                                   size_t max_opts_size,
-                                                   avs_time_duration_t request_timeout);
+* **TCP context creation**
 
-     - **New API:**
+  - **Old API:**
+    ::
 
-       .. snippet-source:: deps/avs_coap/include_public/avsystem/coap/tcp.h
-         :emphasize-lines: 6
+        avs_coap_ctx_t *avs_coap_tcp_ctx_create(avs_sched_t *sched,
+                                                avs_shared_buffer_t *in_buffer,
+                                                avs_shared_buffer_t *out_buffer,
+                                                size_t max_opts_size,
+                                                avs_time_duration_t request_timeout);
 
-           avs_coap_ctx_t *avs_coap_tcp_ctx_create(avs_sched_t *sched,
-                                                   avs_shared_buffer_t *in_buffer,
-                                                   avs_shared_buffer_t *out_buffer,
-                                                   size_t max_opts_size,
-                                                   avs_time_duration_t request_timeout,
-                                                   avs_crypto_prng_ctx_t *prng_ctx);
+  - **New API:**
+
+    .. snippet-source:: deps/avs_coap/include_public/avsystem/coap/tcp.h
+      :emphasize-lines: 6
+
+        avs_coap_ctx_t *avs_coap_tcp_ctx_create(avs_sched_t *sched,
+                                                avs_shared_buffer_t *in_buffer,
+                                                avs_shared_buffer_t *out_buffer,
+                                                size_t max_opts_size,
+                                                avs_time_duration_t request_timeout,
+                                                avs_crypto_prng_ctx_t *prng_ctx);
 
 .. note ::
 
     It is now **mandatory** to pass a non-NULL value as the ``prng_ctx``
     argument to the functions above.
+
+Changed flow of cancelling observations in case of errors
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+CoAP observations are implicitly cancelled if a notification bearing a 4.xx or
+5.xx error code is delivered, or if an attempt to deliver a notification times
+out.
+
+In Anjay 3.4.x and earlier, this cancellation (which involves calling the
+``avs_coap_observe_cancel_handler_t`` callback) was performed *before* calling
+the ``avs_coap_delivery_status_handler_t`` callback for the specific
+notification. Since Anjay 3.5.0, this order is reversed, so any code that relies
+on this logic may break.
 
 Changes in avs_commons
 ----------------------

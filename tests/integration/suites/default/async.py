@@ -27,6 +27,43 @@ class DmChangeDuringRegistration(test_suite.Lwm2mTest):
             Lwm2mCreated.matching(register)(location=self.DEFAULT_REGISTER_ENDPOINT))
 
 
+class NoDmChangeDuringRegistration(test_suite.Lwm2mSingleServerTest):
+    def setUp(self):
+        super().setUp(auto_register=False)
+
+    def runTest(self):
+        register1 = self.assertDemoRegisters(respond=False)
+
+        # This will schedule a reload, which should be a no-op
+        self.communicate('exit-offline')
+
+        register2 = self.assertDemoRegisters()
+        # assert that what we received is a retransmission, not a new register attempt
+        self.assertMsgEqual(register1, register2)
+
+
+class QueueModeChangeDuringRegistration(test_suite.Lwm2mSingleServerTest):
+    def setUp(self):
+        super().setUp(auto_register=False, maximum_version='1.1')
+
+    def runTest(self):
+        register1 = self.assertDemoRegisters(version='1.1', respond=False)
+
+        self.communicate('set-queue-mode-preference PREFER_QUEUE_MODE')
+        # This will schedule a reload
+        self.communicate('exit-offline')
+
+        register2 = self.assertDemoRegisters(version='1.1', respond=False, lwm2m11_queue_mode=True)
+        self.assertNotEqual(register1.token, register2.token)
+
+        # This will schedule another reload, which should be a no-op
+        self.communicate('exit-offline')
+
+        register3 = self.assertDemoRegisters(version='1.1', lwm2m11_queue_mode=True)
+        # assert that what we received is a retransmission, not a new register attempt
+        self.assertMsgEqual(register2, register3)
+
+
 class DmChangeDuringUpdate(test_suite.Lwm2mTest):
     def setUp(self):
         super().setUp(servers=2, num_servers_passed=1)

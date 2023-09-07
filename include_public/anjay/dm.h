@@ -19,6 +19,12 @@
 extern "C" {
 #endif
 
+#define ANJAY_DM_OID_SECURITY 0
+#define ANJAY_DM_OID_SERVER 1
+#define ANJAY_DM_OID_ACCESS_CONTROL 2
+#define ANJAY_DM_OID_DEVICE 3
+#define ANJAY_DM_OID_FIRMWARE_UPDATE 5
+
 typedef struct anjay_dm_object_def_struct anjay_dm_object_def_t;
 
 /** Values for the con attribute. */

@@ -409,6 +409,12 @@ avs_error_t _anjay_download_unlocked(anjay_unlocked_t *anjay,
 
 void _anjay_download_abort_unlocked(anjay_unlocked_t *anjay,
                                     anjay_download_handle_t handle);
+
+void _anjay_download_suspend_unlocked(anjay_unlocked_t *anjay,
+                                      anjay_download_handle_t dl_handle);
+
+int _anjay_download_reconnect_unlocked(anjay_unlocked_t *anjay,
+                                       anjay_download_handle_t dl_handle);
 #endif // ANJAY_WITH_DOWNLOADER
 
 bool _anjay_ongoing_registration_exists_unlocked(anjay_unlocked_t *anjay);

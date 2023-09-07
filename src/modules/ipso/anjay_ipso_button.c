@@ -82,7 +82,6 @@ static int ipso_button_list_instances(anjay_unlocked_t *anjay,
     (void) anjay;
 
     anjay_ipso_button_t *obj = get_obj(&obj_ptr);
-    assert(obj);
 
     for (anjay_iid_t iid = 0; iid < obj->num_instances; iid++) {
         if (obj->instances[iid].initialized) {
@@ -122,7 +121,6 @@ static int ipso_button_resource_read(anjay_unlocked_t *anjay,
     (void) riid;
 
     anjay_ipso_button_t *obj = get_obj(&obj_ptr);
-    assert(obj);
     assert(iid < obj->num_instances);
     anjay_ipso_button_instance_t *inst = &obj->instances[iid];
     assert(inst->initialized);
@@ -155,7 +153,6 @@ static int ipso_button_resource_write(anjay_unlocked_t *anjay,
     (void) riid;
 
     anjay_ipso_button_t *obj = get_obj(&obj_ptr);
-    assert(obj);
     assert(iid < obj->num_instances);
     anjay_ipso_button_instance_t *inst = &obj->instances[iid];
     assert(inst->initialized);

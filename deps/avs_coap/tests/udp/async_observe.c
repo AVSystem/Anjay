@@ -327,7 +327,6 @@ AVS_UNIT_TEST(udp_observe,
     };
 
     expect_send(&env, responses[1]);
-    expect_observe_cancel(&env, observe_id.token);
 
     avs_coap_exchange_id_t id;
     ASSERT_OK(avs_coap_notify_async(env.coap_ctx, &id, observe_id,
@@ -338,6 +337,7 @@ AVS_UNIT_TEST(udp_observe,
 
     expect_recv(&env, requests[1]);
     expect_observe_delivery(&env, AVS_OK);
+    expect_observe_cancel(&env, observe_id.token);
 
     expect_has_buffered_data_check(&env, false);
     ASSERT_OK(avs_coap_async_handle_incoming_packet(env.coap_ctx, NULL, NULL));

@@ -433,18 +433,16 @@ static void suspend_coap_transfer(anjay_download_ctx_t *ctx_) {
     }
 }
 
-static avs_error_t sched_download_resumption(anjay_coap_download_ctx_t *ctx) {
+static avs_error_t sched_start_download(anjay_coap_download_ctx_t *ctx) {
     anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(ctx->common.dl);
     if (AVS_SCHED_NOW(anjay->sched, &ctx->job_start, start_download_job,
                       &ctx->common.id, sizeof(ctx->common.id))) {
         dl_log(WARNING,
-               _("could not schedule resumption for download id "
-                 "= ") "%" PRIuPTR,
+               _("could not schedule download job for id = ") "%" PRIuPTR,
                ctx->common.id);
         return avs_errno(AVS_ENOMEM);
     }
-    dl_log(INFO, _("scheduling download ") "%" PRIuPTR _(" resumption"),
-           ctx->common.id);
+    dl_log(INFO, _("scheduling download ") "%" PRIuPTR, ctx->common.id);
     return AVS_OK;
 }
 
@@ -459,34 +457,28 @@ reconnect_coap_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
         // the Registration be sent even if NSTART=1.
         avs_coap_exchange_cancel(ctx->coap, ctx->exchange_id);
         assert(!avs_coap_exchange_id_valid(ctx->exchange_id));
-        return sched_download_resumption(ctx);
+        return sched_start_download(ctx);
     }
-    char hostname[ANJAY_MAX_URL_HOSTNAME_SIZE];
-    char port[ANJAY_MAX_URL_PORT_SIZE];
 
-    avs_error_t err;
-    if (avs_is_err((err = avs_net_socket_get_remote_hostname(
-                            ctx->socket, hostname, sizeof(hostname))))
-            || avs_is_err((err = avs_net_socket_get_remote_port(
-                                   ctx->socket, port, sizeof(port))))
-            || ((void) avs_net_socket_shutdown(ctx->socket), 0)
-            || ((void) avs_net_socket_close(ctx->socket), 0)
-            || avs_is_err((err = avs_net_socket_connect(ctx->socket, hostname,
-                                                        port)))) {
+    avs_net_socket_shutdown(ctx->socket);
+    avs_net_socket_close(ctx->socket);
+    avs_error_t err =
+            avs_net_socket_connect(ctx->socket, ctx->uri.host, ctx->uri.port);
+    if (avs_is_err(err)) {
         dl_log(WARNING,
-               _("could not reconnect socket for download id = ") "%" PRIuPTR,
+               _("could not connect socket for download id = ") "%" PRIuPTR,
                ctx->common.id);
         return err;
     } else {
         // A new DTLS session requires resetting the CoAP context.
         // If we manage to resume the session, we can simply continue sending
         // retransmissions as if nothing happened.
-        if (!_anjay_was_session_resumed(ctx->socket)
+        if ((!ctx->coap || !_anjay_was_session_resumed(ctx->socket))
                 && avs_is_err((err = reset_coap_ctx(ctx)))) {
             return err;
         }
         if (!avs_coap_exchange_id_valid(ctx->exchange_id)) {
-            return sched_download_resumption(ctx);
+            return sched_start_download(ctx);
         }
     }
     return AVS_OK;
@@ -634,11 +626,6 @@ _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
                                       })))) {
             anjay_log(ERROR, _("could not configure DANE TLSA record"));
             _anjay_socket_cleanup(anjay, &ctx->socket);
-        } else if (avs_is_err((err = avs_net_socket_connect(ctx->socket,
-                                                            ctx->uri.host,
-                                                            ctx->uri.port)))) {
-            dl_log(ERROR, _("could not connect CoAP socket"));
-            _anjay_socket_cleanup(anjay, &ctx->socket);
         }
         if (!ctx->socket) {
             assert(avs_is_err(err));
@@ -673,14 +660,8 @@ _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
     }
 #    endif // WITH_AVS_COAP_UDP
 
-    if (!ctx->common.same_socket_download
-            && avs_is_err((err = reset_coap_ctx(ctx)))) {
-        goto error;
-    }
-
-    if (AVS_SCHED_NOW(anjay->sched, &ctx->job_start, start_download_job,
-                      &ctx->common.id, sizeof(ctx->common.id))) {
-        dl_log(ERROR, _("could not schedule download job"));
+    if (_anjay_downloader_sched_reconnect_ctx((anjay_download_ctx_t *) ctx)) {
+        dl_log(ERROR, _("could not schedule download connect job"));
         err = avs_errno(AVS_ENOMEM);
         goto error;
     }

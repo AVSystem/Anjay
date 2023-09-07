@@ -405,11 +405,11 @@ static void print_help(const struct option *options) {
           "Configures preference of re-using existing LwM2M CoAP contexts for "
           "firmware download" },
         { 284, "NSTART", "1", "Configures NSTART (defined in RFC7252)" },
-#ifdef ANJAY_WITH_SEND
+#if defined(ANJAY_WITH_SEND) && defined(ANJAY_WITH_MODULE_FW_UPDATE)
         { 287, NULL, NULL,
           "Enables using LwM2M Send to report state and result of firmware "
           "update" },
-#endif // ANJAY_WITH_SEND
+#endif // defined(ANJAY_WITH_SEND) && defined(ANJAY_WITH_MODULE_FW_UPDATE)
 #ifdef ANJAY_WITH_LWM2M11
         { 288, "TRUST_STORE_PATH", NULL,
           "Path (file or directory) to use as the trust store for "
@@ -484,6 +484,27 @@ static void print_help(const struct option *options) {
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
         { 328, NULL, NULL,
           "Enter offline mode before starting the event loop." },
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
+        { 329, NULL, NULL,
+          "Start the Firmware Update downloads in suspended mode and resume "
+          "them just when they are requested. Useful for testing purposes "
+          "only." },
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+        { 330, NULL, NULL,
+          "Start the Advanced Firmware Update downloads in suspended mode and "
+          "resume them just in time. Useful for testing purposes only." },
+        { 331, "PSK identity", NULL,
+          "Download firmware over encrypted channels using PSK-mode encryption "
+          "with the specified identity (provided as hexlified string); this "
+          "argument is used by Advanced Firmware Update and must be used "
+          "together with --afu-psk-key" },
+        { 332, "PSK key", NULL,
+          "Download firmware over encrypted channels using PSK-mode encryption "
+          "with the specified key (provided as hexlified string); this "
+          "argument is used by Advanced Firmware Update and must be used "
+          "together with --afu-psk-identity" },
+#endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
     };
 
     const size_t screen_width = get_screen_width();
@@ -590,7 +611,10 @@ static int parse_double(const char *str, double *out_value) {
     return 0;
 }
 
-static int parse_hexstring(const char *str, uint8_t **out, size_t *out_size) {
+static int parse_hexstring(cmdline_args_t *cmdline_args,
+                           const char *str,
+                           uint8_t **out,
+                           size_t *out_size) {
     if (!str) {
         return -1;
     }
@@ -602,23 +626,26 @@ static int parse_hexstring(const char *str, uint8_t **out, size_t *out_size) {
     if (*out) {
         return -1;
     }
-    *out = (uint8_t *) avs_malloc(length / 2);
-    *out_size = 0;
-    if (!*out) {
+    AVS_LIST(anjay_demo_allocated_buffer_t) buffer = (AVS_LIST(
+            anjay_demo_allocated_buffer_t)) AVS_LIST_NEW_BUFFER(length / 2);
+    if (!buffer) {
         return -1;
     }
+    *out = (uint8_t *) buffer;
+    *out_size = 0;
     const char *curr = str;
     uint8_t *data = *out;
     while (*curr) {
         unsigned value;
         if (sscanf(curr, "%2x", &value) != 1 || (uint8_t) value != value) {
-            avs_free(*out);
+            AVS_LIST_DELETE(&buffer);
             return -1;
         }
         *data++ = (uint8_t) value;
         curr += 2;
     }
     *out_size = length / 2;
+    AVS_LIST_INSERT(&cmdline_args->allocated_buffers, buffer);
     return 0;
 }
 
@@ -663,8 +690,11 @@ static int clone_buffer(uint8_t **out,
     return 0;
 }
 
-static int
-load_buffer_from_file(uint8_t **out, size_t *out_size, const char *filename) {
+static int load_buffer_from_file(cmdline_args_t *cmdline_args,
+                                 uint8_t **out,
+                                 size_t *out_size,
+                                 const char *filename) {
+    AVS_LIST(anjay_demo_allocated_buffer_t) buffer = NULL;
     FILE *f = fopen(filename, "rb");
     if (!f) {
         return -1;
@@ -681,16 +711,21 @@ load_buffer_from_file(uint8_t **out, size_t *out_size, const char *filename) {
     if (!(*out_size = (size_t) size)) {
         *out = NULL;
     } else {
-        if (!(*out = (uint8_t *) avs_malloc(*out_size))) {
+        if (!(buffer = (AVS_LIST(anjay_demo_allocated_buffer_t))
+                      AVS_LIST_NEW_BUFFER(*out_size))) {
             goto finish;
         }
+        *out = (uint8_t *) buffer;
         if (fread(*out, *out_size, 1, f) != 1) {
-            avs_free(*out);
+            AVS_LIST_DELETE(&buffer);
             *out = NULL;
             goto finish;
         }
     }
     result = 0;
+    if (buffer) {
+        AVS_LIST_INSERT(&cmdline_args->allocated_buffers, buffer);
+    }
 finish:
     fclose(f);
     return result;
@@ -830,13 +865,21 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "afu-marker-path",               required_argument, 0, 323 },
 #   endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
         { "afu-cert-file",                 required_argument, 0, 324 },
-       { "delayed-afu-result",            required_argument, 0, 325 },
+        { "delayed-afu-result",            required_argument, 0, 325 },
 #   if defined(ANJAY_WITH_SEND)
-       { "afu-use-send",                  no_argument,       0, 326 },
+        { "afu-use-send",                  no_argument,       0, 326 },
 #   endif // defined(ANJAY_WITH_SEND)
-       { "afu-ack-timeout",               required_argument, 0, 327 },
+        { "afu-ack-timeout",               required_argument, 0, 327 },
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
-        { "start-offline",                   no_argument,     0, 328 },
+        { "start-offline",                 no_argument,       0, 328 },
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
+        { "fw-auto-suspend",               no_argument,       0, 329 },
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+        { "afu-auto-suspend",              no_argument,       0, 330 },
+        { "afu-psk-identity",              required_argument, 0, 331 },
+        { "afu-psk-key",                   required_argument, 0, 332 },
+#endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
         { 0, 0, 0, 0 }
         // clang-format on
     };
@@ -988,7 +1031,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             break;
         }
         case 'i':
-            if (parse_hexstring(optarg,
+            if (parse_hexstring(parsed_args, optarg,
                                 &parsed_args->connection_args
                                          .public_cert_or_psk_identity,
                                 &parsed_args->connection_args
@@ -1002,7 +1045,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             break;
         case 'k':
             if (parse_hexstring(
-                        optarg,
+                        parsed_args, optarg,
                         &parsed_args->connection_args.private_cert_or_psk_key,
                         &parsed_args->connection_args
                                  .private_cert_or_psk_key_size)) {
@@ -1197,7 +1240,8 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             }
             uint8_t *identity_buf = NULL;
             size_t identity_size = 0;
-            if (parse_hexstring(optarg, &identity_buf, &identity_size)) {
+            if (parse_hexstring(parsed_args, optarg, &identity_buf,
+                                &identity_size)) {
                 demo_log(ERROR, "Invalid PSK identity for firmware upgrade");
                 goto finish;
             }
@@ -1223,7 +1267,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             }
             uint8_t *psk_buf = NULL;
             size_t psk_size = 0;
-            if (parse_hexstring(optarg, &psk_buf, &psk_size)) {
+            if (parse_hexstring(parsed_args, optarg, &psk_buf, &psk_size)) {
                 demo_log(ERROR, "Invalid pre-shared key for firmware upgrade");
                 goto finish;
             }
@@ -1421,11 +1465,11 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                 goto finish;
             }
             break;
-#ifdef ANJAY_WITH_SEND
+#if defined(ANJAY_WITH_SEND) && defined(ANJAY_WITH_MODULE_FW_UPDATE)
         case 287:
             parsed_args->fw_update_use_send = true;
             break;
-#endif // ANJAY_WITH_SEND
+#endif // defined(ANJAY_WITH_SEND) && defined(ANJAY_WITH_MODULE_FW_UPDATE)
 #ifdef ANJAY_WITH_LWM2M11
         case 288:
             parsed_args->pkix_trust_store = optarg;
@@ -1527,7 +1571,12 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
 #    endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
            // defined(AVS_COMMONS_STREAM_WITH_FILE)
         case 324: {
-
+            if (parsed_args->advanced_fw_security_info.mode
+                    != (avs_net_security_mode_t) -1) {
+                demo_log(ERROR, "Multiple incompatible security information "
+                                "specified for advanced firmware upgrade");
+                goto finish;
+            }
             const avs_net_certificate_info_t cert_info = {
                 .server_cert_validation = true,
                 .trusted_certs =
@@ -1570,6 +1619,77 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         case 328:
             parsed_args->start_offline = true;
             break;
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
+        case 329:
+            parsed_args->fw_update_auto_suspend = true;
+            break;
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+        case 330:
+            parsed_args->advanced_fw_update_auto_suspend = true;
+            break;
+        case 331: {
+            if (parsed_args->advanced_fw_security_info.mode
+                            != AVS_NET_SECURITY_PSK
+                    && parsed_args->advanced_fw_security_info.mode
+                                   != (avs_net_security_mode_t) -1) {
+                demo_log(ERROR, "Multiple incompatible security information "
+                                "specified for advanced firmware upgrade");
+                goto finish;
+            }
+            if (parsed_args->advanced_fw_security_info.mode
+                            == AVS_NET_SECURITY_PSK
+                    && parsed_args->advanced_fw_security_info.data.psk.identity
+                                       .desc.source
+                                   != AVS_CRYPTO_DATA_SOURCE_EMPTY) {
+                demo_log(ERROR, "--afu-psk-identity specified more than once");
+                goto finish;
+            }
+            uint8_t *identity_buf = NULL;
+            size_t identity_size = 0;
+            if (parse_hexstring(parsed_args, optarg, &identity_buf,
+                                &identity_size)) {
+                demo_log(ERROR,
+                         "Invalid PSK identity for advanced firmware upgrade");
+                goto finish;
+            }
+            parsed_args->advanced_fw_security_info.mode = AVS_NET_SECURITY_PSK;
+            parsed_args->advanced_fw_security_info.data.psk.identity =
+                    avs_crypto_psk_identity_info_from_buffer(identity_buf,
+                                                             identity_size);
+            break;
+        }
+        case 332: {
+            if (parsed_args->advanced_fw_security_info.mode
+                            != AVS_NET_SECURITY_PSK
+                    && parsed_args->advanced_fw_security_info.mode
+                                   != (avs_net_security_mode_t) -1) {
+                demo_log(ERROR, "Multiple incompatible security information "
+                                "specified for advanced firmware upgrade");
+                goto finish;
+            }
+            if (parsed_args->advanced_fw_security_info.mode
+                            == AVS_NET_SECURITY_PSK
+                    && parsed_args->advanced_fw_security_info.data.psk.key.desc
+                                       .source
+                                   != AVS_CRYPTO_DATA_SOURCE_EMPTY) {
+                demo_log(ERROR, "--afu-psk-key specified more than once");
+                goto finish;
+            }
+            uint8_t *psk_buf = NULL;
+            size_t psk_size = 0;
+            if (parse_hexstring(parsed_args, optarg, &psk_buf, &psk_size)) {
+                demo_log(
+                        ERROR,
+                        "Invalid pre-shared key for advanced firmware upgrade");
+                goto finish;
+            }
+            parsed_args->advanced_fw_security_info.mode = AVS_NET_SECURITY_PSK;
+            parsed_args->advanced_fw_security_info.data.psk.key =
+                    avs_crypto_psk_key_info_from_buffer(psk_buf, psk_size);
+            break;
+        }
+#endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
         case 0:
             goto process;
         }
@@ -1671,6 +1791,7 @@ process:
 #endif // ANJAY_WITH_SECURITY_STRUCTURED
             {
                 if (load_buffer_from_file(
+                            parsed_args,
                             &parsed_args->connection_args
                                      .public_cert_or_psk_identity,
                             &parsed_args->connection_args
@@ -1681,6 +1802,7 @@ process:
                     retval = -1;
                 }
                 if (load_buffer_from_file(
+                            parsed_args,
                             &parsed_args->connection_args
                                      .private_cert_or_psk_key,
                             &parsed_args->connection_args
@@ -1711,6 +1833,7 @@ process:
 #endif // ANJAY_WITH_SECURITY_STRUCTURED
         if (server_public_key_path
                 && load_buffer_from_file(
+                           parsed_args,
                            &parsed_args->connection_args.server_public_key,
                            &parsed_args->connection_args.server_public_key_size,
                            server_public_key_path)) {
@@ -1732,6 +1855,7 @@ process:
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
 finish:
     if (retval) {
+        AVS_LIST_CLEAR(&parsed_args->allocated_buffers);
 #ifdef ANJAY_WITH_MODULE_ACCESS_CONTROL
         AVS_LIST_CLEAR(&parsed_args->access_entries);
 #endif // ANJAY_WITH_MODULE_ACCESS_CONTROL

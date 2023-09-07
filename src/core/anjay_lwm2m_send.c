@@ -195,12 +195,19 @@ static void response_handler(avs_coap_ctx_t *ctx,
                              const avs_coap_client_async_response_t *response,
                              avs_error_t err,
                              void *entry_) {
-    (void) ctx;
-    (void) exchange_id;
-    (void) err;
     anjay_send_entry_t *entry = (anjay_send_entry_t *) entry_;
     assert(entry);
     assert(avs_coap_exchange_id_equal(exchange_id, entry->exchange_status.id));
+    if (avs_is_ok(err)) {
+        anjay_server_info_t *server =
+                _anjay_servers_find_active(entry->anjay, entry->target_ssid);
+        if (server) {
+            _anjay_connection_mark_stable((anjay_connection_ref_t) {
+                .server = server,
+                .conn_type = ANJAY_CONNECTION_PRIMARY
+            });
+        }
+    }
     if (entry->finished_handler) {
         static const int STATE_TO_RESULT[] = {
             [AVS_COAP_CLIENT_REQUEST_OK] = ANJAY_SEND_SUCCESS,

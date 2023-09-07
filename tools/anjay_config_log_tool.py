@@ -37,8 +37,9 @@ def enumerate_variables(config_files):
     def emit(config_file, name, value):
         if name in result:
             assert name in origins
-            raise ValueError(
-                'Variable %s from %s duplicates one from %s' % (name, config_file, origins[name]))
+            if result[name] != value:
+                raise ValueError('Variable %s from %s conflicts with one from %s' % (
+                    name, config_file, origins[name]))
         result[name] = value
         origins[name] = config_file
 

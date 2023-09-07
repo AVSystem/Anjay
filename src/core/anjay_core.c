@@ -47,7 +47,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "3.4.1"
+#    define ANJAY_VERSION "3.5.0"
 #endif // ANJAY_VERSION
 
 #ifdef ANJAY_WITH_LWM2M11
@@ -176,8 +176,10 @@ static int init_anjay(anjay_unlocked_t *anjay,
 
 #ifdef ANJAY_WITH_LWM2M11
     anjay->queue_mode_preference = ANJAY_PREFER_ONLINE_MODE;
+#endif // ANJAY_WITH_LWM2M11
 
-#    ifdef WITH_AVS_COAP_TCP
+#ifdef WITH_AVS_COAP_TCP
+#    if defined(ANJAY_WITH_LWM2M11) || defined(ANJAY_WITH_COAP_DOWNLOAD)
     // completely arbitrary default value
     static const size_t ANJAY_DEFAULT_COAP_TCP_MAX_OPTIONS_SIZE = 128;
     if (config->coap_tcp_max_options_size == 0) {
@@ -199,8 +201,8 @@ static int init_anjay(anjay_unlocked_t *anjay,
                 ANJAY_DEFAULT_COAP_TCP_REQUEST_TIMEOUT;
     }
     anjay->tcp_exchange_timeout = AVS_COAP_DEFAULT_EXCHANGE_MAX_TIME;
-#    endif // WITH_AVS_COAP_TCP
-#endif     // ANJAY_WITH_LWM2M11
+#    endif // defined(ANJAY_WITH_LWM2M11) || defined(ANJAY_WITH_COAP_DOWNLOAD)
+#endif     // WITH_AVS_COAP_TCP
 
     anjay->in_shared_buffer = avs_shared_buffer_new(config->in_buffer_size);
     if (!anjay->in_shared_buffer) {
@@ -1151,7 +1153,7 @@ avs_error_t anjay_download(anjay_t *anjay_locked,
     (void) anjay_locked;
     (void) config;
     (void) out_handle;
-    anjay_log(ERROR, _("CoAP download support disabled"));
+    anjay_log(ERROR, _("Download support disabled"));
     return avs_errno(AVS_ENOTSUP);
 #endif // ANJAY_WITH_DOWNLOADER
 }
@@ -1171,7 +1173,7 @@ anjay_download_set_next_block_offset(anjay_t *anjay_locked,
     (void) anjay_locked;
     (void) dl_handle;
     (void) next_block_offset;
-    anjay_log(ERROR, _("CoAP download support disabled"));
+    anjay_log(ERROR, _("Download support disabled"));
     return avs_errno(AVS_ENOTSUP);
 #endif // ANJAY_WITH_DOWNLOADER
 }
@@ -1180,6 +1182,17 @@ anjay_download_set_next_block_offset(anjay_t *anjay_locked,
 void _anjay_download_abort_unlocked(anjay_unlocked_t *anjay,
                                     anjay_download_handle_t handle) {
     _anjay_downloader_abort(&anjay->downloader, handle);
+}
+
+void _anjay_download_suspend_unlocked(anjay_unlocked_t *anjay,
+                                      anjay_download_handle_t handle) {
+    _anjay_downloader_suspend(&anjay->downloader, handle);
+}
+
+int _anjay_download_reconnect_unlocked(anjay_unlocked_t *anjay,
+                                       anjay_download_handle_t handle) {
+    return _anjay_downloader_sched_reconnect_by_handle(&anjay->downloader,
+                                                       handle);
 }
 #endif // ANJAY_WITH_DOWNLOADER
 
@@ -1192,8 +1205,37 @@ void anjay_download_abort(anjay_t *anjay_locked,
 #else  // ANJAY_WITH_DOWNLOADER
     (void) anjay_locked;
     (void) handle;
-    anjay_log(ERROR, _("CoAP download support disabled"));
+    anjay_log(ERROR, _("Download support disabled"));
 #endif // ANJAY_WITH_DOWNLOADER
+}
+
+void anjay_download_suspend(anjay_t *anjay_locked,
+                            anjay_download_handle_t handle) {
+#ifdef ANJAY_WITH_DOWNLOADER
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    _anjay_downloader_suspend(&anjay->downloader, handle);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+#else  // ANJAY_WITH_DOWNLOADER
+    (void) anjay_locked;
+    (void) handle;
+    anjay_log(ERROR, _("Download support disabled"));
+#endif // ANJAY_WITH_DOWNLOADER
+}
+
+int anjay_download_reconnect(anjay_t *anjay_locked,
+                             anjay_download_handle_t handle) {
+    int result = -1;
+#ifdef ANJAY_WITH_DOWNLOADER
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    result = _anjay_downloader_sched_reconnect_by_handle(&anjay->downloader,
+                                                         handle);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+#else  // ANJAY_WITH_DOWNLOADER
+    (void) anjay_locked;
+    (void) handle;
+    anjay_log(ERROR, _("Download support disabled"));
+#endif // ANJAY_WITH_DOWNLOADER
+    return result;
 }
 
 #ifdef ANJAY_WITH_LWM2M11
@@ -1207,7 +1249,6 @@ int anjay_set_queue_mode_preference(anjay_t *anjay_locked,
     case ANJAY_PREFER_ONLINE_MODE:
     case ANJAY_FORCE_ONLINE_MODE:
         anjay->queue_mode_preference = preference;
-        // defined(ANJAY_WITH_CORE_PERSISTENCE)
         result = 0;
     }
     if (result) {

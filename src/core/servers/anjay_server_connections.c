@@ -256,8 +256,6 @@ static int read_server_sni(anjay_unlocked_t *anjay,
 void _anjay_active_server_refresh(anjay_server_info_t *server) {
     anjay_log(TRACE, _("refreshing SSID ") "%u", server->ssid);
 
-    // defined(ANJAY_WITH_TELIT_CUSTOM_FEATURES)
-
     // Refreshed server is not deemed explicitly disabled anymore
     server->disabled_explicitly = false;
 

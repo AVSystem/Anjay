@@ -99,15 +99,28 @@ class ResultStream:
 
 
 class PrettyTestResult(unittest.TestResult):
-    def __init__(self, suite, stream, logfile_stream, colorize=False):
+    def __init__(self, suite, stream, logdir, colorize=False):
         unittest.TestResult.__init__(self)
         self.suite = suite
         self.stream = stream
-        self.logfile = logfile_stream
+        self.logdir = logdir
+        self.logfile = None
         self.times = {}
         self.successes = []
 
+    def createLogFile(self, test):
+        self.finishLogFile()
+        f = open(os.path.join(self.logdir, f"{get_test_name(test)}.log"), 'w')
+        self.logfile = ResultStream(f)
+
+    def finishLogFile(self):
+        if getattr(self, 'logfile', None) is not None:
+            self.logfile.stream.close()
+            self.logfile = None
+
     def startTest(self, test):
+        self.createLogFile(test)
+
         self.logfile.write_test_name(get_test_name(test))
         self.stream.write_test_name(get_test_name(test))
 
@@ -172,14 +185,17 @@ class PrettyTestRunner(unittest.TextTestRunner):
         self.results = []
         self.config = config
 
-    def run(self, suite, logfile):
+    def run(self, suite, logdir):
         "Run given test suite."
-        result = PrettyTestResult(suite, self.stream, ResultStream(logfile))
+        result = PrettyTestResult(suite, self.stream, logdir)
 
         suite_name = get_suite_name(suite)
         self.stream.write_suite_name(suite_name)
 
-        suite(result)
+        try:
+            suite(result)
+        finally:
+            result.finishLogFile()
         self.results.append(result)
 
         self.stream.write_suite_result(suite_name, result)

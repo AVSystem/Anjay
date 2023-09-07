@@ -113,7 +113,8 @@ static inline test_env_t test_setup_without_socket(void) {
     });
 }
 
-static inline test_env_t test_setup_with_external_buffers_without_mock_clock(
+static inline test_env_t
+test_setup_with_external_buffers_without_mock_clock_and_peer_csm(
         avs_shared_buffer_t *inbuf, avs_shared_buffer_t *outbuf) {
     reset_token_generator();
 
@@ -134,9 +135,6 @@ static inline test_env_t test_setup_with_external_buffers_without_mock_clock(
                                      MAX_MESSAGE_SIZE(SIZE_MAX));
     avs_unit_mocksock_expect_output(socket, csm->data, csm->size);
 
-    const test_msg_t *peer_csm = COAP_MSG(CSM);
-    avs_unit_mocksock_input(socket, peer_csm->data, peer_csm->size);
-
     test_env_t env = test_setup_from_args(&(const test_env_args_t) {
         .mocksock = socket,
         .inbuf = inbuf,
@@ -145,6 +143,22 @@ static inline test_env_t test_setup_with_external_buffers_without_mock_clock(
 
     ASSERT_NOT_NULL(env.coap_ctx);
     ASSERT_OK(avs_coap_ctx_set_socket(env.coap_ctx, socket));
+
+    return env;
+}
+
+static inline test_env_t test_setup_with_external_buffers_without_mock_clock(
+        avs_shared_buffer_t *inbuf, avs_shared_buffer_t *outbuf) {
+    test_env_t env =
+            test_setup_with_external_buffers_without_mock_clock_and_peer_csm(
+                    inbuf, outbuf);
+    ASSERT_NOT_NULL(env.coap_ctx);
+
+    const test_msg_t *peer_csm = COAP_MSG(CSM);
+    avs_unit_mocksock_input(env.mocksock, peer_csm->data, peer_csm->size);
+    expect_has_buffered_data_check(&env, false);
+    ASSERT_OK(avs_coap_async_handle_incoming_packet(env.coap_ctx, NULL, NULL));
+
     return env;
 }
 

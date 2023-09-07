@@ -152,6 +152,18 @@ static avs_error_t handle_cached_msg(avs_coap_tcp_ctx_t *ctx,
         AVS_COAP_TOKEN_HEX(&ctx->cached_msg.content.token),
         (unsigned) ctx->cached_msg.content.payload_size);
 
+    if (_avs_coap_code_is_signaling_message(code)
+            && (!avs_time_monotonic_valid(ctx->peer_csm.recv_deadline)
+                || msg->content.code == AVS_COAP_CODE_CSM)) {
+        return _avs_coap_tcp_handle_signaling_message(ctx, &ctx->peer_csm,
+                                                      &msg->content);
+    }
+
+    if (avs_time_monotonic_valid(ctx->peer_csm.recv_deadline)) {
+        LOG(DEBUG, _("CSM not received as the first message on connection"));
+        return _avs_coap_err(AVS_COAP_ERR_TCP_CSM_NOT_RECEIVED);
+    }
+
     if (avs_coap_code_is_request(code)) {
         if (out_request && !msg->ignore_request) {
             AVS_ASSERT(msg->content.payload_offset + msg->content.payload_size
@@ -163,9 +175,6 @@ static avs_error_t handle_cached_msg(avs_coap_tcp_ctx_t *ctx,
     } else if (avs_coap_code_is_response(code)) {
         handle_response(ctx, msg);
         return AVS_OK;
-    } else if (_avs_coap_code_is_signaling_message(code)) {
-        return _avs_coap_tcp_handle_signaling_message(ctx, &ctx->peer_csm,
-                                                      &msg->content);
     } else if (code == AVS_COAP_CODE_EMPTY) {
         // "Empty messages (Code 0.00) can always be sent and MUST be ignored by
         //  the recipient. This provides a basic keepalive function that can
@@ -248,10 +257,12 @@ static void finish_message_handling(avs_coap_tcp_ctx_t *ctx) {
 }
 
 static inline void send_abort(avs_coap_tcp_ctx_t *ctx) {
-    ctx->aborted = true;
-    (void) send_simple_msg(ctx, AVS_COAP_CODE_ABORT,
-                           &ctx->cached_msg.content.token,
-                           GET_DIAGNOSTIC_MESSAGE(ctx));
+    if (!ctx->aborted) {
+        ctx->aborted = true;
+        (void) send_simple_msg(ctx, AVS_COAP_CODE_ABORT,
+                               &ctx->cached_msg.content.token,
+                               GET_DIAGNOSTIC_MESSAGE(ctx));
+    }
 }
 
 static void coap_tcp_cleanup(avs_coap_ctx_t *ctx_) {
@@ -338,13 +349,13 @@ coap_tcp_send_message(avs_coap_ctx_t *ctx_,
 
     AVS_LIST(avs_coap_tcp_pending_request_t) *req = NULL;
     if (send_result_handler && avs_coap_code_is_request(msg->code)) {
-        req = _avs_coap_tcp_create_pending_request(ctx,
-                                                   &ctx->pending_requests,
-                                                   &msg->token,
-                                                   send_result_handler,
-                                                   send_result_handler_arg);
-        if (!req) {
-            return avs_errno(AVS_ENOMEM);
+        avs_error_t err =
+                _avs_coap_tcp_create_pending_request(ctx, &req, &msg->token,
+                                                     send_result_handler,
+                                                     send_result_handler_arg);
+        assert(avs_is_ok(err) == !!req);
+        if (avs_is_err(err)) {
+            return err;
         }
     } else if (avs_coap_code_is_response(msg->code)) {
         // Response may be sent before receiving the entire request, don't pass
@@ -791,63 +802,30 @@ coap_tcp_receive_message(avs_coap_ctx_t *ctx_,
     return avs_is_ok(err) ? restore_err : err;
 }
 
-static avs_time_monotonic_t coap_tcp_on_timeout(avs_coap_ctx_t *ctx_) {
-    return _avs_coap_tcp_fail_expired_pending_requests(
-            (avs_coap_tcp_ctx_t *) ctx_);
+static void update_timeout(avs_time_monotonic_t *result_ptr,
+                           avs_time_monotonic_t candidate) {
+    if (!avs_time_monotonic_valid(*result_ptr)
+            || avs_time_monotonic_before(candidate, *result_ptr)) {
+        *result_ptr = candidate;
+    }
 }
 
-static avs_error_t receive_csm(avs_coap_tcp_ctx_t *ctx) {
-    const avs_time_monotonic_t start = avs_time_monotonic_now();
-
-    avs_time_duration_t timeout;
-    avs_error_t err = get_recv_timeout(ctx->base.socket, &timeout);
-    if (avs_is_err(err)) {
-        return err;
-    }
-
-    do {
-        const avs_time_monotonic_t now = avs_time_monotonic_now();
-        const avs_time_duration_t time_passed =
-                avs_time_monotonic_diff(now, start);
-        const avs_time_duration_t new_timeout =
-                avs_time_duration_diff(ctx->request_timeout, time_passed);
-        if (avs_time_duration_less(new_timeout, AVS_TIME_DURATION_ZERO)) {
-            LOG(ERROR, _("timeout reached while receiving CSM"));
-            err = _avs_coap_err(AVS_COAP_ERR_TIMEOUT);
-            break;
+static avs_time_monotonic_t coap_tcp_on_timeout(avs_coap_ctx_t *ctx_) {
+    avs_coap_tcp_ctx_t *ctx = (avs_coap_tcp_ctx_t *) ctx_;
+    avs_time_monotonic_t result = AVS_TIME_MONOTONIC_INVALID;
+    if (avs_coap_ctx_has_socket(ctx_)
+            && avs_time_monotonic_valid(ctx->peer_csm.recv_deadline)) {
+        if (avs_time_monotonic_before(avs_time_monotonic_now(),
+                                      ctx->peer_csm.recv_deadline)) {
+            update_timeout(&result, ctx->peer_csm.recv_deadline);
+        } else {
+            LOG(ERROR, _("CSM not received within timeout"));
+            SET_DIAGNOSTIC_MESSAGE(ctx, "CSM not received within timeout");
+            send_abort(ctx);
         }
-
-        if (avs_is_err(
-                    (err = set_recv_timeout(ctx->base.socket, new_timeout)))) {
-            break;
-        }
-
-        // Used to receive possible chunks of payload, which are ignored anyway.
-        uint8_t temp[16];
-        err = receive_and_handle_message(ctx, temp, sizeof(temp), NULL);
-    } while (avs_is_ok(err) && ctx->cached_msg.remaining_bytes);
-
-    if (avs_is_err(err)) {
-        return err;
-    } else if (!ctx->peer_csm.received) {
-        return _avs_coap_err(AVS_COAP_ERR_TCP_CSM_NOT_RECEIVED);
     }
-
-    AVS_ASSERT(ctx->cached_msg.remaining_bytes == 0
-                       && ctx->cached_msg.remaining_header_bytes == 0,
-               "bug: message seems to be unfinished after handling CSM");
-    finish_message_handling(ctx);
-    AVS_ASSERT(avs_buffer_data_size(ctx->opt_cache.buffer) == 0,
-               "bug: data in buffer after finishing message handling");
-    AVS_ASSERT(ctx->opt_cache.state
-                       == AVS_COAP_TCP_OPT_CACHE_STATE_RECEIVING_HEADER,
-               "bug: invalid state after handling CSM");
-
-    if (avs_is_err((err = set_recv_timeout(ctx->base.socket, timeout)))) {
-        return err;
-    }
-
-    return AVS_OK;
+    update_timeout(&result, _avs_coap_tcp_fail_expired_pending_requests(ctx));
+    return result;
 }
 
 static avs_error_t send_csm(avs_coap_tcp_ctx_t *ctx) {
@@ -889,12 +867,17 @@ static avs_error_t coap_tcp_setsock(avs_coap_ctx_t *ctx_,
         return err;
     }
 
-    if (avs_is_err((err = send_csm(ctx)))
-            || avs_is_err((err = receive_csm(ctx)))) {
-        SET_DIAGNOSTIC_MESSAGE(ctx, "failed to send/receive CSM");
+    ctx->peer_csm.recv_deadline = AVS_TIME_MONOTONIC_INVALID;
+    err = avs_errno(AVS_EOVERFLOW);
+    if (_avs_coap_tcp_update_recv_deadline(ctx, &ctx->peer_csm.recv_deadline)
+            || !avs_time_monotonic_valid(ctx->peer_csm.recv_deadline)
+            || avs_is_err((err = send_csm(ctx)))) {
+        SET_DIAGNOSTIC_MESSAGE(ctx, "failed to send CSM");
         send_abort(ctx);
         return err;
     }
+    _avs_coap_reschedule_retry_or_request_expired_job(
+            ctx_, ctx->peer_csm.recv_deadline);
     return AVS_OK;
 }
 
@@ -968,6 +951,7 @@ avs_coap_ctx_t *avs_coap_tcp_ctx_create(avs_sched_t *sched,
                         out_buffer, sched, prng_ctx);
 
     ctx->vtable = &COAP_TCP_VTABLE;
+    ctx->peer_csm.recv_deadline = avs_time_monotonic_now();
     ctx->peer_csm.max_message_size = CSM_MAX_MESSAGE_SIZE_BASE_VALUE;
     ctx->request_timeout = request_timeout;
 

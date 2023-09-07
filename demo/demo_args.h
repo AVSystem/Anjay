@@ -61,7 +61,8 @@ typedef struct cmdline_args {
 #    ifdef ANJAY_WITH_SEND
     bool fw_update_use_send;
 #    endif // ANJAY_WITH_SEND
-#endif     // ANJAY_WITH_MODULE_FW_UPDATE
+    bool fw_update_auto_suspend;
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
 #ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
     const char *advanced_fw_updated_marker_path;
     avs_net_security_info_t advanced_fw_security_info;
@@ -77,6 +78,7 @@ typedef struct cmdline_args {
 #    ifdef ANJAY_WITH_SEND
     bool advanced_fw_update_use_send;
 #    endif // ANJAY_WITH_SEND
+    bool advanced_fw_update_auto_suspend;
     /**
      * This is a file path to file with original image. After additional
      * image is downloaded, update can be performed. Updating additional
@@ -146,6 +148,8 @@ typedef struct cmdline_args {
 #if defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
     avs_time_duration_t tcp_request_timeout;
 #endif // defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+
+    AVS_LIST(anjay_demo_allocated_buffer_t) allocated_buffers;
 } cmdline_args_t;
 
 int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char **argv);

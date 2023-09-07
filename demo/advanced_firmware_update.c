@@ -732,6 +732,9 @@ int fw_update_common_write(anjay_iid_t iid,
 static int stream_finish(anjay_iid_t iid, void *fw_) {
     advanced_fw_update_logic_t *fw_table = (advanced_fw_update_logic_t *) fw_;
     advanced_fw_update_logic_t *fw = &fw_table[iid];
+    if (fw->auto_suspend) {
+        anjay_advanced_fw_update_pull_suspend(fw->anjay);
+    }
     if (!fw->stream) {
         demo_log(ERROR, "stream not open");
         return -1;
@@ -937,6 +940,9 @@ void fw_update_common_reset(anjay_iid_t iid, void *fw_) {
                     conflicting_instances_count);
         }
     }
+    if (fw->auto_suspend) {
+        anjay_advanced_fw_update_pull_suspend(fw->anjay);
+    }
 }
 
 int fw_update_common_perform_upgrade(
@@ -1056,12 +1062,11 @@ int advanced_firmware_update_install(
         const avs_coap_udp_tx_params_t *tx_params,
         anjay_advanced_fw_update_result_t delayed_result,
         bool prefer_same_socket_downloads,
-        const char *original_img_file_path
+        const char *original_img_file_path,
 #ifdef ANJAY_WITH_SEND
-        ,
-        bool use_lwm2m_send
+        bool use_lwm2m_send,
 #endif // ANJAY_WITH_SEND
-) {
+        bool auto_suspend) {
     advanced_fw_update_logic_t *fw_logic_app = NULL;
     int result = -1;
 
@@ -1167,7 +1172,8 @@ int advanced_firmware_update_install(
             maybe_delete_firmware_file(fw_logic_app);
         }
         result = advanced_firmware_update_application_install(
-                anjay, fw_table, &state, security_info, tx_params);
+                anjay, fw_table, &state, security_info, tx_params,
+                auto_suspend);
         if (result) {
             demo_log(ERROR, "AFU instance %u install failed",
                      FW_UPDATE_IID_APP);
@@ -1211,6 +1217,9 @@ int advanced_firmware_update_install(
     }
 
     if (!result) {
+        if (auto_suspend) {
+            anjay_advanced_fw_update_pull_suspend(anjay);
+        }
         demo_log(INFO, "AFU object install success");
     }
 

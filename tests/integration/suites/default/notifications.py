@@ -189,3 +189,38 @@ class LifetimeExpirationCancelsObserveWhileStoring(test_suite.Lwm2mDtlsSingleSer
         # Check that no notifications are sent
         with self.assertRaises(socket.timeout):
             print(self.serv.recv(timeout_s=5))
+
+
+class UdpNotificationErrorTest(test_suite.Lwm2mSingleServerTest, test_suite.Lwm2mDmOperations):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--confirmable-notifications'])
+
+    def runTest(self):
+        self.write_resource(self.serv, oid=OID.Server, iid=1, rid=RID.Server.DefaultMaxPeriod,
+                            content=b'2')
+
+        self.create_instance(self.serv, oid=OID.Test, iid=1)
+        orig_notif = self.observe(self.serv, oid=OID.Test, iid=1, rid=RID.Test.Counter)
+        self.delete_instance(self.serv, oid=OID.Test, iid=1)
+
+        notif = self.serv.recv(timeout_s=5)
+        self.assertEqual(notif.code, coap.Code.RES_NOT_FOUND)
+        self.assertEqual(notif.token, orig_notif.token)
+        self.serv.send(Lwm2mEmpty.matching(notif)())
+
+
+class TcpNotificationErrorTest(test_suite.Lwm2mSingleTcpServerTest, test_suite.Lwm2mDmOperations):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--confirmable-notifications'], binding='T')
+
+    def runTest(self):
+        self.write_resource(self.serv, oid=OID.Server, iid=1, rid=RID.Server.DefaultMaxPeriod,
+                            content=b'2')
+
+        self.create_instance(self.serv, oid=OID.Test, iid=1)
+        orig_notif = self.observe(self.serv, oid=OID.Test, iid=1, rid=RID.Test.Counter)
+        self.delete_instance(self.serv, oid=OID.Test, iid=1)
+
+        notif = self.serv.recv(timeout_s=5)
+        self.assertEqual(notif.code, coap.Code.RES_NOT_FOUND)
+        self.assertEqual(notif.token, orig_notif.token)

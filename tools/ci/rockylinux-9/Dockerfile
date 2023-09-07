@@ -14,4 +14,4 @@ RUN dnf update -y && \
 RUN dnf config-manager --set-enabled crb && \
     dnf install -y epel-release && \
     dnf install -y mbedtls-devel
-RUN pip3 install sphinx sphinx-rtd-theme cbor2 aiocoap wheel linuxdoc
+RUN pip3 install sphinx sphinx-rtd-theme cbor2 aiocoap wheel linuxdoc openpyxl

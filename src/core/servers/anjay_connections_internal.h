@@ -44,9 +44,7 @@ typedef avs_error_t
 anjay_connection_connect_socket_t(anjay_unlocked_t *anjay,
                                   anjay_server_connection_t *connection);
 
-typedef int
-anjay_connection_ensure_coap_context_t(anjay_unlocked_t *anjay,
-                                       anjay_server_connection_t *connection);
+typedef int anjay_connection_ensure_coap_context_t(anjay_connection_ref_t ref);
 
 typedef struct {
     const char *name;

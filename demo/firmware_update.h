@@ -32,6 +32,8 @@ typedef struct {
     const char *persistence_file;
     FILE *stream;
     avs_net_security_info_t security_info;
+    avs_coap_udp_tx_params_t coap_tx_params;
+    bool auto_suspend;
 } fw_update_logic_t;
 
 int firmware_update_install(anjay_t *anjay,
@@ -40,12 +42,11 @@ int firmware_update_install(anjay_t *anjay,
                             const avs_net_security_info_t *security_info,
                             const avs_coap_udp_tx_params_t *tx_params,
                             anjay_fw_update_result_t delayed_result,
-                            bool prefer_same_socket_downloads
+                            bool prefer_same_socket_downloads,
 #ifdef ANJAY_WITH_SEND
-                            ,
-                            bool use_lwm2m_send
+                            bool use_lwm2m_send,
 #endif // ANJAY_WITH_SEND
-);
+                            bool auto_suspend);
 
 void firmware_update_destroy(fw_update_logic_t *fw_update);
 

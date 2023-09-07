@@ -40,7 +40,6 @@ void _anjay_server_clean_active_data(anjay_server_info_t *server) {
 void _anjay_server_cleanup(anjay_server_info_t *server) {
     anjay_log(TRACE, _("clear_server SSID ") "%u", server->ssid);
 
-    // defined(ANJAY_WITH_CORE_PERSISTENCE)
     _anjay_server_clean_active_data(server);
     _anjay_registration_info_cleanup(&server->registration_info);
 }

@@ -247,7 +247,7 @@ to `anjay_security_object_install()
 
 .. highlight:: c
 .. snippet-source:: examples/commercial-features/CF-SmartCardBootstrap/src/main.c
-    :emphasize-lines: 23-24, 28-30
+    :emphasize-lines: 22-23, 27-29
 
     int main(int argc, char *argv[]) {
         if (argc != 3) {

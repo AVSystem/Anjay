@@ -163,7 +163,7 @@ const char *_anjay_debug_make_path__(char *buffer,
                          ANJAY_ID_INVALID)
 
 #define MAKE_URI_PATH(...) \
-    ((const anjay_uri_path_t) URI_PATH_INITIALIZER(__VA_ARGS__))
+    ((anjay_uri_path_t) URI_PATH_INITIALIZER(__VA_ARGS__))
 
 #define MAKE_RESOURCE_INSTANCE_PATH(Oid, Iid, Rid, Riid) \
     MAKE_URI_PATH(Oid, Iid, Rid, Riid)
@@ -787,12 +787,6 @@ int _anjay_dm_verify_instance_present(
         const anjay_dm_installed_object_t *obj_ptr,
         anjay_iid_t iid);
 
-#define ANJAY_DM_OID_SECURITY 0
-#define ANJAY_DM_OID_SERVER 1
-#define ANJAY_DM_OID_ACCESS_CONTROL 2
-#define ANJAY_DM_OID_DEVICE 3
-#define ANJAY_DM_OID_FIRMWARE_UPDATE 5
-
 #define ANJAY_DM_RID_SECURITY_SERVER_URI 0
 #define ANJAY_DM_RID_SECURITY_BOOTSTRAP 1
 #define ANJAY_DM_RID_SECURITY_MODE 2
@@ -971,9 +965,6 @@ int _anjay_execute_get_arg_value_unlocked(anjay_unlocked_execute_ctx_t *ctx,
                                           size_t *out_bytes_read,
                                           char *out_buf,
                                           size_t buf_size);
-
-AVS_LIST(const anjay_ssid_t)
-_anjay_server_get_ssids_unlocked(anjay_unlocked_t *anjay);
 
 VISIBILITY_PRIVATE_HEADER_END
 

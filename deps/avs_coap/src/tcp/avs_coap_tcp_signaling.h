@@ -20,7 +20,8 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 struct avs_coap_tcp_ctx_struct;
 
 typedef struct {
-    bool received;
+    // if recv_deadline is invalid, it means that peer CSM has been received.
+    avs_time_monotonic_t recv_deadline;
     // max_message_size is a maximum single message size (starting from first
     // byte of the header and ending at the end of the message payload) which
     // peer can receive.

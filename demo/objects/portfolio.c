@@ -133,7 +133,6 @@ static int instance_create(anjay_t *anjay,
                            anjay_iid_t iid) {
     (void) anjay;
     portfolio_t *obj = get_obj(obj_ptr);
-    assert(obj);
 
     AVS_LIST(portfolio_instance_t) created =
             AVS_LIST_NEW_ELEMENT(portfolio_instance_t);
@@ -159,7 +158,6 @@ static int instance_remove(anjay_t *anjay,
                            anjay_iid_t iid) {
     (void) anjay;
     portfolio_t *obj = get_obj(obj_ptr);
-    assert(obj);
 
     AVS_LIST(portfolio_instance_t) *it;
     AVS_LIST_FOREACH_PTR(it, &obj->instances) {
@@ -209,7 +207,6 @@ static int resource_read(anjay_t *anjay,
     (void) anjay;
 
     portfolio_t *obj = get_obj(obj_ptr);
-    assert(obj);
     portfolio_instance_t *inst = find_instance(obj, iid);
     assert(inst);
 
@@ -233,7 +230,6 @@ static int resource_write(anjay_t *anjay,
     (void) anjay;
 
     portfolio_t *obj = get_obj(obj_ptr);
-    assert(obj);
     portfolio_instance_t *inst = find_instance(obj, iid);
     assert(inst);
 
@@ -265,7 +261,6 @@ static int resource_reset(anjay_t *anjay,
     (void) rid;
 
     portfolio_t *obj = get_obj(obj_ptr);
-    assert(obj);
     portfolio_instance_t *inst = find_instance(obj, iid);
     assert(inst);
 
@@ -282,7 +277,6 @@ static int list_resource_instances(anjay_t *anjay,
     (void) anjay;
 
     portfolio_t *obj = get_obj(obj_ptr);
-    assert(obj);
     portfolio_instance_t *inst = find_instance(obj, iid);
     assert(inst);
 
@@ -306,7 +300,6 @@ static int transaction_begin(anjay_t *anjay,
                              const anjay_dm_object_def_t *const *obj_ptr) {
     (void) anjay;
     portfolio_t *obj = get_obj(obj_ptr);
-    assert(obj);
     assert(!obj->backup);
     obj->backup = AVS_LIST_SIMPLE_CLONE(obj->instances);
     if (!obj->backup && obj->instances) {
@@ -319,7 +312,6 @@ static int transaction_commit(anjay_t *anjay,
                               const anjay_dm_object_def_t *const *obj_ptr) {
     (void) anjay;
     portfolio_t *obj = get_obj(obj_ptr);
-    assert(obj);
     AVS_LIST_CLEAR(&obj->backup);
     return 0;
 }
@@ -328,7 +320,6 @@ static int transaction_rollback(anjay_t *anjay,
                                 const anjay_dm_object_def_t *const *obj_ptr) {
     (void) anjay;
     portfolio_t *obj = get_obj(obj_ptr);
-    assert(obj);
     AVS_LIST_CLEAR(&obj->instances);
     obj->instances = obj->backup;
     obj->backup = NULL;

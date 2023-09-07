@@ -50,19 +50,33 @@
 #include <anjay/access_control.h>
 #include <anjay/attr_storage.h>
 #include <anjay/fw_update.h>
-#include <anjay/security.h>
-#include <anjay/server.h>
+
+#ifdef WITH_DEMO_USE_STANDALONE_OBJECTS
+#    include "../standalone/security/standalone_security.h"
+#    include "../standalone/server/standalone_server.h"
+#else // WITH_DEMO_USE_STANDALONE_OBJECTS
+#    include <anjay/security.h>
+#    include <anjay/server.h>
+#endif // WITH_DEMO_USE_STANDALONE_OBJECTS
 
 #ifdef ANJAY_WITH_MODULE_FACTORY_PROVISIONING
 #    include <anjay/factory_provisioning.h>
 #endif // ANJAY_WITH_MODULE_FACTORY_PROVISIONING
 
 static int security_object_reload(anjay_demo_t *demo) {
+#ifdef WITH_DEMO_USE_STANDALONE_OBJECTS
+    standalone_security_object_purge(demo->security_obj_ptr);
+#else  // WITH_DEMO_USE_STANDALONE_OBJECTS
     anjay_security_object_purge(demo->anjay);
+#endif // WITH_DEMO_USE_STANDALONE_OBJECTS
     const server_connection_args_t *args = demo->connection_args;
     const server_entry_t *server;
     DEMO_FOREACH_SERVER_ENTRY(server, args) {
+#ifdef WITH_DEMO_USE_STANDALONE_OBJECTS
+        standalone_security_instance_t instance;
+#else  // WITH_DEMO_USE_STANDALONE_OBJECTS
         anjay_security_instance_t instance;
+#endif // WITH_DEMO_USE_STANDALONE_OBJECTS
         memset(&instance, 0, sizeof(instance));
         instance.ssid = ANJAY_SSID_ANY;
         if ((instance.bootstrap_server = server->is_bootstrap)) {
@@ -127,7 +141,15 @@ static int security_object_reload(anjay_demo_t *demo) {
 #endif // ANJAY_WITH_LWM2M11
 
         anjay_iid_t iid = server->security_iid;
-        if (anjay_security_object_add_instance(demo->anjay, &instance, &iid)) {
+        if (
+#ifdef WITH_DEMO_USE_STANDALONE_OBJECTS
+                    standalone_security_object_add_instance(
+                            demo->security_obj_ptr, &instance, &iid)
+#else  // WITH_DEMO_USE_STANDALONE_OBJECTS
+                    anjay_security_object_add_instance(demo->anjay, &instance,
+                                                       &iid)
+#endif // WITH_DEMO_USE_STANDALONE_OBJECTS
+        ) {
             demo_log(ERROR, "Cannot add Security Instance");
             return -1;
         }
@@ -136,31 +158,50 @@ static int security_object_reload(anjay_demo_t *demo) {
 }
 
 static int server_object_reload(anjay_demo_t *demo) {
+#ifdef WITH_DEMO_USE_STANDALONE_OBJECTS
+    standalone_server_object_purge(demo->server_obj_ptr);
+#else  // WITH_DEMO_USE_STANDALONE_OBJECTS
     anjay_server_object_purge(demo->anjay);
+#endif // WITH_DEMO_USE_STANDALONE_OBJECTS
     const server_entry_t *server;
     DEMO_FOREACH_SERVER_ENTRY(server, demo->connection_args) {
         if (server->is_bootstrap) {
             continue;
         }
 
-        const anjay_server_instance_t instance = {
-            .ssid = server->id,
-            .lifetime = demo->connection_args->lifetime,
-            .default_min_period = -1,
-            .default_max_period = -1,
-            .disable_timeout = -1,
-            .binding = server->binding_mode,
-            .notification_storing = true,
+#ifdef WITH_DEMO_USE_STANDALONE_OBJECTS
+        const standalone_server_instance_t instance =
+#else  // WITH_DEMO_USE_STANDALONE_OBJECTS
+        const anjay_server_instance_t instance =
+#endif // WITH_DEMO_USE_STANDALONE_OBJECTS
+                {
+                    .ssid = server->id,
+                    .lifetime = demo->connection_args->lifetime,
+                    .default_min_period = -1,
+                    .default_max_period = -1,
+                    .disable_timeout = -1,
+                    .binding = server->binding_mode,
+                    .notification_storing = true,
 #ifdef ANJAY_WITH_LWM2M11
-            .communication_retry_count = &server->retry_count,
-            .communication_retry_timer = &server->retry_timer,
-            .communication_sequence_retry_count = &server->sequence_retry_count,
-            .communication_sequence_delay_timer = &server->sequence_delay_timer,
-            .preferred_transport = '\0',
+                    .communication_retry_count = &server->retry_count,
+                    .communication_retry_timer = &server->retry_timer,
+                    .communication_sequence_retry_count =
+                            &server->sequence_retry_count,
+                    .communication_sequence_delay_timer =
+                            &server->sequence_delay_timer,
+                    .preferred_transport = '\0',
 #endif // ANJAY_WITH_LWM2M11
-        };
+                };
         anjay_iid_t iid = server->server_iid;
-        if (anjay_server_object_add_instance(demo->anjay, &instance, &iid)) {
+        if (
+#ifdef WITH_DEMO_USE_STANDALONE_OBJECTS
+                    standalone_server_object_add_instance(demo->server_obj_ptr,
+                                                          &instance, &iid)
+#else  // WITH_DEMO_USE_STANDALONE_OBJECTS
+                    anjay_server_object_add_instance(demo->anjay, &instance,
+                                                     &iid)
+#endif // WITH_DEMO_USE_STANDALONE_OBJECTS
+        ) {
             demo_log(ERROR, "Cannot add Server Instance");
             return -1;
         }
@@ -208,8 +249,15 @@ static void demo_delete(anjay_demo_t *demo) {
         avs_stream_t *data = avs_stream_file_create(demo->dm_persistence_file,
                                                     AVS_STREAM_FILE_WRITE);
         if (!data
+#    ifdef WITH_DEMO_USE_STANDALONE_OBJECTS
+                || avs_is_err(standalone_security_object_persist(
+                           demo->security_obj_ptr, data))
+                || avs_is_err(standalone_server_object_persist(
+                           demo->server_obj_ptr, data))
+#    else  // WITH_DEMO_USE_STANDALONE_OBJECTS
                 || avs_is_err(anjay_security_object_persist(demo->anjay, data))
                 || avs_is_err(anjay_server_object_persist(demo->anjay, data))
+#    endif // WITH_DEMO_USE_STANDALONE_OBJECTS
 #    ifdef ANJAY_WITH_MODULE_ACCESS_CONTROL
                 || avs_is_err(anjay_access_control_persist(demo->anjay, data))
 #    endif // ANJAY_WITH_MODULE_ACCESS_CONTROL
@@ -244,8 +292,14 @@ static void demo_delete(anjay_demo_t *demo) {
 #ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
     advanced_firmware_update_uninstall(demo->advanced_fw_update_logic_table);
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+#ifdef WITH_DEMO_USE_STANDALONE_OBJECTS
+    standalone_server_object_cleanup(demo->server_obj_ptr);
+    standalone_security_object_cleanup(demo->security_obj_ptr);
+    demo->server_obj_ptr = NULL;
+    demo->security_obj_ptr = NULL;
+#endif // WITH_DEMO_USE_STANDALONE_OBJECTS
 
-    AVS_LIST_CLEAR(&demo->allocated_strings);
+    AVS_LIST_CLEAR(&demo->allocated_buffers);
     avs_free(demo);
 }
 
@@ -442,6 +496,9 @@ static void reschedule_notify_time_dependent(anjay_demo_t *demo) {
 }
 
 static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
+    demo->allocated_buffers = cmdline_args->allocated_buffers;
+    cmdline_args->allocated_buffers = NULL;
+
     for (size_t i = 0; i < MAX_SERVERS; ++i) {
         server_entry_t *entry = &cmdline_args->connection_args.servers[i];
         if (entry->uri == NULL) {
@@ -536,6 +593,7 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
 #    ifdef AVS_COMMONS_WITH_AVS_PERSISTENCE
     demo->dm_persistence_file = cmdline_args->dm_persistence_file;
 #    endif // AVS_COMMONS_WITH_AVS_PERSISTENCE
+           // defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
 #endif     // AVS_COMMONS_STREAM_WITH_FILE
     { demo->anjay = anjay_new(&config); }
     if (!demo->anjay
@@ -546,56 +604,70 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         return -1;
     }
 
-    if (anjay_security_object_install(demo->anjay)
-            || anjay_server_object_install(demo->anjay)
+    if (
+#ifdef WITH_DEMO_USE_STANDALONE_OBJECTS
+                !(demo->security_obj_ptr =
+                          standalone_security_object_install(demo->anjay))
+                    || !(demo->server_obj_ptr =
+                                 standalone_server_object_install(demo->anjay))
+#else  // WITH_DEMO_USE_STANDALONE_OBJECTS
+                anjay_security_object_install(demo->anjay)
+                    || anjay_server_object_install(demo->anjay)
+#endif // WITH_DEMO_USE_STANDALONE_OBJECTS
 #ifdef ANJAY_WITH_MODULE_IPSO_OBJECTS
-            || install_accelerometer_object(demo->anjay)
-            || add_installed_object_update_handler(demo,
-                                                   accelerometer_update_handler)
-            || install_push_button_object(demo->anjay)
-            || install_temperature_object(demo->anjay)
-            || add_installed_object_update_handler(demo,
-                                                   temperature_update_handler)
+                    || install_accelerometer_object(demo->anjay)
+                    || add_installed_object_update_handler(
+                               demo, accelerometer_update_handler)
+                    || install_push_button_object(demo->anjay)
+                    || install_temperature_object(demo->anjay)
+                    || add_installed_object_update_handler(
+                               demo, temperature_update_handler)
 #endif // ANJAY_WITH_MODULE_IPSO_OBJECTS
-            || install_object(demo, location_object_create(), NULL,
-                              location_notify_time_dependent,
-                              location_object_release)
-            || install_object(demo, apn_conn_profile_object_create(),
-                              apn_conn_profile_get_instances, NULL,
-                              apn_conn_profile_object_release)
-            || install_object(demo, binary_app_data_container_object_create(),
-                              binary_app_data_container_get_instances, NULL,
-                              binary_app_data_container_object_release)
-            || install_object(demo, cell_connectivity_object_create(demo), NULL,
-                              NULL, cell_connectivity_object_release)
-            || install_object(demo, cm_object_create(), NULL,
-                              cm_notify_time_dependent, cm_object_release)
-            || install_object(demo, cs_object_create(), NULL, NULL,
-                              cs_object_release)
-            || install_object(demo, download_diagnostics_object_create(), NULL,
-                              NULL, download_diagnostics_object_release)
-            || install_object(demo,
-                              device_object_create(cmdline_args->endpoint_name),
-                              NULL, device_notify_time_dependent,
-                              device_object_release)
-            || install_object(demo, ext_dev_info_object_create(), NULL,
-                              ext_dev_info_notify_time_dependent,
-                              ext_dev_info_object_release)
-            || install_object(demo, geopoints_object_create(demo),
-                              geopoints_get_instances,
-                              geopoints_notify_time_dependent,
-                              geopoints_object_release)
+                    || install_object(demo, location_object_create(), NULL,
+                                      location_notify_time_dependent,
+                                      location_object_release)
+                    || install_object(demo, apn_conn_profile_object_create(),
+                                      apn_conn_profile_get_instances, NULL,
+                                      apn_conn_profile_object_release)
+                    || install_object(
+                               demo, binary_app_data_container_object_create(),
+                               binary_app_data_container_get_instances, NULL,
+                               binary_app_data_container_object_release)
+                    || install_object(
+                               demo, cell_connectivity_object_create(demo),
+                               NULL, NULL, cell_connectivity_object_release)
+                    || install_object(demo, cm_object_create(), NULL,
+                                      cm_notify_time_dependent,
+                                      cm_object_release)
+                    || install_object(demo, cs_object_create(), NULL, NULL,
+                                      cs_object_release)
+                    || install_object(
+                               demo, download_diagnostics_object_create(), NULL,
+                               NULL, download_diagnostics_object_release)
+                    || install_object(demo,
+                                      device_object_create(
+                                              cmdline_args->endpoint_name),
+                                      NULL, device_notify_time_dependent,
+                                      device_object_release)
+                    || install_object(demo, ext_dev_info_object_create(), NULL,
+                                      ext_dev_info_notify_time_dependent,
+                                      ext_dev_info_object_release)
+                    || install_object(demo, geopoints_object_create(demo),
+                                      geopoints_get_instances,
+                                      geopoints_notify_time_dependent,
+                                      geopoints_object_release)
 #ifndef _WIN32
-            || install_object(demo, ip_ping_object_create(), NULL, NULL,
-                              ip_ping_object_release)
+                    || install_object(demo, ip_ping_object_create(), NULL, NULL,
+                                      ip_ping_object_release)
 #endif // _WIN32
-            || install_object(demo, test_object_create(), test_get_instances,
-                              test_notify_time_dependent, test_object_release)
-            || install_object(demo, portfolio_object_create(),
-                              portfolio_get_instances, NULL,
-                              portfolio_object_release)
-            || install_object(demo, event_log_object_create(), NULL, NULL,
-                              event_log_object_release)) {
+                    || install_object(
+                               demo, test_object_create(), test_get_instances,
+                               test_notify_time_dependent, test_object_release)
+                    || install_object(demo, portfolio_object_create(),
+                                      portfolio_get_instances, NULL,
+                                      portfolio_object_release)
+                    || install_object(demo, event_log_object_create(), NULL,
+                                      NULL, event_log_object_release)) {
         return -1;
     }
 
@@ -614,8 +686,15 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
                 avs_stream_file_create(cmdline_args->dm_persistence_file,
                                        AVS_STREAM_FILE_READ);
         if (!data
+#    ifdef WITH_DEMO_USE_STANDALONE_OBJECTS
+                || avs_is_err(standalone_security_object_restore(
+                           demo->security_obj_ptr, data))
+                || avs_is_err(standalone_server_object_restore(
+                           demo->server_obj_ptr, data))
+#    else  // WITH_DEMO_USE_STANDALONE_OBJECTS
                 || avs_is_err(anjay_security_object_restore(demo->anjay, data))
                 || avs_is_err(anjay_server_object_restore(demo->anjay, data))
+#    endif // WITH_DEMO_USE_STANDALONE_OBJECTS
 #    ifdef ANJAY_WITH_MODULE_ACCESS_CONTROL
                 || avs_is_err(anjay_access_control_restore(demo->anjay, data))
 #    endif // ANJAY_WITH_MODULE_ACCESS_CONTROL
@@ -665,12 +744,11 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
                                         ? &cmdline_args->fwu_tx_params
                                         : NULL,
                                 cmdline_args->fw_update_delayed_result,
-                                cmdline_args->prefer_same_socket_downloads
+                                cmdline_args->prefer_same_socket_downloads,
 #    ifdef ANJAY_WITH_SEND
-                                ,
-                                cmdline_args->fw_update_use_send
+                                cmdline_args->fw_update_use_send,
 #    endif // ANJAY_WITH_SEND
-                                )) {
+                                cmdline_args->fw_update_auto_suspend)) {
         return -1;
     }
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
@@ -688,12 +766,11 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
                         : NULL,
                 cmdline_args->advanced_fw_update_delayed_result,
                 cmdline_args->prefer_same_socket_downloads,
-                cmdline_args->original_img_file_path
+                cmdline_args->original_img_file_path,
 #    ifdef ANJAY_WITH_SEND
-                ,
-                cmdline_args->advanced_fw_update_use_send
+                cmdline_args->advanced_fw_update_use_send,
 #    endif // ANJAY_WITH_SEND
-                )) {
+                cmdline_args->advanced_fw_update_auto_suspend)) {
         return -1;
     }
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
@@ -804,13 +881,11 @@ log_handler(avs_log_level_t level, const char *module, const char *message) {
 }
 
 static void cmdline_args_cleanup(cmdline_args_t *cmdline_args) {
-    avs_free(cmdline_args->connection_args.public_cert_or_psk_identity);
-    avs_free(cmdline_args->connection_args.private_cert_or_psk_key);
-    avs_free(cmdline_args->connection_args.server_public_key);
 #ifdef ANJAY_WITH_MODULE_ACCESS_CONTROL
     AVS_LIST_CLEAR(&cmdline_args->access_entries);
 #endif // ANJAY_WITH_MODULE_ACCESS_CONTROL
     avs_free(cmdline_args->default_ciphersuites);
+    AVS_LIST_CLEAR(&cmdline_args->allocated_buffers);
 }
 
 int main(int argc, char *argv[]) {

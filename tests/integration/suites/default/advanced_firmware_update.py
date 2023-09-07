@@ -227,7 +227,7 @@ class AdvancedFirmwareUpdate:
 
             self.fail('firmware still not downloaded')
 
-        def wait_until_state_is(self, inst, state, timeout_s=2):
+        def wait_until_state_is(self, inst, state, timeout_s=10):
             deadline = time.time() + timeout_s
             while time.time() < deadline:
                 time.sleep(0.1)
@@ -290,6 +290,16 @@ class AdvancedFirmwareUpdate:
     class TestWithCoapServer(FirmwareUpdate.TestWithCoapServerMixin, Test):
         pass
 
+    class TestWithCoapsServer(FirmwareUpdate.TestWithCoapsServerMixin, Test):
+        def setUp(self, extra_cmdline_args=None, *args, **kwargs):
+            extra_cmdline_args = (extra_cmdline_args or []) + ['--afu-psk-identity',
+                                                               str(binascii.hexlify(
+                                                                   self.FW_PSK_IDENTITY), 'ascii'),
+                                                               '--afu-psk-key',
+                                                               str(binascii.hexlify(
+                                                                   self.FW_PSK_KEY), 'ascii')]
+            super().setUp(*args, extra_cmdline_args=extra_cmdline_args, **kwargs)
+
     class TestWithPartialDownload(Test):
         GARBAGE_SIZE = 8000
 
@@ -333,6 +343,24 @@ class AdvancedFirmwareUpdate:
                     return result
 
             super().setUp(coap_server=SlowServer())
+
+            with self.file_server as file_server:
+                file_server.set_resource('/firmware',
+                                         make_firmware_package(
+                                             self.FIRMWARE_SCRIPT_CONTENT,
+                                             **self.FW_PKG_OPTS))
+                self.fw_uri = file_server.get_resource_uri('/firmware')
+
+    class TestWithPartialCoapsDownloadAndRestart(
+        TestWithPartialDownloadAndRestart,
+        TestWithCoapsServer):
+        def setUp(self):
+            class SlowServer(coap.DtlsServer):
+                def send(self, *args, **kwargs):
+                    time.sleep(0.5)
+                    return super().send(*args, **kwargs)
+
+            super().setUp(coap_server_class=SlowServer)
 
             with self.file_server as file_server:
                 file_server.set_resource('/firmware',
@@ -411,11 +439,14 @@ class AdvancedFirmwareUpdatePackageTest(AdvancedFirmwareUpdate.Test):
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.serv.recv())
 
+        # Demo delays its reset while APP update. Wait for it and terminate if reset not occurred.
+        self._terminate_demo()
+
 
 class AdvancedFirmwareUpdateUriTest(AdvancedFirmwareUpdate.TestWithHttpServer):
 
-    def setUp(self):
-        super().setUp()
+    def setUp(self, *args, **kwargs):
+        super().setUp(*args, **kwargs)
         self.set_check_marker(True)
         self.set_auto_deregister(False)
         self.set_reset_machine(False)
@@ -430,6 +461,56 @@ class AdvancedFirmwareUpdateUriTest(AdvancedFirmwareUpdate.TestWithHttpServer):
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.serv.recv())
+
+        # Demo delays its reset while APP update. Wait for it and terminate if reset not occurred.
+        self._terminate_demo()
+
+
+class AdvancedFirmwareUpdateUriAutoSuspend(AdvancedFirmwareUpdateUriTest):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--fw-auto-suspend'])
+
+
+class AdvancedFirmwareUpdateUriManualSuspend(AdvancedFirmwareUpdate.TestWithHttpServer):
+    def runTest(self):
+        self.provide_response()
+
+        requests = list(self.requests)
+        firmware_uri = self.get_firmware_uri()
+
+        self.communicate('afu-suspend')
+
+        # Write /5/0/1 (Firmware URI)
+        req = Lwm2mWrite(ResPath.AdvancedFirmwareUpdate[Instances.APP].PackageURI, firmware_uri)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.serv.recv())
+
+        # wait until client enters the DOWNLOADING state
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            time.sleep(0.5)
+            if self.read_state(Instances.APP) == UpdateState.DOWNLOADING:
+                break
+        else:
+            self.fail('firmware still not in DOWNLOADING state')
+
+        time.sleep(5)
+        self.assertEqual(requests, self.requests)
+
+        # resume the download
+        self.communicate('afu-reconnect')
+
+        # wait until client downloads the firmware
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            time.sleep(0.5)
+            if self.read_state(Instances.APP) == UpdateState.DOWNLOADED:
+                break
+        else:
+            self.fail('firmware still not downloaded')
+
+        self.assertEqual(requests + ['/firmware'], self.requests)
 
 
 class AdvancedFirmwareUpdateStateChangeTest(
@@ -486,6 +567,9 @@ class AdvancedFirmwareUpdateStateChangeTest(
 
         # there should be exactly one request
         self.assertEqual(['/firmware'], self.requests)
+
+        # Demo delays its reset while APP update. Wait for it and terminate if reset not occurred.
+        self._terminate_demo()
 
 
 class AdvancedFirmwareUpdateSendStateChangeTest(
@@ -736,6 +820,56 @@ class AdvancedFirmwareUpdateReplacingPkg(
 
 
 
+class AdvancedFirmwareUpdateHttpsReconnectTest(
+    AdvancedFirmwareUpdate.TestWithPartialDownloadAndRestart,
+    AdvancedFirmwareUpdate.TestWithHttpsServer):
+    RESPONSE_DELAY = 0.5
+    CHUNK_SIZE = 1000
+    ETAGS = True
+
+    def setUp(self):
+        super().setUp()
+        self.set_check_marker(True)
+        self.set_auto_deregister(False)
+        self.set_reset_machine(False)
+
+    def runTest(self):
+        self.provide_response_app_img()
+
+        # Write /33629/0/1 (Firmware URI)
+        req = Lwm2mWrite(
+            ResPath.AdvancedFirmwareUpdate[Instances.APP].PackageURI,
+            self.get_firmware_uri())
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+
+        self.wait_for_half_download()
+
+        self.assertEqual(len(self.requests), 1)
+
+        self.communicate('afu-reconnect')
+        self.provide_response_app_img()
+
+        # wait until client downloads the firmware
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            time.sleep(0.5)
+
+            if self.read_state(Instances.APP) == UpdateState.DOWNLOADED:
+                break
+        else:
+            raise
+
+        # Execute /33629/0/2 (Update)
+        req = Lwm2mExecute(ResPath.AdvancedFirmwareUpdate[Instances.APP].Update)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.serv.recv())
+
+        # Demo delays its reset while APP update. Wait for it and terminate if reset not occurred.
+        self._terminate_demo()
+
+
 class AdvancedFirmwareUpdateHttpsCancelPackageTest(
     AdvancedFirmwareUpdate.TestWithPartialDownload,
     AdvancedFirmwareUpdate.TestWithHttpServer):
@@ -885,6 +1019,9 @@ class AdvancedFirmwareUpdateHttpsOfflineTest(
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.serv.recv())
 
+        # Demo delays its reset while APP update. Wait for it and terminate if reset not occurred.
+        self._terminate_demo()
+
 
 class AdvancedFirmwareUpdateHttpsTest(
     AdvancedFirmwareUpdate.TestWithHttpsServer):
@@ -905,6 +1042,9 @@ class AdvancedFirmwareUpdateHttpsTest(
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.serv.recv())
+
+        # Demo delays its reset while APP update. Wait for it and terminate if reset not occurred.
+        self._terminate_demo()
 
 
 class AdvancedFirmwareUpdateUnconfiguredHttpsTest(
@@ -1069,6 +1209,474 @@ class AdvancedFirmwareUpdateCoapUri(AdvancedFirmwareUpdate.TestWithCoapServer):
         self.write_firmware_and_wait_for_download(Instances.APP, fw_uri)
 
 
+class AdvancedFirmwareUpdateCoapsUri(AdvancedFirmwareUpdate.TestWithCoapsServer,
+                                     AdvancedFirmwareUpdateCoapUri):
+    pass
+
+
+class AdvancedFirmwareUpdateCoapsUriAutoSuspend(AdvancedFirmwareUpdateCoapsUri):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--afu-auto-suspend'])
+
+
+class AdvancedFirmwareUpdateCoapsUriManualSuspend(AdvancedFirmwareUpdateCoapsUri):
+    def runTest(self):
+        with self.file_server as file_server:
+            file_server.set_resource('/firmware',
+                                     make_firmware_package(self.FIRMWARE_SCRIPT_CONTENT,
+                                                           **self.FW_PKG_OPTS))
+            fw_uri = file_server.get_resource_uri('/firmware')
+
+        self.communicate('afu-suspend')
+
+        # Write /33629/0/1 (Firmware URI)
+        req = Lwm2mWrite(ResPath.AdvancedFirmwareUpdate[Instances.APP].PackageURI, fw_uri)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+
+        # wait until the state machine enters the DOWNLOADING state
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            time.sleep(0.5)
+            if self.read_state(Instances.APP) == UpdateState.DOWNLOADING:
+                break
+        else:
+            self.fail('firmware still not in DOWNLOADING state')
+
+        time.sleep(5)
+        with self.file_server as file_server:
+            self.assertEqual(0, len(file_server.requests))
+
+        # resume the download
+        self.communicate('afu-reconnect')
+
+        # wait until client downloads the firmware
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            time.sleep(0.5)
+            if self.read_state(Instances.APP) == UpdateState.DOWNLOADED:
+                break
+        else:
+            self.fail('firmware still not downloaded')
+
+
+class AdvancedFirmwareUpdateCoapsReconnectTest(
+    AdvancedFirmwareUpdate.TestWithPartialCoapsDownloadAndRestart):
+    def runTest(self):
+        # Write /33629/0/1 (Firmware URI)
+        req = Lwm2mWrite(ResPath.AdvancedFirmwareUpdate[Instances.APP].PackageURI, self.fw_uri)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+
+        self.wait_for_half_download()
+
+        with self.file_server as file_server:
+            file_server._server.reset()
+            self.communicate('afu-reconnect')
+            self.assertDtlsReconnect(file_server._server, timeout_s=10, expected_error='0x7900')
+
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            time.sleep(0.5)
+
+            if self.read_state(Instances.APP) == UpdateState.DOWNLOADED:
+                break
+        else:
+            raise
+
+
+class AdvancedFirmwareUpdateCoapsSuspendDuringOfflineAndReconnectDuringOnlineTest(
+    AdvancedFirmwareUpdate.TestWithPartialCoapsDownloadAndRestart):
+    def runTest(self):
+        # Write /33629/0/1 (Firmware URI)
+        req = Lwm2mWrite(ResPath.AdvancedFirmwareUpdate[Instances.APP].PackageURI, self.fw_uri)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+
+        self.wait_for_half_download()
+
+        with self.file_server as file_server:
+            # Flush any buffers
+            while True:
+                try:
+                    file_server._server.recv(timeout_s=1)
+                except socket.timeout:
+                    break
+
+            self.communicate('enter-offline')
+
+            with self.assertRaises(socket.timeout):
+                file_server._server.recv(timeout_s=5)
+
+            self.communicate('afu-suspend')
+
+            with self.assertRaises(socket.timeout):
+                file_server._server.recv(timeout_s=5)
+
+            self.communicate('exit-offline')
+
+            self.assertDemoRegisters()
+
+            with self.assertRaises(socket.timeout):
+                file_server._server.recv(timeout_s=5)
+
+            file_server._server.reset()
+            self.communicate('afu-reconnect')
+            self.assertPktIsDtlsClientHello(
+                file_server._server._raw_udp_socket.recv(65536, socket.MSG_PEEK))
+
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            time.sleep(0.5)
+
+            if self.read_state(Instances.APP) == UpdateState.DOWNLOADED:
+                break
+        else:
+            raise
+
+
+class AdvancedFirmwareUpdateCoapsSuspendDuringOfflineAndReconnectDuringOfflineTest(
+    AdvancedFirmwareUpdate.TestWithPartialCoapsDownloadAndRestart):
+    def runTest(self):
+        # Write /33629/0/1 (Firmware URI)
+        req = Lwm2mWrite(ResPath.AdvancedFirmwareUpdate[Instances.APP].PackageURI, self.fw_uri)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+
+        self.wait_for_half_download()
+
+        with self.file_server as file_server:
+            # Flush any buffers
+            while True:
+                try:
+                    file_server._server.recv(timeout_s=1)
+                except socket.timeout:
+                    break
+
+            self.communicate('enter-offline')
+
+            with self.assertRaises(socket.timeout):
+                file_server._server.recv(timeout_s=5)
+
+            self.communicate('afu-suspend')
+
+            with self.assertRaises(socket.timeout):
+                file_server._server.recv(timeout_s=5)
+
+            self.communicate('afu-reconnect')
+
+            with self.assertRaises(socket.timeout):
+                file_server._server.recv(timeout_s=5)
+
+            file_server._server.reset()
+            self.communicate('exit-offline')
+            self.assertPktIsDtlsClientHello(
+                file_server._server._raw_udp_socket.recv(65536, socket.MSG_PEEK))
+
+        self.assertDemoRegisters()
+
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            time.sleep(0.5)
+
+            if self.read_state(Instances.APP) == UpdateState.DOWNLOADED:
+                break
+        else:
+            raise
+
+
+class AdvancedFirmwareUpdateCoapsOfflineDuringSuspendAndReconnectDuringOnlineTest(
+    AdvancedFirmwareUpdate.TestWithPartialCoapsDownloadAndRestart):
+    def runTest(self):
+        # Write /33629/0/1 (Firmware URI)
+        req = Lwm2mWrite(ResPath.AdvancedFirmwareUpdate[Instances.APP].PackageURI, self.fw_uri)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+
+        self.wait_for_half_download()
+
+        with self.file_server as file_server:
+            # Flush any buffers
+            while True:
+                try:
+                    file_server._server.recv(timeout_s=1)
+                except socket.timeout:
+                    break
+
+            self.communicate('afu-suspend')
+
+            with self.assertRaises(socket.timeout):
+                file_server._server.recv(timeout_s=5)
+
+            self.communicate('enter-offline')
+
+            with self.assertRaises(socket.timeout):
+                file_server._server.recv(timeout_s=5)
+
+            self.communicate('exit-offline')
+
+            self.assertDemoRegisters()
+
+            with self.assertRaises(socket.timeout):
+                file_server._server.recv(timeout_s=5)
+
+            file_server._server.reset()
+            self.communicate('afu-reconnect')
+            self.assertPktIsDtlsClientHello(
+                file_server._server._raw_udp_socket.recv(65536, socket.MSG_PEEK))
+
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            time.sleep(0.5)
+
+            if self.read_state(Instances.APP) == UpdateState.DOWNLOADED:
+                break
+        else:
+            raise
+
+
+class AdvancedFirmwareUpdateCoapsOfflineDuringSuspendAndReconnectDuringOfflineTest(
+    AdvancedFirmwareUpdate.TestWithPartialCoapsDownloadAndRestart):
+    def runTest(self):
+        # Write /33629/0/1 (Firmware URI)
+        req = Lwm2mWrite(ResPath.AdvancedFirmwareUpdate[Instances.APP].PackageURI, self.fw_uri)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+
+        self.wait_for_half_download()
+
+        with self.file_server as file_server:
+            # Flush any buffers
+            while True:
+                try:
+                    file_server._server.recv(timeout_s=1)
+                except socket.timeout:
+                    break
+
+            self.communicate('afu-suspend')
+
+            with self.assertRaises(socket.timeout):
+                file_server._server.recv(timeout_s=5)
+
+            self.communicate('enter-offline')
+
+            with self.assertRaises(socket.timeout):
+                file_server._server.recv(timeout_s=5)
+
+            self.communicate('afu-reconnect')
+
+            with self.assertRaises(socket.timeout):
+                file_server._server.recv(timeout_s=5)
+
+            file_server._server.reset()
+            self.communicate('exit-offline')
+            self.assertPktIsDtlsClientHello(
+                file_server._server._raw_udp_socket.recv(65536, socket.MSG_PEEK))
+
+        self.assertDemoRegisters()
+
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            time.sleep(0.5)
+
+            if self.read_state(Instances.APP) == UpdateState.DOWNLOADED:
+                break
+        else:
+            raise
+
+
+class AdvancedFirmwareUpdateHttpSuspendDuringOfflineAndReconnectDuringOnlineTest(
+    AdvancedFirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
+    def runTest(self):
+        self.provide_response()
+
+        # Write /33629/0/1 (Firmware URI)
+        req = Lwm2mWrite(ResPath.AdvancedFirmwareUpdate[Instances.APP].PackageURI,
+                         self.get_firmware_uri())
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+
+        self.wait_for_half_download()
+
+        self.communicate('enter-offline')
+
+        time.sleep(5)
+        fsize = os.stat(self.fw_file_name).st_size
+        self.assertEqual(len(self.requests), 1)
+        self.provide_response()
+
+        self.communicate('afu-suspend')
+
+        time.sleep(5)
+        self.assertEqual(os.stat(self.fw_file_name).st_size, fsize)
+        self.assertEqual(len(self.requests), 1)
+
+        self.communicate('exit-offline')
+
+        self.assertDemoRegisters()
+
+        time.sleep(5)
+        self.assertEqual(os.stat(self.fw_file_name).st_size, fsize)
+        self.assertEqual(len(self.requests), 1)
+
+        self.communicate('afu-reconnect')
+
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            time.sleep(0.5)
+
+            if self.read_state(Instances.APP) == UpdateState.DOWNLOADED:
+                break
+        else:
+            raise
+
+        self.assertEqual(len(self.requests), 2)
+
+
+class AdvancedFirmwareUpdateHttpSuspendDuringOfflineAndReconnectDuringOfflineTest(
+    AdvancedFirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
+    def runTest(self):
+        self.provide_response()
+
+        # Write /33629/0/1 (Firmware URI)
+        req = Lwm2mWrite(ResPath.AdvancedFirmwareUpdate[Instances.APP].PackageURI,
+                         self.get_firmware_uri())
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+
+        self.wait_for_half_download()
+
+        self.communicate('enter-offline')
+
+        time.sleep(5)
+        fsize = os.stat(self.fw_file_name).st_size
+        self.assertEqual(len(self.requests), 1)
+        self.provide_response()
+
+        self.communicate('afu-suspend')
+
+        time.sleep(5)
+        self.assertEqual(os.stat(self.fw_file_name).st_size, fsize)
+        self.assertEqual(len(self.requests), 1)
+
+        self.communicate('afu-reconnect')
+
+        time.sleep(5)
+        self.assertEqual(os.stat(self.fw_file_name).st_size, fsize)
+        self.assertEqual(len(self.requests), 1)
+
+        self.communicate('exit-offline')
+
+        self.assertDemoRegisters()
+
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            time.sleep(0.5)
+
+            if self.read_state(Instances.APP) == UpdateState.DOWNLOADED:
+                break
+        else:
+            raise
+
+        self.assertEqual(len(self.requests), 2)
+
+
+class AdvancedFirmwareUpdateHttpOfflineDuringSuspendAndReconnectDuringOnlineTest(
+    AdvancedFirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
+    def runTest(self):
+        self.provide_response()
+
+        # Write /33629/0/1 (Firmware URI)
+        req = Lwm2mWrite(ResPath.AdvancedFirmwareUpdate[Instances.APP].PackageURI,
+                         self.get_firmware_uri())
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+
+        self.wait_for_half_download()
+
+        self.communicate('afu-suspend')
+
+        time.sleep(5)
+        fsize = os.stat(self.fw_file_name).st_size
+        self.assertEqual(len(self.requests), 1)
+        self.provide_response()
+
+        self.communicate('enter-offline')
+
+        time.sleep(5)
+        self.assertEqual(os.stat(self.fw_file_name).st_size, fsize)
+        self.assertEqual(len(self.requests), 1)
+
+        self.communicate('exit-offline')
+
+        self.assertDemoRegisters()
+
+        time.sleep(5)
+        self.assertEqual(os.stat(self.fw_file_name).st_size, fsize)
+        self.assertEqual(len(self.requests), 1)
+
+        self.communicate('afu-reconnect')
+
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            time.sleep(0.5)
+
+            if self.read_state(Instances.APP) == UpdateState.DOWNLOADED:
+                break
+        else:
+            raise
+
+        self.assertEqual(len(self.requests), 2)
+
+
+class AdvancedFirmwareUpdateHttpOfflineDuringSuspendAndReconnectDuringOfflineTest(
+    AdvancedFirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
+    def runTest(self):
+        self.provide_response()
+
+        # Write /33629/0/1 (Firmware URI)
+        req = Lwm2mWrite(ResPath.AdvancedFirmwareUpdate[Instances.APP].PackageURI,
+                         self.get_firmware_uri())
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+
+        self.wait_for_half_download()
+
+        self.communicate('afu-suspend')
+
+        time.sleep(5)
+        fsize = os.stat(self.fw_file_name).st_size
+        self.assertEqual(len(self.requests), 1)
+        self.provide_response()
+
+        self.communicate('enter-offline')
+
+        time.sleep(5)
+        self.assertEqual(os.stat(self.fw_file_name).st_size, fsize)
+        self.assertEqual(len(self.requests), 1)
+
+        self.communicate('afu-reconnect')
+
+        time.sleep(5)
+        self.assertEqual(os.stat(self.fw_file_name).st_size, fsize)
+        self.assertEqual(len(self.requests), 1)
+
+        self.communicate('exit-offline')
+
+        self.assertDemoRegisters()
+
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            time.sleep(0.5)
+
+            if self.read_state(Instances.APP) == UpdateState.DOWNLOADED:
+                break
+        else:
+            raise
+
+        self.assertEqual(len(self.requests), 2)
+
+
 class AdvancedFirmwareUpdateRestartWithDownloaded(AdvancedFirmwareUpdate.Test):
     def setUp(self):
         super().setUp()
@@ -1105,6 +1713,9 @@ class AdvancedFirmwareUpdateRestartWithDownloaded(AdvancedFirmwareUpdate.Test):
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.serv.recv())
+
+        # Demo delays its reset while APP update. Wait for it and terminate if reset not occurred.
+        self._terminate_demo()
 
 
 
@@ -1382,6 +1993,9 @@ class AdvancedFirmwareUpdateCoapTlsTest(
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.serv.recv())
 
+        # Demo delays its reset while APP update. Wait for it and terminate if reset not occurred.
+        self._terminate_demo()
+
 
 class AdvancedFirmwareUpdateWeakEtagTest(
     AdvancedFirmwareUpdate.TestWithHttpServer):
@@ -1414,6 +2028,9 @@ class AdvancedFirmwareUpdateWeakEtagTest(
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.serv.recv())
+
+        # Demo delays its reset while APP update. Wait for it and terminate if reset not occurred.
+        self._terminate_demo()
 
 
 class SameSocketDownload:
@@ -2305,6 +2922,9 @@ class AdvancedFirmwareUpdatePackageTestTwoNotLinkedImages(
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.serv.recv())
 
+        # Demo delays its reset while APP update. Wait for it and terminate if reset not occurred.
+        self._terminate_demo()
+
 
 class AdvancedFirmwareUpdateUriTestTwoNotLinkedImages(
     AdvancedFirmwareUpdate.TestWithHttpServer):
@@ -2347,6 +2967,9 @@ class AdvancedFirmwareUpdateUriTestTwoNotLinkedImages(
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.serv.recv())
+
+        # Demo delays its reset while APP update. Wait for it and terminate if reset not occurred.
+        self._terminate_demo()
 
 
 class AdvancedFirmwareUpdatePackageTestFourNotLinkedImages(
@@ -2439,6 +3062,9 @@ class AdvancedFirmwareUpdatePackageTestFourNotLinkedImages(
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.serv.recv())
 
+        # Demo delays its reset while APP update. Wait for it and terminate if reset not occurred.
+        self._terminate_demo()
+
 
 class AdvancedFirmwareUpdateUriTestFourNotLinkedImages(
     AdvancedFirmwareUpdate.TestWithHttpServer):
@@ -2506,6 +3132,10 @@ class AdvancedFirmwareUpdateUriTestFourNotLinkedImages(
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.serv.recv())
+
+        # Demo delays its reset while APP update. Wait for it and terminate if reset not occurred.
+        self._terminate_demo()
+
 
 class AdvancedFirmwareUpdateUriTestFourNotLinkedImagesAPPFirst(
     AdvancedFirmwareUpdate.TestWithHttpServer):
@@ -3057,6 +3687,9 @@ class AdvancedFirmwareUpdatePackageTestWithMultiPackage(
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.serv.recv())
 
+        # Demo delays its reset while APP update. Wait for it and terminate if reset not occurred.
+        self._terminate_demo()
+
 
 class AdvancedFirmwareUpdatePackageTestWithMultiPackageAllImages(
     AdvancedFirmwareUpdate.Test):
@@ -3150,6 +3783,9 @@ class AdvancedFirmwareUpdatePackageTestWithMultiPackageAllImages(
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.serv.recv())
+
+        # Demo delays its reset while APP update. Wait for it and terminate if reset not occurred.
+        self._terminate_demo()
 
 
 class AdvancedFirmwareUpdatePackageTestWithMultiPackageConflictingDownloads(
@@ -3698,3 +4334,64 @@ class AdvancedFirmwareUpdateHandleTooManyPullsWithSecureConnection(AdvancedFirmw
         # Both instances still should end with DOWNLOADED state
         self.wait_until_state_is(Instances.APP, UpdateState.DOWNLOADED)
         self.wait_until_state_is(Instances.TEE, UpdateState.DOWNLOADED)
+
+
+class AdvancedFirmwareUpdateForceAppToUpdateFirstAndCheckProperStateOfAdditionalImgAfterReboot(
+    AdvancedFirmwareUpdate.TestWithHttpServer):
+    def setUp(self):
+        super().setUp()
+        self.set_check_marker(False)
+        self.set_auto_deregister(True)
+        self.set_reset_machine(False)
+
+    def runTest(self):
+        # Prepare package for /33629/0
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2}
+        self.provide_response_app_img(use_real_app=True)
+
+        # Write /33629/0/0 (Firmware)
+        self.write_firmware_and_wait_for_download(Instances.APP,
+                                                  self.get_firmware_uri())
+
+        # Check /33629/0 state and result
+        self.assertEqual(UpdateState.DOWNLOADED, self.read_state(Instances.APP))
+        self.assertEqual(UpdateResult.INITIAL,
+                         self.read_update_result(Instances.APP))
+
+        # Prepare package for /33629/1
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
+        self.prepare_package_additional_img(content=DUMMY_FILE)
+
+        # Write /33629/1/0 (Firmware)
+        req = Lwm2mWrite(ResPath.AdvancedFirmwareUpdate[Instances.TEE].Package,
+                         self.PACKAGE,
+                         format=coap.ContentFormat.APPLICATION_OCTET_STREAM)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.serv.recv())
+
+        # Check /33629/1 state and result
+        self.assertEqual(UpdateState.DOWNLOADED, self.read_state(Instances.TEE))
+        self.assertEqual(UpdateResult.INITIAL,
+                         self.read_update_result(Instances.TEE))
+
+        # Execute /33629/1/2 (Update)
+        req = Lwm2mExecute(ResPath.AdvancedFirmwareUpdate[Instances.TEE].Update,
+                           content=b'0=\'</33629/0>\'')
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.serv.recv())
+
+        # Demo should reboot, it needs new server
+        self.serv.reset()
+        self.assertDemoRegisters()
+
+        # After init state should be IDLE in both instances
+        self.wait_until_state_is(Instances.APP, UpdateState.IDLE)
+        self.wait_until_state_is(Instances.TEE, UpdateState.IDLE)
+
+        # Check both results
+        self.assertEqual(UpdateResult.SUCCESS,
+                         self.read_update_result(Instances.APP))
+        self.assertEqual(UpdateResult.SUCCESS,
+                         self.read_update_result(Instances.TEE))

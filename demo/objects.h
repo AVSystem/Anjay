@@ -20,7 +20,12 @@
 
 #include <anjay/access_control.h>
 #include <anjay/anjay.h>
-#include <anjay/server.h>
+
+#ifdef WITH_DEMO_USE_STANDALONE_OBJECTS
+#    include "../standalone/server/standalone_server.h"
+#else // WITH_DEMO_USE_STANDALONE_OBJECTS
+#    include <anjay/server.h>
+#endif // WITH_DEMO_USE_STANDALONE_OBJECTS
 
 typedef struct anjay_demo_struct anjay_demo_t;
 

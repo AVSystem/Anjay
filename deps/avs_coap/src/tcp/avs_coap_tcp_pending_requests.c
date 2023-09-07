@@ -60,7 +60,7 @@ is_list_ordered_by_expire_time(AVS_LIST(avs_coap_tcp_pending_request_t) list) {
     return true;
 }
 
-static void
+static AVS_LIST(avs_coap_tcp_pending_request_t) *
 insert_pending_request(AVS_LIST(avs_coap_tcp_pending_request_t) *list_ptr,
                        AVS_LIST(avs_coap_tcp_pending_request_t) req) {
     AVS_LIST_ITERATE_PTR(list_ptr) {
@@ -71,8 +71,10 @@ insert_pending_request(AVS_LIST(avs_coap_tcp_pending_request_t) *list_ptr,
     }
     AVS_LIST_INSERT(list_ptr, req);
 
+    assert(*list_ptr == req);
     AVS_ASSERT(is_list_ordered_by_expire_time(*list_ptr),
                "pending request list must be ordered by expire_time");
+    return list_ptr;
 }
 
 static avs_coap_tcp_pending_request_t *detach_pending_request(
@@ -162,12 +164,16 @@ refresh_timeout(avs_coap_tcp_ctx_t *ctx,
     assert(*req_ptr);
     assert(avs_time_monotonic_valid((*req_ptr)->expire_time));
 
-    (*req_ptr)->expire_time = avs_time_monotonic_add(avs_time_monotonic_now(),
-                                                     ctx->request_timeout);
-    insert_pending_request(&ctx->pending_requests, AVS_LIST_DETACH(req_ptr));
-
-    _avs_coap_reschedule_retry_or_request_expired_job((avs_coap_ctx_t *) ctx,
-                                                      (*req_ptr)->expire_time);
+    if (_avs_coap_tcp_update_recv_deadline(ctx, &(*req_ptr)->expire_time)) {
+        finish_pending_request_with_error(ctx, req_ptr,
+                                          AVS_COAP_SEND_RESULT_FAIL,
+                                          avs_errno(AVS_UNKNOWN_ERROR));
+    } else {
+        insert_pending_request(&ctx->pending_requests,
+                               AVS_LIST_DETACH(req_ptr));
+        _avs_coap_reschedule_retry_or_request_expired_job(
+                (avs_coap_ctx_t *) ctx, (*req_ptr)->expire_time);
+    }
 }
 
 void _avs_coap_tcp_handle_pending_request(
@@ -218,33 +224,40 @@ void _avs_coap_tcp_handle_pending_request(
     AVS_UNREACHABLE("invalid enum value");
 }
 
-AVS_LIST(avs_coap_tcp_pending_request_t) *_avs_coap_tcp_create_pending_request(
+avs_error_t _avs_coap_tcp_create_pending_request(
         avs_coap_tcp_ctx_t *ctx,
-        AVS_LIST(avs_coap_tcp_pending_request_t) *pending_requests,
+        AVS_LIST(avs_coap_tcp_pending_request_t) **out_request,
         const avs_coap_token_t *token,
         avs_coap_send_result_handler_t *handler,
         void *handler_arg) {
+    assert(out_request && !*out_request);
     AVS_LIST(avs_coap_tcp_pending_request_t) req =
             AVS_LIST_NEW_ELEMENT(avs_coap_tcp_pending_request_t);
-    if (req) {
-        *req = (avs_coap_tcp_pending_request_t) {
-            .handler = (avs_coap_tcp_response_handler_t) {
-                .handle_result = handler,
-                .handle_result_arg = handler_arg
-            },
-            .token = *token,
-            .expire_time = avs_time_monotonic_add(avs_time_monotonic_now(),
-                                                  ctx->request_timeout)
-        };
-        insert_pending_request(pending_requests, req);
-        _avs_coap_reschedule_retry_or_request_expired_job(
-                (avs_coap_ctx_t *) ctx, req->expire_time);
-    } else {
+    if (!req) {
         LOG(DEBUG, _("failed to create pending request - out of memory"));
-        return NULL;
+        return avs_errno(AVS_ENOMEM);
     }
 
-    return pending_requests;
+    *req = (avs_coap_tcp_pending_request_t) {
+        .handler = (avs_coap_tcp_response_handler_t) {
+            .handle_result = handler,
+            .handle_result_arg = handler_arg
+        },
+        .token = *token,
+        .expire_time = AVS_TIME_MONOTONIC_INVALID
+    };
+    if (_avs_coap_tcp_update_recv_deadline(ctx, &req->expire_time)) {
+        AVS_LIST_DELETE(&req);
+        LOG(DEBUG, _("failed to create pending request - cannot calculate "
+                     "receive deadline"));
+        return avs_errno(AVS_UNKNOWN_ERROR);
+    }
+
+    *out_request = insert_pending_request(&ctx->pending_requests, req);
+    _avs_coap_reschedule_retry_or_request_expired_job((avs_coap_ctx_t *) ctx,
+                                                      req->expire_time);
+
+    return AVS_OK;
 }
 
 void _avs_coap_tcp_remove_pending_request(
