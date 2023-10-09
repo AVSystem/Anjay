@@ -83,11 +83,11 @@ f971df7872a8f052bb72ae64610a8031  examples/tutorial/firmware-update/basic-implem
 1d85bb08f511fcc7b321f0be56ddb119  examples/tutorial/firmware-update/basic-implementation/src/main.c
 844cd7d9d0ebe80007dc5ae8d6a719b0  examples/tutorial/firmware-update/download-resumption/src/firmware_update.c
 077f6b89dad59ef3b9b58e2abe93aff6  examples/tutorial/firmware-update/secure-downloads/src/firmware_update.c
-b8af5f803c445a4b1f7824407c979037  include_public/anjay/advanced_fw_update.h
+5838371e4081a02d1b91133088262fd5  include_public/anjay/advanced_fw_update.h
 af2f0e0ac0de25dc04713f05a378d469  include_public/anjay/attr_storage.h
-0223e485b0ea245f2b0e7982a502528b  include_public/anjay/core.h
+cb32a2854acf33cce16d04b6bdcec940  include_public/anjay/core.h
 c88697977b9c8e8a34d0229137ae793a  include_public/anjay/dm.h
-638664942f4503dec39d1fbe9d4d7cbc  include_public/anjay/fw_update.h
+774ecfbac5a3a686790469b90092c3f6  include_public/anjay/fw_update.h
 7ef9abee6d8d8e689ddf467cce116347  include_public/anjay/io.h
 33c77736e874a89e7dec6a4654eab3c9  include_public/anjay/ipso_objects.h
 e449359975f3fb404a50078630be399b  include_public/anjay/security.h

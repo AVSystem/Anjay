@@ -242,10 +242,6 @@ avs_error_t _anjay_server_connection_internal_bring_online(
 void _anjay_connections_close(anjay_unlocked_t *anjay,
                               anjay_connections_t *connections);
 
-typedef struct {
-    char sni[256];
-} anjay_server_name_indication_t;
-
 /**
  * Makes sure that socket connections for a given server are up-to-date with the
  * current configuration; (re)connects any sockets and schedules Register/Update
@@ -261,20 +257,20 @@ typedef struct {
  * @param move_uri          Pointer to a server URL to connect to. This function
  *                          will take ownership of data allocated inside that
  *                          object.
- *
- * @param sni               Server Name Identification value to be used for
- *                          certificate validation during TLS handshake.
  */
-void _anjay_server_connections_refresh(
-        anjay_server_info_t *server,
-        anjay_iid_t security_iid,
-        avs_url_t **move_uri,
-        const anjay_server_name_indication_t *sni);
+void _anjay_server_connections_refresh(anjay_server_info_t *server,
+                                       anjay_iid_t security_iid,
+                                       avs_url_t **move_uri);
 
 #ifdef ANJAY_WITH_LWM2M11
 void _anjay_server_update_last_ssl_alert_code(const anjay_server_info_t *info,
                                               uint8_t level,
                                               uint8_t description);
+
+avs_error_t _anjay_server_read_sni(anjay_unlocked_t *anjay,
+                                   anjay_iid_t security_iid,
+                                   anjay_security_config_t *security,
+                                   anjay_security_config_cache_t *cache);
 #endif // ANJAY_WITH_LWM2M11
 
 bool _anjay_socket_transport_supported(anjay_unlocked_t *anjay,

@@ -634,6 +634,17 @@
  * in the open source version.
  */
 #cmakedefine ANJAY_WITH_MODULE_OSCORE
+
+/**
+ * If enable Anjay doesn't handle composite operation (read, observe and write).
+ * Its use makes sense for LWM2M v1.1 upwards.
+ *
+ * This flag can be used to reduce the size of the resulting code.
+ *
+ * If active, anjay will respond with message code 5.01 Not Implemented to any
+ * composite type request.
+ */
+#cmakedefine ANJAY_WITHOUT_COMPOSITE_OPERATIONS
 /**@}*/
 
 #endif // ANJAY_CONFIG_H

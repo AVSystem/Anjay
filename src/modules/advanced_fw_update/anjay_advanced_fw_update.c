@@ -93,6 +93,11 @@ typedef struct {
 } advanced_fw_instance_t;
 
 typedef struct {
+    anjay_iid_t iid;
+    anjay_download_handle_t download_handle;
+} current_download_t;
+
+typedef struct {
     anjay_dm_installed_object_t def_ptr;
     const anjay_unlocked_dm_object_def_t *def;
 
@@ -107,7 +112,7 @@ typedef struct {
     size_t supplemental_iid_cache_count;
 
 #    ifdef ANJAY_WITH_DOWNLOADER
-    anjay_download_handle_t download_handle;
+    current_download_t current_download;
     bool downloads_suspended;
     AVS_LIST(anjay_download_config_t) download_queue;
 #    endif // ANJAY_WITH_DOWNLOADER
@@ -452,6 +457,18 @@ static int get_coap_tx_params(anjay_unlocked_t *anjay,
     }
     return -1;
 }
+
+static avs_time_duration_t
+get_tcp_request_timeout(anjay_unlocked_t *anjay, advanced_fw_instance_t *inst) {
+    avs_time_duration_t result = AVS_TIME_DURATION_INVALID;
+    if (inst->user_state.handlers->get_tcp_request_timeout) {
+        ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, anjay);
+        result = inst->user_state.handlers->get_tcp_request_timeout(
+                inst->iid, inst->user_state.arg, inst->package_uri);
+        ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
+    }
+    return result;
+}
 #    endif // ANJAY_WITH_DOWNLOADER
 
 static void
@@ -781,7 +798,8 @@ static int schedule_download_now(anjay_unlocked_t *anjay,
         }
     }
     avs_error_t err =
-            _anjay_download_unlocked(anjay, cfg, &fw->download_handle);
+            _anjay_download_unlocked(anjay, cfg,
+                                     &fw->current_download.download_handle);
     if (avs_is_err(err)) {
         anjay_advanced_fw_update_result_t update_result =
                 ANJAY_ADVANCED_FW_UPDATE_RESULT_CONNECTION_LOST;
@@ -807,8 +825,10 @@ static int schedule_download_now(anjay_unlocked_t *anjay,
 #        endif // ANJAY_WITH_SEND
         return -1;
     }
+    fw->current_download.iid = inst->iid;
     if (fw->downloads_suspended) {
-        _anjay_download_suspend_unlocked(anjay, fw->download_handle);
+        _anjay_download_suspend_unlocked(anjay,
+                                         fw->current_download.download_handle);
     }
     inst->retry_download_on_expired = (false);
     update_state_and_update_result(anjay, fw, inst,
@@ -822,12 +842,12 @@ static int schedule_download_now(anjay_unlocked_t *anjay,
 static void start_next_download_if_waiting(anjay_unlocked_t *anjay,
                                            advanced_fw_repr_t *fw) {
     if (fw->download_queue != NULL) {
-        if (schedule_download_now(
-                    anjay, fw,
-                    (advanced_fw_instance_t *) fw->download_queue->user_data,
-                    fw->download_queue)) {
+        advanced_fw_instance_t *inst =
+                (advanced_fw_instance_t *) fw->download_queue->user_data;
+        if (schedule_download_now(anjay, fw, inst, fw->download_queue)) {
             fw_log(WARNING, _("Scheduling next waiting download failed"));
         }
+        fw_log(TRACE, _("Scheduled download for instance %") PRIu16, inst->iid);
         avs_free((void *) (intptr_t) fw->download_queue->url);
         avs_free((void *) fw->download_queue->coap_tx_params);
         AVS_LIST_DELETE(&fw->download_queue);
@@ -845,7 +865,8 @@ static void download_finished(anjay_t *anjay_locked,
     } else {
         advanced_fw_repr_t *fw = get_fw(*obj);
         advanced_fw_instance_t *inst = (advanced_fw_instance_t *) inst_;
-        fw->download_handle = NULL;
+        fw->current_download.download_handle = NULL;
+        fw->current_download.iid = ANJAY_ID_INVALID;
         if (inst->state != ANJAY_ADVANCED_FW_UPDATE_STATE_DOWNLOADING) {
             // something already failed in download_write_block()
             reset_user_state(anjay, inst);
@@ -919,7 +940,7 @@ static void download_finished(anjay_t *anjay_locked,
 }
 
 static bool is_any_download_in_progress(advanced_fw_repr_t *fw) {
-    return fw->download_handle || fw->download_queue;
+    return fw->current_download.download_handle || fw->download_queue;
 }
 
 static int enqueue_download(anjay_unlocked_t *anjay,
@@ -986,6 +1007,7 @@ static int schedule_download(anjay_unlocked_t *anjay,
     if (!get_coap_tx_params(anjay, inst, &tx_params)) {
         cfg.coap_tx_params = &tx_params;
     }
+    cfg.tcp_request_timeout = get_tcp_request_timeout(anjay, inst);
     if (is_any_download_in_progress(fw)) {
         return enqueue_download(anjay, fw, inst, &cfg);
     }
@@ -1102,21 +1124,42 @@ static int write_firmware(anjay_unlocked_t *anjay,
 }
 
 #    ifdef ANJAY_WITH_DOWNLOADER
+static void download_queue_entry_cleanup(anjay_download_config_t *cfg) {
+    avs_free((void *) (intptr_t) cfg->url);
+    avs_free((void *) cfg->coap_tx_params);
+}
+
 static void
 cancel_existing_download_if_in_progress(anjay_unlocked_t *anjay,
                                         advanced_fw_repr_t *fw,
                                         advanced_fw_instance_t *inst) {
     if (inst->state == ANJAY_ADVANCED_FW_UPDATE_STATE_DOWNLOADING) {
-        if (inst->resume_download_job) {
-            assert(!fw->download_handle);
-            avs_sched_del(&inst->resume_download_job);
+        if (fw->current_download.download_handle
+                && fw->current_download.iid == inst->iid) {
+            _anjay_download_abort_unlocked(
+                    anjay, fw->current_download.download_handle);
+            assert(!fw->current_download.download_handle);
+            fw->current_download.iid = ANJAY_ID_INVALID;
+            fw_log(TRACE,
+                   _("Aborted ongoing download for instance ") "%" PRIu16,
+                   inst->iid);
+            start_next_download_if_waiting(anjay, fw);
             return;
         }
-        AVS_ASSERT(fw->download_handle,
-                   "download_handle is NULL - another Write handler called "
-                   "during a PUSH-mode download?!");
-        _anjay_download_abort_unlocked(anjay, fw->download_handle);
-        assert(!fw->download_handle);
+        AVS_LIST(anjay_download_config_t) *queued_cfg;
+        AVS_LIST_FOREACH_PTR(queued_cfg, &fw->download_queue) {
+            advanced_fw_instance_t *queued_inst =
+                    (advanced_fw_instance_t *) (*queued_cfg)->user_data;
+            if (queued_inst->iid == inst->iid) {
+                download_queue_entry_cleanup(*queued_cfg);
+                AVS_LIST_DELETE(queued_cfg);
+                fw_log(TRACE,
+                       _("Removed instance ") "%" PRIu16 _(
+                               " from download queue"),
+                       inst->iid);
+                return;
+            }
+        }
     }
 }
 #    endif // ANJAY_WITH_DOWNLOADER
@@ -1601,6 +1644,7 @@ static int fw_execute(anjay_unlocked_t *anjay,
 #    ifdef ANJAY_WITH_DOWNLOADER
         cancel_existing_download_if_in_progress(anjay, fw, inst);
 #    endif // ANJAY_WITH_DOWNLOADER
+
         reset_user_state(anjay, inst);
         update_state_and_update_result(
                 anjay, fw, inst, ANJAY_ADVANCED_FW_UPDATE_STATE_IDLE,
@@ -1734,8 +1778,7 @@ static void fw_delete(void *fw_) {
     }
 #    ifdef ANJAY_WITH_DOWNLOADER
     AVS_LIST_CLEAR(&fw->download_queue) {
-        avs_free((void *) (intptr_t) fw->download_queue->url);
-        avs_free((void *) fw->download_queue->coap_tx_params);
+        download_queue_entry_cleanup(fw->download_queue);
     }
 #    endif // ANJAY_WITH_DOWNLOADER
     // NOTE: fw itself will be freed when cleaning the objects list
@@ -1753,6 +1796,7 @@ int anjay_advanced_fw_update_install(
         fw_log(ERROR, _("out of memory"));
     } else {
         repr->def = &FIRMWARE_UPDATE;
+        repr->current_download.iid = ANJAY_ID_INVALID;
         if (config) {
 #    ifdef ANJAY_WITH_DOWNLOADER
             repr->prefer_same_socket_downloads =
@@ -2277,8 +2321,9 @@ void anjay_advanced_fw_update_pull_suspend(anjay_t *anjay_locked) {
     } else {
         advanced_fw_repr_t *fw = get_fw(*obj);
         assert(fw);
-        if (fw->download_handle) {
-            _anjay_download_suspend_unlocked(anjay, fw->download_handle);
+        if (fw->current_download.download_handle) {
+            _anjay_download_suspend_unlocked(
+                    anjay, fw->current_download.download_handle);
         }
         fw->downloads_suspended = true;
     }
@@ -2297,9 +2342,9 @@ int anjay_advanced_fw_update_pull_reconnect(anjay_t *anjay_locked) {
         advanced_fw_repr_t *fw = get_fw(*obj);
         assert(fw);
         fw->downloads_suspended = false;
-        if (fw->download_handle) {
-            result = _anjay_download_reconnect_unlocked(anjay,
-                                                        fw->download_handle);
+        if (fw->current_download.download_handle) {
+            result = _anjay_download_reconnect_unlocked(
+                    anjay, fw->current_download.download_handle);
         } else {
             result = 0;
         }

@@ -1,5 +1,25 @@
 # Changelog
 
+## 3.6.0 (October 9th, 2023)
+
+### Features
+
+- Added APIs for setting custom timeouts for downloads performed over CoAP+TCP
+  and HTTP, including firmware update downloads
+- Added `requirements.txt` file to manage Python dependencies more efficiently
+
+### Improvements
+- Clarified documentation on behavior of Firmware Update and Advanced Firmware
+  Update modules when ``anjay_fw_update_get_security_config_t`` and
+  ``anjay_advanced_fw_update_perform_upgrade_t`` callbacks, respectively, are
+  not defined.
+- Added compilation flag that disables all composite operations
+
+### Bugfixes
+
+- Updated integration tests so that they pass on macOS
+- Fix abort scenario in Advanced Firmware Update module
+
 ## 3.5.0 (September 7th, 2023)
 
 ### BREAKING CHANGES
@@ -32,6 +52,7 @@
   require extra care to maintain thread safety
 - Removed ``const`` qualifier from ``MAKE_URI_PATH()`` compound literal which
   triggers a plausible compiler bug on IAR EWARM v9.30
+- Reading SNI from the Security Object for the FOTA download connection
 
 ### Bugfixes
 

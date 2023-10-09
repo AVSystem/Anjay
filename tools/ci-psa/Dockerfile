@@ -7,9 +7,13 @@
 
 
 FROM ubuntu:22.04
-
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -yq git build-essential cmake zlib1g-dev doxygen python3 libpython3-dev libssl-dev python3-pip python3-sphinx clang-tools valgrind opensc libengine-pkcs11-openssl docker.io nodejs curl jq automake
-RUN pip3 install sphinx_rtd_theme cbor2 dpkt gitpython cryptography openpyxl
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive \
+    apt-get install -yq git build-essential cmake zlib1g-dev doxygen python3 \
+        libpython3-dev libssl-dev python3-pip clang-tools valgrind opensc \
+        libengine-pkcs11-openssl docker.io nodejs curl jq automake
+COPY requirements.txt requirements.txt
+RUN pip3 install -r requirements.txt
 
 RUN $(which echo) -e "                                                      \n\
                                                                             \n\

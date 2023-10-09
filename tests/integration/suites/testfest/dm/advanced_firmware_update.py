@@ -125,17 +125,20 @@ class AdvancedFirmwareUpdateWithHttpServer:
                     time.sleep(1)
 
                     test_case.during_download(self)
-                    try:
-                        self.wfile.write(firmware_package)
-                    except BrokenPipeError:
-                        pass
+                    self.wfile.write(firmware_package)
 
                 def log_request(code='-', size='-'):
                     # don't display logs on successful request
                     pass
 
+            class SilentServer(self.HTTP_SERVER_CLASS):
+                def handle_error(self, *args, **kwargs):
+                    # don't log BrokenPipeErrors
+                    if not isinstance(sys.exc_info()[1], BrokenPipeError):
+                        super().handle_error(*args, **kwargs)
+
             self.requests = []
-            self.http_server = self.HTTP_SERVER_CLASS(('', 0), FirmwareRequestHandler)
+            self.http_server = SilentServer(('', 0), FirmwareRequestHandler)
 
             self.server_thread = threading.Thread(target=lambda: self.http_server.serve_forever())
             self.server_thread.start()

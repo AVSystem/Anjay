@@ -940,15 +940,18 @@ static int read_as_batch(anjay_unlocked_t *anjay,
 
     int result = _anjay_dm_read_into_batch(builder, anjay, obj_ptr, path_info,
                                            connection_ssid, timestamp);
-#    ifdef ANJAY_WITH_LWM2M11
+#    if defined(ANJAY_WITH_LWM2M11) \
+            && !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
     if (action == ANJAY_ACTION_READ_COMPOSITE
             && (result == ANJAY_ERR_UNAUTHORIZED
                 || result == ANJAY_ERR_NOT_FOUND)) {
         result = 0;
     }
-#    else  // ANJAY_WITH_LWM2M11
+#    else  // defined(ANJAY_WITH_LWM2M11) &&
+           // !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
     (void) action;
-#    endif // ANJAY_WITH_LWM2M11
+#    endif // defined(ANJAY_WITH_LWM2M11) &&
+           // !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
     if (!result && !(*out_batch = _anjay_batch_builder_compile(&builder))) {
         anjay_log(ERROR, _("out of memory"));
         result = -1;
@@ -962,7 +965,8 @@ cast_to_const_batch_array(anjay_batch_t **batch_array) {
     return (const anjay_batch_t *const *) batch_array;
 }
 
-#    ifdef ANJAY_WITH_LWM2M11
+#    if defined(ANJAY_WITH_LWM2M11) \
+            && !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
 static anjay_uri_path_t
 get_composite_root_path(const anjay_batch_t *const *values,
                         size_t values_count) {
@@ -974,16 +978,19 @@ get_composite_root_path(const anjay_batch_t *const *values,
     }
     return prefix_buf;
 }
-#    endif // ANJAY_WITH_LWM2M11
+#    endif // defined(ANJAY_WITH_LWM2M11) &&
+           // !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
 
 static anjay_uri_path_t get_response_path(anjay_observation_value_t *value) {
     anjay_observation_t *observation = value->ref;
-#    ifdef ANJAY_WITH_LWM2M11
+#    if defined(ANJAY_WITH_LWM2M11) \
+            && !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
     if (observation->action == ANJAY_ACTION_READ_COMPOSITE) {
         return get_composite_root_path(cast_to_const_batch_array(value->values),
                                        observation->paths_count);
     }
-#    endif // ANJAY_WITH_LWM2M11
+#    endif // defined(ANJAY_WITH_LWM2M11) &&
+           // !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
     return observation->paths[0];
 }
 
@@ -1052,11 +1059,13 @@ initial_response_details(anjay_unlocked_t *anjay,
                          anjay_lwm2m_version_t lwm2m_version,
                          const anjay_batch_t *const *values) {
     bool requires_hierarchical_format;
-#    ifdef ANJAY_WITH_LWM2M11
+#    if defined(ANJAY_WITH_LWM2M11) \
+            && !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
     if (request->action == ANJAY_ACTION_READ_COMPOSITE) {
         requires_hierarchical_format = true;
     } else
-#    endif // ANJAY_WITH_LWM2M11
+#    endif // defined(ANJAY_WITH_LWM2M11) &&
+           // !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
     {
         assert(request->action == ANJAY_ACTION_READ);
         assert(values);
@@ -1080,11 +1089,13 @@ static int send_initial_response(anjay_unlocked_t *anjay,
     }
 
     anjay_uri_path_t root_path = request->uri;
-#    ifdef ANJAY_WITH_LWM2M11
+#    if defined(ANJAY_WITH_LWM2M11) \
+            && !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
     if (request->action == ANJAY_ACTION_READ_COMPOSITE) {
         root_path = get_composite_root_path(values, values_count);
     }
-#    endif // ANJAY_WITH_LWM2M11
+#    endif // defined(ANJAY_WITH_LWM2M11) &&
+           // !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
 
     anjay_unlocked_output_ctx_t *out_ctx = NULL;
     int result =
@@ -1258,7 +1269,8 @@ int _anjay_observe_handle(anjay_connection_ref_t ref,
                           request);
 }
 
-#    ifdef ANJAY_WITH_LWM2M11
+#    if defined(ANJAY_WITH_LWM2M11) \
+            && !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
 int _anjay_observe_composite_handle(anjay_connection_ref_t ref,
                                     AVS_LIST(anjay_uri_path_t) paths,
                                     const anjay_request_t *request) {
@@ -1271,7 +1283,8 @@ int _anjay_observe_composite_handle(anjay_connection_ref_t ref,
                           },
                           request);
 }
-#    endif // ANJAY_WITH_LWM2M11
+#    endif // defined(ANJAY_WITH_LWM2M11) &&
+           // !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
 
 static int observe_gc_ssid_iterate(anjay_unlocked_t *anjay,
                                    anjay_ssid_t ssid,

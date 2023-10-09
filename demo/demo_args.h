@@ -113,6 +113,7 @@ typedef struct cmdline_args {
      */
     bool fwu_tx_params_modified;
     avs_coap_udp_tx_params_t fwu_tx_params;
+    avs_time_duration_t fwu_tcp_request_timeout;
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
 #ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
     /**
@@ -123,6 +124,7 @@ typedef struct cmdline_args {
      */
     bool advanced_fwu_tx_params_modified;
     avs_coap_udp_tx_params_t advanced_fwu_tx_params;
+    avs_time_duration_t advanced_fwu_tcp_request_timeout;
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
 #ifdef ANJAY_WITH_LWM2M11
     anjay_lwm2m_version_config_t lwm2m_version_config;

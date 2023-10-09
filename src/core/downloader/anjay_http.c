@@ -35,6 +35,7 @@ typedef struct {
     avs_net_ssl_configuration_t ssl_configuration;
     anjay_security_config_cache_t security_config_cache;
     avs_net_resolved_endpoint_t preferred_endpoint;
+    avs_time_duration_t request_timeout;
     avs_http_t *client;
     avs_url_t *parsed_url;
     avs_stream_t *stream;
@@ -158,7 +159,7 @@ handle_http_packet_with_locked_buffer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr,
     // if anjay_download_suspend() was called
     if (ctx->next_action_job) {
         int result = AVS_RESCHED_DELAYED(&ctx->next_action_job,
-                                         AVS_NET_SOCKET_DEFAULT_RECV_TIMEOUT);
+                                         ctx->request_timeout);
         assert(!result);
         (void) result;
     }
@@ -302,8 +303,8 @@ static void send_request_unlocked(anjay_unlocked_t *anjay, uintptr_t id) {
     avs_http_set_header_storage(ctx->stream, NULL);
 
     if (AVS_SCHED_DELAYED(anjay->sched, &ctx->next_action_job,
-                          AVS_NET_SOCKET_DEFAULT_RECV_TIMEOUT, timeout_job,
-                          &ctx->common.id, sizeof(ctx->common.id))) {
+                          ctx->request_timeout, timeout_job, &ctx->common.id,
+                          sizeof(ctx->common.id))) {
         dl_log(ERROR, _("could not schedule timeout job"));
         _anjay_downloader_abort_transfer(
                 ctx_ptr, _anjay_download_status_failed(avs_errno(AVS_ENOMEM)));
@@ -604,6 +605,13 @@ _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
     ctx->ssl_configuration.prng_ctx = anjay->prng_ctx.ctx;
     avs_http_ssl_configuration(ctx->client, &ctx->ssl_configuration);
     avs_http_ssl_pre_connect_cb(ctx->client, http_ssl_pre_connect_cb, ctx);
+
+    if (avs_time_duration_less(AVS_TIME_DURATION_ZERO,
+                               cfg->tcp_request_timeout)) {
+        ctx->request_timeout = cfg->tcp_request_timeout;
+    } else {
+        ctx->request_timeout = AVS_NET_SOCKET_DEFAULT_RECV_TIMEOUT;
+    }
 
     if (!(ctx->parsed_url = avs_url_parse(cfg->url))) {
         err = avs_errno(AVS_EINVAL);

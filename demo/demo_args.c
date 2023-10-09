@@ -93,10 +93,13 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
     .fwu_tx_params_modified = false,
     .fwu_tx_params = ANJAY_COAP_DEFAULT_UDP_TX_PARAMS,
+    .fwu_tcp_request_timeout = { 0, -1 },
+// AVS_TIME_DURATION_INVALID
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
 #ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
     .advanced_fwu_tx_params_modified = false,
     .advanced_fwu_tx_params = ANJAY_COAP_DEFAULT_UDP_TX_PARAMS,
+    .advanced_fwu_tcp_request_timeout = { 0, -1 },
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
 #ifdef ANJAY_WITH_LWM2M11
     .lwm2m_version_config = {
@@ -505,6 +508,16 @@ static void print_help(const struct option *options) {
           "argument is used by Advanced Firmware Update and must be used "
           "together with --afu-psk-identity" },
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
+        { 333, "TIMEOUT", NULL,
+          "Request timeout (in seconds) to use for firmware updates performed "
+          "over CoAP+TCP and HTTP" },
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+        { 334, "TIMEOUT", NULL,
+          "Request timeout (in seconds) to use for Advanced Firmware Update "
+          "downloads performed over CoAP+TCP and HTTP" },
+#endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
     };
 
     const size_t screen_width = get_screen_width();
@@ -879,6 +892,12 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "afu-auto-suspend",              no_argument,       0, 330 },
         { "afu-psk-identity",              required_argument, 0, 331 },
         { "afu-psk-key",                   required_argument, 0, 332 },
+#endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
+        { "fwu-tcp-request-timeout",       required_argument, 0, 333 },
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+        { "afu-tcp-request-timeout",       required_argument, 0, 334 },
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
         { 0, 0, 0, 0 }
         // clang-format on
@@ -1687,6 +1706,34 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             parsed_args->advanced_fw_security_info.mode = AVS_NET_SECURITY_PSK;
             parsed_args->advanced_fw_security_info.data.psk.key =
                     avs_crypto_psk_key_info_from_buffer(psk_buf, psk_size);
+            break;
+        }
+#endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
+        case 333: {
+            double timeout_s;
+            if (parse_double(optarg, &timeout_s) || !isfinite(timeout_s)
+                    || timeout_s <= 0.0) {
+                demo_log(ERROR, "Expected TCP request timeout to be a positive "
+                                "floating point number");
+                goto finish;
+            }
+            parsed_args->fwu_tcp_request_timeout =
+                    avs_time_duration_from_fscalar(timeout_s, AVS_TIME_S);
+            break;
+        }
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+        case 334: {
+            double timeout_s;
+            if (parse_double(optarg, &timeout_s) || !isfinite(timeout_s)
+                    || timeout_s <= 0.0) {
+                demo_log(ERROR, "Expected TCP request timeout to be a positive "
+                                "floating point number");
+                goto finish;
+            }
+            parsed_args->advanced_fwu_tcp_request_timeout =
+                    avs_time_duration_from_fscalar(timeout_s, AVS_TIME_S);
             break;
         }
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE

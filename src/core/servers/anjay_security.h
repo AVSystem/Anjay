@@ -24,7 +24,6 @@ typedef struct {
     avs_url_t *uri;
     const anjay_transport_info_t *transport_info;
     bool is_encrypted;
-    anjay_server_name_indication_t sni;
 } anjay_connection_info_t;
 
 int _anjay_connection_security_generic_get_uri(

@@ -1273,7 +1273,8 @@ class AdvancedFirmwareUpdateCoapsReconnectTest(
         with self.file_server as file_server:
             file_server._server.reset()
             self.communicate('afu-reconnect')
-            self.assertDtlsReconnect(file_server._server, timeout_s=10, expected_error='0x7900')
+            self.assertDtlsReconnect(file_server._server, timeout_s=10,
+                                     expected_error=['0x7700', '0x7900'])
 
         deadline = time.time() + 20
         while time.time() < deadline:
@@ -2940,7 +2941,7 @@ class AdvancedFirmwareUpdateUriTestTwoNotLinkedImages(
         self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2}
         self.provide_response_app_img()
 
-        # Write /33629/0/0 (Firmware)
+        # Write /33629/0/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.APP,
                                                   self.get_firmware_uri())
 
@@ -2952,7 +2953,7 @@ class AdvancedFirmwareUpdateUriTestTwoNotLinkedImages(
         self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
-        # Write /33629/1/0 (Firmware)
+        # Write /33629/1/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.TEE,
                                                   self.get_firmware_uri())
 
@@ -3079,7 +3080,7 @@ class AdvancedFirmwareUpdateUriTestFourNotLinkedImages(
         self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2}
         self.provide_response_app_img()
 
-        # Write /33629/0/0 (Firmware)
+        # Write /33629/0/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.APP,
                                                   self.get_firmware_uri())
 
@@ -3091,7 +3092,7 @@ class AdvancedFirmwareUpdateUriTestFourNotLinkedImages(
         self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
-        # Write /33629/0/0 (Firmware)
+        # Write /33629/0/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.TEE,
                                                   self.get_firmware_uri())
 
@@ -3103,7 +3104,7 @@ class AdvancedFirmwareUpdateUriTestFourNotLinkedImages(
         self.FW_PKG_OPTS = {'magic': b'AJAYBOOT', 'version': 2}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
-        # Write /33629/0/0 (Firmware)
+        # Write /33629/0/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.BOOT,
                                                   self.get_firmware_uri())
 
@@ -3115,7 +3116,7 @@ class AdvancedFirmwareUpdateUriTestFourNotLinkedImages(
         self.FW_PKG_OPTS = {'magic': b'AJAYMODE', 'version': 2}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
-        # Write /33629/0/0 (Firmware)
+        # Write /33629/0/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.MODEM,
                                                   self.get_firmware_uri())
 
@@ -3150,7 +3151,7 @@ class AdvancedFirmwareUpdateUriTestFourNotLinkedImagesAPPFirst(
         self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2}
         self.provide_response_app_img(use_real_app=True)
 
-        # Write /33629/0/0 (Firmware)
+        # Write /33629/0/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.APP,
                                                   self.get_firmware_uri())
 
@@ -3162,7 +3163,7 @@ class AdvancedFirmwareUpdateUriTestFourNotLinkedImagesAPPFirst(
         self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
-        # Write /33629/0/0 (Firmware)
+        # Write /33629/0/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.TEE,
                                                   self.get_firmware_uri())
 
@@ -3174,7 +3175,7 @@ class AdvancedFirmwareUpdateUriTestFourNotLinkedImagesAPPFirst(
         self.FW_PKG_OPTS = {'magic': b'AJAYBOOT', 'version': 2}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
-        # Write /33629/0/0 (Firmware)
+        # Write /33629/0/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.BOOT,
                                                   self.get_firmware_uri())
 
@@ -3186,7 +3187,7 @@ class AdvancedFirmwareUpdateUriTestFourNotLinkedImagesAPPFirst(
         self.FW_PKG_OPTS = {'magic': b'AJAYMODE', 'version': 2}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
-        # Write /33629/0/0 (Firmware)
+        # Write /33629/0/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.MODEM,
                                                   self.get_firmware_uri())
 
@@ -3224,7 +3225,7 @@ class AdvancedFirmwareUpdateTestLinkedTeeToApp(
         # Check /33629/0/16 (LinkedInstances), there should not be any linked instances
         self.read_linked_and_check(Instances.APP, [])
 
-        # Write /33629/0/0 (Firmware)
+        # Write /33629/0/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.APP,
                                                   self.get_firmware_uri())
 
@@ -3253,7 +3254,7 @@ class AdvancedFirmwareUpdateTestLinkedOthersToApp(
         # Check /33629/0/16 (LinkedInstances), there should not be any linked instances
         self.read_linked_and_check(Instances.APP, [])
 
-        # Write /33629/0/0 (Firmware)
+        # Write /33629/0/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.APP,
                                                   self.get_firmware_uri())
 
@@ -3298,7 +3299,7 @@ class AdvancedFirmwareUpdateTestConflictingAppAndTee(
         # Check /33629/0/17, there should not be any conflicting instances
         self.read_conflicting_and_check(Instances.APP, [])
 
-        # Write /33629/0/0 (Firmware)
+        # Write /33629/0/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.APP,
                                                   self.get_firmware_uri())
 
@@ -3325,7 +3326,7 @@ class AdvancedFirmwareUpdateTestResolveConflictingAppAndTee(
         # Check /33629/0/17, there should not be any conflicting instances
         self.read_conflicting_and_check(Instances.APP, [])
 
-        # Write /33629/0/0 (Firmware)
+        # Write /33629/0/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.APP,
                                                   self.get_firmware_uri())
 
@@ -3338,7 +3339,7 @@ class AdvancedFirmwareUpdateTestResolveConflictingAppAndTee(
         self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
-        # Write /33629/1/0 (Firmware)
+        # Write /33629/1/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.TEE,
                                                   self.get_firmware_uri())
 
@@ -3368,7 +3369,7 @@ class AdvancedFirmwareUpdateTestResolveConflictingAndUpdateTeeAndBoot(
         # Check /33629/1/17, there should not be any conflicting instances
         self.read_conflicting_and_check(Instances.TEE, [])
 
-        # Write /33629/1/0 (Firmware)
+        # Write /33629/1/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.TEE,
                                                   self.get_firmware_uri())
 
@@ -3382,7 +3383,7 @@ class AdvancedFirmwareUpdateTestResolveConflictingAndUpdateTeeAndBoot(
                             'linked': [Instances.TEE]}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
-        # Write /33629/2/0 (Firmware)
+        # Write /33629/2/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.BOOT,
                                                   self.get_firmware_uri())
 
@@ -3422,7 +3423,7 @@ class AdvancedFirmwareUpdateTestNoConflictWithDownloadedEarlier(
         self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
-        # Write /33629/0/0 (Firmware)
+        # Write /33629/0/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.TEE,
                                                   self.get_firmware_uri())
 
@@ -3439,7 +3440,7 @@ class AdvancedFirmwareUpdateTestNoConflictWithDownloadedEarlier(
         # Check /33629/0/17, there should not be any conflicting instances
         self.read_conflicting_and_check(Instances.APP, [])
 
-        # Write /33629/0/0 (Firmware)
+        # Write /33629/0/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.APP,
                                                   self.get_firmware_uri())
 
@@ -3468,7 +3469,7 @@ class AdvancedFirmwareUpdateTestFailedUpdate(
         # Check /33629/1/17, there should not be any conflicting instances
         self.read_conflicting_and_check(Instances.TEE, [])
 
-        # Write /33629/1/0 (Firmware)
+        # Write /33629/1/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.TEE,
                                                   self.get_firmware_uri())
 
@@ -3482,7 +3483,7 @@ class AdvancedFirmwareUpdateTestFailedUpdate(
                             'linked': [Instances.TEE]}
         self.provide_response_additional_img(content=DUMMY_FILE, overwrite_original_img=False)
 
-        # Write /33629/2/0 (Firmware)
+        # Write /33629/2/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.BOOT,
                                                   self.get_firmware_uri())
 
@@ -3533,7 +3534,7 @@ class AdvancedFirmwareUpdateTestUpdateBootWithLinkedTee(
         # Check /33629/2/17, there should not be any conflicting instances
         self.read_conflicting_and_check(Instances.BOOT, [])
 
-        # Write /33629/2/0 (Firmware)
+        # Write /33629/2/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.BOOT,
                                                   self.get_firmware_uri())
 
@@ -3547,7 +3548,7 @@ class AdvancedFirmwareUpdateTestUpdateBootWithLinkedTee(
         self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
-        # Write /33629/0/0 (Firmware)
+        # Write /33629/0/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.TEE,
                                                   self.get_firmware_uri())
 
@@ -3604,7 +3605,7 @@ class AdvancedFirmwareUpdateTestSetConflictAfterCancelOfLinkedImage(
         # Check /33629/0/17, there should not be any conflicting instances
         self.read_conflicting_and_check(Instances.APP, [])
 
-        # Write /33629/0/0 (Firmware)
+        # Write /33629/0/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.APP,
                                                   self.get_firmware_uri())
 
@@ -3617,7 +3618,7 @@ class AdvancedFirmwareUpdateTestSetConflictAfterCancelOfLinkedImage(
         self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
-        # Write /33629/0/0 (Firmware)
+        # Write /33629/0/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.TEE,
                                                   self.get_firmware_uri())
 
@@ -3861,7 +3862,7 @@ class AdvancedFirmwareUpdateUriTestExplicitLinkedUpdate(
         self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2, 'linked': [1]}
         self.provide_response_app_img(use_real_app=True)
 
-        # Write /33629/0/0 (Firmware)
+        # Write /33629/0/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.APP,
                                                   self.get_firmware_uri())
 
@@ -3874,7 +3875,7 @@ class AdvancedFirmwareUpdateUriTestExplicitLinkedUpdate(
         self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2, 'linked': [0]}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
-        # Write /33629/1/0 (Firmware)
+        # Write /33629/1/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.TEE,
                                                   self.get_firmware_uri())
 
@@ -3969,7 +3970,7 @@ class AdvancedFirmwareUpdateUriTestExplicitSinglePartitionUpdate(
         self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2, 'linked': [1]}
         self.provide_response_app_img(use_real_app=True)
 
-        # Write /33629/0/0 (Firmware)
+        # Write /33629/0/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.APP,
                                                   self.get_firmware_uri())
 
@@ -3982,7 +3983,7 @@ class AdvancedFirmwareUpdateUriTestExplicitSinglePartitionUpdate(
         self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2, 'linked': [0]}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
-        # Write /33629/1/0 (Firmware)
+        # Write /33629/1/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.TEE,
                                                   self.get_firmware_uri())
 
@@ -4066,7 +4067,7 @@ class AdvancedFirmwareUpdateUriTestCheckPkgVersion(
                             'pkg_version': b'2.0.1'}
         self.provide_response_app_img()
 
-        # Write /33629/0/0 (Firmware)
+        # Write /33629/0/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.APP,
                                                   self.get_firmware_uri())
 
@@ -4098,7 +4099,7 @@ class AdvancedFirmwareUpdateVersionConflictTest(
                             'pkg_version': b'2.0.1'}
         self.provide_response_app_img()
 
-        # Write /33629/0/0 (Firmware)
+        # Write /33629/0/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.APP,
                                                   self.get_firmware_uri())
 
@@ -4127,7 +4128,7 @@ class AdvancedFirmwareUpdateVersionConflictTest(
                             'pkg_version': b'2.0.1'}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
-        # Write /33629/1/0 (Firmware)
+        # Write /33629/1/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.TEE,
                                                   self.get_firmware_uri())
 
@@ -4349,7 +4350,7 @@ class AdvancedFirmwareUpdateForceAppToUpdateFirstAndCheckProperStateOfAdditional
         self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2}
         self.provide_response_app_img(use_real_app=True)
 
-        # Write /33629/0/0 (Firmware)
+        # Write /33629/0/1 (Package URI)
         self.write_firmware_and_wait_for_download(Instances.APP,
                                                   self.get_firmware_uri())
 
@@ -4395,3 +4396,181 @@ class AdvancedFirmwareUpdateForceAppToUpdateFirstAndCheckProperStateOfAdditional
                          self.read_update_result(Instances.APP))
         self.assertEqual(UpdateResult.SUCCESS,
                          self.read_update_result(Instances.TEE))
+
+
+class AdvancedFirmwareUpdateCancelWhileDownloadQueued(AdvancedFirmwareUpdate.TestWithCoapServer):
+    def setUp(self, coap_server=None, *args, **kwargs):
+        super().setUp(coap_server=[None, None], *args, **kwargs)
+
+    def runTest(self):
+        # Prepare package for /33629/0
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2}
+        self.prepare_package_app_img(use_real_app=True)
+        with self.get_file_server(serv=0) as file_server:
+            file_server.set_resource('/firmwareAPP',
+                                     self.PACKAGE)
+            fw_uri1 = file_server.get_resource_uri('/firmwareAPP')
+
+        # Prepare package for /33629/1
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
+        self.prepare_package_additional_img(content=DUMMY_FILE)
+        with self.get_file_server(serv=1) as file_server:
+            file_server.set_resource('/firmwareTEE',
+                                     self.PACKAGE)
+            fw_uri2 = file_server.get_resource_uri('/firmwareTEE')
+
+        # Write /33629/0/1 (Firmware URI)
+        req1 = Lwm2mWrite(ResPath.AdvancedFirmwareUpdate[Instances.APP].PackageURI,
+                          fw_uri1)
+        self.serv.send(req1)
+
+        # Write /33629/1/1 (Firmware URI)
+        req2 = Lwm2mWrite(ResPath.AdvancedFirmwareUpdate[Instances.TEE].PackageURI,
+                          fw_uri2)
+        self.serv.send(req2)
+
+        # There should be two request already received
+        self.assertMsgEqual(Lwm2mChanged.matching(req1)(),
+                            self.serv.recv())
+        self.assertMsgEqual(Lwm2mChanged.matching(req2)(),
+                            self.serv.recv())
+
+        # Wait for download to start
+        self.wait_until_state_is(Instances.APP, UpdateState.DOWNLOADING)
+        # TEE URI is going to be queued but its state should be DOWNLOADING as well
+        self.wait_until_state_is(Instances.TEE, UpdateState.DOWNLOADING)
+
+        # Execute /33629/0/10 (Cancel)
+        req1 = Lwm2mExecute(ResPath.AdvancedFirmwareUpdate[Instances.APP].Cancel)
+        self.serv.send(req1)
+
+        # Execute /33629/1/10 (Cancel)
+        req2 = Lwm2mExecute(ResPath.AdvancedFirmwareUpdate[Instances.TEE].Cancel)
+        self.serv.send(req2)
+
+        # Check APP instance abort
+        if self.read_log_until_match(regex=re.escape(b'Aborted ongoing download for instance 0'),
+                                     timeout_s=5) is None:
+            raise self.failureException(
+                'string not found')
+
+        # Download for instance TEE should start then
+        if self.read_log_until_match(regex=re.escape(b'Scheduled download for instance 1'),
+                                     timeout_s=5) is None:
+            raise self.failureException(
+                'string not found')
+
+        # Check TEE instance abort
+        if self.read_log_until_match(regex=re.escape(b'Aborted ongoing download for instance 1'),
+                                     timeout_s=5) is None:
+            raise self.failureException(
+                'string not found')
+
+        # There should be two request already received
+        self.assertMsgEqual(Lwm2mChanged.matching(req1)(),
+                            self.serv.recv())
+        self.assertMsgEqual(Lwm2mChanged.matching(req2)(),
+                            self.serv.recv())
+
+
+        # Check states and results
+        self.assertEqual(UpdateState.IDLE, self.read_state(Instances.APP))
+        self.assertEqual(UpdateResult.CANCELLED,
+                         self.read_update_result(Instances.APP))
+        self.assertEqual(UpdateState.IDLE, self.read_state(Instances.TEE))
+        self.assertEqual(UpdateResult.CANCELLED,
+                         self.read_update_result(Instances.TEE))
+
+
+class AdvancedFirmwareUpdateCancelCurrentDownloadAndLeaveSecondOne(AdvancedFirmwareUpdate.TestWithCoapServer):
+    def setUp(self, coap_server=None, *args, **kwargs):
+        super().setUp(coap_server=[None, None], *args, **kwargs)
+
+    def runTest(self):
+        # Prepare package for /33629/0
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2}
+        self.prepare_package_app_img(use_real_app=True)
+        with self.get_file_server(serv=0) as file_server:
+            file_server.set_resource('/firmwareAPP',
+                                     self.PACKAGE)
+            fw_uri1 = file_server.get_resource_uri('/firmwareAPP')
+
+        # Prepare package for /33629/1
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
+        self.prepare_package_additional_img(content=DUMMY_FILE)
+        with self.get_file_server(serv=1) as file_server:
+            file_server.set_resource('/firmwareTEE',
+                                     self.PACKAGE)
+            fw_uri2 = file_server.get_resource_uri('/firmwareTEE')
+
+        # Write /33629/0/1 (Firmware URI)
+        req1 = Lwm2mWrite(ResPath.AdvancedFirmwareUpdate[Instances.APP].PackageURI,
+                          fw_uri1)
+        self.serv.send(req1)
+
+        # Write /33629/1/1 (Firmware URI)
+        req2 = Lwm2mWrite(ResPath.AdvancedFirmwareUpdate[Instances.TEE].PackageURI,
+                          fw_uri2)
+        self.serv.send(req2)
+
+        # There should be two request already received
+        self.assertMsgEqual(Lwm2mChanged.matching(req1)(),
+                            self.serv.recv())
+        self.assertMsgEqual(Lwm2mChanged.matching(req2)(),
+                            self.serv.recv())
+
+        # Wait for download to start
+        self.wait_until_state_is(Instances.APP, UpdateState.DOWNLOADING)
+        # TEE URI is going to be queued but its state should be DOWNLOADING as well
+        self.wait_until_state_is(Instances.TEE, UpdateState.DOWNLOADING)
+
+        # Execute /33629/0/10 (Cancel)
+        req = Lwm2mExecute(ResPath.AdvancedFirmwareUpdate[Instances.APP].Cancel)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.serv.recv())
+
+        # Check states and results
+        self.assertEqual(UpdateState.IDLE, self.read_state(Instances.APP))
+        self.assertEqual(UpdateResult.CANCELLED,
+                         self.read_update_result(Instances.APP))
+        self.wait_until_state_is(Instances.TEE, UpdateState.DOWNLOADED)
+        self.assertEqual(UpdateResult.INITIAL,
+                         self.read_update_result(Instances.TEE))
+
+
+class AdvancedFirmwareUpdateHttpRequestTimeoutTest(AdvancedFirmwareUpdate.TestWithPartialDownload,
+                                                   AdvancedFirmwareUpdate.TestWithHttpServer):
+    CHUNK_SIZE = 500
+    RESPONSE_DELAY = 0.5
+    TCP_REQUEST_TIMEOUT = 5
+
+    def setUp(self):
+        super().setUp(
+            extra_cmdline_args=['--afu-tcp-request-timeout', str(self.TCP_REQUEST_TIMEOUT)])
+
+    def runTest(self):
+        self.provide_response()
+
+        # Write /33629/0/1 (Firmware URI)
+        req = Lwm2mWrite(ResPath.AdvancedFirmwareUpdate[Instances.APP].PackageURI,
+                         self.get_firmware_uri())
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+
+        self.wait_for_half_download()
+        # Change RESPONSE_DELAY so that the server stops responding
+        self.RESPONSE_DELAY = self.TCP_REQUEST_TIMEOUT + 5
+
+        half_download_time = time.time()
+        self.wait_until_state_is(Instances.APP, UpdateState.IDLE,
+                                 timeout_s=self.TCP_REQUEST_TIMEOUT + 5)
+        fail_time = time.time()
+        self.assertEqual(self.read_update_result(Instances.APP), UpdateResult.CONNECTION_LOST)
+
+        self.assertAlmostEqual(fail_time, half_download_time + self.TCP_REQUEST_TIMEOUT, delta=1.5)
+
+
+class AdvancedFirmwareUpdateHttpRequestTimeoutTest20sec(
+    AdvancedFirmwareUpdateHttpRequestTimeoutTest):
+    TCP_REQUEST_TIMEOUT = 20

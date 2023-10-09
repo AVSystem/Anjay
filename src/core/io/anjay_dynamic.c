@@ -116,7 +116,7 @@ static const dynamic_format_def_t SUPPORTED_HIERARCHICAL_FORMATS[] = {
 AVS_STATIC_ASSERT(AVS_ARRAY_SIZE(SUPPORTED_HIERARCHICAL_FORMATS) > 1,
                   at_least_one_hierarchical_format_must_be_enabled);
 
-#ifdef ANJAY_WITH_LWM2M11
+#if defined(ANJAY_WITH_LWM2M11) && !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
 static const dynamic_format_def_t SUPPORTED_COMPOSITE_READ_FORMATS[] = {
 #    ifdef ANJAY_WITH_CBOR
     { AVS_COAP_FORMAT_SENML_CBOR, _anjay_input_senml_cbor_composite_read_create,
@@ -128,7 +128,10 @@ static const dynamic_format_def_t SUPPORTED_COMPOSITE_READ_FORMATS[] = {
 #    endif // ANJAY_WITH_SENML_JSON
     { AVS_COAP_FORMAT_NONE, NULL, NULL }
 };
+#endif // defined(ANJAY_WITH_LWM2M11) &&
+       // !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
 
+#ifdef ANJAY_WITH_LWM2M11
 static const dynamic_format_def_t SUPPORTED_COMPOSITE_WRITE_FORMATS[] = {
 #    ifdef ANJAY_WITH_CBOR
     { AVS_COAP_FORMAT_SENML_CBOR, _anjay_input_senml_cbor_create, NULL },
@@ -241,11 +244,12 @@ int _anjay_output_dynamic_construct(anjay_unlocked_output_ctx_t **out_ctx,
         (void) ((def = find_format(SUPPORTED_SIMPLE_FORMATS, format))
                 || (def = find_format(SUPPORTED_HIERARCHICAL_FORMATS, format)));
         break;
-#ifdef ANJAY_WITH_LWM2M11
+#if defined(ANJAY_WITH_LWM2M11) && !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
     case ANJAY_ACTION_READ_COMPOSITE:
         def = find_format(SUPPORTED_COMPOSITE_READ_FORMATS, format);
         break;
-#endif // ANJAY_WITH_LWM2M11
+#endif // defined(ANJAY_WITH_LWM2M11) &&
+       // !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
     default:
         break;
     }
@@ -284,12 +288,14 @@ int _anjay_input_dynamic_construct_raw(anjay_unlocked_input_ctx_t **out,
             constructor = def->input_ctx_constructor;
         }
         break;
+#    ifndef ANJAY_WITHOUT_COMPOSITE_OPERATIONS
     case ANJAY_ACTION_READ_COMPOSITE:
         if ((def = find_format(SUPPORTED_COMPOSITE_READ_FORMATS, format))) {
             constructor = def->input_ctx_constructor;
         }
         break;
-#endif // ANJAY_WITH_LWM2M11
+#    endif // ANJAY_WITHOUT_COMPOSITE_OPERATIONS
+#endif     // ANJAY_WITH_LWM2M11
     default:
         // Nothing to prepare - the action does not need an input context.
         return 0;

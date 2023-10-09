@@ -405,17 +405,29 @@ typedef int anjay_fw_update_perform_upgrade_t(void *user_ptr);
  * to <c>NULL</c>), @ref anjay_security_config_from_dm will be used as a default
  * way to get security information.
  *
- * In that (no user-defined handler) case, <c>anjay_security_config_pkix()</c>
- * will be used as an additional fallback if <c>ANJAY_WITH_LWM2M11</c> is
- * enabled and a valid trust store is available (either specified through
- * <c>use_system_trust_store</c>, <c>trust_store_certs</c> or
- * <c>trust_store_crls</c> fields in <c>anjay_configuration_t</c>, or obtained
- * via <c>/est/crts</c> request if <c>est_cacerts_policy</c> is set to
+ * <strong>WARNING:</strong> If the aforementioned @ref
+ * anjay_security_config_from_dm function won't find any server
+ * connection that matches the <c>download_uri</c> by protocol,
+ * hostname and port triple, it'll attempt to match a configuration just by the
+ * hostname. This may cause Anjay to use wrong security configuration, e.g. in
+ * case when both CoAPS LwM2M server and HTTPS firmware package server have the
+ * same hostname, but require different security configs.
+ *
+ * If no user-defined handler is provided and the call to
+ * @ref anjay_security_config_from_dm fails (including case when no matching
+ * LwM2M Security Object instance is found, even just by the hostname),
+ * @ref anjay_security_config_pkix will be used as an additional fallback
+ * if <c>ANJAY_WITH_LWM2M11</c> is enabled and a valid trust store is available
+ * (either specified through <c>use_system_trust_store</c>,
+ * <c>trust_store_certs</c> or <c>trust_store_crls</c> fields in
+ * <c>anjay_configuration_t</c>, or obtained via <c>/est/crts</c> request if
+ * <c>est_cacerts_policy</c> is set to
  * <c>ANJAY_EST_CACERTS_IF_EST_CONFIGURED</c> or
  * <c>ANJAY_EST_CACERTS_ALWAYS</c>).
  *
- * You may also use these functions yourself, for example as a fallback
- * mechanism.
+ * You may also use those aforementioned functions
+ * (@ref anjay_security_config_from_dm, @ref anjay_security_config_pkix) in
+ * your callback, for example as a fallback mechanism.
  *
  * @param user_ptr            Opaque pointer to user data, as passed to
  *                            @ref anjay_fw_update_install
@@ -465,6 +477,30 @@ typedef int anjay_fw_update_get_security_config_t(
  */
 typedef avs_coap_udp_tx_params_t
 anjay_fw_update_get_coap_tx_params_t(void *user_ptr, const char *download_uri);
+
+/**
+ * Returns request timeout to be used during firmware update over CoAP+TCP or
+ * HTTP.
+ *
+ * If this handler is not implemented at all (with the corresponding field set
+ * to <c>NULL</c>), <c>coap_tcp_request_timeout</c> from <c>anjay_t</c> object
+ * will be used for CoAP+TCP, and <c>AVS_NET_SOCKET_DEFAULT_RECV_TIMEOUT</c>
+ * (i.e., 30 seconds) will be used for HTTP.
+ *
+ * <strong>NOTE:</strong> This callback is called even for non-TCP downloads,
+ * but the returned transmission parameters are ignored in that case.
+ *
+ * @param user_ptr      Opaque pointer to user data, as passed to
+ *                      @ref anjay_fw_update_install .
+ *
+ * @param download_uri  Target firmware URI.
+ *
+ * @returns The desired request timeout. If the value returned is non-positive
+ *          (including zero and invalid value), the default will be used.
+ */
+typedef avs_time_duration_t
+anjay_fw_update_get_tcp_request_timeout_t(void *user_ptr,
+                                          const char *download_uri);
 
 /**
  * Handler callbacks that shall implement the platform-specific part of firmware
@@ -543,6 +579,10 @@ typedef struct {
     /** Queries CoAP transmission parameters to be used during firmware
      * update; @ref anjay_fw_update_get_coap_tx_params_t */
     anjay_fw_update_get_coap_tx_params_t *get_coap_tx_params;
+
+    /** Queries request timeout to be used during firmware update over CoAP+TCP
+     * or HTTP; @ref anjay_advanced_fw_update_get_tcp_request_timeout */
+    anjay_fw_update_get_tcp_request_timeout_t *get_tcp_request_timeout;
 } anjay_fw_update_handlers_t;
 
 /**
@@ -623,8 +663,9 @@ int anjay_fw_update_set_result(anjay_t *anjay, anjay_fw_update_result_t result);
  *
  * When PULL-mode downloads are suspended, @ref anjay_fw_update_stream_open_t
  * will <strong>NOT</strong> be called when a download request is issued.
- * However, @ref anjay_fw_update_get_security_config_t and
- * @ref anjay_fw_update_get_coap_tx_params_t will be called. You may call
+ * However, @ref anjay_fw_update_get_security_config_t,
+ * @ref anjay_fw_update_get_coap_tx_params_t and
+ * @ref anjay_fw_update_get_tcp_request_timeout_t will be called. You may call
  * @ref anjay_fw_update_pull_reconnect from one of these functions if you decide
  * to accept the download immediately after all.
  *

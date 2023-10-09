@@ -368,6 +368,18 @@ static int get_coap_tx_params(anjay_unlocked_t *anjay,
     }
     return -1;
 }
+
+static avs_time_duration_t get_tcp_request_timeout(anjay_unlocked_t *anjay,
+                                                   fw_repr_t *fw) {
+    avs_time_duration_t result = AVS_TIME_DURATION_INVALID;
+    if (fw->user_state.handlers->get_tcp_request_timeout) {
+        ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, anjay);
+        result = fw->user_state.handlers->get_tcp_request_timeout(
+                fw->user_state.arg, fw->package_uri);
+        ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
+    }
+    return result;
+}
 #    endif // ANJAY_WITH_DOWNLOADER
 
 static void handle_err_result(anjay_unlocked_t *anjay,
@@ -680,6 +692,7 @@ static int schedule_download(anjay_unlocked_t *anjay,
     if (!get_coap_tx_params(anjay, fw, &tx_params)) {
         cfg.coap_tx_params = &tx_params;
     }
+    cfg.tcp_request_timeout = get_tcp_request_timeout(anjay, fw);
 
     assert(!fw->download_handle);
     avs_error_t err =

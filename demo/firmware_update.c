@@ -478,6 +478,13 @@ fw_get_coap_tx_params(void *fw_, const char *download_uri) {
     return fw->coap_tx_params;
 }
 
+static avs_time_duration_t
+fw_get_tcp_request_timeout(void *fw_, const char *download_uri) {
+    fw_update_logic_t *fw = (fw_update_logic_t *) fw_;
+    (void) download_uri;
+    return fw->tcp_request_timeout;
+}
+
 static anjay_fw_update_handlers_t FW_UPDATE_HANDLERS = {
     .stream_open = fw_stream_open,
     .stream_write = fw_stream_write,
@@ -573,6 +580,7 @@ int firmware_update_install(anjay_t *anjay,
                             const char *persistence_file,
                             const avs_net_security_info_t *security_info,
                             const avs_coap_udp_tx_params_t *tx_params,
+                            avs_time_duration_t tcp_request_timeout,
                             anjay_fw_update_result_t delayed_result,
                             bool prefer_same_socket_downloads,
 #ifdef ANJAY_WITH_SEND
@@ -600,6 +608,13 @@ int firmware_update_install(anjay_t *anjay,
         FW_UPDATE_HANDLERS.get_coap_tx_params = fw_get_coap_tx_params;
     } else {
         FW_UPDATE_HANDLERS.get_coap_tx_params = NULL;
+    }
+
+    if (avs_time_duration_valid(tcp_request_timeout)) {
+        fw->tcp_request_timeout = tcp_request_timeout;
+        FW_UPDATE_HANDLERS.get_tcp_request_timeout = fw_get_tcp_request_timeout;
+    } else {
+        FW_UPDATE_HANDLERS.get_tcp_request_timeout = NULL;
     }
 
     persistence_file_data_t data = read_persistence_file(persistence_file);

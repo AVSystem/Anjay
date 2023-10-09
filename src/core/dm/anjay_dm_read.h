@@ -39,11 +39,12 @@ int _anjay_dm_read_and_destroy_ctx(anjay_unlocked_t *anjay,
                                    anjay_ssid_t requesting_ssid,
                                    anjay_unlocked_output_ctx_t **out_ctx_ptr);
 
-#ifdef ANJAY_WITH_LWM2M11
+#if defined(ANJAY_WITH_LWM2M11) && !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
 int _anjay_dm_read_or_observe_composite(anjay_connection_ref_t connection,
                                         const anjay_request_t *request,
                                         anjay_unlocked_input_ctx_t *in_ctx);
-#endif // ANJAY_WITH_LWM2M11
+#endif // defined(ANJAY_WITH_LWM2M11) &&
+       // !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
 
 VISIBILITY_PRIVATE_HEADER_END
 

@@ -405,7 +405,7 @@ int _anjay_dm_write(anjay_unlocked_t *anjay,
     return result;
 }
 
-#ifdef ANJAY_WITH_LWM2M11
+#if defined(ANJAY_WITH_LWM2M11) && !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
 int _anjay_dm_write_composite(anjay_unlocked_t *anjay,
                               const anjay_request_t *request,
                               anjay_ssid_t ssid,
@@ -476,7 +476,8 @@ finish:
     _anjay_notify_clear_queue(&notify_queue);
     return result;
 }
-#endif // ANJAY_WITH_LWM2M11
+#endif // defined(ANJAY_WITH_LWM2M11) &&
+       // !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
 
 int _anjay_dm_write_created_instance_and_move_to_next_entry(
         anjay_unlocked_t *anjay,

@@ -102,10 +102,11 @@ Make use of the `coverage script <tools/coverage>`_ to generate a code coverage 
 
 Before submitting your code, run the whole test suite (``make check``) to ensure that it does not introduce regressions. Use ``valgrind`` and Address Sanitizer to check for memory corruption errors.
 
-Running tests on Ubuntu 16.04 or later: ::
+Running tests on Ubuntu 20.04 or later: ::
 
     # Install these for tests:
-    sudo apt-get install libpython3-dev libssl-dev python3 python3-cryptography python3-jinja2 python3-sphinx python3-requests clang valgrind clang-tools
+    sudo apt-get install python3-pip git libmbedtls-dev libssl-dev zlib1g-dev python3 libpython3-dev wget valgrind curl cmake build-essential tshark
+    pip3 install -U -r requirements.txt
     # Configure and run check target
     ./devconfig && make check
 
@@ -119,7 +120,7 @@ Running tests on CentOS 7 or later: ::
     # Use update-alternatives to create a /usr/bin/python3 symlink with priority 0
     # (lowest possible)
     sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.5 0
-    sudo python3 -m pip install cryptography jinja2 requests sphinx sphinx_rtd_theme
+    sudo python3 -m pip install -r requirements.txt
 
     # Configure and run check target
     # NOTE: clang-3.4 static analyzer (default version for CentOS) gives false
@@ -130,7 +131,7 @@ Running tests on macOS Sierra or later: ::
 
     # Install these for tests:
     brew install python3 openssl llvm
-    pip3 install cryptography sphinx sphinx_rtd_theme requests
+    pip3 install -r requirements.txt
 
     # Configure and run check target:
     # if the scan-build script is located somewhere else, then you need to

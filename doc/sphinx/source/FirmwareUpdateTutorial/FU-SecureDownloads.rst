@@ -74,6 +74,15 @@ Security information is configured in Anjay through a structure:
          * to be used.
          */
         avs_net_socket_tls_ciphersuites_t tls_ciphersuites;
+
+        /*
+         * Server Name Indicator to use for authenticating with the peer during
+         * secure TLS connection. The value is passed to the underlying TLS library
+         * that need to take this variable into account for it make any effect. This
+         * field is optional and can be left zero-initialized. If not set the
+         * integration layer should use the Server URI instead.
+         */
+        const char *server_name_indication;
     } anjay_security_config_t;
 
 And specifically, it's the ``security_info`` field that is of interest to
@@ -294,6 +303,10 @@ by the user:
         /** Queries CoAP transmission parameters to be used during firmware
          * update; @ref anjay_fw_update_get_coap_tx_params_t */
         anjay_fw_update_get_coap_tx_params_t *get_coap_tx_params;
+
+        /** Queries request timeout to be used during firmware update over CoAP+TCP
+         * or HTTP; @ref anjay_advanced_fw_update_get_tcp_request_timeout */
+        anjay_fw_update_get_tcp_request_timeout_t *get_tcp_request_timeout;
     } anjay_fw_update_handlers_t;
 
 Now, the ``anjay_fw_update_get_security_config_t`` job is to fill
@@ -322,6 +335,15 @@ Now, the ``anjay_fw_update_get_security_config_t`` job is to fill
          * to be used.
          */
         avs_net_socket_tls_ciphersuites_t tls_ciphersuites;
+
+        /*
+         * Server Name Indicator to use for authenticating with the peer during
+         * secure TLS connection. The value is passed to the underlying TLS library
+         * that need to take this variable into account for it make any effect. This
+         * field is optional and can be left zero-initialized. If not set the
+         * integration layer should use the Server URI instead.
+         */
+        const char *server_name_indication;
     } anjay_security_config_t;
 
 We've already seen in previous sections how to configure

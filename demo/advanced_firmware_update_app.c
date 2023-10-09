@@ -169,6 +169,16 @@ static avs_coap_udp_tx_params_t fw_get_coap_tx_params(
     return fw->coap_tx_params;
 }
 
+static avs_time_duration_t fw_get_tcp_request_timeout(
+        anjay_iid_t iid, void *user_ptr, const char *download_uri) {
+    (void) iid;
+    (void) download_uri;
+    advanced_fw_update_logic_t *fw_table =
+            (advanced_fw_update_logic_t *) user_ptr;
+    advanced_fw_update_logic_t *fw = &fw_table[FW_UPDATE_IID_APP];
+    return fw->tcp_request_timeout;
+}
+
 static anjay_advanced_fw_update_handlers_t handlers = {
     .stream_open = fw_stream_open,
     .stream_write = fw_update_common_write,
@@ -198,6 +208,7 @@ int advanced_firmware_update_application_install(
         anjay_advanced_fw_update_initial_state_t *init_state,
         const avs_net_security_info_t *security_info,
         const avs_coap_udp_tx_params_t *tx_params,
+        avs_time_duration_t tcp_request_timeout,
         bool auto_suspend) {
     advanced_fw_update_logic_t *fw_logic = &fw_table[FW_UPDATE_IID_APP];
 
@@ -219,6 +230,13 @@ int advanced_firmware_update_application_install(
         handlers.get_coap_tx_params = fw_get_coap_tx_params;
     } else {
         handlers.get_coap_tx_params = NULL;
+    }
+
+    if (avs_time_duration_valid(tcp_request_timeout)) {
+        fw_logic->tcp_request_timeout = tcp_request_timeout;
+        handlers.get_tcp_request_timeout = fw_get_tcp_request_timeout;
+    } else {
+        handlers.get_tcp_request_timeout = NULL;
     }
 
     fw_global = fw_logic;

@@ -1309,6 +1309,15 @@ typedef struct {
      * to be used.
      */
     avs_net_socket_tls_ciphersuites_t tls_ciphersuites;
+
+    /*
+     * Server Name Indicator to use for authenticating with the peer during
+     * secure TLS connection. The value is passed to the underlying TLS library
+     * that need to take this variable into account for it make any effect. This
+     * field is optional and can be left zero-initialized. If not set the
+     * integration layer should use the Server URI instead.
+     */
+    const char *server_name_indication;
 } anjay_security_config_t;
 
 /**

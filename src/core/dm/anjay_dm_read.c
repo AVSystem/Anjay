@@ -527,6 +527,7 @@ int _anjay_dm_read_resource_u32_array(anjay_unlocked_t *anjay,
     return result;
 }
 
+#    ifndef ANJAY_WITHOUT_COMPOSITE_OPERATIONS
 static int cache_all_paths(anjay_unlocked_input_ctx_t *in_ctx,
                            AVS_LIST(anjay_uri_path_t) *out_paths) {
     AVS_LIST(anjay_uri_path_t) *endptr = out_paths;
@@ -571,13 +572,13 @@ int _anjay_dm_read_or_observe_composite(anjay_connection_ref_t connection,
     }
     if (request->observe) {
         dm_log(DEBUG, _("Observe Composite"));
-#    ifdef ANJAY_WITH_OBSERVE
+#        ifdef ANJAY_WITH_OBSERVE
         result = _anjay_observe_composite_handle(connection, cached_paths,
                                                  request);
-#    else  // ANJAY_WITH_OBSERVE
+#        else  // ANJAY_WITH_OBSERVE
         dm_log(ERROR, _("Observe support disabled"));
         return ANJAY_ERR_BAD_OPTION;
-#    endif // ANJAY_WITH_OBSERVE
+#        endif // ANJAY_WITH_OBSERVE
     } else {
         anjay_unlocked_t *anjay = _anjay_from_server(connection.server);
         const anjay_msg_details_t details = _anjay_dm_response_details_for_read(
@@ -641,4 +642,5 @@ int _anjay_dm_read_or_observe_composite(anjay_connection_ref_t connection,
     AVS_LIST_CLEAR(&cached_paths);
     return result;
 }
-#endif // ANJAY_WITH_LWM2M11
+#    endif // ANJAY_WITHOUT_COMPOSITE_OPERATIONS
+#endif     // ANJAY_WITH_LWM2M11

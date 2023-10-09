@@ -214,7 +214,9 @@ class Lwm2mAsserts:
         with self.assertRaises(RuntimeError) as raised:
             serv.recv(timeout_s=timeout_s, deadline=deadline)
         # -0x6780 == MBEDTLS_ERR_SSL_CLIENT_RECONNECT
-        self.assertIn(expected_error, raised.exception.args[0])
+        if isinstance(expected_error, str):
+            expected_error = [expected_error]
+        self.assertTrue(any(err in raised.exception.args[0] for err in expected_error))
 
     def assertPktIsDtlsClientHello(self, pkt, seq_number=ANY):
         if seq_number is not ANY and seq_number >= 2 ** 48:

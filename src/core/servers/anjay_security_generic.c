@@ -290,6 +290,11 @@ static avs_error_t init_cert_security(anjay_unlocked_t *anjay,
         }
     }
     avs_stream_cleanup(&server_pk_membuf);
+#ifdef ANJAY_WITH_LWM2M11
+    if (avs_is_ok(err)) {
+        err = _anjay_server_read_sni(anjay, security_iid, security, cache);
+    }
+#endif // ANJAY_WITH_LWM2M11
     if (avs_is_err(err)) {
         return err;
     }
@@ -348,8 +353,7 @@ static avs_error_t init_security(anjay_unlocked_t *anjay,
     case ANJAY_SECURITY_PSK:
         return _anjay_connection_init_psk_security(
                 anjay, security_iid, ANJAY_DM_RID_SECURITY_PK_OR_IDENTITY,
-                ANJAY_DM_RID_SECURITY_SECRET_KEY, &security->security_info,
-                cache);
+                ANJAY_DM_RID_SECURITY_SECRET_KEY, security, cache);
     case ANJAY_SECURITY_CERTIFICATE:
     case ANJAY_SECURITY_EST:
         return init_cert_security(anjay, ssid, security_iid, security,

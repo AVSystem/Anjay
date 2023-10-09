@@ -747,15 +747,6 @@ AVS_UNIT_TEST(queue_mode, change) {
     _anjay_mock_dm_expect_resource_read(
             anjay, &FAKE_SECURITY2, 1, ANJAY_DM_RID_SECURITY_SERVER_URI,
             ANJAY_ID_INVALID, 0, ANJAY_MOCK_DM_STRING(0, "coap://127.0.0.1"));
-#ifdef ANJAY_WITH_LWM2M11
-    // get SNI
-    _anjay_mock_dm_expect_list_resources(
-            anjay, &FAKE_SECURITY2, 1, 0,
-            (const anjay_mock_dm_res_entry_t[]) { { ANJAY_DM_RID_SECURITY_SNI,
-                                                    ANJAY_DM_RES_R,
-                                                    ANJAY_DM_RES_ABSENT },
-                                                  ANJAY_MOCK_DM_RES_END });
-#endif // ANJAY_WITH_LWM2M11
 
     // data model for the Update message - just fake an empty one
     _anjay_mock_dm_expect_list_instances(
@@ -935,11 +926,6 @@ expect_refresh_server__(anjay_t *anjay,
     _anjay_mock_dm_expect_resource_read(
             anjay, &FAKE_SECURITY2, 1, ANJAY_DM_RID_SECURITY_SERVER_URI,
             ANJAY_ID_INVALID, 0, ANJAY_MOCK_DM_STRING(0, "coap://127.0.0.1"));
-#ifdef ANJAY_WITH_LWM2M11
-    // Attempt to read SNI
-    _anjay_mock_dm_expect_list_resources(anjay, &FAKE_SECURITY2, 1, 0,
-                                         FAKE_SECURITY_RESOURCES);
-#endif // ANJAY_WITH_LWM2M11
     if (args->with_reconnect == RECONNECT_NONE) {
         return;
     }

@@ -185,6 +185,19 @@ typedef struct anjay_download_config {
     avs_coap_udp_tx_params_t *coap_tx_params;
 
     /**
+     * Time of inactivity that will cause the download to time out when using
+     * TCP-based transports (i.e., CoAP+TCP or HTTP).
+     *
+     * If uninitialized or otherwise non-positive (including zero and invalid
+     * value), the value passed as
+     * <c>anjay_configuration_t::coap_tcp_request_timeout</c> (or its default,
+     * which is 30 seconds) will be used for CoAP+TCP, and
+     * <c>AVS_NET_SOCKET_DEFAULT_RECV_TIMEOUT</c> (i.e., 30 seconds) will be
+     * used for HTTP.
+     */
+    avs_time_duration_t tcp_request_timeout;
+
+    /**
      * If set to true, the downloader module will attempt performing downloads
      * over the same sockets as existing LwM2M Servers (if the download URI is
      * found to match the URI of some LwM2M Server). Moreover, if set to true,

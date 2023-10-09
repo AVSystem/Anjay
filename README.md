@@ -26,9 +26,10 @@ The project has been created and is actively maintained by [AVSystem](https://ww
 * [About OMA LwM2M](#about-oma-lwm2m)
 * [Quickstart guide](#quickstart-guide)
   * [Dependencies](#dependencies)
-    * [Ubuntu 18.04 LTS / Raspbian Buster or later](#ubuntu-1804-lts--raspbian-buster-or-later)
+    * [Ubuntu 20.04 LTS / Raspbian Buster or later](#ubuntu-2004-lts--raspbian-buster-or-later)
     * [CentOS 7 or later](#centos-7-or-later)
     * [macOS Sierra or later, with Homebrew](#macos-sierra-or-later-with-homebrew)
+    * [Python dependencies](#python-dependencies)
   * [Running the demo client](#running-the-demo-client)
   * [Detailed compilation guide](#detailed-compilation-guide)
     * [Building using CMake](#building-using-cmake)
@@ -145,7 +146,7 @@ More details about OMA LwM2M: [Brief introduction to LwM2M](https://AVSystem.git
     -   [Doxygen](http://www.doxygen.nl/),
     -   [Sphinx](https://www.sphinx-doc.org/en/master/).
 
-#### Ubuntu 18.04 LTS / Raspbian Buster or later
+#### Ubuntu 20.04 LTS / Raspbian Buster or later
 
 <!-- deps_install_begin -->
 ``` sh
@@ -165,6 +166,15 @@ sudo yum install -y which git make cmake3 mbedtls-devel gcc gcc-c++ zlib-devel
 
 ``` sh
 brew install cmake mbedtls openssl
+```
+
+#### Python dependencies
+
+In order to run integration tests or `nsh_lwm2m` server, some additional Python
+modules are required. To install them, you can use `requirements.txt` file by
+running the following command:
+```sh
+pip3 install -U -r requirements.txt
 ```
 
 ### Running the demo client
@@ -287,12 +297,14 @@ docker run -it anjay
 
 ## Embedded operating systems ports
 
-If you want to use Anjay on Mbed OS, Zephyr OS, FreeRTOS or ESP-IDF check our demo
+If you want to use Anjay on Mbed OS, Zephyr OS, FreeRTOS, Azure RTOS or ESP-IDF check our demo
 applications available in other repositories:
 - [Anjay-mbedos-client](https://github.com/AVSystem/Anjay-mbedos-client) (uses [Anjay-mbedos](https://github.com/AVSystem/Anjay-mbedos) integration layer)
 - [Anjay-zephyr-client](https://github.com/AVSystem/Anjay-zephyr-client) (uses [Anjay-zephyr](https://github.com/AVSystem/Anjay-zephyr) integration layer)
 - [Anjay-freertos-client](https://github.com/AVSystem/Anjay-freertos-client)
-- [Anjay-esp32-client](https://github.com/AVSystem/Anjay-esp32-client)
+- [Anjay-stm32-azurertos-client](https://github.com/AVSystem/Anjay-stm32-azurertos-client)
+- [Anjay-esp32-client](https://github.com/AVSystem/Anjay-esp32-client) (uses [Anjay-esp-idf](https://github.com/AVSystem/Anjay-esp-idf) integration layer)
+- [Anjay-pico-client](https://github.com/AVSystem/Anjay-pico-client) (uses FreeRTOS Kernel)
 
 ## Raspberry Pi client
 

@@ -37,15 +37,15 @@ CoAP(s)/TCP
 The download fails if either the connection could not be established (e.g.
 TLS handshake failure, remote host is down) or the TCP stack declares
 the connection as broken, or when there is no response to the request for
-**5 minutes**.
+the configured time; by default that time is 30 seconds.
 
 HTTP(s)
 """""""
 
 The download fails due to similar reasons as above. Since HTTP(s) operates
 over TCP and the TCP stack maintains retransmissions and other things in a
-way outside of our control. The difference is that here the response timeout
-is fixed to **30 seconds**.
+way outside of our control. The reponse timeout is configured the same way as
+for CoAP(s)/TCP, and the default timeout is also 30 seconds.
 
 
 So what happens when the download fails?
@@ -64,13 +64,12 @@ problems as it doesn't seem to be supported by the LwM2M protocol.
 How can we ensure higher success rate?
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-As described in previous sections, for any TCP based transport you can't do
-much in terms of when the firmware download is considered as failed. The
-timeouts are, at the time of writing this tutorial, fixed and cannot be
-changed during runtime.
+For CoAP/UDP, you can provide the :ref:`CoAP transmission parameters
+<coap-retransmission-parameters>` by implementing the ``get_coap_tx_params``
+handler, which is a part of ``anjay_fw_update_handlers_t``. If not provided,
+default CoAP transmission parameters (or passed as part of
+``anjay_configuration_t``) will be used.
 
-However, CoAP/UDP provides much more control. :ref:`CoAP transmission
-parameters <coap-retransmission-parameters>` can be provided by
-the user, who implements ``get_coap_tx_params``, which is a part of
-``anjay_fw_update_handlers_t``. If not provided, default CoAP transmission
-parameters (or passed as part of ``anjay_configuration_t``) will be used.
+In a similar manner, for TCP-based transports (i.e., CoAP(s)/TCP and HTTP(s))
+you can implement the ``get_tcp_request_timeout`` to set a custom request
+timeout. This is the time of stream inactivity that will be treated as an error.

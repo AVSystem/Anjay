@@ -150,6 +150,15 @@ class FirmwareUpdate:
 
             self.fail('firmware still not downloaded')
 
+        def wait_until_state_is(self, state, timeout_s=10):
+            deadline = time.time() + timeout_s
+            while time.time() < deadline:
+                time.sleep(0.1)
+                if self.read_state() == state:
+                    return
+
+            self.fail(f'state still is not {state}')
+
     class TestWithHttpServerMixin:
         RESPONSE_DELAY = 0
         CHUNK_SIZE = sys.maxsize
@@ -203,17 +212,20 @@ class FirmwareUpdate:
 
                     for chunk in chunks(response_content):
                         time.sleep(test_case.RESPONSE_DELAY)
-                        try:
-                            self.wfile.write(chunk)
-                        except BrokenPipeError:
-                            pass
+                        self.wfile.write(chunk)
                         self.wfile.flush()
 
                 def log_request(self, code='-', size='-'):
                     # don't display logs on successful request
                     pass
 
-            return http.server.HTTPServer(('', 0), FirmwareRequestHandler)
+            class SilentServer(http.server.HTTPServer):
+                def handle_error(self, *args, **kwargs):
+                    # don't log BrokenPipeErrors
+                    if not isinstance(sys.exc_info()[1], BrokenPipeError):
+                        super().handle_error(*args, **kwargs)
+
+            return SilentServer(('', 0), FirmwareRequestHandler)
 
         def write_firmware_and_wait_for_download(self, *args, **kwargs):
             requests = list(self.requests)
@@ -537,10 +549,7 @@ class FirmwareUpdate:
 
                     while offset < len(response_content):
                         chunk = response_content[offset:offset + 1024]
-                        try:
-                            self.wfile.write(chunk)
-                        except BrokenPipeError:
-                            pass
+                        self.wfile.write(chunk)
                         offset += len(chunk)
                         time.sleep(0.5)
 
@@ -1366,7 +1375,8 @@ class FirmwareUpdateCoapsReconnectTest(FirmwareUpdate.TestWithPartialCoapsDownlo
         with self.file_server as file_server:
             file_server._server.reset()
             self.communicate('fw-update-reconnect')
-            self.assertDtlsReconnect(file_server._server, timeout_s=10, expected_error='0x7900')
+            self.assertDtlsReconnect(file_server._server, timeout_s=10,
+                                     expected_error=['0x7700', '0x7900'])
 
         deadline = time.time() + 20
         while time.time() < deadline:
@@ -2861,3 +2871,37 @@ class FirmwareDownloadSameSocketInterruptedByRebootTwoServersCancel(
             self.servers[1]), UpdateResult.INITIAL)
         self.assertEqual(self.read_state(self.servers[1]), UpdateState.IDLE)
         self.assertDemoRegisters(self.servers[0])
+
+
+class FirmwareUpdateHttpRequestTimeoutTest(FirmwareUpdate.TestWithPartialDownload,
+                                           FirmwareUpdate.TestWithHttpServer):
+    CHUNK_SIZE = 500
+    RESPONSE_DELAY = 0.5
+    TCP_REQUEST_TIMEOUT = 5
+
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--fwu-tcp-request-timeout',
+                                          str(self.TCP_REQUEST_TIMEOUT)])
+
+    def runTest(self):
+        self.provide_response()
+
+        # Write /5/0/1 (Firmware URI)
+        req = Lwm2mWrite(ResPath.FirmwareUpdate.PackageURI, self.get_firmware_uri())
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+
+        self.wait_for_half_download()
+        # Change RESPONSE_DELAY so that the server stops responding
+        self.RESPONSE_DELAY = self.TCP_REQUEST_TIMEOUT + 5
+
+        half_download_time = time.time()
+        self.wait_until_state_is(UpdateState.IDLE, timeout_s=self.TCP_REQUEST_TIMEOUT + 5)
+        fail_time = time.time()
+        self.assertEqual(self.read_update_result(), UpdateResult.CONNECTION_LOST)
+
+        self.assertAlmostEqual(fail_time, half_download_time + self.TCP_REQUEST_TIMEOUT, delta=1.5)
+
+
+class FirmwareUpdateHttpRequestTimeoutTest20sec(FirmwareUpdateHttpRequestTimeoutTest):
+    TCP_REQUEST_TIMEOUT = 20

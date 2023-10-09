@@ -398,6 +398,9 @@ typedef struct {
     avs_crypto_private_key_info_t *client_key;
     avs_net_socket_dane_tlsa_record_t *dane_tlsa_record;
     avs_net_socket_tls_ciphersuites_t ciphersuites;
+#ifdef ANJAY_WITH_LWM2M11
+    char server_name_indication[256];
+#endif
 } anjay_security_config_cache_t;
 
 void _anjay_security_config_cache_cleanup(anjay_security_config_cache_t *cache);

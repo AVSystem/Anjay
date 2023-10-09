@@ -23,12 +23,13 @@ int _anjay_dm_write(anjay_unlocked_t *anjay,
                     anjay_ssid_t ssid,
                     anjay_unlocked_input_ctx_t *in_ctx);
 
-#ifdef ANJAY_WITH_LWM2M11
+#if defined(ANJAY_WITH_LWM2M11) && !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
 int _anjay_dm_write_composite(anjay_unlocked_t *anjay,
                               const anjay_request_t *request,
                               anjay_ssid_t ssid,
                               anjay_unlocked_input_ctx_t *in_ctx);
-#endif // ANJAY_WITH_LWM2M11
+#endif // defined(ANJAY_WITH_LWM2M11) &&
+       // !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
 
 /**
  * NOTE: This function is used in one situation, that is: after LwM2M Create to

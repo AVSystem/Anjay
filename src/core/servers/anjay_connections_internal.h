@@ -74,7 +74,7 @@ _anjay_connection_init_psk_security(anjay_unlocked_t *anjay,
                                     anjay_iid_t security_iid,
                                     anjay_rid_t identity_rid,
                                     anjay_rid_t secret_key_rid,
-                                    avs_net_security_info_t *security,
+                                    anjay_security_config_t *security,
                                     anjay_security_config_cache_t *cache);
 
 VISIBILITY_PRIVATE_HEADER_END

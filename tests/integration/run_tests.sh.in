@@ -12,7 +12,7 @@ COMMAND="@CMAKE_CTEST_COMMAND@";
 RERUNS=@TEST_RERUNS@;
 
 CREATE_XLSX_REPORTS="python3 @CMAKE_SOURCE_DIR@/tests/integration/framework/create_xlsx_test_report.py \
-                                -d @CMAKE_SOURCE_DIR@/output/test/integration/log/test/"
+                                -d @CMAKE_BINARY_DIR@/output/test/integration/log/test/"
 
 if [ "$1" == "-h" ]; then
     COMMAND="@CMAKE_CTEST_COMMAND@ -R hsm";

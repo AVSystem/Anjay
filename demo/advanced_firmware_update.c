@@ -1060,6 +1060,7 @@ int advanced_firmware_update_install(
         const char *persistence_file,
         const avs_net_security_info_t *security_info,
         const avs_coap_udp_tx_params_t *tx_params,
+        avs_time_duration_t tcp_request_timeout,
         anjay_advanced_fw_update_result_t delayed_result,
         bool prefer_same_socket_downloads,
         const char *original_img_file_path,
@@ -1173,7 +1174,7 @@ int advanced_firmware_update_install(
         }
         result = advanced_firmware_update_application_install(
                 anjay, fw_table, &state, security_info, tx_params,
-                auto_suspend);
+                tcp_request_timeout, auto_suspend);
         if (result) {
             demo_log(ERROR, "AFU instance %u install failed",
                      FW_UPDATE_IID_APP);

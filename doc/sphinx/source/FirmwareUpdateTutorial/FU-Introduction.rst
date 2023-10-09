@@ -120,6 +120,10 @@ give an idea on what the implementation of FOTA would take:
         /** Queries CoAP transmission parameters to be used during firmware
          * update; @ref anjay_fw_update_get_coap_tx_params_t */
         anjay_fw_update_get_coap_tx_params_t *get_coap_tx_params;
+
+        /** Queries request timeout to be used during firmware update over CoAP+TCP
+         * or HTTP; @ref anjay_advanced_fw_update_get_tcp_request_timeout */
+        anjay_fw_update_get_tcp_request_timeout_t *get_tcp_request_timeout;
     } anjay_fw_update_handlers_t;
 
 

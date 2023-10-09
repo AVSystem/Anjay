@@ -63,11 +63,13 @@ void _anjay_observe_gc(anjay_unlocked_t *anjay);
 int _anjay_observe_handle(anjay_connection_ref_t ref,
                           const anjay_request_t *request);
 
-#    ifdef ANJAY_WITH_LWM2M11
+#    if defined(ANJAY_WITH_LWM2M11) \
+            && !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
 int _anjay_observe_composite_handle(anjay_connection_ref_t ref,
                                     AVS_LIST(anjay_uri_path_t) paths,
                                     const anjay_request_t *request);
-#    endif // ANJAY_WITH_LWM2M11
+#    endif // defined(ANJAY_WITH_LWM2M11) &&
+           // !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
 
 void _anjay_observe_interrupt(anjay_connection_ref_t ref);
 

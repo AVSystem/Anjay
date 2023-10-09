@@ -10,7 +10,7 @@ on: [push]
 jobs:
   ubuntu1804-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:ubuntu-18.04-1.2
+    container: avsystemembedded/anjay-travis:ubuntu-18.04-2.0
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
@@ -37,7 +37,7 @@ jobs:
 
   ubuntu2004-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:ubuntu-20.04-1.2
+    container: avsystemembedded/anjay-travis:ubuntu-20.04-2.0
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
@@ -68,7 +68,7 @@ jobs:
 
   ubuntu2204-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:ubuntu-22.04-1.2
+    container: avsystemembedded/anjay-travis:ubuntu-22.04-2.0
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
@@ -110,7 +110,7 @@ jobs:
 
   rockylinux9-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:rockylinux-9-1.2
+    container: avsystemembedded/anjay-travis:rockylinux-9-2.0
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
@@ -153,7 +153,7 @@ jobs:
       # NOTE: try the brew install command twice to work around "brew link" errors
       - run: INSTALL_CMD="brew install openssl mbedtls $COMPILER_VERSION"; $INSTALL_CMD || $INSTALL_CMD
       # NOTE: The above command may have installed a new version of Python, that's why we launch it weirdly
-      - run: /usr/bin/env python3 -m pip install sphinx sphinx-rtd-theme linuxdoc cbor2 aiocoap cryptography packaging requests wheel
+      - run: /usr/bin/env python3 -m pip install -r requirements.txt
       - run: env JAVA_HOME="$JAVA_HOME_17_X64" ./devconfig --with-asan --without-analysis --no-examples -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF -DWITH_IPV6=OFF
       - run: LC_ALL=en_US.UTF-8 make -j
       - run: LC_ALL=en_US.UTF-8 make check

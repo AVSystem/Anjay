@@ -51,9 +51,18 @@ typedef struct {
     char dtls_session_buffer[ANJAY_DTLS_SESSION_BUFFER_SIZE];
 
     avs_coap_exchange_id_t exchange_id;
+    union {
 #    ifdef WITH_AVS_COAP_UDP
-    avs_coap_udp_tx_params_t tx_params;
+        struct {
+            avs_coap_udp_tx_params_t tx_params;
+        } udp;
 #    endif // WITH_AVS_COAP_UDP
+#    ifdef WITH_AVS_COAP_TCP
+        struct {
+            avs_time_duration_t request_timeout;
+        } tcp;
+#    endif // WITH_AVS_COAP_TCP
+    } protocol;
     avs_coap_ctx_t *coap;
 
     avs_sched_handle_t job_start;
@@ -365,7 +374,7 @@ static avs_error_t reset_coap_ctx(anjay_coap_download_ctx_t *ctx) {
         // handle an incoming request, and contexts used for downloads don't
         // expect receiving any requests that would need handling.
         if ((ctx->coap = avs_coap_udp_ctx_create(
-                     _anjay_get_coap_sched(anjay), &ctx->tx_params,
+                     _anjay_get_coap_sched(anjay), &ctx->protocol.udp.tx_params,
                      anjay->in_shared_buffer, anjay->out_shared_buffer, NULL,
                      anjay->prng_ctx.ctx))) {
             avs_coap_set_exchange_max_time(ctx->coap,
@@ -379,7 +388,7 @@ static avs_error_t reset_coap_ctx(anjay_coap_download_ctx_t *ctx) {
         if ((ctx->coap = avs_coap_tcp_ctx_create(
                      _anjay_get_coap_sched(anjay), anjay->in_shared_buffer,
                      anjay->out_shared_buffer, anjay->coap_tcp_max_options_size,
-                     anjay->coap_tcp_request_timeout, anjay->prng_ctx.ctx))) {
+                     ctx->protocol.tcp.request_timeout, anjay->prng_ctx.ctx))) {
             avs_coap_set_exchange_max_time(ctx->coap,
                                            anjay->tcp_exchange_timeout);
         }
@@ -563,7 +572,11 @@ _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
                                     ? cfg->security_config.tls_ciphersuites
                                     : anjay->default_tls_ciphersuites,
             .backend_configuration = anjay->socket_config,
-            .prng_ctx = anjay->prng_ctx.ctx
+            .prng_ctx = anjay->prng_ctx.ctx,
+#    ifdef ANJAY_WITH_LWM2M11
+            .server_name_indication =
+                    cfg->security_config.server_name_indication,
+#    endif // ANJAY_WITH_LWM2M11
         };
         ssl_config.backend_configuration.reuse_addr = 1;
         ssl_config.backend_configuration.preferred_endpoint =
@@ -647,18 +660,32 @@ _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
     }
 
 #    ifdef WITH_AVS_COAP_UDP
-    if (!cfg->coap_tx_params) {
-        ctx->tx_params = anjay->udp_tx_params;
-    } else {
-        const char *error_string = NULL;
-        if (avs_coap_udp_tx_params_valid(cfg->coap_tx_params, &error_string)) {
-            ctx->tx_params = *cfg->coap_tx_params;
+    if (ctx->transport == ANJAY_SOCKET_TRANSPORT_UDP) {
+        if (!cfg->coap_tx_params) {
+            ctx->protocol.udp.tx_params = anjay->udp_tx_params;
         } else {
-            dl_log(ERROR, _("invalid tx_params: ") "%s", error_string);
-            goto error;
+            const char *error_string = NULL;
+            if (avs_coap_udp_tx_params_valid(cfg->coap_tx_params,
+                                             &error_string)) {
+                ctx->protocol.udp.tx_params = *cfg->coap_tx_params;
+            } else {
+                dl_log(ERROR, _("invalid tx_params: ") "%s", error_string);
+                goto error;
+            }
         }
     }
 #    endif // WITH_AVS_COAP_UDP
+
+#    ifdef WITH_AVS_COAP_TCP
+    if (ctx->transport == ANJAY_SOCKET_TRANSPORT_TCP) {
+        if (avs_time_duration_less(AVS_TIME_DURATION_ZERO,
+                                   cfg->tcp_request_timeout)) {
+            ctx->protocol.tcp.request_timeout = cfg->tcp_request_timeout;
+        } else {
+            ctx->protocol.tcp.request_timeout = anjay->coap_tcp_request_timeout;
+        }
+    }
+#    endif // WITH_AVS_COAP_TCP
 
     if (_anjay_downloader_sched_reconnect_ctx((anjay_download_ctx_t *) ctx)) {
         dl_log(ERROR, _("could not schedule download connect job"));

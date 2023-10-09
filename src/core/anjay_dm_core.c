@@ -627,8 +627,12 @@ static int invoke_transactional_action(anjay_unlocked_t *anjay,
         break;
 #ifdef ANJAY_WITH_LWM2M11
     case ANJAY_ACTION_WRITE_COMPOSITE:
+#    ifdef ANJAY_WITHOUT_COMPOSITE_OPERATIONS
+        retval = ANJAY_ERR_NOT_IMPLEMENTED;
+#    else  // ANJAY_WITHOUT_COMPOSITE_OPERATIONS
         assert(in_ctx);
         retval = _anjay_dm_write_composite(anjay, request, ssid, in_ctx);
+#    endif // ANJAY_WITHOUT_COMPOSITE_OPERATIONS
         break;
 #endif // ANJAY_WITH_LWM2M11
     case ANJAY_ACTION_CREATE:
@@ -656,8 +660,12 @@ static int invoke_action(anjay_connection_ref_t connection,
         return _anjay_dm_read_or_observe(connection, obj, request);
 #ifdef ANJAY_WITH_LWM2M11
     case ANJAY_ACTION_READ_COMPOSITE:
+#    ifdef ANJAY_WITHOUT_COMPOSITE_OPERATIONS
+        return ANJAY_ERR_NOT_IMPLEMENTED;
+#    else  // ANJAY_WITHOUT_COMPOSITE_OPERATIONS
         return _anjay_dm_read_or_observe_composite(connection, request, in_ctx);
-#endif // ANJAY_WITH_LWM2M11
+#    endif // ANJAY_WITHOUT_COMPOSITE_OPERATIONS
+#endif     // ANJAY_WITH_LWM2M11
     case ANJAY_ACTION_DISCOVER:
         return dm_discover(connection, obj, request);
     case ANJAY_ACTION_WRITE:

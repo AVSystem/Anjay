@@ -228,31 +228,6 @@ static int select_security_instance(anjay_unlocked_t *anjay,
     return 0;
 }
 
-#ifdef ANJAY_WITH_LWM2M11
-static int read_server_sni(anjay_unlocked_t *anjay,
-                           anjay_iid_t security_iid,
-                           anjay_server_name_indication_t *out_sni) {
-    out_sni->sni[0] = '\0';
-
-    const anjay_uri_path_t path =
-            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
-                               ANJAY_DM_RID_SECURITY_SNI);
-    int result = _anjay_dm_read_resource_string(anjay, &path, out_sni->sni,
-                                                sizeof(out_sni->sni));
-    if (result == ANJAY_ERR_NOT_FOUND
-            || result == ANJAY_ERR_METHOD_NOT_ALLOWED) {
-        anjay_log(TRACE, _("no SNI for /0/") "%u" _(", using defaults"),
-                  (unsigned) security_iid);
-        return 0;
-    }
-    if (!result) {
-        anjay_log(TRACE, _("using SNI ") "%s" _(" for /0/") "%u", out_sni->sni,
-                  (unsigned) security_iid);
-    }
-    return result;
-}
-#endif // ANJAY_WITH_LWM2M11
-
 void _anjay_active_server_refresh(anjay_server_info_t *server) {
     anjay_log(TRACE, _("refreshing SSID ") "%u", server->ssid);
 
@@ -262,7 +237,6 @@ void _anjay_active_server_refresh(anjay_server_info_t *server) {
     int result = 0;
     anjay_iid_t security_iid = ANJAY_ID_INVALID;
     avs_url_t *uri = NULL;
-    anjay_server_name_indication_t sni = { "" };
     if (server->ssid == ANJAY_SSID_BOOTSTRAP) {
         const anjay_transport_info_t *transport_info = NULL;
         if ((security_iid = _anjay_find_bootstrap_security_iid(server->anjay))
@@ -281,11 +255,7 @@ void _anjay_active_server_refresh(anjay_server_info_t *server) {
                                                       transport_info->transport)
                                                       ->letter))
                     >= 0) {
-#ifdef ANJAY_WITH_LWM2M11
-                result = read_server_sni(server->anjay, security_iid, &sni);
-#else  // ANJAY_WITH_LWM2M11
                 result = 0;
-#endif // ANJAY_WITH_LWM2M11
             }
         }
     } else {
@@ -295,14 +265,10 @@ void _anjay_active_server_refresh(anjay_server_info_t *server) {
                                             &preferred_transport))
                 || (result = select_security_instance(
                             server->anjay, server->ssid, &server->binding_mode,
-                            preferred_transport, &security_iid, &uri))
-#ifdef ANJAY_WITH_LWM2M11
-                || (result = read_server_sni(server->anjay, security_iid, &sni))
-#endif // ANJAY_WITH_LWM2M11
-        );
+                            preferred_transport, &security_iid, &uri)));
     }
     if (!result) {
-        _anjay_server_connections_refresh(server, security_iid, &uri, &sni);
+        _anjay_server_connections_refresh(server, security_iid, &uri);
     }
     avs_url_free(uri);
     if (result) {

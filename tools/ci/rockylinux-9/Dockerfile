@@ -8,10 +8,10 @@
 FROM rockylinux/rockylinux:9
 RUN dnf update -y && \
     dnf install -y --allowerasing python3-pip git openssl-devel zlib-devel \
-                   python3 python3-devel wget python3-cryptography openssl \
-                   python3-requests python3-packaging valgrind curl cmake \
+                   python3 python3-devel wget openssl valgrind curl cmake \
                    gcc gcc-c++ wireshark-cli which 'dnf-command(config-manager)'
 RUN dnf config-manager --set-enabled crb && \
     dnf install -y epel-release && \
     dnf install -y mbedtls-devel
-RUN pip3 install sphinx sphinx-rtd-theme cbor2 aiocoap wheel linuxdoc openpyxl
+COPY requirements.txt requirements.txt
+RUN pip3 install -r requirements.txt

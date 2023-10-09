@@ -743,6 +743,7 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
                                 cmdline_args->fwu_tx_params_modified
                                         ? &cmdline_args->fwu_tx_params
                                         : NULL,
+                                cmdline_args->fwu_tcp_request_timeout,
                                 cmdline_args->fw_update_delayed_result,
                                 cmdline_args->prefer_same_socket_downloads,
 #    ifdef ANJAY_WITH_SEND
@@ -764,6 +765,7 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
                 cmdline_args->advanced_fwu_tx_params_modified
                         ? &cmdline_args->advanced_fwu_tx_params
                         : NULL,
+                cmdline_args->advanced_fwu_tcp_request_timeout,
                 cmdline_args->advanced_fw_update_delayed_result,
                 cmdline_args->prefer_same_socket_downloads,
                 cmdline_args->original_img_file_path,

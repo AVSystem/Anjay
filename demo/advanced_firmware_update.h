@@ -75,6 +75,7 @@ struct advanced_fw_update_logic {
     FILE *stream;
     avs_net_security_info_t security_info;
     avs_coap_udp_tx_params_t coap_tx_params;
+    avs_time_duration_t tcp_request_timeout;
     bool auto_suspend;
     int (*check_yourself)(struct advanced_fw_update_logic *);
     int (*update_yourself)(struct advanced_fw_update_logic *);
@@ -88,6 +89,7 @@ int advanced_firmware_update_application_install(
         anjay_advanced_fw_update_initial_state_t *init_state,
         const avs_net_security_info_t *security_info,
         const avs_coap_udp_tx_params_t *tx_params,
+        avs_time_duration_t tcp_request_timeout,
         bool auto_suspend);
 int advanced_firmware_update_app_perform(advanced_fw_update_logic_t *fw);
 const char *advanced_firmware_update_app_get_pkg_version(anjay_iid_t iid,
@@ -115,6 +117,7 @@ int advanced_firmware_update_install(
         const char *persistence_file,
         const avs_net_security_info_t *security_info,
         const avs_coap_udp_tx_params_t *tx_params,
+        avs_time_duration_t tcp_request_timeout,
         anjay_advanced_fw_update_result_t delayed_result,
         bool prefer_same_socket_downloads,
         const char *original_img_file_path,

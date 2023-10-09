@@ -249,7 +249,7 @@ _anjay_connection_init_psk_security(anjay_unlocked_t *anjay,
                                     anjay_iid_t security_iid,
                                     anjay_rid_t identity_rid,
                                     anjay_rid_t secret_key_rid,
-                                    avs_net_security_info_t *security,
+                                    anjay_security_config_t *security,
                                     anjay_security_config_cache_t *cache) {
     assert(anjay);
     avs_error_t err;
@@ -286,7 +286,13 @@ _anjay_connection_init_psk_security(anjay_unlocked_t *anjay,
     assert(element_count == 1);
     psk_info.identity = *cache->psk_identity;
 
-    *security = avs_net_security_info_from_psk(psk_info);
+    security->security_info = avs_net_security_info_from_psk(psk_info);
+#ifdef ANJAY_WITH_LWM2M11
+    if (avs_is_err((err = _anjay_server_read_sni(anjay, security_iid, security,
+                                                 cache)))) {
+        return err;
+    }
+#endif // ANJAY_WITH_LWM2M11
     return AVS_OK;
 }
 
@@ -472,7 +478,6 @@ recreate_socket(anjay_unlocked_t *anjay,
             def->get_dtls_handshake_timeouts(anjay);
     socket_config.additional_configuration_clb =
             anjay->additional_tls_config_clb;
-    socket_config.server_name_indication = inout_info->sni.sni;
     socket_config.use_connection_id = anjay->use_connection_id;
     socket_config.prng_ctx = anjay->prng_ctx.ctx;
 
@@ -494,6 +499,8 @@ recreate_socket(anjay_unlocked_t *anjay,
     } else {
         socket_config.security = security_config.security_info;
         socket_config.ciphersuites = security_config.tls_ciphersuites;
+        socket_config.server_name_indication =
+                security_config.server_name_indication;
         if (avs_is_err((err = def->prepare_connection(
                                 anjay, connection, &socket_config,
                                 security_config.dane_tlsa_record, inout_info)))
@@ -594,11 +601,9 @@ static avs_error_t refresh_connection(anjay_server_info_t *server,
     }
 }
 
-void _anjay_server_connections_refresh(
-        anjay_server_info_t *server,
-        anjay_iid_t security_iid,
-        avs_url_t **move_uri,
-        const anjay_server_name_indication_t *sni) {
+void _anjay_server_connections_refresh(anjay_server_info_t *server,
+                                       anjay_iid_t security_iid,
+                                       avs_url_t **move_uri) {
     anjay_connection_info_t server_info = {
         .ssid = server->ssid,
         .security_iid = security_iid,
@@ -609,7 +614,6 @@ void _anjay_server_connections_refresh(
                 avs_url_protocol(*move_uri));
         *move_uri = NULL;
     }
-    memcpy(&server_info.sni, sni, sizeof(*sni));
 
     if (security_iid != ANJAY_ID_INVALID) {
         server->last_used_security_iid = security_iid;
@@ -730,3 +734,35 @@ bool _anjay_socket_transport_supported(anjay_unlocked_t *anjay,
     (void) anjay;
     return true;
 }
+
+#ifdef ANJAY_WITH_LWM2M11
+avs_error_t _anjay_server_read_sni(anjay_unlocked_t *anjay,
+                                   anjay_iid_t security_iid,
+                                   anjay_security_config_t *security,
+                                   anjay_security_config_cache_t *cache) {
+    avs_error_t err = AVS_OK;
+
+    security->server_name_indication = NULL;
+    const anjay_uri_path_t server_sni =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
+                               ANJAY_DM_RID_SECURITY_SNI);
+    int result = _anjay_dm_read_resource_string(
+            anjay, &server_sni, cache->server_name_indication,
+            sizeof(cache->server_name_indication));
+    if (!result) {
+        anjay_log(INFO, _("using SNI ") "%s" _(" for /0/") "%u",
+                  cache->server_name_indication, (unsigned) security_iid);
+        security->server_name_indication = cache->server_name_indication;
+    } else if (result == ANJAY_ERR_NOT_FOUND
+               || result == ANJAY_ERR_METHOD_NOT_ALLOWED) {
+        anjay_log(INFO, _("no SNI for /0/") "%u" _(", using defaults"),
+                  (unsigned) security_iid);
+    } else {
+        anjay_log(WARNING, _("reading ") "%s" _(" failed"),
+                  ANJAY_DEBUG_MAKE_PATH(&server_sni));
+        err = avs_errno(AVS_EPROTO);
+    }
+
+    return err;
+}
+#endif // ANJAY_WITH_LWM2M11
