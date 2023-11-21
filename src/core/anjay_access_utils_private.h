@@ -22,6 +22,14 @@ typedef struct {
     anjay_request_action_t action;
 } anjay_action_info_t;
 
+typedef enum {
+    ANJAY_INSTANCE_ACTION_DISALLOWED,
+    ANJAY_INSTANCE_ACTION_ALLOWED,
+#ifdef ANJAY_WITH_ACCESS_CONTROL
+    ANJAY_INSTANCE_ACTION_NEEDS_ACL_CHECK
+#endif // ANJAY_WITH_ACCESS_CONTROL
+} anjay_instance_action_allowed_stateless_result_t;
+
 /**
  * Checks whether an operation described by the @p info on a non-restricted
  * Object is allowed. Security checks for restricted objects shall be performed
@@ -35,6 +43,35 @@ typedef struct {
  */
 bool _anjay_instance_action_allowed(anjay_unlocked_t *anjay,
                                     const anjay_action_info_t *info);
+
+/**
+ * Checks whether an operation described by the @p info on a non-restricted
+ * Object is allowed, but only if that can be determined without accessing the
+ * data model.
+ *
+ * Returns @ref ANJAY_INSTANCE_ACTION_NEEDS_ACL_CHECK if it is not possible.
+ */
+anjay_instance_action_allowed_stateless_result_t
+_anjay_instance_action_allowed_stateless(anjay_unlocked_t *anjay,
+                                         const anjay_action_info_t *info);
+
+#ifdef ANJAY_WITH_ACCESS_CONTROL
+/**
+ * Accesses the data model to check whether an operation described by @p info
+ * is allowed.
+ *
+ * May only be called on an @p info object previously checked using @ref
+ * _anjay_instance_action_allowed_stateless which returned @ref
+ * ANJAY_INSTANCE_ACTION_NEEDS_ACL_CHECK result. The behavior is undefined
+ * otherwise.
+ *
+ * @ref _anjay_instance_action_allowed_stateless and @ref
+ * _anjay_instance_action_allowed_by_acl together shall have identical semantics
+ * to @ref _anjay_instance_action_allowed.
+ */
+bool _anjay_instance_action_allowed_by_acl(anjay_unlocked_t *anjay,
+                                           const anjay_action_info_t *info);
+#endif // ANJAY_WITH_ACCESS_CONTROL
 
 /**
  * Performs implicit creations and deletions of Access Control object instances

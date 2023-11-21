@@ -548,7 +548,7 @@ _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
     AVS_LIST(anjay_http_download_ctx_t) ctx =
             AVS_LIST_NEW_ELEMENT(anjay_http_download_ctx_t);
     if (!ctx) {
-        dl_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return avs_errno(AVS_ENOMEM);
     }
 

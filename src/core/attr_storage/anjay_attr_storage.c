@@ -90,7 +90,7 @@ find_or_create_entry_impl(AVS_LIST(void) *children_list_ptr,
         if (allow_create) {
             AVS_LIST(void) new_entry = AVS_LIST_NEW_BUFFER(entry_size);
             if (!new_entry) {
-                as_log(ERROR, _("out of memory"));
+                _anjay_log_oom();
                 return NULL;
             }
             *(uint16_t *) new_entry = id;
@@ -458,7 +458,7 @@ static int write_attrs_impl(anjay_attr_storage_t *as,
             // entry does not exist, creating
             AVS_LIST(void) new_attrs = AVS_LIST_NEW_BUFFER(element_size);
             if (!new_attrs) {
-                as_log(ERROR, _("out of memory"));
+                _anjay_log_oom();
                 return ANJAY_ERR_INTERNAL;
             }
             *get_ssid_ptr(new_attrs) = ssid;

@@ -1,5 +1,20 @@
 # Changelog
 
+## 3.6.1 (November 21st, 2023)
+
+### Improvements
+
+- Optimized heap memory usage: SenML CBOR payloads for Send and Notify
+  operations are no longer serialized in memory in their entirety unless their
+  contents depend on the Access Control object state
+- Added a public define for MSISDN string size
+- Optimized "Out of memory" logs in favor of a smaller flash memory footprint
+
+### Bugfixes
+
+- (commercial feature only) Fixes for various bugs that could cause invalid
+  memory accesses when restoring data from corrupted core persistence data
+
 ## 3.6.0 (October 9th, 2023)
 
 ### Features
@@ -9,6 +24,7 @@
 - Added `requirements.txt` file to manage Python dependencies more efficiently
 
 ### Improvements
+
 - Clarified documentation on behavior of Firmware Update and Advanced Firmware
   Update modules when ``anjay_fw_update_get_security_config_t`` and
   ``anjay_advanced_fw_update_perform_upgrade_t`` callbacks, respectively, are

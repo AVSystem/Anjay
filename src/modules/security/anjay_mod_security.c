@@ -116,7 +116,7 @@ static int add_instance(sec_repr_t *repr,
     AVS_LIST(sec_instance_t) new_instance =
             AVS_LIST_NEW_ELEMENT(sec_instance_t);
     if (!new_instance) {
-        security_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return -1;
     }
     init_instance(new_instance, *inout_iid);
@@ -237,7 +237,7 @@ static int add_instance(sec_repr_t *repr,
     if (instance->server_name_indication
             && !(new_instance->server_name_indication =
                          avs_strdup(instance->server_name_indication))) {
-        security_log(ERROR, _("Could not copy SNI: out of memory"));
+        _anjay_log_oom();
         goto error;
     }
     if (instance->certificate_usage) {
@@ -254,8 +254,7 @@ static int add_instance(sec_repr_t *repr,
         AVS_LIST(sec_cipher_instance_t) cipher_instance =
                 AVS_LIST_NEW_ELEMENT(sec_cipher_instance_t);
         if (!cipher_instance) {
-            security_log(ERROR,
-                         _("Could not copy ciphersuites: out of memory"));
+            _anjay_log_oom();
             goto error;
         }
         cipher_instance->riid = (anjay_riid_t) i;
@@ -825,7 +824,7 @@ bool anjay_security_object_is_modified(anjay_t *anjay_locked) {
 static sec_repr_t *security_install_unlocked(anjay_unlocked_t *anjay) {
     AVS_LIST(sec_repr_t) repr = AVS_LIST_NEW_ELEMENT(sec_repr_t);
     if (!repr) {
-        security_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return NULL;
     }
     int result = -1;

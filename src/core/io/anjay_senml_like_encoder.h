@@ -104,14 +104,18 @@ int _anjay_senml_like_encoder_cleanup(anjay_senml_like_encoder_t **ctx);
 /**
  * Creates SenML CBOR encoder (content format 112).
  *
- * @param stream Stream to encode data to. Encoder doesn't take ownership of
- *               stream.
+ * @param stream      Stream to encode data to. Encoder doesn't take ownership
+ *                    of stream.
+ * @param items_count Pointer to a variable that specifies the number of entries
+ *                    in the outermost definite array, or NULL if not known.
+ *
  * @returns Pointer to encoder in case of success, NULL otherwise.
  *
  * In current implementation, all data are cached and written to stream during
  * call to <c>_anjay_senml_like_encoder_cleanup</c>.
  */
-anjay_senml_like_encoder_t *_anjay_senml_cbor_encoder_new(avs_stream_t *stream);
+anjay_senml_like_encoder_t *
+_anjay_senml_cbor_encoder_new(avs_stream_t *stream, const size_t *items_count);
 #endif // ANJAY_WITH_CBOR
 
 #ifdef ANJAY_WITH_SENML_JSON

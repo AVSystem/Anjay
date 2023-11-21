@@ -114,7 +114,7 @@ static handle_sockets_result_t handle_sockets(event_loop_state_t *state) {
             state->pollfds = pollfds_new;
             state->pollfds_size = numsocks;
         } else if (numsocks > state->pollfds_size) {
-            anjay_log(ERROR, "Out of memory in anjay_event_loop_run()");
+            _anjay_log_oom();
             result = HANDLE_SOCKETS_ERROR;
         }
     }

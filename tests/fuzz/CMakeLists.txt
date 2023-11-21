@@ -61,6 +61,7 @@ foreach(FUZZ_TEST_SOURCE ${FUZZ_TEST_SOURCES})
     add_fuzz_target(${FUZZ_TEST_NAME} "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${FUZZ_TEST_NAME}_fuzz_test")
 endforeach()
 
+set(AFL_FUZZ_MEMORY_LIMIT_MEGS 32)
 set(AFL_FUZZ_TIMEOUT_MS 1000)
 
 list(LENGTH FUZZ_TEST_NAMES FUZZ_TEST_COUNT)
@@ -78,6 +79,7 @@ foreach(i RANGE ${FUZZ_TEST_MAX})
                       COMMAND "${AFL_FUZZ_EXECUTABLE}" -i "${FUZZ_TEST_CASE_DIR}"
                                                        -o "${FUZZ_TEST_FINDINGS_DIR}"
                                                        -t ${AFL_FUZZ_TIMEOUT_MS}
+                                                       -m ${AFL_FUZZ_MEMORY_LIMIT_MEGS}
                                                        "${${FUZZ_TEST_ARG_LIST_NAME}}"
                                                        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
                       DEPENDS ${FUZZ_TEST_NAME}_fuzz_test)

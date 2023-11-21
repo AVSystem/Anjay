@@ -170,7 +170,7 @@ int anjay_register_object(anjay_t *anjay_locked,
     AVS_LIST(anjay_dm_installed_object_t) new_elem =
             AVS_LIST_NEW_ELEMENT(anjay_dm_installed_object_t);
     if (!new_elem) {
-        dm_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return -1;
     }
 
@@ -869,7 +869,7 @@ static int query_dm_instance(anjay_unlocked_t *anjay,
 
     AVS_LIST(anjay_iid_t) new_instance = AVS_LIST_NEW_ELEMENT(anjay_iid_t);
     if (!new_instance) {
-        dm_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return -1;
     }
     AVS_LIST_INSERT(*instance_insert_ptr, new_instance);

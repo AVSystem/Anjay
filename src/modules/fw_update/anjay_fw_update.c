@@ -149,7 +149,7 @@ static void perform_lwm2m_send(anjay_unlocked_t *anjay,
 
     anjay_send_batch_builder_t *batch_builder = anjay_send_batch_builder_new();
     if (!batch_builder) {
-        fw_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return;
     }
 
@@ -164,7 +164,7 @@ static void perform_lwm2m_send(anjay_unlocked_t *anjay,
             anjay_send_batch_builder_compile(&batch_builder);
     if (!batch) {
         anjay_send_batch_builder_cleanup(&batch_builder);
-        fw_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return;
     }
 
@@ -1265,7 +1265,7 @@ int anjay_fw_update_install(
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     AVS_LIST(fw_repr_t) repr = AVS_LIST_NEW_ELEMENT(fw_repr_t);
     if (!repr) {
-        fw_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
     } else {
         repr->def = &FIRMWARE_UPDATE;
         _anjay_dm_installed_object_init_unlocked(&repr->def_ptr, &repr->def);

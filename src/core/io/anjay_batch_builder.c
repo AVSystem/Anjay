@@ -745,19 +745,6 @@ static int serialize_batch_entry(const anjay_batch_entry_t *entry,
     }
 }
 
-static bool is_server_allowed_to_read(anjay_unlocked_t *anjay,
-                                      anjay_oid_t oid,
-                                      anjay_iid_t iid,
-                                      anjay_ssid_t ssid) {
-    const anjay_action_info_t action_info = {
-        .oid = oid,
-        .iid = iid,
-        .ssid = ssid,
-        .action = ANJAY_ACTION_READ
-    };
-    return _anjay_instance_action_allowed(anjay, &action_info);
-}
-
 int _anjay_batch_data_output(anjay_unlocked_t *anjay,
                              const anjay_batch_t *batch,
                              anjay_ssid_t target_ssid,
@@ -788,9 +775,13 @@ int _anjay_batch_data_output_entry(
         assert(AVS_LIST_FIND_PTR(&batch->list, it) != NULL);
     }
     while (it
-           && !is_server_allowed_to_read(anjay, it->path.ids[ANJAY_ID_OID],
-                                         it->path.ids[ANJAY_ID_IID],
-                                         target_ssid)) {
+           && !_anjay_instance_action_allowed(
+                      anjay, &(const anjay_action_info_t) {
+                                 .oid = it->path.ids[ANJAY_ID_OID],
+                                 .iid = it->path.ids[ANJAY_ID_IID],
+                                 .ssid = target_ssid,
+                                 .action = ANJAY_ACTION_READ
+                             })) {
         AVS_LIST_ADVANCE((AVS_LIST(anjay_batch_entry_t) *) (intptr_t) &it);
     }
     int result = 0;
@@ -863,6 +854,37 @@ bool _anjay_batch_data_requires_hierarchical_format(
     }
     assert(_anjay_uri_path_has(&entry->path, ANJAY_ID_RID));
     return false;
+}
+
+int _anjay_batch_outputable_item_count(anjay_unlocked_t *anjay,
+                                       const anjay_batch_t *batch,
+                                       anjay_ssid_t target_ssid,
+                                       size_t *out_count) {
+    size_t count = 0;
+    if (batch) {
+        AVS_LIST(anjay_batch_entry_t) it;
+        AVS_LIST_FOREACH(it, batch->list) {
+            anjay_instance_action_allowed_stateless_result_t result =
+                    _anjay_instance_action_allowed_stateless(
+                            anjay, &(const anjay_action_info_t) {
+                                       .oid = it->path.ids[ANJAY_ID_OID],
+                                       .iid = it->path.ids[ANJAY_ID_IID],
+                                       .ssid = target_ssid,
+                                       .action = ANJAY_ACTION_READ
+                                   });
+#    ifdef ANJAY_WITH_ACCESS_CONTROL
+            if (result == ANJAY_INSTANCE_ACTION_NEEDS_ACL_CHECK) {
+                return -1;
+            }
+#    endif // ANJAY_WITH_ACCESS_CONTROL
+            if (result == ANJAY_INSTANCE_ACTION_ALLOWED
+                    && it->data.type != ANJAY_BATCH_DATA_START_AGGREGATE) {
+                ++count;
+            }
+        }
+    }
+    *out_count = count;
+    return 0;
 }
 
 double _anjay_batch_data_numeric_value(const anjay_batch_t *batch) {

@@ -176,7 +176,7 @@ static int add_instance(server_repr_t *repr,
     AVS_LIST(server_instance_t) new_instance =
             AVS_LIST_NEW_ELEMENT(server_instance_t);
     if (!new_instance) {
-        server_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return -1;
     }
     if (instance->binding) {
@@ -748,7 +748,7 @@ int anjay_server_object_install(anjay_t *anjay_locked) {
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     AVS_LIST(server_repr_t) repr = AVS_LIST_NEW_ELEMENT(server_repr_t);
     if (!repr) {
-        server_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
     } else {
         repr->def = &SERVER;
         _anjay_dm_installed_object_init_unlocked(&repr->def_ptr, &repr->def);

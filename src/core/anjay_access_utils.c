@@ -328,38 +328,62 @@ static bool is_single_ssid_environment(anjay_unlocked_t *anjay) {
 
 #endif // ANJAY_WITH_ACCESS_CONTROL
 
-bool _anjay_instance_action_allowed(anjay_unlocked_t *anjay,
-                                    const anjay_action_info_t *info) {
+anjay_instance_action_allowed_stateless_result_t
+_anjay_instance_action_allowed_stateless(anjay_unlocked_t *anjay,
+                                         const anjay_action_info_t *info) {
     if (info->oid == ANJAY_DM_OID_SECURITY) {
-        return false;
+        return ANJAY_INSTANCE_ACTION_DISALLOWED;
     }
 
     assert(info->iid != ANJAY_ID_INVALID
            || info->action == ANJAY_ACTION_CREATE);
 #ifndef ANJAY_WITH_ACCESS_CONTROL
-    return true;
+    return ANJAY_INSTANCE_ACTION_ALLOWED;
 #else
     if (info->ssid == ANJAY_SSID_BOOTSTRAP) {
         // Access Control is not applicable to Bootstrap Server
-        return true;
+        return ANJAY_INSTANCE_ACTION_ALLOWED;
     }
 
     if (info->action == ANJAY_ACTION_DISCOVER) {
-        return true;
+        return ANJAY_INSTANCE_ACTION_ALLOWED;
     }
 
     if (!get_access_control(anjay) || is_single_ssid_environment(anjay)) {
-        return true;
+        return ANJAY_INSTANCE_ACTION_ALLOWED;
     }
 
     if (info->oid == ANJAY_DM_OID_ACCESS_CONTROL) {
         if (info->action == ANJAY_ACTION_READ
                 || info->action == ANJAY_ACTION_WRITE_ATTRIBUTES) {
-            return true;
+            return ANJAY_INSTANCE_ACTION_ALLOWED;
         } else if (info->action == ANJAY_ACTION_CREATE
                    || info->action == ANJAY_ACTION_DELETE) {
-            return false;
+            return ANJAY_INSTANCE_ACTION_DISALLOWED;
         }
+    }
+
+    return ANJAY_INSTANCE_ACTION_NEEDS_ACL_CHECK;
+#endif // ANJAY_WITH_ACCESS_CONTROL
+}
+
+#ifdef ANJAY_WITH_ACCESS_CONTROL
+bool _anjay_instance_action_allowed_by_acl(anjay_unlocked_t *anjay,
+                                           const anjay_action_info_t *info) {
+    assert(info->oid != ANJAY_DM_OID_SECURITY);
+    assert(info->iid != ANJAY_ID_INVALID
+           || info->action == ANJAY_ACTION_CREATE);
+    assert(info->ssid != ANJAY_SSID_BOOTSTRAP);
+    assert(info->action != ANJAY_ACTION_DISCOVER);
+    assert(get_access_control(anjay));
+    assert(!is_single_ssid_environment(anjay));
+
+    if (info->oid == ANJAY_DM_OID_ACCESS_CONTROL) {
+        assert(info->action != ANJAY_ACTION_READ);
+        assert(info->action != ANJAY_ACTION_WRITE_ATTRIBUTES);
+        assert(info->action != ANJAY_ACTION_CREATE);
+        assert(info->action != ANJAY_ACTION_DELETE);
+
         anjay_ssid_t owner;
         if (read_u16(anjay, info->iid, ANJAY_DM_RID_ACCESS_CONTROL_OWNER,
                      &owner)) {
@@ -389,7 +413,23 @@ bool _anjay_instance_action_allowed(anjay_unlocked_t *anjay,
         AVS_UNREACHABLE("invalid enum value");
         return false;
     }
+}
 #endif // ANJAY_WITH_ACCESS_CONTROL
+
+bool _anjay_instance_action_allowed(anjay_unlocked_t *anjay,
+                                    const anjay_action_info_t *info) {
+    switch (_anjay_instance_action_allowed_stateless(anjay, info)) {
+    case ANJAY_INSTANCE_ACTION_DISALLOWED:
+        return false;
+    case ANJAY_INSTANCE_ACTION_ALLOWED:
+        return true;
+#ifdef ANJAY_WITH_ACCESS_CONTROL
+    case ANJAY_INSTANCE_ACTION_NEEDS_ACL_CHECK:
+        return _anjay_instance_action_allowed_by_acl(anjay, info);
+#endif // ANJAY_WITH_ACCESS_CONTROL
+    }
+    AVS_UNREACHABLE("invalid enum value");
+    return false;
 }
 
 #ifdef ANJAY_WITH_ACCESS_CONTROL
@@ -456,7 +496,7 @@ enumerate_valid_ssids_clb(anjay_unlocked_t *anjay,
         return 0;
     }
     if (!AVS_LIST_INSERT_NEW(anjay_ssid_t, insert_ptr)) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return -1;
     }
     **insert_ptr = ssid;
@@ -592,7 +632,7 @@ process_orphaned_instances_clb(anjay_unlocked_t *anjay,
         assert(!*args->orphaned_instance_list_append_ptr);
         if (!(*args->orphaned_instance_list_append_ptr =
                       AVS_LIST_NEW_ELEMENT(orphaned_instance_info_t))) {
-            anjay_log(ERROR, _("out of memory"));
+            _anjay_log_oom();
             result = -1;
             goto finish;
         }
@@ -777,7 +817,7 @@ int _anjay_acl_ref_validate_inst_ref(anjay_unlocked_t *anjay,
     acl_ref_validation_object_info_t *object_info =
             get_or_create_validation_object_info(anjay, obj, ctx);
     if (!object_info) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return -1;
     }
     AVS_LIST(anjay_iid_t) *allowed_iid_ptr = &object_info->allowed_iids;
@@ -816,7 +856,7 @@ enumerate_instances_to_remove_clb(anjay_unlocked_t *anjay,
             && _anjay_acl_ref_validate_inst_ref(anjay, &args->validation_ctx,
                                                 target_oid, target_iid)) {
         if (!AVS_LIST_INSERT_NEW(anjay_iid_t, &args->iids_to_remove)) {
-            anjay_log(ERROR, _("out of memory"));
+            _anjay_log_oom();
             return -1;
         }
         *args->iids_to_remove = iid;

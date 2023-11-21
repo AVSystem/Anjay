@@ -213,11 +213,12 @@ avs_error_t avs_coap_observe_persist(avs_coap_ctx_t *ctx,
     return err;
 }
 
-avs_error_t
-avs_coap_observe_restore(avs_coap_ctx_t *ctx,
-                         avs_coap_observe_cancel_handler_t *cancel_handler,
-                         void *handler_arg,
-                         avs_persistence_context_t *persistence) {
+avs_error_t avs_coap_observe_restore_with_id(
+        avs_coap_ctx_t *ctx,
+        avs_coap_observe_cancel_handler_t *cancel_handler,
+        void *handler_arg,
+        avs_coap_observe_id_t *out_id,
+        avs_persistence_context_t *persistence) {
     if (avs_persistence_direction(persistence) != AVS_PERSISTENCE_RESTORE) {
         return avs_errno(AVS_EINVAL);
     }
@@ -272,35 +273,10 @@ avs_coap_observe_restore(avs_coap_ctx_t *ctx,
     LOG(DEBUG, _("Observe (restored) start: ") "%s",
         AVS_COAP_TOKEN_HEX(&id.token));
     AVS_LIST_INSERT(&coap_base->observes, observe);
-
+    if (out_id) {
+        *out_id = id;
+    }
     return AVS_OK;
-}
-
-#    else // WITH_AVS_COAP_OBSERVE_PERSISTENCE
-
-avs_error_t avs_coap_observe_persist(avs_coap_ctx_t *ctx,
-                                     avs_coap_observe_id_t id,
-                                     avs_persistence_context_t *persistence) {
-    (void) ctx;
-    (void) id;
-    (void) persistence;
-
-    LOG(WARNING, _("observe persistence not compiled in"));
-    return _avs_coap_err(AVS_COAP_ERR_FEATURE_DISABLED);
-}
-
-avs_error_t
-avs_coap_observe_restore(avs_coap_ctx_t *ctx,
-                         avs_coap_observe_cancel_handler_t *cancel_handler,
-                         void *handler_arg,
-                         avs_persistence_context_t *persistence) {
-    (void) ctx;
-    (void) cancel_handler;
-    (void) handler_arg;
-    (void) persistence;
-
-    LOG(WARNING, _("observe persistence not compiled in"));
-    return _avs_coap_err(AVS_COAP_ERR_FEATURE_DISABLED);
 }
 
 #    endif // WITH_AVS_COAP_OBSERVE_PERSISTENCE

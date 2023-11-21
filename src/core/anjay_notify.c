@@ -248,12 +248,12 @@ int _anjay_notify_queue_instance_created(anjay_notify_queue_t *out_queue,
     AVS_LIST(anjay_notify_queue_object_entry_t) *entry_ptr =
             find_or_create_object_entry(out_queue, oid);
     if (!entry_ptr) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return -1;
     }
     if (add_entry_to_iid_set(
                 &(*entry_ptr)->instance_set_changes.known_added_iids, iid)) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         delete_notify_queue_object_entry_if_empty(entry_ptr);
         return -1;
     }
@@ -267,7 +267,7 @@ int _anjay_notify_queue_instance_removed(anjay_notify_queue_t *out_queue,
     AVS_LIST(anjay_notify_queue_object_entry_t) *entry_ptr =
             find_or_create_object_entry(out_queue, oid);
     if (!entry_ptr) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return -1;
     }
     remove_entry_from_iid_set(
@@ -281,7 +281,7 @@ int _anjay_notify_queue_instance_set_unknown_change(
     AVS_LIST(anjay_notify_queue_object_entry_t) *entry_ptr =
             find_or_create_object_entry(out_queue, oid);
     if (!entry_ptr) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return -1;
     }
     (*entry_ptr)->instance_set_changes.instance_set_changed = true;
@@ -305,7 +305,7 @@ int _anjay_notify_queue_resource_change(anjay_notify_queue_t *out_queue,
     AVS_LIST(anjay_notify_queue_object_entry_t) *obj_entry_ptr =
             find_or_create_object_entry(out_queue, oid);
     if (!obj_entry_ptr) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return -1;
     }
     anjay_notify_queue_resource_entry_t new_entry = {
@@ -323,7 +323,7 @@ int _anjay_notify_queue_resource_change(anjay_notify_queue_t *out_queue,
     }
     if (!AVS_LIST_INSERT_NEW(anjay_notify_queue_resource_entry_t,
                              res_entry_ptr)) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         if (!(*obj_entry_ptr)->instance_set_changes.instance_set_changed
                 && !(*obj_entry_ptr)->resources_changed) {
             AVS_LIST_DELETE(obj_entry_ptr);

@@ -87,7 +87,7 @@ static int read_security_info_ret_bytes_begin(
     }
     if (!(ctx->out_array = (avs_crypto_security_info_union_t *) avs_malloc(
                   sizeof(*ctx->out_array) + length))) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return -1;
     }
     *ctx->out_array = (const avs_crypto_security_info_union_t) {

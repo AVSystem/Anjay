@@ -82,7 +82,7 @@ static int ac_instance_create(anjay_unlocked_t *anjay,
     AVS_LIST(access_control_instance_t) new_instance =
             AVS_LIST_NEW_ELEMENT(access_control_instance_t);
     if (!new_instance) {
-        ac_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return ANJAY_ERR_INTERNAL;
     }
     *new_instance = (access_control_instance_t) {
@@ -349,7 +349,7 @@ static int ac_transaction_begin(anjay_unlocked_t *anjay, obj_ptr_t obj_ptr) {
     access_control_t *ac = _anjay_access_control_from_obj_ptr(obj_ptr);
     assert(!ac->in_transaction);
     if (_anjay_access_control_clone_state(&ac->saved_state, &ac->current)) {
-        ac_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return ANJAY_ERR_INTERNAL;
     }
     ac->in_transaction = true;
@@ -368,7 +368,7 @@ static int add_ssid(AVS_SORTED_SET(anjay_ssid_t) ssids_list,
             AVS_SORTED_SET_FIND(ssids_list, &ssid);
     if (!elem) {
         if (!(elem = AVS_SORTED_SET_ELEM_NEW(anjay_ssid_t))) {
-            ac_log(ERROR, _("out of memory"));
+            _anjay_log_oom();
             return -1;
         }
         *elem = ssid;
@@ -401,7 +401,7 @@ static int ac_transaction_validate(anjay_unlocked_t *anjay, obj_ptr_t obj_ptr) {
     AVS_SORTED_SET(anjay_ssid_t) ssids_used = NULL;
     if (access_control->needs_validation) {
         if (!(ssids_used = AVS_SORTED_SET_NEW(anjay_ssid_t, anjay_ssid_cmp))) {
-            ac_log(ERROR, _("out of memory"));
+            _anjay_log_oom();
             goto finish;
         }
         access_control_instance_t *inst;

@@ -8,7 +8,7 @@
 cmake_minimum_required(VERSION 3.6.0)
 
 project(anjay C)
-set(ANJAY_VERSION "3.6.0" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "3.6.1" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")

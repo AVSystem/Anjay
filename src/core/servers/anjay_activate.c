@@ -527,7 +527,7 @@ _anjay_servers_create_inactive(anjay_unlocked_t *anjay, anjay_ssid_t ssid) {
     AVS_LIST(anjay_server_info_t) new_server =
             AVS_LIST_NEW_ELEMENT(anjay_server_info_t);
     if (!new_server) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return NULL;
     }
 

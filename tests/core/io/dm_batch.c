@@ -470,7 +470,7 @@ AVS_UNIT_TEST(dm_batch, serialize_empty) {
     anjay_unlocked_output_ctx_t *out_ctx =
             _anjay_output_senml_like_create((avs_stream_t *) &stream,
                                             &MAKE_ROOT_PATH(),
-                                            AVS_COAP_FORMAT_SENML_JSON);
+                                            AVS_COAP_FORMAT_SENML_JSON, NULL);
     AVS_UNIT_ASSERT_NOT_NULL(out_ctx);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_SUCCESS(
@@ -513,7 +513,7 @@ AVS_UNIT_TEST(dm_batch, serialize_bytes) {
     anjay_unlocked_output_ctx_t *out_ctx =
             _anjay_output_senml_like_create((avs_stream_t *) &stream,
                                             &MAKE_ROOT_PATH(),
-                                            AVS_COAP_FORMAT_SENML_JSON);
+                                            AVS_COAP_FORMAT_SENML_JSON, NULL);
     AVS_UNIT_ASSERT_NOT_NULL(out_ctx);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_SUCCESS(
@@ -551,7 +551,7 @@ AVS_UNIT_TEST(dm_batch, serialize_one_resource) {
     anjay_unlocked_output_ctx_t *out_ctx =
             _anjay_output_senml_like_create((avs_stream_t *) &stream,
                                             &MAKE_ROOT_PATH(),
-                                            AVS_COAP_FORMAT_SENML_JSON);
+                                            AVS_COAP_FORMAT_SENML_JSON, NULL);
     AVS_UNIT_ASSERT_NOT_NULL(out_ctx);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_SUCCESS(
@@ -591,7 +591,7 @@ AVS_UNIT_TEST(dm_batch, serialize_one_resource_with_absolute_timestamp) {
     anjay_unlocked_output_ctx_t *out_ctx =
             _anjay_output_senml_like_create((avs_stream_t *) &stream,
                                             &MAKE_ROOT_PATH(),
-                                            AVS_COAP_FORMAT_SENML_JSON);
+                                            AVS_COAP_FORMAT_SENML_JSON, NULL);
     AVS_UNIT_ASSERT_NOT_NULL(out_ctx);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_SUCCESS(
@@ -634,7 +634,7 @@ AVS_UNIT_TEST(dm_batch, serialize_two_resources) {
     anjay_unlocked_output_ctx_t *out_ctx =
             _anjay_output_senml_like_create((avs_stream_t *) &stream,
                                             &MAKE_ROOT_PATH(),
-                                            AVS_COAP_FORMAT_SENML_JSON);
+                                            AVS_COAP_FORMAT_SENML_JSON, NULL);
     AVS_UNIT_ASSERT_NOT_NULL(out_ctx);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_SUCCESS(
@@ -683,7 +683,7 @@ AVS_UNIT_TEST(dm_batch, serialize_two_resources_with_relative_timestamp) {
     anjay_unlocked_output_ctx_t *out_ctx =
             _anjay_output_senml_like_create((avs_stream_t *) &stream,
                                             &MAKE_ROOT_PATH(),
-                                            AVS_COAP_FORMAT_SENML_JSON);
+                                            AVS_COAP_FORMAT_SENML_JSON, NULL);
     AVS_UNIT_ASSERT_NOT_NULL(out_ctx);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_SUCCESS(
@@ -725,7 +725,7 @@ AVS_UNIT_TEST(dm_batch, serialize_resource_instance) {
     anjay_unlocked_output_ctx_t *out_ctx =
             _anjay_output_senml_like_create((avs_stream_t *) &stream,
                                             &MAKE_ROOT_PATH(),
-                                            AVS_COAP_FORMAT_SENML_JSON);
+                                            AVS_COAP_FORMAT_SENML_JSON, NULL);
     AVS_UNIT_ASSERT_NOT_NULL(out_ctx);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_SUCCESS(
@@ -766,7 +766,7 @@ AVS_UNIT_TEST(dm_batch, absolute_timestamp_higher_than_serialization_time) {
     anjay_unlocked_output_ctx_t *out_ctx =
             _anjay_output_senml_like_create((avs_stream_t *) &stream,
                                             &MAKE_ROOT_PATH(),
-                                            AVS_COAP_FORMAT_SENML_JSON);
+                                            AVS_COAP_FORMAT_SENML_JSON, NULL);
     AVS_UNIT_ASSERT_NOT_NULL(out_ctx);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_SUCCESS(
@@ -808,7 +808,7 @@ AVS_UNIT_TEST(dm_batch, relative_timestamp_higher_than_serialization_time) {
     anjay_unlocked_output_ctx_t *out_ctx =
             _anjay_output_senml_like_create((avs_stream_t *) &stream,
                                             &MAKE_ROOT_PATH(),
-                                            AVS_COAP_FORMAT_SENML_JSON);
+                                            AVS_COAP_FORMAT_SENML_JSON, NULL);
     AVS_UNIT_ASSERT_NOT_NULL(out_ctx);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_SUCCESS(
@@ -849,7 +849,7 @@ AVS_UNIT_TEST(dm_batch, relative_timestamp_absolute_serialization_time) {
     anjay_unlocked_output_ctx_t *out_ctx =
             _anjay_output_senml_like_create((avs_stream_t *) &stream,
                                             &MAKE_ROOT_PATH(),
-                                            AVS_COAP_FORMAT_SENML_JSON);
+                                            AVS_COAP_FORMAT_SENML_JSON, NULL);
     AVS_UNIT_ASSERT_NOT_NULL(out_ctx);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_SUCCESS(
@@ -897,7 +897,7 @@ AVS_UNIT_TEST(dm_batch, negative_timestamp) {
     anjay_unlocked_output_ctx_t *out_ctx =
             _anjay_output_senml_like_create((avs_stream_t *) &stream,
                                             &MAKE_ROOT_PATH(),
-                                            AVS_COAP_FORMAT_SENML_JSON);
+                                            AVS_COAP_FORMAT_SENML_JSON, NULL);
     AVS_UNIT_ASSERT_NOT_NULL(out_ctx);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_SUCCESS(

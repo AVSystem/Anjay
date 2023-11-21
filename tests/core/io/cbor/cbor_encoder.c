@@ -396,7 +396,25 @@ AVS_UNIT_TEST(cbor_encoder, definite_array) {
     cbor_test_setup(&env, 32);
     cbor_encoder_t *encoder = env.encoder;
 
-    AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_begin(encoder));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_known_length_definite_array_begin(encoder, 3));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_encode_int(encoder, 1));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_encode_string(encoder, "cwiercz"));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_encode_int(encoder, 200));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_end(encoder));
+    AVS_UNIT_ASSERT_EQUAL(nested_context_top(encoder)->size, 1);
+    AVS_UNIT_ASSERT_SUCCESS(cbor_encoder_delete(&encoder));
+    VERIFY_BYTES(env, "\x83\x01\x67\x63\x77\x69\x65\x72\x63\x7A\x18\xC8");
+
+    avs_free(env.buf);
+}
+
+// [1, "cwiercz", 200]
+AVS_UNIT_TEST(cbor_encoder, cached_definite_array) {
+    cbor_test_env_t env;
+    cbor_test_setup(&env, 32);
+    cbor_encoder_t *encoder = env.encoder;
+
+    AVS_UNIT_ASSERT_SUCCESS(cbor_unknown_length_definite_array_begin(encoder));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_int(encoder, 1));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_string(encoder, "cwiercz"));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_int(encoder, 200));
@@ -414,7 +432,23 @@ AVS_UNIT_TEST(cbor_encoder, empty_definite_array) {
     cbor_test_setup(&env, 32);
     cbor_encoder_t *encoder = env.encoder;
 
-    AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_begin(encoder));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_known_length_definite_array_begin(encoder, 0));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_end(encoder));
+    AVS_UNIT_ASSERT_EQUAL(nested_context_top(encoder)->size, 1);
+    AVS_UNIT_ASSERT_SUCCESS(cbor_encoder_delete(&encoder));
+
+    VERIFY_BYTES(env, "\x80");
+
+    avs_free(env.buf);
+}
+
+// []
+AVS_UNIT_TEST(cbor_encoder, cached_empty_definite_array) {
+    cbor_test_env_t env;
+    cbor_test_setup(&env, 32);
+    cbor_encoder_t *encoder = env.encoder;
+
+    AVS_UNIT_ASSERT_SUCCESS(cbor_unknown_length_definite_array_begin(encoder));
     AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_end(encoder));
     AVS_UNIT_ASSERT_EQUAL(nested_context_top(encoder)->size, 1);
     AVS_UNIT_ASSERT_SUCCESS(cbor_encoder_delete(&encoder));
@@ -430,9 +464,9 @@ AVS_UNIT_TEST(cbor_encoder, nested_definite_arrays1) {
     cbor_test_setup(&env, 32);
     cbor_encoder_t *encoder = env.encoder;
 
-    AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_begin(encoder));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_known_length_definite_array_begin(encoder, 2));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_int(encoder, 1));
-    AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_begin(encoder));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_unknown_length_definite_array_begin(encoder));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_int(encoder, 2));
     AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_end(encoder));
     AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_end(encoder));
@@ -450,10 +484,10 @@ AVS_UNIT_TEST(cbor_encoder, nested_definite_arrays2) {
     cbor_test_setup(&env, 32);
     cbor_encoder_t *encoder = env.encoder;
 
-    AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_begin(encoder));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_unknown_length_definite_array_begin(encoder));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_int(encoder, 1));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_int(encoder, 2));
-    AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_begin(encoder));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_known_length_definite_array_begin(encoder, 3));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_int(encoder, 3));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_int(encoder, 4));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_int(encoder, 5));
@@ -475,7 +509,7 @@ AVS_UNIT_TEST(cbor_encoder, map_with_array_with_bytes) {
 
     AVS_UNIT_ASSERT_SUCCESS(cbor_definite_map_begin(encoder, 1));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_string(encoder, "array"));
-    AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_begin(encoder));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_known_length_definite_array_begin(encoder, 2));
     AVS_UNIT_ASSERT_SUCCESS(cbor_bytes_begin(encoder, 1));
     AVS_UNIT_ASSERT_SUCCESS(cbor_bytes_append(encoder, "\x00", 1));
     AVS_UNIT_ASSERT_SUCCESS(cbor_bytes_end(encoder));
@@ -498,8 +532,8 @@ AVS_UNIT_TEST(cbor_encoder, empty_nested_arrays) {
     cbor_test_setup(&env, 32);
     cbor_encoder_t *encoder = env.encoder;
 
-    AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_begin(encoder));
-    AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_begin(encoder));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_unknown_length_definite_array_begin(encoder));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_unknown_length_definite_array_begin(encoder));
     AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_end(encoder));
     AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_end(encoder));
     AVS_UNIT_ASSERT_EQUAL(nested_context_top(encoder)->size, 1);
@@ -516,11 +550,11 @@ AVS_UNIT_TEST(cbor_encoder, double_nested_arrays) {
     cbor_test_setup(&env, 32);
     cbor_encoder_t *encoder = env.encoder;
 
-    AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_begin(encoder));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_unknown_length_definite_array_begin(encoder));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_int(encoder, 1));
-    AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_begin(encoder));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_unknown_length_definite_array_begin(encoder));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_int(encoder, 2));
-    AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_begin(encoder));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_unknown_length_definite_array_begin(encoder));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_int(encoder, 3));
     AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_end(encoder));
     AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_end(encoder));
@@ -539,16 +573,16 @@ AVS_UNIT_TEST(cbor_encoder, three_nested_arrays) {
     cbor_test_setup(&env, 32);
     cbor_encoder_t *encoder = env.encoder;
 
-    AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_begin(encoder));
-    AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_begin(encoder));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_unknown_length_definite_array_begin(encoder));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_unknown_length_definite_array_begin(encoder));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_uint(encoder, 1));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_int(encoder, 2));
     AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_end(encoder));
-    AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_begin(encoder));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_unknown_length_definite_array_begin(encoder));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_uint(encoder, 3));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_int(encoder, 4));
     AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_end(encoder));
-    AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_begin(encoder));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_unknown_length_definite_array_begin(encoder));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_uint(encoder, 5));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_int(encoder, 6));
     AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_end(encoder));
@@ -567,7 +601,7 @@ AVS_UNIT_TEST(cbor_encoder, array_with_one_map) {
     cbor_test_setup(&env, 32);
     cbor_encoder_t *encoder = env.encoder;
 
-    AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_begin(encoder));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_unknown_length_definite_array_begin(encoder));
     AVS_UNIT_ASSERT_SUCCESS(cbor_definite_map_begin(encoder, 1));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_string(encoder, "A"));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_int(encoder, 1));
@@ -587,7 +621,7 @@ AVS_UNIT_TEST(cbor_encoder, array_with_two_maps) {
     cbor_test_setup(&env, 32);
     cbor_encoder_t *encoder = env.encoder;
 
-    AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_begin(encoder));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_unknown_length_definite_array_begin(encoder));
     AVS_UNIT_ASSERT_SUCCESS(cbor_definite_map_begin(encoder, 1));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_string(encoder, "A"));
     AVS_UNIT_ASSERT_SUCCESS(cbor_encode_int(encoder, 1));
@@ -611,7 +645,7 @@ AVS_UNIT_TEST(cbor_encoder, array_with_bytes) {
     cbor_test_setup(&env, 32);
     cbor_encoder_t *encoder = env.encoder;
 
-    AVS_UNIT_ASSERT_SUCCESS(cbor_definite_array_begin(encoder));
+    AVS_UNIT_ASSERT_SUCCESS(cbor_unknown_length_definite_array_begin(encoder));
     AVS_UNIT_ASSERT_SUCCESS(cbor_bytes_begin(encoder, 3));
     AVS_UNIT_ASSERT_SUCCESS(cbor_bytes_append(encoder, "\xAA\xBB\xCC", 3));
     AVS_UNIT_ASSERT_SUCCESS(cbor_bytes_end(encoder));

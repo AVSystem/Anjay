@@ -286,8 +286,14 @@ static const anjay_output_ctx_vtable_t SENML_OUT_VTABLE = {
     .close = senml_output_close
 };
 
-anjay_unlocked_output_ctx_t *_anjay_output_senml_like_create(
-        avs_stream_t *stream, const anjay_uri_path_t *uri, uint16_t format) {
+anjay_unlocked_output_ctx_t *
+_anjay_output_senml_like_create(avs_stream_t *stream,
+                                const anjay_uri_path_t *uri,
+                                uint16_t format,
+                                const size_t *items_count) {
+#    ifndef ANJAY_WITH_CBOR
+    (void) items_count;
+#    endif // ANJAY_WITH_CBOR
     senml_out_t *ctx = (senml_out_t *) avs_calloc(1, sizeof(senml_out_t));
     if (!ctx) {
         return NULL;
@@ -316,7 +322,7 @@ anjay_unlocked_output_ctx_t *_anjay_output_senml_like_create(
 #    endif // ANJAY_WITH_SENML_JSON
 #    ifdef ANJAY_WITH_CBOR
     case AVS_COAP_FORMAT_SENML_CBOR:
-        ctx->encoder = _anjay_senml_cbor_encoder_new(stream);
+        ctx->encoder = _anjay_senml_cbor_encoder_new(stream, items_count);
         break;
 #    endif // ANJAY_WITH_CBOR
     default:

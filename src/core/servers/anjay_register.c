@@ -341,7 +341,7 @@ query_dm(anjay_unlocked_t *anjay, anjay_lwm2m_version_t version, char **out) {
     assert(!*out);
     avs_stream_t *stream = avs_stream_membuf_create();
     if (!stream) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return -1;
     }
     int retval;
@@ -512,7 +512,7 @@ static int get_endpoint_path(AVS_LIST(const anjay_string_t) *out_path,
         AVS_LIST(anjay_string_t) segment =
                 (AVS_LIST(anjay_string_t)) AVS_LIST_NEW_BUFFER(attr_size + 1);
         if (!segment) {
-            anjay_log(ERROR, _("out of memory"));
+            _anjay_log_oom();
             goto fail;
         }
 

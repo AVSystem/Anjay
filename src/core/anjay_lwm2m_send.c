@@ -259,7 +259,7 @@ create_exchange(anjay_unlocked_t *anjay,
     AVS_LIST(anjay_send_entry_t) entry =
             AVS_LIST_NEW_ELEMENT(anjay_send_entry_t);
     if (!entry) {
-        send_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return NULL;
     }
     entry->anjay = anjay;
@@ -336,11 +336,17 @@ static avs_error_t start_send_exchange(anjay_send_entry_t *entry,
         goto finish;
     }
 
+    size_t item_count;
     if (!(entry->exchange_status.memstream = avs_stream_membuf_create())
             || (_anjay_output_dynamic_send_construct(
                        &entry->exchange_status.out_ctx,
                        entry->exchange_status.memstream, &base_path,
-                       content_format))) {
+                       content_format,
+                       _anjay_batch_outputable_item_count(
+                               entry->anjay, entry->payload_batch,
+                               entry->target_ssid, &item_count)
+                               ? NULL
+                               : &item_count))) {
         send_log(ERROR, _("could not create output context"));
         err = avs_errno(AVS_ENOMEM);
         goto finish;

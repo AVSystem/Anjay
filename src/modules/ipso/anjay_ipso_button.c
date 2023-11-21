@@ -250,7 +250,7 @@ int anjay_ipso_button_install(anjay_t *anjay_locked, size_t num_instances) {
             sizeof(anjay_ipso_button_t)
             + num_instances * sizeof(anjay_ipso_button_instance_t));
     if (!obj) {
-        _anjay_log(ipso, ERROR, _("Out of memory"));
+        _anjay_log_oom();
         err = -1;
         goto finish;
     }

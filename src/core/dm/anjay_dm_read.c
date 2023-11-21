@@ -385,7 +385,7 @@ int _anjay_dm_read_or_observe(anjay_connection_ref_t connection,
     anjay_unlocked_output_ctx_t *out_ctx = NULL;
     if ((result = _anjay_output_dynamic_construct(&out_ctx, response_stream,
                                                   &request->uri, details.format,
-                                                  ANJAY_ACTION_READ))) {
+                                                  NULL, ANJAY_ACTION_READ))) {
         return result;
     }
     return _anjay_dm_read_and_destroy_ctx(anjay, obj, &path_info,
@@ -604,7 +604,7 @@ int _anjay_dm_read_or_observe_composite(anjay_connection_ref_t connection,
         anjay_unlocked_output_ctx_t *out_ctx = NULL;
         (void) ((result = _anjay_output_dynamic_construct(
                          &out_ctx, response_stream, &root_path, details.format,
-                         ANJAY_ACTION_READ_COMPOSITE)));
+                         NULL, ANJAY_ACTION_READ_COMPOSITE)));
         while (!result && cached_paths) {
             const anjay_uri_path_t path = *cached_paths;
             AVS_LIST_DELETE(&cached_paths);

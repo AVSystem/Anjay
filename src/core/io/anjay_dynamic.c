@@ -27,52 +27,65 @@ VISIBILITY_SOURCE_BEGIN
 /////////////////////////////////////////////////////////////////////// ENCODING
 
 static anjay_unlocked_output_ctx_t *spawn_opaque(avs_stream_t *stream,
-                                                 const anjay_uri_path_t *uri) {
+                                                 const anjay_uri_path_t *uri,
+                                                 const size_t *items_count) {
     (void) uri;
+    (void) items_count;
     return _anjay_output_opaque_create(stream);
 }
 
 #ifndef ANJAY_WITHOUT_PLAINTEXT
 static anjay_unlocked_output_ctx_t *spawn_text(avs_stream_t *stream,
-                                               const anjay_uri_path_t *uri) {
+                                               const anjay_uri_path_t *uri,
+                                               const size_t *items_count) {
     (void) uri;
+    (void) items_count;
     return _anjay_output_text_create(stream);
 }
 #endif // ANJAY_WITHOUT_PLAINTEXT
 
 #ifndef ANJAY_WITHOUT_TLV
 static anjay_unlocked_output_ctx_t *spawn_tlv(avs_stream_t *stream,
-                                              const anjay_uri_path_t *uri) {
+                                              const anjay_uri_path_t *uri,
+                                              const size_t *items_count) {
+    (void) items_count;
     return _anjay_output_tlv_create(stream, uri);
 }
 #endif // ANJAY_WITHOUT_TLV
 
 #ifdef ANJAY_WITH_LWM2M_JSON
 static anjay_unlocked_output_ctx_t *spawn_json(avs_stream_t *stream,
-                                               const anjay_uri_path_t *uri) {
-    return _anjay_output_senml_like_create(stream, uri,
-                                           AVS_COAP_FORMAT_OMA_LWM2M_JSON);
+                                               const anjay_uri_path_t *uri,
+                                               const size_t *items_count) {
+    return _anjay_output_senml_like_create(
+            stream, uri, AVS_COAP_FORMAT_OMA_LWM2M_JSON, items_count);
 }
 #endif // ANJAY_WITH_LWM2M_JSON
 
 #ifdef ANJAY_WITH_SENML_JSON
 static anjay_unlocked_output_ctx_t *
-spawn_senml_json(avs_stream_t *stream, const anjay_uri_path_t *uri) {
-    return _anjay_output_senml_like_create(stream, uri,
-                                           AVS_COAP_FORMAT_SENML_JSON);
+spawn_senml_json(avs_stream_t *stream,
+                 const anjay_uri_path_t *uri,
+                 const size_t *items_count) {
+    return _anjay_output_senml_like_create(
+            stream, uri, AVS_COAP_FORMAT_SENML_JSON, items_count);
 }
 #endif // ANJAY_WITH_SENML_JSON
 
 #ifdef ANJAY_WITH_CBOR
 static anjay_unlocked_output_ctx_t *
-spawn_senml_cbor(avs_stream_t *stream, const anjay_uri_path_t *uri) {
-    return _anjay_output_senml_like_create(stream, uri,
-                                           AVS_COAP_FORMAT_SENML_CBOR);
+spawn_senml_cbor(avs_stream_t *stream,
+                 const anjay_uri_path_t *uri,
+                 const size_t *items_count) {
+    return _anjay_output_senml_like_create(
+            stream, uri, AVS_COAP_FORMAT_SENML_CBOR, items_count);
 }
 
 static anjay_unlocked_output_ctx_t *spawn_cbor(avs_stream_t *stream,
-                                               const anjay_uri_path_t *uri) {
+                                               const anjay_uri_path_t *uri,
+                                               const size_t *items_count) {
     (void) uri;
+    (void) items_count;
     return _anjay_output_cbor_create(stream);
 }
 
@@ -82,7 +95,9 @@ typedef struct {
     uint16_t format;
     anjay_input_ctx_constructor_t *input_ctx_constructor;
     anjay_unlocked_output_ctx_t *(*output_ctx_spawn_func)(
-            avs_stream_t *stream, const anjay_uri_path_t *uri);
+            avs_stream_t *stream,
+            const anjay_uri_path_t *uri,
+            const size_t *items_count);
 } dynamic_format_def_t;
 
 static const dynamic_format_def_t SUPPORTED_SIMPLE_FORMATS[] = {
@@ -174,6 +189,7 @@ static int spawn_output_ctx(anjay_unlocked_output_ctx_t **out_ctx,
                             avs_stream_t *stream,
                             const anjay_uri_path_t *uri,
                             uint16_t format,
+                            const size_t *items_count,
                             const dynamic_format_def_t *def) {
     if (!def || !def->output_ctx_spawn_func) {
         anjay_log(DEBUG,
@@ -183,7 +199,7 @@ static int spawn_output_ctx(anjay_unlocked_output_ctx_t **out_ctx,
         return ANJAY_ERR_NOT_ACCEPTABLE;
     }
 
-    if (!(*out_ctx = def->output_ctx_spawn_func(stream, uri))) {
+    if (!(*out_ctx = def->output_ctx_spawn_func(stream, uri, items_count))) {
         anjay_log(DEBUG, _("Failed to spawn output context"));
         return ANJAY_ERR_INTERNAL;
     }
@@ -233,6 +249,7 @@ int _anjay_output_dynamic_construct(anjay_unlocked_output_ctx_t **out_ctx,
                                     avs_stream_t *stream,
                                     const anjay_uri_path_t *uri,
                                     uint16_t format,
+                                    const size_t *items_count,
                                     anjay_request_action_t action) {
     if (format == AVS_COAP_FORMAT_NONE) {
         return -1;
@@ -253,7 +270,7 @@ int _anjay_output_dynamic_construct(anjay_unlocked_output_ctx_t **out_ctx,
     default:
         break;
     }
-    return spawn_output_ctx(out_ctx, stream, uri, format, def);
+    return spawn_output_ctx(out_ctx, stream, uri, format, items_count, def);
 }
 
 /////////////////////////////////////////////////////////////////////// DECODING
@@ -318,7 +335,8 @@ int _anjay_input_dynamic_construct(anjay_unlocked_input_ctx_t **out,
 int _anjay_output_dynamic_send_construct(anjay_unlocked_output_ctx_t **out_ctx,
                                          avs_stream_t *stream,
                                          const anjay_uri_path_t *uri,
-                                         uint16_t format) {
+                                         uint16_t format,
+                                         const size_t *items_count) {
     if (format == AVS_COAP_FORMAT_NONE) {
         return -1;
     }
@@ -326,7 +344,7 @@ int _anjay_output_dynamic_send_construct(anjay_unlocked_output_ctx_t **out_ctx,
     const dynamic_format_def_t *def =
             find_format(SUPPORTED_SEND_FORMATS, format);
 
-    return spawn_output_ctx(out_ctx, stream, uri, format, def);
+    return spawn_output_ctx(out_ctx, stream, uri, format, items_count, def);
 }
 #endif // ANJAY_WITH_SEND
 

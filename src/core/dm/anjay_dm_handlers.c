@@ -976,7 +976,7 @@ int _anjay_dm_transaction_include_object(
         AVS_LIST(const anjay_dm_installed_object_t *) new_entry =
                 AVS_LIST_NEW_ELEMENT(const anjay_dm_installed_object_t *);
         if (!new_entry) {
-            dm_log(ERROR, _("out of memory"));
+            _anjay_log_oom();
             return -1;
         }
         *new_entry = obj_ptr;

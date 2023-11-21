@@ -127,7 +127,7 @@ After populating the ``avs_net_psk_info_t`` structure, we may use:
     avs_net_security_info_t
     avs_net_security_info_from_psk(avs_net_psk_info_t psk);
 
-to convert into into ``avs_net_security_info_t``, as in the following example:
+to convert into ``avs_net_security_info_t``, as in the following example:
 
 .. code-block:: c
 
@@ -310,7 +310,7 @@ by the user:
     } anjay_fw_update_handlers_t;
 
 Now, the ``anjay_fw_update_get_security_config_t`` job is to fill
-``anjay_security_config_t`` properly. This structure consists of three fields:
+``anjay_security_config_t`` properly. This structure consists of four fields:
 
 .. highlight:: c
 .. snippet-source:: include_public/anjay/core.h
@@ -348,7 +348,8 @@ Now, the ``anjay_fw_update_get_security_config_t`` job is to fill
 
 We've already seen in previous sections how to configure
 ``security_info``. Also, for now there is no need to worry about
-``dane_tlsa_record`` or ``tls_ciphersuites`` - they can be reset to zero.
+``dane_tlsa_record``, ``tls_ciphersuites`` and ``server_name_indication`` - they can be
+reset to zero.
 
 Implementation
 ^^^^^^^^^^^^^^

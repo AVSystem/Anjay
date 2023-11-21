@@ -125,6 +125,9 @@ avs_error_t avs_coap_observe_persist(avs_coap_ctx_t *ctx,
  *
  * @param handler_arg    Opaque argument to pass to @p cancel_handler.
  *
+ * @param out_id         Pointer to a variable that (if not NULL) will be filled
+ *                       with the ID of the restored observation.
+ *
  * @param persistence    Persistence context to operate on.
  *
  * @returns
@@ -134,12 +137,26 @@ avs_error_t avs_coap_observe_persist(avs_coap_ctx_t *ctx,
  *  - <c>avs_errno(AVS_EINVAL)</c> if the CoAP context is already initialized
  *  - any I/O error forwarded from the underlying stream
  */
-avs_error_t
+avs_error_t avs_coap_observe_restore_with_id(
+        avs_coap_ctx_t *ctx,
+        avs_coap_observe_cancel_handler_t *cancel_handler,
+        void *handler_arg,
+        avs_coap_observe_id_t *out_id,
+        avs_persistence_context_t *persistence);
+
+/**
+ * Restores single Observe entry from the specified @p persistence context. This
+ * is a version of @ref avs_coap_observe_restore_with_id without the
+ * <c>out_id</c> argument declared to maitain backwards compatibility.
+ */
+static inline avs_error_t
 avs_coap_observe_restore(avs_coap_ctx_t *ctx,
                          avs_coap_observe_cancel_handler_t *cancel_handler,
                          void *handler_arg,
-                         avs_persistence_context_t *persistence);
-
+                         avs_persistence_context_t *persistence) {
+    return avs_coap_observe_restore_with_id(
+            ctx, cancel_handler, handler_arg, NULL, persistence);
+}
 #endif // WITH_AVS_COAP_OBSERVE_PERSISTENCE
 
 #ifdef WITH_AVS_COAP_OBSERVE

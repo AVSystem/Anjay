@@ -252,7 +252,7 @@ static int set_acl_in_instance(anjay_unlocked_t *anjay,
 
         AVS_LIST(acl_entry_t) new_entry = AVS_LIST_NEW_ELEMENT(acl_entry_t);
         if (!new_entry) {
-            ac_log(ERROR, _("out of memory"));
+            _anjay_log_oom();
             return -1;
         }
 

@@ -124,7 +124,7 @@ static int add_socket_onto_list(AVS_LIST(anjay_socket_entry_t) *tail_ptr,
     assert(!*tail_ptr);
     AVS_LIST_INSERT_NEW(anjay_socket_entry_t, tail_ptr);
     if (!*tail_ptr) {
-        anjay_log(ERROR, _("Out of memory while building socket list"));
+        _anjay_log_oom();
         return -1;
     }
     (*tail_ptr)->socket = socket;

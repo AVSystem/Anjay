@@ -229,6 +229,35 @@ int _anjay_batch_data_output_entry(
         anjay_unlocked_output_ctx_t *out_ctx);
 
 /**
+ * Calculates the number of entries that will be generated in a SenML document
+ * if @ref _anjay_batch_data_output_entry is called on a given @p batch.
+ *
+ * This is calculated only if it's possible to do so without accessing the data
+ * model. That might not be true if the Access Control mechanism is in use, i.e.
+ * it is enabled and there are multiple LwM2M Server Accounts actually
+ * configured.
+ *
+ * @param [in]    anjay       Anjay object to operate on.
+ *
+ * @param [in]    batch       Compiled batch.
+ *
+ * @param [in]    target_ssid SSID of the server for which this batch is being
+ *                            serialized. Will be used in relation to the Access
+ *                            Control mechanism.
+ *
+ * @param [out]   out_count   Pointer to a variable that, on successful return,
+ *                            will be filled with the calculated number of
+ *                            items.
+ *
+ * @returns 0 for success, or a negative value if the count depends on the data
+ *          in the Access Control object.
+ */
+int _anjay_batch_outputable_item_count(anjay_unlocked_t *anjay,
+                                       const anjay_batch_t *batch,
+                                       anjay_ssid_t target_ssid,
+                                       size_t *out_count);
+
+/**
  * Returns whether two batches have exactly the same data.
  *
  * NOTE: Timestamps are NOT taken into account in comparisons.

@@ -115,7 +115,7 @@ find_or_create_observe_path_entry(anjay_observe_connection_entry_t *connection,
         AVS_SORTED_SET_ELEM(anjay_observe_path_entry_t) new_entry =
                 AVS_SORTED_SET_ELEM_NEW(anjay_observe_path_entry_t);
         if (!new_entry) {
-            anjay_log(ERROR, _("out of memory"));
+            _anjay_log_oom();
             return NULL;
         }
 
@@ -140,7 +140,7 @@ static int add_path_to_observed_paths(
             AVS_LIST_INSERT_NEW(AVS_SORTED_SET_ELEM(anjay_observation_t),
                                 &observed_path->refs);
     if (!entry) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         if (!observed_path->refs) {
             AVS_SORTED_SET_DELETE_ELEM(conn->observed_paths, &observed_path);
         }
@@ -232,7 +232,9 @@ detach_observation(anjay_observe_connection_entry_t *conn,
 static void
 cleanup_observation(anjay_observe_connection_entry_t *conn,
                     AVS_SORTED_SET_ELEM(anjay_observation_t) observation) {
-    remove_from_observed_paths(conn, observation);
+    if (conn->observed_paths) {
+        remove_from_observed_paths(conn, observation);
+    }
     avs_sched_del(&observation->notify_task);
     if (observation->last_sent) {
         delete_value(_anjay_from_server(conn->conn_ref.server),
@@ -243,10 +245,13 @@ cleanup_observation(anjay_observe_connection_entry_t *conn,
 
 static void cleanup_connection_without_observations_set(
         anjay_observe_connection_entry_t *conn) {
-    anjay_unlocked_t *anjay = _anjay_from_server(conn->conn_ref.server);
-    while (conn->unsent) {
-        delete_value(anjay, &conn->unsent);
+    if (conn->conn_ref.server) {
+        anjay_unlocked_t *anjay = _anjay_from_server(conn->conn_ref.server);
+        while (conn->unsent) {
+            delete_value(anjay, &conn->unsent);
+        }
     }
+    assert(!conn->unsent);
     AVS_SORTED_SET_ELEM(anjay_observation_t) observation;
     AVS_SORTED_SET_FOREACH(observation, conn->observations) {
         cleanup_observation(conn, observation);
@@ -437,7 +442,7 @@ create_observation_value(const anjay_msg_details_t *details,
     AVS_LIST(anjay_observation_value_t) result = (AVS_LIST(
             anjay_observation_value_t)) AVS_LIST_NEW_BUFFER(element_size);
     if (!result) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return NULL;
     }
     result->details = *details;
@@ -714,7 +719,7 @@ create_detached_observation(const avs_coap_token_t *token,
                             offsetof(anjay_observation_t, paths)
                             + paths->count * sizeof(const anjay_uri_path_t));
     if (!new_observation) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return NULL;
     }
     memcpy((void *) (intptr_t) (const void *) &new_observation->token, token,
@@ -772,7 +777,7 @@ find_or_create_connection_state(anjay_connection_ref_t ref) {
                 || !((*conn_ptr)->observed_paths = AVS_SORTED_SET_NEW(
                              anjay_observe_path_entry_t,
                              _anjay_observe_path_entry_cmp))) {
-            anjay_log(ERROR, _("out of memory"));
+            _anjay_log_oom();
             if (*conn_ptr) {
                 AVS_SORTED_SET_DELETE(&(*conn_ptr)->observations);
                 AVS_LIST_DELETE(conn_ptr);
@@ -934,7 +939,7 @@ static int read_as_batch(anjay_unlocked_t *anjay,
     assert(out_batch && !*out_batch);
     anjay_batch_builder_t *builder = _anjay_batch_builder_new();
     if (!builder) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return -1;
     }
 
@@ -953,7 +958,7 @@ static int read_as_batch(anjay_unlocked_t *anjay,
 #    endif // defined(ANJAY_WITH_LWM2M11) &&
            // !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
     if (!result && !(*out_batch = _anjay_batch_builder_compile(&builder))) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         result = -1;
     }
     _anjay_batch_builder_cleanup(&builder);
@@ -1076,6 +1081,24 @@ initial_response_details(anjay_unlocked_t *anjay,
             anjay, request, requires_hierarchical_format, lwm2m_version);
 }
 
+static int multiple_batches_item_count(anjay_unlocked_t *anjay,
+                                       size_t values_count,
+                                       const anjay_batch_t *const *values,
+                                       size_t *out_count) {
+    size_t item_count = 0;
+    for (size_t i = 0; i < values_count; ++i) {
+        size_t batch_count;
+        if (_anjay_batch_outputable_item_count(
+                    anjay, values[i], ANJAY_SSID_BOOTSTRAP, &batch_count)) {
+            return -1;
+        } else {
+            item_count += batch_count;
+        }
+    }
+    *out_count = item_count;
+    return 0;
+}
+
 static int send_initial_response(anjay_unlocked_t *anjay,
                                  const anjay_msg_details_t *details,
                                  const anjay_request_t *request,
@@ -1097,10 +1120,15 @@ static int send_initial_response(anjay_unlocked_t *anjay,
 #    endif // defined(ANJAY_WITH_LWM2M11) &&
            // !defined(ANJAY_WITHOUT_COMPOSITE_OPERATIONS)
 
+    size_t item_count;
     anjay_unlocked_output_ctx_t *out_ctx = NULL;
-    int result =
-            _anjay_output_dynamic_construct(&out_ctx, notify_stream, &root_path,
-                                            details->format, request->action);
+    int result = _anjay_output_dynamic_construct(
+            &out_ctx, notify_stream, &root_path, details->format,
+            multiple_batches_item_count(anjay, values_count, values,
+                                        &item_count)
+                    ? NULL
+                    : &item_count,
+            request->action);
     for (size_t i = 0; !result && i < values_count; ++i) {
         // NOTE: Access Control permissions have been checked during the
         // read_as_batch() stage, so we're "spoofing" ANJAY_SSID_BOOTSTRAP
@@ -1160,7 +1188,7 @@ static int read_observation_values(anjay_unlocked_t *anjay,
     if (paths->count
             && !(*out_batches = (anjay_batch_t **) avs_calloc(
                          paths->count, sizeof(anjay_batch_t *)))) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return -1;
     }
 
@@ -1530,11 +1558,20 @@ initialize_serialization_state(anjay_observe_connection_entry_t *conn) {
     anjay_observation_value_t *value = conn->unsent;
     const anjay_uri_path_t root_path = get_response_path(value);
 
+    size_t item_count;
     if (!(conn->serialization_state.membuf_stream = avs_stream_membuf_create())
             || _anjay_output_dynamic_construct(
                        &conn->serialization_state.out_ctx,
                        conn->serialization_state.membuf_stream, &root_path,
-                       value->details.format, value->ref->action)) {
+                       value->details.format,
+                       multiple_batches_item_count(
+                               _anjay_from_server(conn->conn_ref.server),
+                               value->ref->paths_count,
+                               cast_to_const_batch_array(value->values),
+                               &item_count)
+                               ? NULL
+                               : &item_count,
+                       value->ref->action)) {
         return -1;
     }
     conn->serialization_state.serialization_time = avs_time_real_now();
@@ -1720,7 +1757,7 @@ update_notification_value(anjay_observe_connection_entry_t *conn_state,
     if (observation->paths_count
             && !(batches = (anjay_batch_t **) avs_calloc(
                          observation->paths_count, sizeof(anjay_batch_t *)))) {
-        anjay_log(ERROR, _("Out of memory"));
+        _anjay_log_oom();
         return -1;
     }
 

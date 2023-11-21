@@ -59,7 +59,7 @@ static int url_parse_chunks(const char **url,
                 AVS_LIST(anjay_string_t) chunk = (AVS_LIST(
                         anjay_string_t)) AVS_LIST_NEW_BUFFER(chunk_len + 1);
                 if (!chunk) {
-                    anjay_log(ERROR, _("out of memory"));
+                    _anjay_log_oom();
                     return -1;
                 }
                 AVS_LIST_APPEND(out_chunks, chunk);
@@ -195,7 +195,7 @@ AVS_LIST(const anjay_string_t) _anjay_make_string_list(const char *string,
         size_t len = strlen(str) + 1;
         if (!(*strings_list_endptr =
                       (AVS_LIST(anjay_string_t)) AVS_LIST_NEW_BUFFER(len))) {
-            anjay_log(ERROR, _("out of memory"));
+            _anjay_log_oom();
             AVS_LIST_CLEAR(&strings_list);
             break;
         }
@@ -455,7 +455,7 @@ int _anjay_copy_tls_ciphersuites(avs_net_socket_tls_ciphersuites_t *dest,
     if (src->num_ids) {
         if (!(dest->ids = (uint32_t *) avs_calloc(src->num_ids,
                                                   sizeof(*dest->ids)))) {
-            anjay_log(ERROR, _("out of memory"));
+            _anjay_log_oom();
             return -1;
         }
         memcpy(dest->ids, src->ids, src->num_ids * sizeof(*src->ids));
@@ -820,6 +820,10 @@ int _anjay_safe_strtod(const char *in, double *value) {
 }
 
 // || defined(ANJAY_WITH_CORE_PERSISTENCE))
+
+void _anjay_log_oom(void) {
+    anjay_log(ERROR, _("out of memory"));
+}
 
 #ifdef ANJAY_TEST
 #    include "tests/core/utils.c"

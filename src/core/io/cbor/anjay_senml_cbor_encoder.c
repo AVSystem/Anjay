@@ -40,7 +40,8 @@ VISIBILITY_SOURCE_BEGIN
 
 typedef enum {
     CBOR_CONTEXT_TYPE_ROOT = 0,
-    CBOR_CONTEXT_TYPE_ARRAY,
+    CBOR_CONTEXT_TYPE_UNKNOWN_LENGTH_ARRAY,
+    CBOR_CONTEXT_TYPE_KNOWN_LENGTH_ARRAY,
     CBOR_CONTEXT_TYPE_BYTES,
     CBOR_CONTEXT_TYPE_MAP
 } cbor_context_type_t;
@@ -217,7 +218,25 @@ static int cbor_definite_map_end(cbor_encoder_t *ctx) {
     return retval;
 }
 
-static int cbor_definite_array_begin(cbor_encoder_t *ctx) {
+static int cbor_known_length_definite_array_begin(cbor_encoder_t *ctx,
+                                                  size_t items_count) {
+    assert(ctx);
+    cbor_encoder_internal_t *top_ctx = nested_context_top(ctx);
+    assert(top_ctx->context_type != CBOR_CONTEXT_TYPE_BYTES);
+
+    cbor_encoder_internal_t *array_ctx =
+            nested_context_push(ctx, top_ctx->stream,
+                                CBOR_CONTEXT_TYPE_KNOWN_LENGTH_ARRAY);
+
+    int retval =
+            _anjay_cbor_ll_definite_array_begin(array_ctx->stream, items_count);
+    if (retval) {
+        nested_context_pop(ctx);
+    }
+    return retval;
+}
+
+static int cbor_unknown_length_definite_array_begin(cbor_encoder_t *ctx) {
     cbor_encoder_internal_t *top_ctx = nested_context_top(ctx);
     assert(top_ctx->context_type != CBOR_CONTEXT_TYPE_BYTES);
     (void) top_ctx;
@@ -227,7 +246,7 @@ static int cbor_definite_array_begin(cbor_encoder_t *ctx) {
         return -1;
     }
 
-    nested_context_push(ctx, stream, CBOR_CONTEXT_TYPE_ARRAY);
+    nested_context_push(ctx, stream, CBOR_CONTEXT_TYPE_UNKNOWN_LENGTH_ARRAY);
     return 0;
 }
 
@@ -248,7 +267,9 @@ static int copy_stream(avs_stream_t *dst, avs_stream_t *src) {
 static int cbor_definite_array_end(cbor_encoder_t *ctx) {
     assert(ctx);
     cbor_encoder_internal_t *top_ctx = nested_context_top(ctx);
-    if (top_ctx->context_type != CBOR_CONTEXT_TYPE_ARRAY) {
+    cbor_context_type_t context_type = top_ctx->context_type;
+    if (context_type != CBOR_CONTEXT_TYPE_UNKNOWN_LENGTH_ARRAY
+            && context_type != CBOR_CONTEXT_TYPE_KNOWN_LENGTH_ARRAY) {
         cbor_log(DEBUG, _("trying to finish array, but it is not started"));
         return -1;
     }
@@ -258,11 +279,16 @@ static int cbor_definite_array_end(cbor_encoder_t *ctx) {
 
     top_ctx = nested_context_top(ctx);
 
-    int retval;
-    (void) ((retval = _anjay_cbor_ll_definite_array_begin(top_ctx->stream,
-                                                          entries))
-            || (retval = copy_stream(top_ctx->stream, array_stream)));
-    avs_stream_cleanup(&array_stream);
+    assert((top_ctx->stream == array_stream)
+           == (context_type == CBOR_CONTEXT_TYPE_KNOWN_LENGTH_ARRAY));
+
+    int retval = 0;
+    if (context_type == CBOR_CONTEXT_TYPE_UNKNOWN_LENGTH_ARRAY) {
+        (void) ((retval = _anjay_cbor_ll_definite_array_begin(top_ctx->stream,
+                                                              entries))
+                || (retval = copy_stream(top_ctx->stream, array_stream)));
+        avs_stream_cleanup(&array_stream);
+    }
     top_ctx->size++;
     return retval;
 }
@@ -437,7 +463,7 @@ static int senml_cbor_encoder_cleanup(anjay_senml_like_encoder_t **ctx_) {
 
     while (ctx->stack_size > 1) {
         cbor_encoder_internal_t *top_ctx = nested_context_top(ctx);
-        if (top_ctx->context_type == CBOR_CONTEXT_TYPE_ARRAY) {
+        if (top_ctx->context_type == CBOR_CONTEXT_TYPE_UNKNOWN_LENGTH_ARRAY) {
             avs_stream_cleanup(&top_ctx->stream);
         }
         nested_context_pop(ctx);
@@ -464,7 +490,7 @@ static const anjay_senml_like_encoder_vtable_t SENML_CBOR_ENCODER_VTABLE = {
 };
 
 anjay_senml_like_encoder_t *
-_anjay_senml_cbor_encoder_new(avs_stream_t *stream) {
+_anjay_senml_cbor_encoder_new(avs_stream_t *stream, const size_t *items_count) {
     if (!stream) {
         cbor_log(DEBUG, _("no stream provided"));
         return NULL;
@@ -478,7 +504,13 @@ _anjay_senml_cbor_encoder_new(avs_stream_t *stream) {
     }
 
     nested_context_push(ctx, stream, CBOR_CONTEXT_TYPE_ROOT);
-    if (cbor_definite_array_begin(ctx)) {
+    int result;
+    if (items_count) {
+        result = cbor_known_length_definite_array_begin(ctx, *items_count);
+    } else {
+        result = cbor_unknown_length_definite_array_begin(ctx);
+    }
+    if (result) {
         avs_free(ctx);
         return NULL;
     }

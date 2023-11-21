@@ -47,7 +47,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "3.6.0"
+#    define ANJAY_VERSION "3.6.1"
 #endif // ANJAY_VERSION
 
 #ifdef ANJAY_WITH_LWM2M11
@@ -61,7 +61,7 @@ static int init_anjay(anjay_unlocked_t *anjay,
                       const anjay_configuration_t *config) {
 #ifdef ANJAY_WITH_THREAD_SAFETY
     if (!(anjay->coap_sched = avs_sched_new("Anjay CoAP", NULL))) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return -1;
     }
 #endif // ANJAY_WITH_THREAD_SAFETY
@@ -149,7 +149,7 @@ static int init_anjay(anjay_unlocked_t *anjay,
         anjay->udp_response_cache =
                 avs_coap_udp_response_cache_create(config->msg_cache_size);
         if (!anjay->udp_response_cache) {
-            anjay_log(ERROR, _("out of memory"));
+            _anjay_log_oom();
             return -1;
         }
     }
@@ -206,12 +206,12 @@ static int init_anjay(anjay_unlocked_t *anjay,
 
     anjay->in_shared_buffer = avs_shared_buffer_new(config->in_buffer_size);
     if (!anjay->in_shared_buffer) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return -1;
     }
     anjay->out_shared_buffer = avs_shared_buffer_new(config->out_buffer_size);
     if (!anjay->out_shared_buffer) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return -1;
     }
 
@@ -302,7 +302,7 @@ static anjay_t *alloc_anjay(void) {
 #endif // ANJAY_WITH_THREAD_SAFETY
     anjay_t *out = (anjay_t *) avs_calloc(1, alloc_size);
     if (!out) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return NULL;
     }
 #ifdef ANJAY_WITH_THREAD_SAFETY
@@ -317,7 +317,7 @@ static anjay_t *alloc_anjay(void) {
     anjay_unlocked_t *anjay = out;
 #endif // ANJAY_WITH_THREAD_SAFETY
     if (!(anjay->sched = avs_sched_new("Anjay", out))) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
 #ifdef ANJAY_WITH_THREAD_SAFETY
         avs_mutex_cleanup(&out->mutex);
 #endif // ANJAY_WITH_THREAD_SAFETY

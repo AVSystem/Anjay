@@ -519,7 +519,7 @@ _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
     AVS_LIST(anjay_coap_download_ctx_t) ctx =
             AVS_LIST_NEW_ELEMENT(anjay_coap_download_ctx_t);
     if (!ctx) {
-        dl_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return avs_errno(AVS_ENOMEM);
     }
     if (forced_coap_ctx) {

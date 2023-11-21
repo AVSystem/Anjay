@@ -33,7 +33,7 @@
     avs_stream_outbuf_set_buffer(&outbuf, buf, sizeof(buf));                  \
     anjay_unlocked_output_ctx_t *out = NULL;                                  \
     ASSERT_OK(_anjay_output_dynamic_construct(&out, (avs_stream_t *) &outbuf, \
-                                              (Uri), (Format),                \
+                                              (Uri), (Format), NULL,          \
                                               ANJAY_ACTION_READ));
 
 #define PATH_HIERARCHICAL true

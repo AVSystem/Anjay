@@ -38,6 +38,7 @@ int _anjay_output_dynamic_construct(anjay_unlocked_output_ctx_t **out_ctx,
                                     avs_stream_t *stream,
                                     const anjay_uri_path_t *uri,
                                     uint16_t format,
+                                    const size_t *items_count,
                                     anjay_request_action_t action);
 
 #ifdef ANJAY_WITH_LEGACY_CONTENT_FORMAT_SUPPORT
@@ -192,8 +193,11 @@ _anjay_output_tlv_create(avs_stream_t *stream, const anjay_uri_path_t *uri);
 
 #if defined(ANJAY_WITH_LWM2M_JSON) || defined(ANJAY_WITH_SENML_JSON) \
         || defined(ANJAY_WITH_CBOR)
-anjay_unlocked_output_ctx_t *_anjay_output_senml_like_create(
-        avs_stream_t *stream, const anjay_uri_path_t *uri, uint16_t format);
+anjay_unlocked_output_ctx_t *
+_anjay_output_senml_like_create(avs_stream_t *stream,
+                                const anjay_uri_path_t *uri,
+                                uint16_t format,
+                                const size_t *items_count);
 #endif
 
 int _anjay_output_bytes_begin(anjay_unlocked_output_ctx_t *ctx,
@@ -278,7 +282,8 @@ uint16_t _anjay_default_simple_format(anjay_unlocked_t *anjay,
 int _anjay_output_dynamic_send_construct(anjay_unlocked_output_ctx_t **out_ctx,
                                          avs_stream_t *stream,
                                          const anjay_uri_path_t *uri,
-                                         uint16_t format);
+                                         uint16_t format,
+                                         const size_t *items_count);
 #endif // ANJAY_WITH_SEND
 
 VISIBILITY_PRIVATE_HEADER_END

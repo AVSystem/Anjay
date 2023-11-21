@@ -78,18 +78,15 @@ static int get_security_mode(anjay_unlocked_t *anjay,
     }
 
     switch (mode) {
-    case ANJAY_SECURITY_RPK:
-        anjay_log(ERROR, _("unsupported security mode: ") "%s",
-                  AVS_INT64_AS_STRING(mode));
-        return -1;
     case ANJAY_SECURITY_NOSEC:
     case ANJAY_SECURITY_PSK:
     case ANJAY_SECURITY_CERTIFICATE:
     case ANJAY_SECURITY_EST:
         *out_mode = (anjay_security_mode_t) mode;
         return 0;
+    case ANJAY_SECURITY_RPK:
     default:
-        anjay_log(ERROR, _("invalid security mode: ") "%s",
+        anjay_log(ERROR, _("unsupported security mode: ") "%s",
                   AVS_INT64_AS_STRING(mode));
         return -1;
     }
@@ -235,7 +232,7 @@ static avs_error_t init_cert_security(anjay_unlocked_t *anjay,
 
     avs_stream_t *server_pk_membuf = avs_stream_membuf_create();
     if (!server_pk_membuf) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return avs_errno(AVS_ENOMEM);
     }
     avs_net_socket_dane_tlsa_record_t dane_tlsa_record = {
@@ -360,8 +357,6 @@ static avs_error_t init_security(anjay_unlocked_t *anjay,
                                   security_mode, cache);
     case ANJAY_SECURITY_RPK:
     default:
-        anjay_log(ERROR, _("unsupported security mode: ") "%d",
-                  (int) security_mode);
         return avs_errno(AVS_EINVAL);
     }
 }

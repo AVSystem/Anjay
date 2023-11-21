@@ -119,7 +119,7 @@ restore_instances(anjay_unlocked_t *anjay,
             AVS_LIST(access_control_instance_t) entry =
                     AVS_LIST_NEW_ELEMENT(access_control_instance_t);
             if (!entry) {
-                ac_log(ERROR, _("out of memory"));
+                _anjay_log_oom();
                 return avs_errno(AVS_ENOMEM);
             }
             *entry = instance;

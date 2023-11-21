@@ -424,6 +424,8 @@ bool _anjay_ongoing_registration_exists_unlocked(anjay_unlocked_t *anjay);
 
 avs_sched_t *_anjay_get_scheduler_unlocked(anjay_unlocked_t *anjay);
 
+void _anjay_log_oom(void);
+
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif /* ANJAY_INCLUDE_ANJAY_MODULES_UTILS_CORE_H */

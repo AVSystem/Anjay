@@ -44,7 +44,8 @@ static void cbor_test_setup(cbor_test_env_t *env, size_t buf_size) {
     env->buf = avs_malloc(buf_size);
     AVS_UNIT_ASSERT_NOT_NULL(env->buf);
     avs_stream_outbuf_set_buffer(&env->outbuf, env->buf, buf_size);
-    env->encoder = _anjay_senml_cbor_encoder_new((avs_stream_t *) &env->outbuf);
+    env->encoder =
+            _anjay_senml_cbor_encoder_new((avs_stream_t *) &env->outbuf, NULL);
     AVS_UNIT_ASSERT_NOT_NULL(env->encoder);
 }
 

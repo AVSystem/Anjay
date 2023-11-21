@@ -40,7 +40,7 @@ int _anjay_dm_module_install(anjay_unlocked_t *anjay,
     AVS_LIST(anjay_dm_installed_module_t) new_entry =
             AVS_LIST_NEW_ELEMENT(anjay_dm_installed_module_t);
     if (!new_entry) {
-        anjay_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return -1;
     }
     new_entry->deleter = module_deleter;

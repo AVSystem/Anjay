@@ -945,8 +945,12 @@ AVS_UNIT_TEST(observe_persistence, simple) {
 
         avs_persistence_context_t persistence =
                 avs_persistence_restore_context_create(stream);
-        ASSERT_OK(avs_coap_observe_restore(env.coap_ctx, on_observe_cancel,
-                                           &env, &persistence));
+        avs_coap_observe_id_t restored_id;
+        ASSERT_OK(avs_coap_observe_restore_with_id(env.coap_ctx,
+                                                   on_observe_cancel, &env,
+                                                   &restored_id, &persistence));
+        ASSERT_TRUE(
+                avs_coap_token_equal(&observe_id.token, &restored_id.token));
 
         avs_net_socket_t *socket = NULL;
         avs_unit_mocksock_create_datagram(&socket);

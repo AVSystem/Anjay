@@ -889,7 +889,7 @@ static int bootstrap_read(anjay_connection_ref_t bootstrap_connection,
     anjay_unlocked_output_ctx_t *out_ctx = NULL;
     (void) ((result = _anjay_output_dynamic_construct(
                      &out_ctx, response_stream, &request->uri, details.format,
-                     ANJAY_ACTION_READ))
+                     NULL, ANJAY_ACTION_READ))
             || (result = _anjay_dm_read_and_destroy_ctx(anjay, obj, &path_info,
                                                         ANJAY_SSID_BOOTSTRAP,
                                                         &out_ctx)));

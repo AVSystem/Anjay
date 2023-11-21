@@ -114,7 +114,7 @@ static void assert_observe(anjay_t *anjay_locked,
     anjay_unlocked_output_ctx_t *out_ctx = NULL;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_dynamic_construct(
             &out_ctx, (avs_stream_t *) &out_buf_stream, uri, details->format,
-            ANJAY_ACTION_READ));
+            NULL, ANJAY_ACTION_READ));
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_batch_data_output(anjay, observation->last_sent->values[0],
                                      ANJAY_SSID_BOOTSTRAP, out_ctx));

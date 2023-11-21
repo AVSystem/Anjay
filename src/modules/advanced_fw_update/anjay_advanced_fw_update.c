@@ -177,7 +177,7 @@ static void perform_lwm2m_send(anjay_unlocked_t *anjay,
 
     anjay_send_batch_builder_t *batch_builder = anjay_send_batch_builder_new();
     if (!batch_builder) {
-        fw_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return;
     }
     if (_anjay_send_batch_data_add_current_multiple_unlocked(
@@ -190,7 +190,7 @@ static void perform_lwm2m_send(anjay_unlocked_t *anjay,
             anjay_send_batch_builder_compile(&batch_builder);
     if (!batch) {
         anjay_send_batch_builder_cleanup(&batch_builder);
-        fw_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
         return;
     }
     send_batch_to_all_servers(anjay, batch);
@@ -985,7 +985,7 @@ static int enqueue_download(anjay_unlocked_t *anjay,
     return 0;
 
 cleanup:
-    fw_log(ERROR, _("Out of memory"));
+    _anjay_log_oom();
     if (new_download) {
         avs_free((void *) (intptr_t) new_download->url);
         AVS_LIST_DELETE(&new_download);
@@ -1455,7 +1455,7 @@ static int handle_fw_execute_args(advanced_fw_repr_t *fw,
     avs_stream_t *supplemental_iid_cache_membuf = avs_stream_membuf_create();
 
     if (!supplemental_iid_cache_membuf) {
-        fw_log(ERROR, _("Out of memory"));
+        _anjay_log_oom();
         return ANJAY_ERR_INTERNAL;
     }
 
@@ -1520,7 +1520,7 @@ static int handle_fw_execute_args(advanced_fw_repr_t *fw,
         if (avs_is_err(avs_stream_write(supplemental_iid_cache_membuf,
                                         &supplemental_iid,
                                         sizeof(supplemental_iid)))) {
-            fw_log(ERROR, _("Out of memory"));
+            _anjay_log_oom();
             result = ANJAY_ERR_INTERNAL;
             goto finish;
         }
@@ -1690,7 +1690,7 @@ static AVS_LIST(advanced_fw_instance_t) initialize_fw_instance(
             AVS_LIST_NEW_ELEMENT(advanced_fw_instance_t);
 
     if (!inst) {
-        fw_log(ERROR, _("Out of memory"));
+        _anjay_log_oom();
         return NULL;
     }
 
@@ -1793,7 +1793,7 @@ int anjay_advanced_fw_update_install(
     AVS_LIST(advanced_fw_repr_t) repr =
             AVS_LIST_NEW_ELEMENT(advanced_fw_repr_t);
     if (!repr) {
-        fw_log(ERROR, _("out of memory"));
+        _anjay_log_oom();
     } else {
         repr->def = &FIRMWARE_UPDATE;
         repr->current_download.iid = ANJAY_ID_INVALID;
@@ -2074,7 +2074,7 @@ static int copy_target_iid_list(anjay_iid_t **out_instances,
     }
 
     if (target_iids_count && !new_ptr) {
-        fw_log(ERROR, _("Out of memory"));
+        _anjay_log_oom();
         return -1;
     }
 

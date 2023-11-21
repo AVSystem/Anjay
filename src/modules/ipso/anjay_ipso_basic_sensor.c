@@ -327,7 +327,7 @@ int anjay_ipso_basic_sensor_install(anjay_t *anjay_locked,
                     + num_instances
                               * sizeof(anjay_ipso_basic_sensor_instance_t));
     if (!obj) {
-        _anjay_log(ipso, ERROR, _("Out of memory"));
+        _anjay_log_oom();
         err = -1;
         goto finish;
     }
