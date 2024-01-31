@@ -1,0 +1,25 @@
+docs/diagrams/out
+
+# NetBeans Project
+nbproject
+
+# VSCode
+.vscode/
+
+build/
+site/
+
+# make
+CMakeFiles/
+anjay_basic_example
+cmake_install.cmake
+CMakeCache.txt
+libfluf.a
+libavs_commons.a
+Makefile
+
+/anjay_basic_with_dm_example
+/dm_tests
+/sdm_tests
+/example_coap_udp
+/fluf_tests

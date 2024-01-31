@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+#
+# Copyright 2023-2024 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
+
+set -e
+
+canonicalize() {
+    echo "$(cd "$(dirname "$1")" && pwd -P)/$(basename "$1")"
+}
+
+num_processors() {
+    if command -v nproc > /dev/null; then
+        nproc
+    else
+        sysctl -n hw.ncpu
+    fi
+}
+
+function die() {
+    echo -e "$@" >&2
+    exit 1
+}
+
+[[ "$PROJECT_ROOT" ]] || PROJECT_ROOT="$(dirname "$(dirname "$(canonicalize "$0")")")"
+
+which gcovr || die "gcovr not found, exiting"
+
+rm -rf "$PROJECT_ROOT/build/coverage"
+mkdir -p "$PROJECT_ROOT/build/coverage"
+pushd "$PROJECT_ROOT/build/coverage"
+    cmake -D CMAKE_C_FLAGS="-std=c99 -D_POSIX_C_SOURCE=200809L -g --coverage" -D CMAKE_EXE_LINKER_FLAGS="--coverage" "$@" -H../.. -B.
+    make -j$(num_processors) fluf_tests dm_tests sdm_tests
+    ./fluf_tests
+    ./dm_tests
+    ./sdm_tests
+
+    mkdir -p "$PROJECT_ROOT/coverage"
+    gcovr . --html --html-details -r "$PROJECT_ROOT" \
+            -f "$PROJECT_ROOT/src" -f "$PROJECT_ROOT/inc" -f "$PROJECT_ROOT/include_public" \
+            -f "$PROJECT_ROOT/deps/avs_commons/src" -f "$PROJECT_ROOT/deps/avs_commons/include_public" \
+            -o "$PROJECT_ROOT/coverage/coverage.html"
+popd
+
+cat <<EOF
+
+-----
+Coverage report generated in $PROJECT_ROOT/coverage
+EOF

@@ -1,0 +1,3 @@
+[submodule "deps/avs_commons"]
+	path = deps/avs_commons
+	url = https://github.com/AVSystem/avs_commons.git
