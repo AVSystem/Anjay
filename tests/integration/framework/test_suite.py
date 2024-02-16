@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -387,6 +387,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                        fw_updated_marker_path,
                        afu_marker_path=None,
                        afu_original_img_file_path=None,
+                       sw_mgmt_persistence_file=None,
                        tls_version='TLSv1.2',
                        ciphersuites=(0xC030, 0xC0A8, 0xC0AE)):
         """
@@ -417,6 +418,8 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             args += ['--afu-marker-path', afu_marker_path]
         if afu_original_img_file_path is not None:
             args += ['--afu-original-img-file-path', afu_original_img_file_path]
+        if sw_mgmt_persistence_file is not None:
+            args += ['--sw-mgmt-persistence-file', sw_mgmt_persistence_file]
         if tls_version is not None:
             args += ['--tls-version', tls_version]
         if ciphersuites is not None:

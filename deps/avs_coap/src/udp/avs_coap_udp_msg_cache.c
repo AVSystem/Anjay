@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem CoAP library
  * All rights reserved.
  *
@@ -104,7 +104,7 @@ static endpoint_t *cache_endpoint_add_ref(avs_coap_udp_response_cache_t *cache,
 
     AVS_LIST(endpoint_t) new_ep = AVS_LIST_NEW_ELEMENT(endpoint_t);
     if (!new_ep) {
-        LOG(DEBUG, _("out of memory"));
+        LOG_OOM();
         return NULL;
     }
 

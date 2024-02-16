@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -59,7 +59,8 @@ def make_firmware_package(binary: bytes,
 def make_multiple_firmware_package(binary: List[bytes],
                                    magic: bytes = b'MULTIPKG',
                                    version: int = 3):
-    meta = struct.pack(f'>8sHH{"I" * len(binary)}', magic, version, len(binary), *[len(pkg) for pkg in binary])
+    meta = struct.pack(f'>8sHH{"I" * len(binary)}', magic,
+                       version, len(binary), *[len(pkg) for pkg in binary])
     package = meta
     for pkg in binary:
         package += pkg
@@ -108,7 +109,8 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     args.force_error = FirmwareUpdateForcedError.__members__[args.force_error]
-    linked = args.linked_instances if type(args.linked_instances) == list else []
+    linked = args.linked_instances if type(
+        args.linked_instances) == list else []
     with open(args.in_file, 'rb') as in_file, open(args.out_file, 'wb') as out_file:
         out_file.write(make_firmware_package(in_file.read(),
                                              magic=args.magic.encode('ascii'),

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -70,7 +70,7 @@ atexit "rm -rf '$TMPDIR'"
 
 analyze() {
     "$SCAN_BUILD" --status-bugs -no-failure-reports -o "$OUTPUT_DIR" \
-        "$ROOT_DIR/devconfig -DSCAN_BUILD_BINARY="$SCAN_BUILD" -DWITH_NESTED_FUNCTION_MUTEX_LOCKS=OFF" \
+        "$ROOT_DIR/devconfig -DSCAN_BUILD_BINARY="$SCAN_BUILD" -DWITH_NESTED_FUNCTION_MUTEX_LOCKS=OFF -DWITH_AVS_CRYPTO_PKI_ENGINE=OFF" \
         && "$SCAN_BUILD" --status-bugs -o "$OUTPUT_DIR" make -j"$NUM_JOBS"
 }
 

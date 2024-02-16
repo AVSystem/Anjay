@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
@@ -305,7 +305,7 @@ by the user:
         anjay_fw_update_get_coap_tx_params_t *get_coap_tx_params;
 
         /** Queries request timeout to be used during firmware update over CoAP+TCP
-         * or HTTP; @ref anjay_advanced_fw_update_get_tcp_request_timeout */
+         * or HTTP; @ref anjay_fw_update_get_tcp_request_timeout_t */
         anjay_fw_update_get_tcp_request_timeout_t *get_tcp_request_timeout;
     } anjay_fw_update_handlers_t;
 

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -85,3 +85,35 @@ class ObserveCancelCrash(test_suite.Lwm2mSingleServerTest):
 
         # send the ACK
         self.serv.send(Lwm2mEmpty.matching(notif)())
+
+
+class ConfirmableBlockNotifCrash(test_suite.Lwm2mSingleServerTest, test_suite.Lwm2mDmOperations):
+    def runTest(self):
+        self.create_instance(self.serv, OID.Test)
+        self.write_attributes(self.serv, OID.Test, 0, RID.Test.ResBytes, ['con=1'])
+        obs = self.observe(self.serv, OID.Test, 0, RID.Test.ResBytes)
+        self.write_resource(self.serv, OID.Test, 0, RID.Test.ResBytesSize, b'1500')
+
+        expected_seq_count = 2
+        for seq in range(expected_seq_count):
+            pkt = self.serv.recv()
+            if seq == 0:
+                self.assertMsgEqual(
+                    Lwm2mNotify(token=obs.token, format=coap.ContentFormat.TEXT_PLAIN,
+                                confirmable=True, options=[coap.Option.OBSERVE(1),
+                                                           coap.Option.BLOCK2(seq,
+                                                                              seq < expected_seq_count - 1,
+                                                                              1024)]), pkt)
+            else:
+                self.assertMsgEqual(Lwm2mContent.matching(req)(format=coap.ContentFormat.TEXT_PLAIN,
+                                                               options=[coap.Option.BLOCK2(seq,
+                                                                                           seq < expected_seq_count - 1,
+                                                                                           1024)]),
+                                    pkt)
+            if seq < expected_seq_count - 1:
+                # Corner case: GET for the next block arrives before the ACK
+                req = Lwm2mRead(ResPath.Test[0].ResBytes, token=obs.token,
+                                options=[coap.Option.BLOCK2(seq + 1, False, 1024)])
+                self.serv.send(req)
+            if seq == 0:
+                self.serv.send(Lwm2mEmpty.matching(pkt)())

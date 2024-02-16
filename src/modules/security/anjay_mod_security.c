@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -831,8 +831,7 @@ static sec_repr_t *security_install_unlocked(anjay_unlocked_t *anjay) {
     repr->def = &SECURITY;
     _anjay_dm_installed_object_init_unlocked(&repr->def_ptr, &repr->def);
     if (!_anjay_dm_module_install(anjay, security_delete, repr)) {
-        AVS_STATIC_ASSERT(offsetof(sec_repr_t, def_ptr) == 0,
-                          def_ptr_is_first_field);
+        _ANJAY_ASSERT_INSTALLED_OBJECT_IS_FIRST_FIELD(sec_repr_t, def_ptr);
         AVS_LIST(anjay_dm_installed_object_t) entry = &repr->def_ptr;
         if (_anjay_register_object_unlocked(anjay, &entry)) {
             result = _anjay_dm_module_uninstall(anjay, security_delete);

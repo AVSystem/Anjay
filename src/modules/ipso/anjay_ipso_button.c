@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -225,15 +225,17 @@ static const anjay_unlocked_dm_object_def_t OBJECT_DEF = {
 };
 
 static anjay_ipso_button_t *obj_from_anjay(anjay_unlocked_t *anjay) {
-    anjay_ipso_button_t *obj =
-            get_obj(_anjay_dm_find_object_by_oid(anjay, PUSH_BUTTON_OID));
-
-    // Checks if it is really an instance of anjay_ipso_button_t
-    if (obj->obj_def == &OBJECT_DEF) {
-        return obj;
-    } else {
+    const anjay_dm_installed_object_t *installed_obj_ptr =
+            _anjay_dm_find_object_by_oid(anjay, PUSH_BUTTON_OID);
+    if (!_anjay_dm_installed_object_is_valid_unlocked(installed_obj_ptr)) {
         return NULL;
     }
+
+    // Checks if it is really an instance of anjay_ipso_button_t
+    return *_anjay_dm_installed_object_get_unlocked(installed_obj_ptr)
+                           == &OBJECT_DEF
+                   ? get_obj(installed_obj_ptr)
+                   : NULL;
 }
 
 int anjay_ipso_button_install(anjay_t *anjay_locked, size_t num_instances) {
@@ -259,6 +261,8 @@ int anjay_ipso_button_install(anjay_t *anjay_locked, size_t num_instances) {
     obj->num_instances = num_instances;
 
     _anjay_dm_installed_object_init_unlocked(&obj->obj_def_ptr, &obj->obj_def);
+    _ANJAY_ASSERT_INSTALLED_OBJECT_IS_FIRST_FIELD(anjay_ipso_button_t,
+                                                  obj_def_ptr);
     entry = &obj->obj_def_ptr;
     if (_anjay_register_object_unlocked(anjay, &entry)) {
         avs_free(obj);

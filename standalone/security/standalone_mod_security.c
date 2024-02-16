@@ -1006,7 +1006,6 @@ standalone_security_object_install(anjay_t *anjay) {
     }
     repr->def = &SECURITY;
     repr->anjay = anjay;
-    AVS_STATIC_ASSERT(offsetof(sec_repr_t, def) == 0, def_is_first_field);
     if (anjay_register_object(anjay, &repr->def)) {
         avs_free(repr);
         return NULL;

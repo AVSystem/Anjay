@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -24,7 +24,7 @@ class TimeAPIChecks:
         # Expects the log to be in format
         # [NAME_OF_TIMESTAMP]=[point in time according to the real-time clock]
         def readTimeFromLog(self, cmd, strTimestampName):
-            reg_exp = strTimestampName + '=([0-9]+\.[0-9]+)'
+            reg_exp = strTimestampName + '=([0-9]+\.[0-9]+)\n'
             log_line = self.communicate(cmd, 5, reg_exp)
             self.assertIsNotNone(log_line)
             self.assertTrue(self.validTime(log_line.group(1)))
@@ -89,6 +89,9 @@ class RegistrationTimeMultipleServers(TimeAPIChecks.Test):
         self.setup_demo_with_servers(servers=2)
 
     def runTest(self):
+        self.coap_ping(self.servers[0])
+        self.coap_ping(self.servers[1])
+
         reg_time, next_update_time, last_comm_time = self.readAllTimestampsFromLog()
         srv_1_reg_time, srv_1_next_update_time, srv_1_last_comm_time = self.readAllTimestampsFromLog(
             1)

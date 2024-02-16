@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -26,15 +26,32 @@ class RandomPortRebind(test_suite.Lwm2mDtlsSingleServerTest, test_suite.Lwm2mDmO
                 self.fail('Socket not closed')
             time.sleep(0.1)
 
-        with contextlib.closing(socket.socket(type=socket.SOCK_DGRAM)) as conflict_socket:
-            conflict_socket.bind(('0.0.0.0', demo_port))
+        conflict_socket_ipv4 = None
+        conflict_socket_ipv6 = None
 
-            self.serv.reset()
-            self.communicate('exit-offline')
-            self.serv.listen(timeout_s=5)
+        try:
+            conflict_socket_ipv4 = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+            conflict_socket_ipv4.bind(('', demo_port))
+        except:
+            pass
+        try:
+            conflict_socket_ipv6 = socket.socket(family=socket.AF_INET6, type=socket.SOCK_DGRAM)
+            conflict_socket_ipv6.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+            conflict_socket_ipv6.bind(('::', demo_port))
+        except:
+            pass
 
-            # check that everything is working
-            self.read_path(self.serv, ResPath.Device.Manufacturer)
+        self.serv.reset()
+        self.communicate('exit-offline')
+        self.serv.listen(timeout_s=5)
+
+        # check that everything is working
+        self.read_path(self.serv, ResPath.Device.Manufacturer)
+
+        if conflict_socket_ipv4:
+            conflict_socket_ipv4.close()
+        if conflict_socket_ipv6:
+            conflict_socket_ipv6.close()
 
         self.assertNotEqual(self.serv.get_remote_addr()[1], demo_port)
 

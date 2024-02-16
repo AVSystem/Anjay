@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -293,20 +293,18 @@ basic_sensor_resource_execute(anjay_unlocked_t *anjay,
 
 static anjay_ipso_basic_sensor_t *obj_from_oid(anjay_unlocked_t *anjay,
                                                anjay_oid_t oid) {
-    const anjay_dm_installed_object_t *installed_obj =
+    const anjay_dm_installed_object_t *installed_obj_ptr =
             _anjay_dm_find_object_by_oid(anjay, oid);
-    if (!_anjay_dm_installed_object_is_valid_unlocked(installed_obj)) {
+    if (!_anjay_dm_installed_object_is_valid_unlocked(installed_obj_ptr)) {
         return NULL;
     }
-
-    anjay_ipso_basic_sensor_t *obj = get_obj(installed_obj);
 
     // Checks if it is really an instance of anjay_ipso_basic_sensor_t
-    if (obj->def.handlers.list_instances == basic_sensor_list_instances) {
-        return obj;
-    } else {
-        return NULL;
-    }
+    return (*_anjay_dm_installed_object_get_unlocked(installed_obj_ptr))
+                                   ->handlers.list_instances
+                           == basic_sensor_list_instances
+                   ? get_obj(installed_obj_ptr)
+                   : NULL;
 }
 
 int anjay_ipso_basic_sensor_install(anjay_t *anjay_locked,
@@ -346,6 +344,8 @@ int anjay_ipso_basic_sensor_install(anjay_t *anjay_locked,
     obj->num_instances = num_instances;
 
     _anjay_dm_installed_object_init_unlocked(&obj->obj_def_ptr, &obj->obj_def);
+    _ANJAY_ASSERT_INSTALLED_OBJECT_IS_FIRST_FIELD(anjay_ipso_basic_sensor_t,
+                                                  obj_def_ptr);
     entry = &obj->obj_def_ptr;
     if (_anjay_register_object_unlocked(anjay, &entry)) {
         avs_free(obj);

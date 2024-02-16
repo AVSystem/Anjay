@@ -1,4 +1,4 @@
-# Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -48,6 +48,10 @@ if (${ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE})
 
 endif()
 
+if (${ANJAY_WITH_MODULE_SW_MGMT})
+    set(SOURCES ${SOURCES} software_mgmt.c)
+endif()
+
 if(NOT WIN32)
     set(SOURCES ${SOURCES} objects/ip_ping.c)
 endif()
@@ -70,6 +74,10 @@ endif()
 
 if (${ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE})
     set(HEADERS ${HEADERS} advanced_firmware_update.h)
+endif()
+
+if (${ANJAY_WITH_MODULE_SW_MGMT})
+    set(HEADERS ${HEADERS} software_mgmt.h)
 endif()
 
 set(ALL_SOURCES ${SOURCES} ${HEADERS})

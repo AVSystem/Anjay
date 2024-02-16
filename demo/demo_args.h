@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -21,6 +21,10 @@
 #ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
 #    include <anjay/advanced_fw_update.h>
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+
+#ifdef ANJAY_WITH_MODULE_SW_MGMT
+#    include "software_mgmt.h"
+#endif // ANJAY_WITH_MODULE_SW_MGMT
 
 #include "demo_utils.h"
 #include "objects.h"
@@ -86,6 +90,25 @@ typedef struct cmdline_args {
      */
     const char *original_img_file_path;
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_SW_MGMT
+    const char *sw_mgmt_persistence_file;
+    bool sw_mgmt_terminate_after_downloading;
+    bool sw_mgmt_disable_repeated_activation_deactivation;
+#    ifdef ANJAY_WITH_DOWNLOADER
+    avs_net_security_info_t sw_mgmt_security_info;
+#    endif // ANJAY_WITH_DOWNLOADER
+    /**
+     * If delayed-sw-mgmt-result is passed, first (iid=0) Software Management
+     * object will be initialized in
+     * @ref ANJAY_SW_MGMT_INITIAL_STATE_DELIVERED state. In that case, @ref
+     * anjay_sw_mgmt_finish_pkg_install will be used after a while to make
+     * transition to Installed state or report installation error. This
+     * simulates a installation procedure during which the client is restarted
+     * while the procedure is still in progress.
+     */
+    uint8_t sw_mgmt_delayed_first_instance_install_result;
+    bool sw_mgmt_auto_suspend;
+#endif // ANJAY_WITH_MODULE_SW_MGMT
 #ifdef AVS_COMMONS_STREAM_WITH_FILE
 #    ifdef ANJAY_WITH_ATTR_STORAGE
     const char *attr_storage_file;
@@ -126,6 +149,17 @@ typedef struct cmdline_args {
     avs_coap_udp_tx_params_t advanced_fwu_tx_params;
     avs_time_duration_t advanced_fwu_tcp_request_timeout;
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_SW_MGMT
+    /**
+     * This flag allows to enable callback providing tx_params for software
+     * management only if some of parameters were changed by passing proper
+     * command line argument to demo. Otherwise tx_params should be inherited
+     * from Anjay.
+     */
+    bool sw_mgmt_tx_params_modified;
+    avs_coap_udp_tx_params_t sw_mgmt_tx_params;
+    avs_time_duration_t sw_mgmt_tcp_request_timeout;
+#endif // ANJAY_WITH_MODULE_SW_MGMT
 #ifdef ANJAY_WITH_LWM2M11
     anjay_lwm2m_version_config_t lwm2m_version_config;
 #endif // ANJAY_WITH_LWM2M11

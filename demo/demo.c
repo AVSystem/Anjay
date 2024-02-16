@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -292,6 +292,9 @@ static void demo_delete(anjay_demo_t *demo) {
 #ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
     advanced_firmware_update_uninstall(demo->advanced_fw_update_logic_table);
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_SW_MGMT
+    sw_mgmt_update_destroy(demo->sw_mgmt_table);
+#endif // ANJAY_WITH_MODULE_SW_MGMT
 #ifdef WITH_DEMO_USE_STANDALONE_OBJECTS
     standalone_server_object_cleanup(demo->server_obj_ptr);
     standalone_security_object_cleanup(demo->security_obj_ptr);
@@ -585,6 +588,14 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
     }
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
 
+#if defined(ANJAY_WITH_MODULE_SW_MGMT) && defined(ANJAY_WITH_DOWNLOADER)
+    avs_net_security_info_t *sw_mgmt_security_info_ptr = NULL;
+    if (cmdline_args->sw_mgmt_security_info.mode
+            != (avs_net_security_mode_t) -1) {
+        sw_mgmt_security_info_ptr = &cmdline_args->sw_mgmt_security_info;
+    }
+#endif // defined(ANJAY_WITH_MODULE_SW_MGMT) && defined(ANJAY_WITH_DOWNLOADER)
+
     demo->connection_args = &cmdline_args->connection_args;
 #ifdef AVS_COMMONS_STREAM_WITH_FILE
 #    ifdef ANJAY_WITH_ATTR_STORAGE
@@ -776,6 +787,28 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         return -1;
     }
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+
+#ifdef ANJAY_WITH_MODULE_SW_MGMT
+    if (sw_mgmt_install(
+                demo->anjay, &demo->sw_mgmt_common, demo->sw_mgmt_table,
+                cmdline_args->sw_mgmt_persistence_file,
+                cmdline_args->prefer_same_socket_downloads,
+                cmdline_args->sw_mgmt_delayed_first_instance_install_result,
+                cmdline_args->sw_mgmt_terminate_after_downloading,
+                cmdline_args->sw_mgmt_disable_repeated_activation_deactivation
+#    ifdef ANJAY_WITH_DOWNLOADER
+                ,
+                sw_mgmt_security_info_ptr,
+                cmdline_args->sw_mgmt_tx_params_modified
+                        ? &cmdline_args->sw_mgmt_tx_params
+                        : NULL,
+                &cmdline_args->sw_mgmt_tcp_request_timeout,
+                cmdline_args->sw_mgmt_auto_suspend
+#    endif // ANJAY_WITH_DOWNLOADER
+                )) {
+        return -1;
+    }
+#endif // ANJAY_WITH_MODULE_SW_MGMT
 
 #ifdef ANJAY_WITH_MODULE_ACCESS_CONTROL
     if (!dm_persistence_restored

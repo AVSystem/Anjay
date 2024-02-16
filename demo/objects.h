@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -179,7 +179,6 @@ int event_log_write_data(anjay_t *anjay,
                          const void *data,
                          size_t data_size);
 
-#ifdef ANJAY_WITH_MODULE_IPSO_OBJECTS
 int install_temperature_object(anjay_t *anjay);
 void temperature_update_handler(anjay_t *anjay);
 void temperature_add_instance(anjay_t *anjay, anjay_iid_t iid);
@@ -191,6 +190,5 @@ void accelerometer_add_instance(anjay_t *anjay, anjay_iid_t iid);
 void accelerometer_remove_instance(anjay_t *anjay, anjay_iid_t iid);
 
 int install_push_button_object(anjay_t *anjay);
-#endif // ANJAY_WITH_MODULE_IPSO_OBJECTS
 
 #endif // DEMO_OBJECTS_H

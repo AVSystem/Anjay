@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -1396,7 +1396,61 @@ anjay_security_config_t anjay_security_config_pkix(anjay_t *anjay);
  */
 bool anjay_ongoing_registration_exists(anjay_t *anjay);
 
+typedef enum {
+    /**
+     * Anjay registration is valid, expiration time got from
+     * @ref anjay_registration_expiration_time_with_status informs when the
+     * registration expires.
+     */
+    ANJAY_REGISTRATION_EXPIRATION_STATUS_VALID,
+    /**
+     * Anjay registration expired, expiration time is set to
+     * <c>AVS_TIME_REAL_INVALID</c>.
+     */
+    ANJAY_REGISTRATION_EXPIRATION_STATUS_EXPIRED,
+    /**
+     * Anjay lifetime is set to infinity and expiration time is set to
+     * <c>AVS_TIME_REAL_INVALID</c>.
+     */
+    ANJAY_REGISTRATION_EXPIRATION_STATUS_INFINITE_LIFETIME,
+} anjay_registration_expiration_status_t;
+
 /**
+ * Returns the time at which the lifetime of a registration to a given LwM2M
+ * Server expires. Returns the registration status through an inout parameter
+ * <c>out_status</c>.
+ *
+ * Note that this is <strong>not</strong> the time at which the Update message
+ * will be sent. Update messages are planned for <c>MAX_TRANSMIT_WAIT</c> before
+ * the expiration time (or at halfway between last registration update and the
+ * expiration time if that is less than <c>MAX_TRANSMIT_WAIT</c>) to allow some
+ * leeway to make sure that the registration is renewed strictly <em>before</em>
+ * it expires.
+ *
+ * If you want to retrieve the information about the next scheduled Update
+ * operation, please use @ref anjay_next_planned_lifecycle_operation.
+ *
+ * @param anjay Anjay object to operate on.
+ *
+ * @param ssid  Short Server ID of a non-bootstrap LwM2M Server for which to get
+ *              the information.
+ * @param out_status Status of expiration.
+ *
+ * @returns Point in time according to the real-time clock at which the
+ *          registration expires, or <c>AVS_TIME_REAL_INVALID</c> if there is
+ *          no active registration for a given server or no such server
+ *          connection exists. <c>AVS_TIME_REAL_INVALID</c> is returned also in
+ *          case of inifinite lifetime
+ */
+avs_time_real_t anjay_registration_expiration_time_with_status(
+        anjay_t *anjay,
+        anjay_ssid_t ssid,
+        anjay_registration_expiration_status_t *out_status);
+
+/**
+ * Function replaced with anjay_registration_expiration_time_with_status(),
+ * which support LwM2M 1.2.
+ *
  * Returns the time at which the lifetime of a registration to a given LwM2M
  * Server expires.
  *
@@ -1420,8 +1474,10 @@ bool anjay_ongoing_registration_exists(anjay_t *anjay);
  *          no active registration for a given server or no such server
  *          connection exists.
  */
-avs_time_real_t anjay_registration_expiration_time(anjay_t *anjay,
-                                                   anjay_ssid_t ssid);
+static inline avs_time_real_t
+anjay_registration_expiration_time(anjay_t *anjay, anjay_ssid_t ssid) {
+    return anjay_registration_expiration_time_with_status(anjay, ssid, NULL);
+}
 
 /**
  * Returns the time at which next outgoing lifecycle message is planned to be

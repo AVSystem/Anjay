@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem CoAP library
  * All rights reserved.
  *
@@ -38,8 +38,11 @@
 #    endif
 #    include <avsystem/commons/avs_log.h>
 #    define LOG(...) avs_log(MODULE_NAME, __VA_ARGS__)
+void _avs_coap_log_oom__(void);
+#    define LOG_OOM() _avs_coap_log_oom__()
 #else // WITH_AVS_COAP_LOGS
 #    define LOG(...) ((void) 0)
+#    define LOG_OOM() ((void) 0)
 // used by tcp_ctx
 #    define avs_log_internal_l__(...) ((void) 0)
 #endif // WITH_AVS_COAP_LOG

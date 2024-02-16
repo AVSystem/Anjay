@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -32,9 +32,17 @@ _anjay_servers_find_active_primary_connection(anjay_unlocked_t *anjay,
                                               anjay_ssid_t ssid);
 
 /**
+ *
+ * @param server server for which expire time is going to be returned.
+ * @param expiration Status of expiration. It can be
+ * ANJAY_REGISTRATION_EXPIRATION_STATUS_VALID,
+ * ANJAY_REGISTRATION_EXPIRATION_STATUS_EXPIRED or
+ * ANJAY_REGISTRATION_EXPIRATION_STATUS_INFINITE_LIFETIME.
  * @returns Point in time at which the server registration expires.
  */
-avs_time_real_t _anjay_registration_expire_time(anjay_server_info_t *server);
+avs_time_real_t _anjay_registration_expire_time_with_status(
+        anjay_server_info_t *server,
+        anjay_registration_expiration_status_t *status);
 
 bool _anjay_server_registration_expired(anjay_server_info_t *server);
 

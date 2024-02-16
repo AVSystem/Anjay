@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -18,7 +18,12 @@
 #    include "advanced_firmware_update.h"
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
 
+#ifdef ANJAY_WITH_MODULE_SW_MGMT
+#    include "software_mgmt.h"
+#endif // ANJAY_WITH_MODULE_SW_MGMT
+
 #include <ctype.h>
+#include <errno.h>
 #include <inttypes.h>
 #include <string.h>
 
@@ -204,6 +209,57 @@ static void cmd_afu_reconnect(anjay_demo_t *demo, const char *args_string) {
     anjay_advanced_fw_update_pull_reconnect(demo->anjay);
 }
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+
+#ifdef ANJAY_WITH_MODULE_SW_MGMT
+static void cmd_set_sw_mgmt_package_path(anjay_demo_t *demo,
+                                         const char *args_string) {
+    anjay_iid_t iid;
+
+    char *path = (char *) avs_malloc(strlen(args_string) + 1);
+    if (!path) {
+        demo_log(ERROR, "Out of memory");
+        return;
+    }
+    path[0] = '\0';
+
+    if (sscanf(args_string, "%" SCNu16 "%s", &iid, path) != 2
+            || iid >= SW_MGMT_PACKAGE_COUNT) {
+        demo_log(ERROR, "invalid parameters");
+        avs_free(path);
+        return;
+    }
+
+    sw_mgmt_set_package_path(&demo->sw_mgmt_table[iid], path);
+    avs_free(path);
+}
+
+static void cmd_set_sw_mgmt_install_result(anjay_demo_t *demo,
+                                           const char *args_string) {
+    anjay_iid_t iid;
+    uint8_t result;
+
+    if (sscanf(args_string, "%" SCNu16 "%" SCNu8, &iid, &result) != 2
+            || (result != 0 && result != 1)) {
+        demo_log(ERROR, "invalid parameters");
+        return;
+    }
+
+    anjay_sw_mgmt_finish_pkg_install(
+            demo->anjay, iid,
+            result == 1 ? ANJAY_SW_MGMT_FINISH_PKG_INSTALL_SUCCESS_INACTIVE
+                        : ANJAY_SW_MGMT_FINISH_PKG_INSTALL_FAILURE);
+}
+
+static void cmd_sw_mgmt_suspend(anjay_demo_t *demo, const char *args_string) {
+    (void) args_string;
+    anjay_sw_mgmt_pull_suspend(demo->anjay);
+}
+
+static void cmd_sw_mgmt_reconnect(anjay_demo_t *demo, const char *args_string) {
+    (void) args_string;
+    anjay_sw_mgmt_pull_reconnect(demo->anjay);
+}
+#endif // ANJAY_WITH_MODULE_SW_MGMT
 
 static void cmd_open_location_csv(anjay_demo_t *demo, const char *args_string) {
     const anjay_dm_object_def_t **location_obj =
@@ -1088,7 +1144,8 @@ static void cmd_registration_expiration_time(anjay_demo_t *demo,
 
     demo_log(INFO, "REGISTRATION_EXPIRATION_TIME=%s",
              AVS_TIME_DURATION_AS_STRING(
-                     anjay_registration_expiration_time(demo->anjay, ssid)
+                     anjay_registration_expiration_time_with_status(demo->anjay,
+                                                                    ssid, NULL)
                              .since_real_epoch));
 }
 
@@ -1165,7 +1222,6 @@ static void cmd_has_unsent_notifications(anjay_demo_t *demo,
     demo_log(INFO, "HAS_UNSENT_NOTIFICATIONS=%s", result ? "true" : "false");
 }
 
-#ifdef ANJAY_WITH_MODULE_IPSO_OBJECTS
 static void cmd_temperature_add_instance(anjay_demo_t *demo,
                                          const char *args_string) {
     anjay_iid_t iid;
@@ -1253,7 +1309,6 @@ static void cmd_push_button_release(anjay_demo_t *demo,
 
     anjay_ipso_button_update(demo->anjay, iid, false);
 }
-#endif // ANJAY_WITH_MODULE_IPSO_OBJECTS
 
 static void cmd_set_tx_params(anjay_demo_t *demo, const char *args_string) {
     avs_coap_udp_tx_params_t tx_params;
@@ -1398,12 +1453,12 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
     CMD_HANDLER("reconnect", "[transports...]", cmd_reconnect,
                 "Reconnects to LwM2M servers and sends Update messages"),
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
-    CMD_HANDLER("set-fw-package-path", "", cmd_set_fw_package_path,
+    CMD_HANDLER("set-fw-package-path", "PATH", cmd_set_fw_package_path,
                 "Sets the path where the firmware package will be saved when "
                 "Write /5/0/0 is performed"),
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
 #ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
-    CMD_HANDLER("set-afu-package-path", "", cmd_set_afu_package_path,
+    CMD_HANDLER("set-afu-package-path", "PATH", cmd_set_afu_package_path,
                 "Sets the path where the firmware package will be saved when "
                 "Write /" AVS_QUOTE_MACRO(ANJAY_ADVANCED_FW_UPDATE_OID) "/0/0 is performed. Only applied to instance 0."),
     CMD_HANDLER("get-afu-deadline", "", cmd_get_afu_deadline,
@@ -1420,6 +1475,18 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 "Firmware Update module and if PULL-mode downloads are "
                 "suspended, resumes normal operation"),
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_SW_MGMT
+    CMD_HANDLER("set-sw-mgmt-package-path", "IID PATH", cmd_set_sw_mgmt_package_path,
+                "Sets the path where the software package will be saved when "
+                "Write to /9/x/2 or /9/x/3 is performed"),
+    CMD_HANDLER("set-sw-mgmt-install-result", "IID RESULT", cmd_set_sw_mgmt_install_result,
+                "Attempts to set Software Install Result at runtime"),
+    CMD_HANDLER("sw-mgmt-suspend", "", cmd_sw_mgmt_suspend,
+                "Suspends the operation of PULL-mode downloads in the Software Management module"),
+    CMD_HANDLER("sw-mgmt-reconnect", "", cmd_sw_mgmt_reconnect,
+                "Reconnects any ongoing PULL-mode downloads in the Software Management module"
+                "and if PULL-mode downloads are suspended, resumes normal operation"),
+#endif // ANJAY_WITH_MODULE_SW_MGMT
     CMD_HANDLER("open-location-csv", "filename frequency=1",
                 cmd_open_location_csv,
                 "Opens a CSV file and starts using it for location information"),
@@ -1516,7 +1583,6 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
     CMD_HANDLER("ongoing-registration-exists", "",
                 cmd_ongoing_registration_exists,
                 "Display information about ongoing registrations"),
-#ifdef ANJAY_WITH_MODULE_IPSO_OBJECTS
     CMD_HANDLER("temperature-add-instance", "IID",
                 cmd_temperature_add_instance,
                 "Adds a new instance of the fake Temperature object. Maximal "
@@ -1545,7 +1611,6 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
     CMD_HANDLER("push-button-release", "IID",
                 cmd_push_button_release,
                 "Releases the selected instance of the fake Push Button object."),
-#endif // ANJAY_WITH_MODULE_IPSO_OBJECTS
     CMD_HANDLER("registration-expiration-time", "SSID",
                 cmd_registration_expiration_time,
                 "Displays time when registration with a given server expires"),

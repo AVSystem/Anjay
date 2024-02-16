@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem CoAP library
  * All rights reserved.
  *
@@ -641,8 +641,6 @@ AVS_UNIT_TEST(udp_streaming_observe, notify_block_confirmable) {
         // request for second block of Notify
         COAP_MSG(CON, GET, ID(101), TOKEN(MAKE_TOKEN("Notifaj")),
                  BLOCK2_REQ(1, 1024)),
-        // separate response ack
-        COAP_MSG(ACK, EMPTY, ID(1), NO_PAYLOAD),
     };
     const test_msg_t *responses[] = {
         COAP_MSG(ACK, CONTENT, ID(100), TOKEN(MAKE_TOKEN("Obserw")), OBSERVE(0),
@@ -653,7 +651,7 @@ AVS_UNIT_TEST(udp_streaming_observe, notify_block_confirmable) {
                  BLOCK2_RES(0, 1024, NOTIFY_PAYLOAD)),
         // Note: further blocks should not contain the Observe option
         // see RFC 7959, Figure 12: "Observe Sequence with Block-Wise Response"
-        COAP_MSG(CON, CONTENT, ID(1), TOKEN(MAKE_TOKEN("Notifaj")),
+        COAP_MSG(ACK, CONTENT, ID(101), TOKEN(MAKE_TOKEN("Notifaj")),
                  BLOCK2_RES(1, 1024, NOTIFY_PAYLOAD)),
     };
 
@@ -687,7 +685,78 @@ AVS_UNIT_TEST(udp_streaming_observe, notify_block_confirmable) {
     expect_recv(&env, requests[1]);
     expect_recv(&env, requests[2]);
     expect_send(&env, responses[2]);
-    expect_recv(&env, requests[3]);
+    expect_has_buffered_data_check(&env, false);
+
+    ASSERT_OK(avs_coap_notify_streaming(
+            env.coap_ctx, observe_id,
+            &(avs_coap_response_header_t) {
+                .code = responses[1]->response_header.code
+            },
+            AVS_COAP_NOTIFY_PREFER_CONFIRMABLE, test_streaming_writer,
+            &test_payload));
+
+    // should be canceled by cleanup
+    expect_observe_cancel(&env, requests[0]->msg.token);
+#        undef NOTIFY_PAYLOAD
+}
+
+AVS_UNIT_TEST(udp_streaming_observe, notify_block_confirmable_late_ack) {
+#        define NOTIFY_PAYLOAD DATA_1KB "Notifaj"
+    test_env_t env __attribute__((cleanup(test_teardown_late_expects_check))) =
+            test_setup_default();
+
+    const test_msg_t *requests[] = {
+        COAP_MSG(CON, GET, ID(100), TOKEN(MAKE_TOKEN("Obserw")), OBSERVE(0),
+                 NO_PAYLOAD),
+        // request for second block of Notify
+        COAP_MSG(CON, GET, ID(101), TOKEN(MAKE_TOKEN("Notifaj")),
+                 BLOCK2_REQ(1, 1024)),
+        // late ACK for the first block
+        COAP_MSG(ACK, EMPTY, ID(0), NO_PAYLOAD),
+    };
+    const test_msg_t *responses[] = {
+        COAP_MSG(ACK, CONTENT, ID(100), TOKEN(MAKE_TOKEN("Obserw")), OBSERVE(0),
+                 NO_PAYLOAD),
+
+        // BLOCK Notify
+        COAP_MSG(CON, CONTENT, ID(0), TOKEN(MAKE_TOKEN("Obserw")), OBSERVE(1),
+                 BLOCK2_RES(0, 1024, NOTIFY_PAYLOAD)),
+        // Note: further blocks should not contain the Observe option
+        // see RFC 7959, Figure 12: "Observe Sequence with Block-Wise Response"
+        COAP_MSG(ACK, CONTENT, ID(101), TOKEN(MAKE_TOKEN("Notifaj")),
+                 BLOCK2_RES(1, 1024, NOTIFY_PAYLOAD)),
+    };
+
+    streaming_handle_request_args_t args = {
+        .env = &env,
+        .expected_request_header = requests[0]->request_header,
+        .response_header = {
+            .code = responses[0]->response_header.code
+        }
+    };
+
+    avs_unit_mocksock_enable_recv_timeout_getsetopt(
+            env.mocksock, avs_time_duration_from_scalar(1, AVS_TIME_S));
+
+    expect_recv(&env, requests[0]);
+    expect_send(&env, responses[0]);
+    expect_has_buffered_data_check(&env, false);
+
+    ASSERT_OK(avs_coap_streaming_handle_incoming_packet(
+            env.coap_ctx, streaming_handle_request, &args));
+
+    avs_coap_observe_id_t observe_id = {
+        .token = requests[0]->msg.token
+    };
+    test_streaming_payload_t test_payload = {
+        .data = NOTIFY_PAYLOAD,
+        .size = sizeof(NOTIFY_PAYLOAD) - 1
+    };
+
+    expect_send(&env, responses[1]);
+    expect_recv(&env, requests[1]);
+    expect_send(&env, responses[2]);
+    expect_recv(&env, requests[2]);
     expect_has_buffered_data_check(&env, false);
 
     ASSERT_OK(avs_coap_notify_streaming(
@@ -794,25 +863,18 @@ AVS_UNIT_TEST(udp_streaming_observe, increasing_block_size_confirmable) {
         // requests and separate response ACKs for further blocks of Notify
         COAP_MSG(CON, GET, ID(101), TOKEN(MAKE_TOKEN("Notifaj")),
                  BLOCK2_REQ(1, 16)),
-        COAP_MSG(ACK, EMPTY, ID(1), NO_PAYLOAD),
         COAP_MSG(CON, GET, ID(102), TOKEN(MAKE_TOKEN("Notifaj")),
                  BLOCK2_REQ(1, 32)),
-        COAP_MSG(ACK, EMPTY, ID(2), NO_PAYLOAD),
         COAP_MSG(CON, GET, ID(103), TOKEN(MAKE_TOKEN("Notifaj")),
                  BLOCK2_REQ(1, 64)),
-        COAP_MSG(ACK, EMPTY, ID(3), NO_PAYLOAD),
         COAP_MSG(CON, GET, ID(104), TOKEN(MAKE_TOKEN("Notifaj")),
                  BLOCK2_REQ(1, 128)),
-        COAP_MSG(ACK, EMPTY, ID(4), NO_PAYLOAD),
         COAP_MSG(CON, GET, ID(105), TOKEN(MAKE_TOKEN("Notifaj")),
                  BLOCK2_REQ(1, 256)),
-        COAP_MSG(ACK, EMPTY, ID(5), NO_PAYLOAD),
         COAP_MSG(CON, GET, ID(106), TOKEN(MAKE_TOKEN("Notifaj")),
                  BLOCK2_REQ(1, 512)),
-        COAP_MSG(ACK, EMPTY, ID(6), NO_PAYLOAD),
         COAP_MSG(CON, GET, ID(107), TOKEN(MAKE_TOKEN("Notifaj")),
                  BLOCK2_REQ(1, 1024)),
-        COAP_MSG(ACK, EMPTY, ID(7), NO_PAYLOAD),
     };
     const test_msg_t *responses[] = {
         COAP_MSG(ACK, CONTENT, ID(100), TOKEN(MAKE_TOKEN("Obserw")), OBSERVE(0),
@@ -823,19 +885,19 @@ AVS_UNIT_TEST(udp_streaming_observe, increasing_block_size_confirmable) {
                  BLOCK2_RES(0, 16, NOTIFY_PAYLOAD)),
         // Note: further blocks should not contain the Observe option
         // see RFC 7959, Figure 12: "Observe Sequence with Block-Wise Response"
-        COAP_MSG(CON, CONTENT, ID(1), TOKEN(MAKE_TOKEN("Notifaj")),
+        COAP_MSG(ACK, CONTENT, ID(101), TOKEN(MAKE_TOKEN("Notifaj")),
                  BLOCK2_RES(1, 16, NOTIFY_PAYLOAD)),
-        COAP_MSG(CON, CONTENT, ID(2), TOKEN(MAKE_TOKEN("Notifaj")),
+        COAP_MSG(ACK, CONTENT, ID(102), TOKEN(MAKE_TOKEN("Notifaj")),
                  BLOCK2_RES(1, 32, NOTIFY_PAYLOAD)),
-        COAP_MSG(CON, CONTENT, ID(3), TOKEN(MAKE_TOKEN("Notifaj")),
+        COAP_MSG(ACK, CONTENT, ID(103), TOKEN(MAKE_TOKEN("Notifaj")),
                  BLOCK2_RES(1, 64, NOTIFY_PAYLOAD)),
-        COAP_MSG(CON, CONTENT, ID(4), TOKEN(MAKE_TOKEN("Notifaj")),
+        COAP_MSG(ACK, CONTENT, ID(104), TOKEN(MAKE_TOKEN("Notifaj")),
                  BLOCK2_RES(1, 128, NOTIFY_PAYLOAD)),
-        COAP_MSG(CON, CONTENT, ID(5), TOKEN(MAKE_TOKEN("Notifaj")),
+        COAP_MSG(ACK, CONTENT, ID(105), TOKEN(MAKE_TOKEN("Notifaj")),
                  BLOCK2_RES(1, 256, NOTIFY_PAYLOAD)),
-        COAP_MSG(CON, CONTENT, ID(6), TOKEN(MAKE_TOKEN("Notifaj")),
+        COAP_MSG(ACK, CONTENT, ID(106), TOKEN(MAKE_TOKEN("Notifaj")),
                  BLOCK2_RES(1, 512, NOTIFY_PAYLOAD)),
-        COAP_MSG(CON, CONTENT, ID(7), TOKEN(MAKE_TOKEN("Notifaj")),
+        COAP_MSG(ACK, CONTENT, ID(107), TOKEN(MAKE_TOKEN("Notifaj")),
                  BLOCK2_RES(1, 1024, NOTIFY_PAYLOAD)),
     };
 
@@ -868,9 +930,8 @@ AVS_UNIT_TEST(udp_streaming_observe, increasing_block_size_confirmable) {
     expect_send(&env, responses[1]);
     expect_recv(&env, requests[1]);
     for (size_t i = 2; i < AVS_ARRAY_SIZE(responses); ++i) {
-        expect_recv(&env, requests[2 * i - 2]);
+        expect_recv(&env, requests[i]);
         expect_send(&env, responses[i]);
-        expect_recv(&env, requests[2 * i - 1]);
     }
     expect_has_buffered_data_check(&env, false);
 

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -38,7 +38,7 @@ class Base64DifferentLengths(Base64Test.Test):
             result = self.read_resource(self.serv, oid=OID.Test, iid=1, rid=RID.Test.ResBytes,
                                         accept=coap.ContentFormat.TEXT_PLAIN)
             decoded = base64.decodebytes(result.content)
-            self.assertEquals(test_object_bytes_generator(length), decoded)
+            self.assertEqual(test_object_bytes_generator(length), decoded)
 
 
 class Base64BlockTransfer(br.BlockResponseTest, test_suite.Lwm2mDmOperations):
@@ -48,7 +48,7 @@ class Base64BlockTransfer(br.BlockResponseTest, test_suite.Lwm2mDmOperations):
                             rid=RID.Test.ResBytesSize, content=str(LENGTH))
         result = self.read_blocks(iid=0, accept=coap.ContentFormat.TEXT_PLAIN)
         decoded = base64.decodebytes(result)
-        self.assertEquals(test_object_bytes_generator(LENGTH), decoded)
+        self.assertEqual(test_object_bytes_generator(LENGTH), decoded)
 
 
 @unittest.skip("TODO: CoAP2 does not allow sending non-block messages larger than 1024")
@@ -64,7 +64,7 @@ class Base64ReadWrite(Base64Test.Test):
             data = self.read_resource(self.serv, oid=OID.Test, iid=1,
                                       rid=RID.Test.ResRawBytes,
                                       accept=coap.ContentFormat.TEXT_PLAIN)
-            self.assertEquals(raw_data, base64.decodebytes(data.content))
+            self.assertEqual(raw_data, base64.decodebytes(data.content))
 
 
 class Base64InvalidWrite(Base64Test.Test):

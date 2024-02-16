@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -30,10 +30,7 @@ class FirmwareUpdateWithoutReboot(Block.Test):
                         force_error=FirmwareUpdateForcedError.DoNothing)
 
         # Execute /5/0/2 (Update)
-        req = Lwm2mExecute(ResPath.FirmwareUpdate.Update)
-        self.serv.send(req)
-        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.serv.recv())
+        self.perform_firmware_update_expect_success()
 
         # Wait until internal state machine is updated
         # We cannot rely on FirmwareUpdate.State resource because it is updated first

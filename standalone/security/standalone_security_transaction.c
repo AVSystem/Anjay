@@ -351,7 +351,8 @@ maybe_move_sec_key_to_hsm(sec_instance_t *instance,
                           avs_crypto_prng_ctx_t *prng_ctx,
                           standalone_security_hsm_query_cb_t *query_cb,
                           void *query_cb_arg) {
-    if (sec_key->type != SEC_KEY_AS_DATA || !query_cb) {
+    if (sec_key->type != SEC_KEY_AS_DATA || !sec_key->value.data.size
+            || !query_cb) {
         return 0;
     }
     const char *query =

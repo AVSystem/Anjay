@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -9,6 +9,8 @@
 
 #ifndef ANJAY_INCLUDE_ANJAY_MODULES_DM_MODULES_H
 #define ANJAY_INCLUDE_ANJAY_MODULES_DM_MODULES_H
+
+#include <avsystem/commons/avs_defs.h>
 
 #include <anjay/dm.h>
 
@@ -105,6 +107,20 @@ typedef anjay_execute_ctx_t anjay_unlocked_execute_ctx_t;
 typedef anjay_dm_handlers_t anjay_unlocked_dm_handlers_t;
 
 #endif // ANJAY_WITH_THREAD_SAFETY
+
+/**
+ * AVS_LIST(anjay_dm_installed_object_t) of installed objects is de facto a list
+ * of objects of different types, because unlocked objects often maintain their
+ * state in a surrounding container struct. To make this work,
+ * @ref anjay_dm_installed_object_t must come as the first field, otherwise
+ * additional state that's stored in memory (pointer to next element) before
+ * theseactual elements of the list would collide with other fields of
+ * surrounding struct.
+ */
+#define _ANJAY_ASSERT_INSTALLED_OBJECT_IS_FIRST_FIELD(                         \
+        ObjectReprType, InstalledObjectFieldName)                              \
+    AVS_STATIC_ASSERT(offsetof(ObjectReprType, InstalledObjectFieldName) == 0, \
+                      installed_object_field_in_object_repr_must_be_first)
 
 typedef int anjay_unlocked_dm_object_read_default_attrs_t(
         anjay_unlocked_t *anjay,

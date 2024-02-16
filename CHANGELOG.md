@@ -1,5 +1,33 @@
 # Changelog
 
+## 3.7.0 (February 16th, 2024)
+
+### Features
+
+- Added support for LwM2M 1.2 server object requirement for infinite lifetime
+  (lifetime == 0).
+- Introduced @experimental and @deprecated Doxygen tags.
+- Added experimental IPSO objects v2 API.
+- Added experimental Software Management object API.
+
+### Improvements
+
+- Improved integration tests compability and framework stability
+- Added support for wget2 for validating links in documentation (for HTTP/2
+  support)
+
+### Bugfixes
+
+- Refactored generation of blockwise Confirmable notifications to avoid a
+  possible assertion failure; requests for subsequent blocks of such
+  notifications are now sent as Piggybacked responses
+- Fixed a bug in the documentation of an object definition struct
+- (commercial version only) Fixed problems with running some tests on systems
+  with Mbed TLS 3.x
+- Fixed a few assertion and pointer punning issues regarding calls to IPSO
+  objects APIs in erroneous cases
+- Prevent from trying to store empty cert/keys on HSM
+
 ## 3.6.1 (November 21st, 2023)
 
 ### Improvements
@@ -9,6 +37,8 @@
   contents depend on the Access Control object state
 - Added a public define for MSISDN string size
 - Optimized "Out of memory" logs in favor of a smaller flash memory footprint
+- (commercial feature only) Added API for querying Anjay for SSID associated
+  with given MSISDN and SMS Trigger resource value
 
 ### Bugfixes
 

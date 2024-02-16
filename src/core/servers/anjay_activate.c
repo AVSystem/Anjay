@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -534,6 +534,7 @@ _anjay_servers_create_inactive(anjay_unlocked_t *anjay, anjay_ssid_t ssid) {
     new_server->anjay = anjay;
     new_server->ssid = ssid;
     new_server->last_used_security_iid = ANJAY_ID_INVALID;
+    new_server->registration_info.last_update_params.lifetime_s = -1;
     _anjay_connection_get(&new_server->connections, ANJAY_CONNECTION_PRIMARY)
             ->transport = ANJAY_SOCKET_TRANSPORT_INVALID;
     new_server->reactivate_time = AVS_TIME_REAL_INVALID;

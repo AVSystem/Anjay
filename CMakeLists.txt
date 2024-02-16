@@ -1,4 +1,4 @@
-# Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -8,7 +8,7 @@
 cmake_minimum_required(VERSION 3.6.0)
 
 project(anjay C)
-set(ANJAY_VERSION "3.6.1" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "3.7.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -325,6 +325,7 @@ endif()
 
 cmake_dependent_option(WITH_MODULE_access_control "Access control object implementation module" ON WITH_ACCESS_CONTROL OFF)
 option(WITH_MODULE_ipso_objects "Generic implementation of certain kinds of IPSO objects" ON)
+option(WITH_MODULE_ipso_objects_v2 "Experimental generic implementation of certain kinds of IPSO objects" ON)
 option(WITH_MODULE_security "Security object module" ON)
 option(WITH_MODULE_server "Server object module" ON)
 option(WITH_MODULE_fw_update "Firmware Update object module" ON)
@@ -333,6 +334,7 @@ cmake_dependent_option(WITHOUT_MODULE_fw_update_PUSH_MODE
                        OFF "WITH_MODULE_fw_update;WITH_DOWNLOADER" OFF)
 cmake_dependent_option(WITH_MODULE_factory_provisioning "Factory provisioning module" ON "WITH_BOOTSTRAP;WITH_CBOR" OFF)
 option(WITH_MODULE_advanced_fw_update "Advanced Firmware Update object module" OFF)
+option(WITH_MODULE_sw_mgmt "Software Management object module" OFF)
 
 ################# CODE #########################################################
 
@@ -348,10 +350,12 @@ add_library(anjay
             include_public/anjay/fw_update.h
             include_public/anjay/io.h
             include_public/anjay/ipso_objects.h
+            include_public/anjay/ipso_objects_v2.h
             include_public/anjay/lwm2m_send.h
             include_public/anjay/security.h
             include_public/anjay/server.h
             include_public/anjay/stats.h
+            include_public/anjay/sw_mgmt.h
             src/anjay_config_log.h
             src/anjay_init.h
             src/anjay_modules/anjay_access_utils.h
@@ -483,6 +487,8 @@ add_library(anjay
             src/modules/ipso/anjay_ipso_3d_sensor.c
             src/modules/ipso/anjay_ipso_basic_sensor.c
             src/modules/ipso/anjay_ipso_button.c
+            src/modules/ipso_v2/anjay_ipso_v2_3d_sensor.c
+            src/modules/ipso_v2/anjay_ipso_v2_basic_sensor.c
             src/modules/security/anjay_mod_security.c
             src/modules/security/anjay_mod_security.h
             src/modules/security/anjay_security_persistence.c
@@ -497,6 +503,7 @@ add_library(anjay
             src/modules/server/anjay_server_transaction.h
             src/modules/server/anjay_server_utils.c
             src/modules/server/anjay_server_utils.h
+            src/modules/sw_mgmt/anjay_sw_mgmt.c
             )
 
 target_include_directories(anjay PUBLIC
@@ -528,11 +535,13 @@ set(ANJAY_WITHOUT_IP_STICKINESS "${WITHOUT_IP_STICKINESS}")
 set(ANJAY_WITHOUT_COMPOSITE_OPERATIONS "${WITHOUT_COMPOSITE_OPERATIONS}")
 set(ANJAY_WITH_MODULE_ACCESS_CONTROL "${WITH_MODULE_access_control}")
 set(ANJAY_WITH_MODULE_IPSO_OBJECTS "${WITH_MODULE_ipso_objects}")
+set(ANJAY_WITH_MODULE_IPSO_OBJECTS_V2 "${WITH_MODULE_ipso_objects_v2}")
 set(ANJAY_WITH_MODULE_FW_UPDATE "${WITH_MODULE_fw_update}")
 set(ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE "${WITH_MODULE_advanced_fw_update}")
 set(ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE "${WITHOUT_MODULE_fw_update_PUSH_MODE}")
 set(ANJAY_WITH_MODULE_SECURITY "${WITH_MODULE_security}")
 set(ANJAY_WITH_MODULE_SERVER "${WITH_MODULE_server}")
+set(ANJAY_WITH_MODULE_SW_MGMT "${WITH_MODULE_sw_mgmt}")
 set(ANJAY_WITH_NET_STATS "${WITH_NET_STATS}")
 set(ANJAY_WITH_COMMUNICATION_TIMESTAMP_API "${WITH_COMMUNICATION_TIMESTAMP_API}")
 set(ANJAY_WITH_EVENT_LOOP "${WITH_EVENT_LOOP}")
@@ -865,6 +874,10 @@ if(WITH_MODULE_ipso_objects)
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/ipso_objects.h"
             DESTINATION include/anjay)
 endif()
+if(WITH_MODULE_ipso_objects_v2)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/ipso_objects_v2.h"
+            DESTINATION include/anjay)
+endif()
 if(WITH_MODULE_fw_update)
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/fw_update.h"
             DESTINATION include/anjay)
@@ -883,6 +896,10 @@ if(WITH_MODULE_server)
 endif()
 if(WITH_MODULE_factory_provisioning)
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/factory_provisioning.h"
+            DESTINATION include/anjay)
+endif()
+if(WITH_MODULE_sw_mgmt)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/sw_mgmt.h"
             DESTINATION include/anjay)
 endif()
 

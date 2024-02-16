@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -316,7 +316,7 @@ class BlockRegister:
                 server.send(Lwm2mContinue.matching(pkt)(options=block1))
 
             if verify:
-                self.assertEquals(expected_content(version), register_content)
+                self.assertEqual(expected_content(version), register_content)
 
             server.send(Lwm2mCreated.matching(pkt)(location='/rd/demo', options=block1))
 
@@ -376,6 +376,9 @@ def expected_content(version='1.0'):
             continue
 
         if obj.oid == OID.Server:
+            result.append('</%d/1>' % (obj.oid,))
+        elif obj.oid == OID.SoftwareManagement:
+            result.append('</%d/0>' % (obj.oid,))
             result.append('</%d/1>' % (obj.oid,))
         elif obj.is_multi_instance or obj.version is not None:
             entry = '</%d>' % (obj.oid,)

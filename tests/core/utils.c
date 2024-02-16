@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -13,8 +13,14 @@
 
 #include <anjay_modules/anjay_time_defs.h>
 
+#include <anjay/core.h>
+#include <anjay/security.h>
+#include <anjay/server.h>
+
 #include <avsystem/commons/avs_unit_test.h>
 #include <avsystem/commons/avs_utils.h>
+
+#include "tests/utils/utils.h"
 
 #define ANJAY_URL_EMPTY   \
     (anjay_url_t) {       \

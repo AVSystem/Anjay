@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -69,19 +69,19 @@ typedef enum {
  * to a value default for a given handler.
  */
 #define ANJAY_ADVANCED_FW_UPDATE_ERR_NOT_ENOUGH_SPACE \
-    (-ANJAY_ADVANCED_FW_UPDATE_RESULT_NOT_ENOUGH_SPACE)
+    (-(int) ANJAY_ADVANCED_FW_UPDATE_RESULT_NOT_ENOUGH_SPACE)
 #define ANJAY_ADVANCED_FW_UPDATE_ERR_OUT_OF_MEMORY \
-    (-ANJAY_ADVANCED_FW_UPDATE_RESULT_OUT_OF_MEMORY)
+    (-(int) ANJAY_ADVANCED_FW_UPDATE_RESULT_OUT_OF_MEMORY)
 #define ANJAY_ADVANCED_FW_UPDATE_ERR_INTEGRITY_FAILURE \
-    (-ANJAY_ADVANCED_FW_UPDATE_RESULT_INTEGRITY_FAILURE)
+    (-(int) ANJAY_ADVANCED_FW_UPDATE_RESULT_INTEGRITY_FAILURE)
 #define ANJAY_ADVANCED_FW_UPDATE_ERR_UNSUPPORTED_PACKAGE_TYPE \
-    (-ANJAY_ADVANCED_FW_UPDATE_RESULT_UNSUPPORTED_PACKAGE_TYPE)
+    (-(int) ANJAY_ADVANCED_FW_UPDATE_RESULT_UNSUPPORTED_PACKAGE_TYPE)
 #define ANJAY_ADVANCED_FW_UPDATE_ERR_DEFERRED \
-    (-ANJAY_ADVANCED_FW_UPDATE_RESULT_DEFERRED)
+    (-(int) ANJAY_ADVANCED_FW_UPDATE_RESULT_DEFERRED)
 #define ANJAY_ADVANCED_FW_UPDATE_ERR_CONFLICTING_STATE \
-    (-ANJAY_ADVANCED_FW_UPDATE_RESULT_CONFLICTING_STATE)
+    (-(int) ANJAY_ADVANCED_FW_UPDATE_RESULT_CONFLICTING_STATE)
 #define ANJAY_ADVANCED_FW_UPDATE_ERR_DEPENDENCY_ERROR \
-    (-ANJAY_ADVANCED_FW_UPDATE_RESULT_DEPENDENCY_ERROR)
+    (-(int) ANJAY_ADVANCED_FW_UPDATE_RESULT_DEPENDENCY_ERROR)
 /** @} */
 
 /**
@@ -356,7 +356,8 @@ anjay_advanced_fw_update_get_current_version_t(anjay_iid_t iid, void *user_ptr);
  * - perform firmware upgrade, terminate outermost event loop and return,
  *   call reboot after @ref anjay_event_loop_run
  * - perform the firmware upgrade internally and then reboot, it means that
- *   the return will never happen
+ *   the return will never happen (although the library won't be able to send
+ *   the acknowledgement to execution of Update resource)
  *
  * After rebooting, the result of the upgrade process may be passed to the
  * library during initialization via the <c>initial_result</c> argument to

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem CoAP library
  * All rights reserved.
  *
@@ -29,6 +29,12 @@ typedef struct avs_coap_server_exchange_data {
 
     /** Flag indicating whether NON messages may be used if supported. */
     avs_coap_notify_reliability_hint_t reliability_hint;
+
+    /**
+     * Flag indicating whether the initial CON block of a Confirmable
+     * notification has been ACKed by the remote endpoint.
+     */
+    bool con_block_acked;
 
     /**
      * User-defined response delivery handler. May be non-NULL for Observe

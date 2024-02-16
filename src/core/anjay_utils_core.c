@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -19,6 +19,8 @@
 #include <string.h>
 
 #include "anjay_core.h"
+
+#include "dm/anjay_query.h"
 
 #include <anjay_modules/anjay_dm_utils.h>
 #include <anjay_modules/anjay_servers.h>
@@ -329,7 +331,7 @@ avs_error_t _anjay_coap_add_query_options(avs_coap_options_t *opts,
         return err;
     }
 
-    assert(lifetime == NULL || *lifetime > 0);
+    assert(lifetime == NULL || *lifetime >= 0);
     if (lifetime
             && avs_is_err((err = avs_coap_options_add_string_f(
                                    opts, AVS_COAP_OPTION_URI_QUERY, "lt=%s",

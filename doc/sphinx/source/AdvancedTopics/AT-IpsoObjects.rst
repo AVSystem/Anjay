@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
@@ -8,264 +8,446 @@
 
 .. highlight:: c
 
-Anjay IPSO Objects implementation
+IPSO objects implementation
 =================================
 
-Among many Objects defined in
-`OMA LightweightM2M (LwM2M) Object and Resource Registry
-<https://technical.openmobilealliance.org/OMNA/LwM2M/LwM2MRegistry.html>`_
-there are some which are used quite frequently.
-Anjay provides an easy to use API for implementing some of them, i.e. for a few
-kinds of IPSO objects:
+.. contents:: :local:
 
- * basic sensors (like Temperature or Humidity Objects),
- * three axis sensors (like Accelerometer or Gyrometer Objects) and
- * Push Button Object.
+Introduction
+------------
 
-The API is declared in `anjay/ipso_objects.h <../api/ipso__objects_8h.html>`_ header.
+IPSO (Internet Protocol for Smart Objects) objects are a collection of LwM2M
+objects that can be used to expose some common features of many IoT devices,
+like sensors, buttons, actuators or control switches. Using predefined objects
+for these purposes enables higher interoperability of applications, i.e. all
+devices that have a temperature sensor can report the readings in a standardized
+way, making it possible to easily process such measurements from different,
+nonhomogeneous devices on the cloud.
 
-Object installation
--------------------
+In practice, IPSO objects are most importantly a convenient way to report sensor
+data over LwM2M. All IPSO objects of aforementioned certain kinds share
+common set of resources, and thanks to that these objects in a large part can be
+easily preimplemented.
 
-To install an Anjay IPSO Object we can use one of the following functions, each
-of them corresponding to a specific class of objects:
+Anjay provides a ready-to-use implementation of:
 
- * `anjay_ipso_basic_sensor_install <../api/ipso__objects_8h.html#a8a95f45e84db077652f65d272ccbf730>`_,
- * `anjay_ipso_3d_sensor_install <../api/ipso__objects_8h.html#a9911f0f48d8cdebcbd8bfd9859f43358>`_,
- * `anjay_ipso_button_install <../api/ipso__objects_8h.html#a11e68bd571d70da7d17ee5c73cff6e0d>`_.
+- basic (i.e. scalar) sensor objects (e.g. Temperature Object or Pressure
+  Object),
+- three-axis sensor objects (e.g. Accelerometer Object or Magnetometer Object),
+- Push Button Object.
 
-As you can see, it needs only the maximum number of
-instances which will be used and, in case of sensor objects, OID of the
-installed objects (in the case of the Push Button Object it is always the same
-and equals 3347). 
+User's only responsibility is to retrieve those values from actual sensors
+and supply them to Anjay, making it very easy to implement LwM2M devices with
+sensor support.
 
-For example, if we wanted to create a Temperature Object (which has OID equal to
-3303) that could have up to 2 instances, we would call
-``anjay_ipso_basic_sensor_install`` function like we did in our demo:
+The API is declared in ``include_public/anjay/ipso_objects.h`` and
+``include_public/anjay/ipso_objects_v2.h`` headers. To use them, enable them
+first by either defining ``ANJAY_WITH_MODULE_IPSO_OBJECTS`` and/or
+``ANJAY_WITH_MODULE_IPSO_OBJECTS_V2`` in the Anjay's configuration files, or, if
+using CMake, enabling ``WITH_MODULE_ipso_objects`` and/or
+``WITH_MODULE_ipso_objects_v2`` options.
 
-.. snippet-source:: demo/objects/ipso_objects.c
+.. important::
 
-    if (anjay_ipso_basic_sensor_install(
-                anjay,
-                ANJAY_DEMO_TEMPERATURE_OID,
-                ANJAY_DEMO_TEMPERATURE_MAX_INSTANCE_NUM)) {
-        avs_log(ipso, ERROR, "Could not install Temperature object");
-        return -1;
-    }
+    The APIs for basic and 3D IPSO sensors objects explained in this tutorial
+    are new, experimental variants declared in
+    ``include_public/anjay/ipso_objects_v2.h``.
 
-Instance addition
+Supported objects
 -----------------
 
-To add an instance of an existing Anjay IPSO Object we can use one of the following functions,
-each of them corresponding to a specific class of objects:
+Implementation of IPSO objects in Anjay supports objects that have the following
+set of resources:
 
- * `anjay_ipso_basic_sensor_instance_add <../api/ipso__objects_8h.html#adc74272152c265197c86eff505bde54a>`_,
- * `anjay_ipso_3d_sensor_instance_add <../api/ipso__objects_8h.html#a822eca024f1b55d83ca6828b56b02bef>`_,
+.. flat-table::
+   :header-rows: 2
+
+   * - :cspan:`3` **Basic (scalar) sensor objects**
+   * - **Resource ID**
+     - **Resource Name**
+     - **Must be supported by object**
+   * - 5601
+     - Min Measured Value
+     - no
+   * - 5602
+     - Max Measured Value
+     - no
+   * - 5603
+     - Min Range Value
+     - no
+   * - 5604
+     - Max Range Value
+     - no
+   * - 5605
+     - Reset Min and Max Measured Values
+     - no
+   * - 5700
+     - Sensor Value
+     - **yes**
+   * - 5701
+     - Sensor Units
+     - no
+
+.. flat-table::
+   :header-rows: 2
+
+   * - :cspan:`3` **Three-axis sensor objects**
+   * - **Resource ID**
+     - **Resource Name**
+     - **Must be supported by object**
+   * - 5508
+     - Min X Value
+     - no
+   * - 5509
+     - Max X Value
+     - no
+   * - 5510
+     - Min Y Value
+     - no
+   * - 5511
+     - Max Y Value
+     - no
+   * - 5512
+     - Min Z Value
+     - no
+   * - 5513
+     - Max Z Value
+     - no
+   * - 5603
+     - Min Range Value
+     - no
+   * - 5604
+     - Max Range Value
+     - no
+   * - 5605
+     - Reset Min and Max Measured Values
+     - no
+   * - 5701
+     - Sensor Units
+     - no
+   * - 5702
+     - X Value
+     - **yes**
+   * - 5703
+     - Y Value
+     - no
+   * - 5704
+     - Z Value
+     - no
+
+As of December 13th, 2023, objects registered by IPSO Alliance that meet these
+requirements are:
+3300 (Generic Sensor),
+3301 (Illuminance),
+3303 (Temperature),
+3304 (Humidity),
+3313 (Accelerometer),
+3314 (Magnetometer),
+3315 (Barometer),
+3316 (Voltage),
+3317 (Current),
+3318 (Frequency),
+3319 (Depth),
+3320 (Percentage),
+3321 (Altitude),
+3322 (Load),
+3323 (Pressure),
+3324 (Loudness),
+3325 (Concentration),
+3326 (Acidity),
+3327 (Conductivity),
+3328 (Power),
+3329 (Power Factor),
+3330 (Distance),
+3334 (Gyrometer),
+3345 (Multiple Axis Joystick),
+3346 (Rate).
+
+Additionally, object 3347 (Push Button) is supported with a separate API.
+
+Usage example
+-------------
+
+This tutorial builds up on the :doc:`../../BasicClient/BC-MandatoryObjects`
+tutorial which contains an implementation of a minimal, but complete LwM2M
+client.
+
+.. note::
+
+    Complete code of this example can be found in
+    `examples/tutorial/AT-IpsoObjects` subdirectory of main Anjay project
+    repository.
+
+In this example we'll implement a simple application that simulates a few
+thermometers, accelerometers and buttons.
+
+Installing objects and instances
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+To setup an IPSO object, you must install it first using one of the following
+methods:
+
+ * `anjay_ipso_v2_basic_sensor_install <../api/ipso__objects__v2_8h.html#ac3200c3c61ea62f76eb4e606adfcd90f>`_,
+ * `anjay_ipso_v2_3d_sensor_install <../api/ipso__objects__v2_8h.html#a154a62e2adafe9890cbd66c91bb8f20a>`_,
+ * `anjay_ipso_button_install <../api/ipso__objects_8h.html#a11e68bd571d70da7d17ee5c73cff6e0d>`_.
+
+For sensors, the API accepts Object ID, object version and maximum number of
+instances that'll be installed later. For button, the Object ID and version is
+defined upfront.
+
+.. important::
+
+    It's important to set appropriate object version number. Without configuring
+    it a LwM2M server may fail to interpret resources that were added in newer
+    versions of an object. Such an example is Gyrometer Object, which has the
+    "Reset Min and Max Measured Values" resource available only since version
+    1.1.
+
+    In this example all enabled resources are available in version 1.0 of these
+    objects, to which passing ``NULL`` defaults to.
+
+After installing objects, instances of these objects can be added using
+following APIs:
+
+ * `anjay_ipso_v2_basic_sensor_instance_add <../api/ipso__objects__v2_8h.html#ae92a38b4eba14909b00233088e6256b5>`_,
+ * `anjay_ipso_v2_3d_sensor_instance_add <../api/ipso__objects__v2_8h.html#a760f33f44690447409e77066b4c86295>`_,
  * `anjay_ipso_button_instance_add <../api/ipso__objects_8h.html#ae981fe67ce9c2e9032284f26fa5fb3c3>`_.
 
-As you can see, in case of basic or three-axis sensors we need to provide the
-OID, IID and the implementation. Let's have a look at
-``anjay_ipso_basic_sensor_impl_t`` structure:
+For basic and 3D sensors, these methods accept an initial value of the sensor
+and a structure that provides metadata about each instance:
+`anjay_ipso_v2_basic_sensor_meta_t <../api/ipso__objects__v2_8h.html#a2e0cd9b35002025a91edb96842cd29cf>`_
+and
+`anjay_ipso_v2_3d_sensor_meta_t <../api/ipso__objects__v2_8h.html#a34fe615fc03fa7313a2dffabd326058f>`_,
+respectively.
 
+These structs are used to configure unit, reported minimum and maximum values
+that can be measured by a sensor, and presence of optional Y and Z axis in case
+of 3D objects.
 
-.. snippet-source:: include_public/anjay/ipso_objects.h
+In our example, let's define some macros and necessary metadata structs first:
 
-    typedef struct anjay_ipso_basic_sensor_impl_struct {
-        /**
-        * Unit of the measured values.
-        *
-        * The pointed string won't be copied, so user code must assure that the
-        * pointer will remain valid for the lifetime of the object.
-        */
-        const char *unit;
+.. snippet-source:: examples/tutorial/AT-IpsoObjects/src/main.c
 
-        /**
-        * User context which will be passed to @ref get_value callback.
-        */
-        void *user_context;
+    #define TEMPERATURE_OBJ_OID 3303
+    #define ACCELEROMETER_OBJ_OID 3313
 
-        /**
-        * The minimum value that can be measured by the sensor.
-        *
-        * If the value is NaN the resource won't be created.
-        */
-        double min_range_value;
+    #define THERMOMETER_COUNT 3
+    #define ACCELEROMETER_COUNT 2
+    #define BUTTON_COUNT 4
 
-        /**
-        * The maximum value that can be measured by the sensor.
-        *
-        * If the value is NaN the resource won't be created.
-        */
-        double max_range_value;
+    static const anjay_ipso_v2_basic_sensor_meta_t thermometer_meta = {
+        .unit = "Cel",
+        .min_max_measured_value_present = true,
+        .min_range_value = -20.0,
+        .max_range_value = 120.0
+    };
 
-        /**
-        * User provided callback for reading the sensor value.
-        */
-        anjay_ipso_basic_sensor_value_reader_t *get_value;
-    } anjay_ipso_basic_sensor_impl_t;
+    static const anjay_ipso_v2_3d_sensor_meta_t accelerometer_meta = {
+        .unit = "m/s2",
+        .min_range_value = -20.0,
+        .max_range_value = 20.0,
+        .y_axis_present = true,
+        .z_axis_present = true
+    };
 
-The most important field of the structure is ``get_value`` which is a callback
-called whenever the sensor value needs to be read (so either when it is
-updated explicitly by the client or when the value is read by the server).
-User might pass some additional context to the callback using the ``user_ctx``
-field.
+.. note::
 
-Let's assume that we want to add an instance of the installed Temperature
-Object and let ``get_temperature`` be a given system
-function (which takes as an argument some thermometer instance of type
-``thermometer_t *``) for reading the temperature. We fake such situation for our
-demo client and in this scenario we can use the following simple function:
+    It's a good practice to report values using units defined in
+    `SenML Units Registry <https://www.rfc-editor.org/rfc/rfc8428.html#section-12.1>`_,
+    the up to date list can be
+    `found here <https://www.iana.org/assignments/senml/senml.xhtml>`_.
 
-.. snippet-source:: demo/objects/ipso_objects.c
+Then, let's introduce some helper methods that will install our sensor objects
+and add all instances upfront:
 
-    static int
-    temperature_get_value(anjay_iid_t iid, void *thermometer, double *value) {
-        (void) iid;
+.. snippet-source:: examples/tutorial/AT-IpsoObjects/src/main.c
 
-        *value = get_temperature((thermometer_t *) thermometer);
+    static int setup_temperature_object(anjay_t *anjay) {
+        if (anjay_ipso_v2_basic_sensor_install(anjay, TEMPERATURE_OBJ_OID, NULL,
+                                              THERMOMETER_COUNT)) {
+            return -1;
+        }
+
+        for (anjay_iid_t iid = 0; iid < THERMOMETER_COUNT; iid++) {
+            if (anjay_ipso_v2_basic_sensor_instance_add(
+                        anjay, TEMPERATURE_OBJ_OID, iid, 20.0, &thermometer_meta)) {
+                return -1;
+            }
+        }
 
         return 0;
     }
 
-The proper temperature unit are degrees Celsius (as defined in 
-`SenML RFC <https://datatracker.ietf.org/doc/html/rfc8428#section-12.1>`_).
-Let assume that our thermometer measures temperatures between 0 and 100 degrees
-Celsius. Knowing this we can prepare an instance of
-``anjay_ipso_basic_sensor_impl_t`` and pass it to
-``anjay_ipso_basic_sensor_add_instance`` function, as we did in our demo:
+    static int setup_accelerometer_object(anjay_t *anjay) {
+        if (anjay_ipso_v2_3d_sensor_install(anjay, ACCELEROMETER_OBJ_OID, NULL,
+                                            ACCELEROMETER_COUNT)) {
+            return -1;
+        }
 
-.. snippet-source:: demo/objects/ipso_objects.c
+        for (anjay_iid_t iid = 0; iid < ACCELEROMETER_COUNT; iid++) {
+            anjay_ipso_v2_3d_sensor_value_t initial_value = {
+                .x = 0.0,
+                .y = 0.0,
+                .z = 0.0
+            };
 
-    (void) anjay_ipso_basic_sensor_instance_add(
-            anjay,
-            ANJAY_DEMO_TEMPERATURE_OID,
-            iid,
-            (anjay_ipso_basic_sensor_impl_t) {
-                .unit = ANJAY_DEMO_TEMPERATURE_UNIT,
-                .get_value = temperature_get_value,
-                .user_context = (void *) &THERMOMETER,
-                .min_range_value = 0,
-                .max_range_value = (double) ANJAY_DEMO_TEMPERATURE_MAX_VALUE
-            });
+            if (anjay_ipso_v2_3d_sensor_instance_add(anjay, ACCELEROMETER_OBJ_OID,
+                                                    iid, &initial_value,
+                                                    &accelerometer_meta)) {
+                return -1;
+            }
+        }
 
-The implementation struct for the three axis objects is quite similar to this
-for basic objects - there are three major differences:
+        return 0;
+    }
 
- * there are additional ``use_y_value`` and ``use_z_value`` fields for enabling
-   optional Y and Z axes,
+    static int setup_button_object(anjay_t *anjay) {
+        if (anjay_ipso_button_install(anjay, BUTTON_COUNT)) {
+            return -1;
+        }
 
- * callback needs to take three output pointers, one for each of the axes.
+        for (anjay_iid_t iid = 0; iid < BUTTON_COUNT; iid++) {
+            if (anjay_ipso_button_instance_add(anjay, iid, "")) {
+                return -1;
+            }
+        }
 
-Let's have a look on the whole structure:
+        return 0;
+    }
 
-.. snippet-source:: include_public/anjay/ipso_objects.h
+Finally, let's call these methods in initialization code, in ``main()`` method:
 
-    typedef struct anjay_ipso_3d_sensor_impl_struct {
-        /**
-        * Unit of the measured values.
-        *
-        * The pointed string won't be copied, so user code must assure that the
-        * pointer will remain valid for the lifetime of the object.
-        */
-        const char *unit;
-        /**
-        * Enables usage of the optional Y axis.
-        */
-        bool use_y_value;
-        /**
-        * Enables usage of the optional Z axis.
-        */
-        bool use_z_value;
+.. snippet-source:: examples/tutorial/AT-IpsoObjects/src/main.c
+    :emphasize-lines: 5-7
 
-        /**
-        * User context which will be passed to @ref get_values callback.
-        */
-        void *user_context;
+    int main(int argc, char *argv[]) {
+        // ...
 
-        /**
-        * The minimum value that can be measured by the sensor.
-        *
-        * If the value is NaN the resource won't be created.
-        */
-        double min_range_value;
+        if (setup_security_object(anjay) || setup_server_object(anjay)
+                || setup_temperature_object(anjay)
+                || setup_accelerometer_object(anjay)
+                || setup_button_object(anjay)) {
+            result = -1;
+        }
 
-        /**
-        * The maximum value that can be measured by the sensor.
-        *
-        * If the value is NaN the resource won't be created.
-        */
-        double max_range_value;
+        // ...
+    }
 
-        /**
-        * User provided callback for reading the sensor value.
-        */
-        anjay_ipso_3d_sensor_value_reader_t *get_values;
-    } anjay_ipso_3d_sensor_impl_t;
+Updating values
+^^^^^^^^^^^^^^^
 
-In case of the Push Button Object, neither implementation nor OID is required.
-Instead, we need to provide the initial string for the "Application Type" field.
+To update reported value of a sensor, use one of following methods:
 
-In both cases it is allowed to overwrite an existing instance of an object
-(but in the case of the Push Button Object it can change only "Application Type"
-field).
+ * `anjay_ipso_v2_basic_sensor_value_update <../api/ipso__objects__v2_8h.html#ab9ee3d855e885a2dc25ae73f466dd228>`_,
+ * `anjay_ipso_v2_3d_sensor_value_update <../api/ipso__objects__v2_8h.html#a2166bd5daae8fb235f96064d8b97c740>`_,
+ * `anjay_ipso_button_update <../api/ipso__objects_8h.html#a84a9bf58b9cff7e1bd5fe9083576cfa2>`_.
 
-Instance update
----------------
+.. important::
 
-To update an instance of an existing Anjay IPSO Object we can use one of the following functions,
-each of them corresponding to a specific class of objects:
+    Keep in mind that a LwM2M Server is allowed to configure resource
+    observations with attributes that require the client to report the data very
+    frequently or when some threshold value is exceeded, even for a very short
+    moment. If you want to ensure that server is notified of every change of
+    resource value that could meet such conditions, **you must update the value
+    very frequently**.
 
- * `anjay_ipso_basic_sensor_instance_update <../api/ipso__objects_8h.html#adb1d4d64c728ad7e77f35c8c28eb74bf>`_,
- * `anjay_ipso_3d_sensor_instance_update <../api/ipso__objects_8h.html#a254fafed91f3ef3613ae29de05a67449>`_,
- * `anjay_ipso_button_instance_update <../api/ipso__objects_8h.html#a84a9bf58b9cff7e1bd5fe9083576cfa2>`_.
+.. important::
 
-In case of the sensor objects they just force an update of the sensor value
-for the proper instance of the sensor object instance. To keep the value of
-the sensor object current, it is usually a good practice to call it frequently.
+    These methods (as all methods in Anjay's public API) cannot be called from
+    an interrupt. In case ``ANJAY_WITH_THREAD_SAFETY`` is disabled Anjay APIs
+    are not safe to call from other contexts than method which runs event loop
+    and ``avs_sched`` tasks, while if ``ANJAY_WITH_THREAD_SAFETY`` is enabled
+    calling such methods will attempt to lock a mutex from an interrupt which
+    also is wrong.
 
-In the case of the Push Button Object the update function is a bit more
-significant - it is meant to be called every time the button is pressed or
-released and it is the only way to update the state of the Object Instance.
-In addition to IID it passes a new state of the button. Thus, when an instance
-of the fake button in our demo is pressed, we call:
+    If your application retrieves new sensor values and/or button state changes
+    in an interrupt, you must find a way to pass these values to a non-interrupt
+    execution context.
 
-.. snippet-source:: demo/demo_cmds.c
+In our example we're simulating values of these sensors, so let's add some
+utility methods first:
 
-    anjay_ipso_button_update(demo->anjay, iid, true);
+.. snippet-source:: examples/tutorial/AT-IpsoObjects/src/main.c
 
-and when it is released:
+    static double get_random_in_range(double min, double max) {
+        return min + (max - min) * rand() / RAND_MAX;
+    }
 
-.. snippet-source:: demo/demo_cmds.c
+    static double get_thermometer_value(void) {
+        return get_random_in_range(thermometer_meta.min_range_value,
+                                  thermometer_meta.max_range_value);
+    }
 
-    anjay_ipso_button_update(demo->anjay, iid, false);
+    static anjay_ipso_v2_3d_sensor_value_t get_accelerometer_value(void) {
+        return (anjay_ipso_v2_3d_sensor_value_t) {
+            .x = get_random_in_range(accelerometer_meta.min_range_value,
+                                    accelerometer_meta.max_range_value),
+            .y = get_random_in_range(accelerometer_meta.min_range_value,
+                                    accelerometer_meta.max_range_value),
+            .z = get_random_in_range(accelerometer_meta.min_range_value,
+                                    accelerometer_meta.max_range_value)
+        };
+    }
 
-.. note:
+    static bool get_button_state(void) {
+        return rand() % 2 == 0;
+    }
 
-    It is not safe to call update functions for the IPSO objects (as all of the
-    Anjay API functions) from an ISR context.
+Then, let's implement a scheduler task that will update all sensors. The task
+schedules itself to run every second:
 
-Instance removal
-----------------
+.. snippet-source:: examples/tutorial/AT-IpsoObjects/src/main.c
 
-To remove an instance of an existing Anjay IPSO Object we can use one of the following functions,
-each of them corresponding to a specific class of objects:
+    static void update_sensor_values(avs_sched_t *sched, const void *anjay_ptr) {
+        anjay_t *anjay = *(anjay_t *const *) anjay_ptr;
 
- * `anjay_ipso_basic_sensor_instance_remove <../api/ipso__objects_8h.html#a50e8c38ac2271e9d702d305349ea79c3>`_,
- * `anjay_ipso_3d_sensor_instance_remove <../api/ipso__objects_8h.html#a2bd255f62cf4817ea567b65ddae6644c>`_,
+        for (anjay_iid_t iid = 0; iid < THERMOMETER_COUNT; iid++) {
+            (void) anjay_ipso_v2_basic_sensor_value_update(
+                    anjay, TEMPERATURE_OBJ_OID, iid, get_thermometer_value());
+        }
+
+        for (anjay_iid_t iid = 0; iid < ACCELEROMETER_COUNT; iid++) {
+            anjay_ipso_v2_3d_sensor_value_t value = get_accelerometer_value();
+
+            (void) anjay_ipso_v2_3d_sensor_value_update(
+                    anjay, ACCELEROMETER_OBJ_OID, iid, &value);
+        }
+
+        for (anjay_iid_t iid = 0; iid < BUTTON_COUNT; iid++) {
+            (void) anjay_ipso_button_update(anjay, iid, get_button_state());
+        }
+
+        AVS_SCHED_DELAYED(sched, NULL, avs_time_duration_from_scalar(1, AVS_TIME_S),
+                          update_sensor_values, &anjay, sizeof(anjay));
+    }
+
+Lastly, let's call this method once before entering event loop. From that moment
+the task will keep running infinitely.
+
+.. snippet-source:: examples/tutorial/AT-IpsoObjects/src/main.c
+    :emphasize-lines: 5
+
+    int main(int argc, char *argv[]) {
+        // ...
+
+        if (!result) {
+            update_sensor_values(anjay_get_scheduler(anjay), &anjay);
+            result = anjay_event_loop_run(
+                    anjay, avs_time_duration_from_scalar(1, AVS_TIME_S));
+        }
+
+        // ...
+    }
+
+Removing instances
+^^^^^^^^^^^^^^^^^^
+
+In case you need to change the set of instances of installed IPSO objects, those
+instances can be removed using following methods:
+
+ * `anjay_ipso_v2_basic_sensor_instance_remove <../api/ipso__objects__v2_8h.html#af53a1881ef4ed8de52cb000700a0dbb9>`_,
+ * `anjay_ipso_v2_3d_sensor_instance_remove <../api/ipso__objects__v2_8h.html#a2bd255f62cf4817ea567b65ddae6644c>`_,
  * `anjay_ipso_button_instance_remove <../api/ipso__objects_8h.html#af53a1881ef4ed8de52cb000700a0dbb9>`_.
 
-For example, we can look how the fake temperature object instance is removed in
-our demo:
-
-.. snippet-source:: demo/objects/ipso_objects.c
-
-    (void) anjay_ipso_basic_sensor_instance_remove(
-            anjay, ANJAY_DEMO_TEMPERATURE_OID, iid);
-
-Further reading
----------------
-
-To learn more about Anjay IPSO Objects API you can look how they are used in
-our demo `demo/objects/ipso_objects.c <../../../../../demo/objects/ipso_objects.c>`_
-and our integrations: `Anjay Zephyr Client <https://github.com/AVSystem/Anjay-zephyr-client>`_
-and `Anjay FreeRTOS Client <https://github.com/AVSystem/Anjay-freertos-client>`_.
+In our example instance set doesn't change. All objects and instances are
+automatically deleted when ``anjay_delete()`` is called.

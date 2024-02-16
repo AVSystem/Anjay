@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -543,8 +543,8 @@ int anjay_access_control_install(anjay_t *anjay_locked) {
         _anjay_dm_installed_object_init_unlocked(&access_control->obj_def_ptr,
                                                  &access_control->obj_def);
         if (!_anjay_dm_module_install(anjay, ac_delete, access_control)) {
-            AVS_STATIC_ASSERT(offsetof(access_control_t, obj_def_ptr) == 0,
-                              obj_def_ptr_is_first_field);
+            _ANJAY_ASSERT_INSTALLED_OBJECT_IS_FIRST_FIELD(access_control_t,
+                                                          obj_def_ptr);
             AVS_LIST(anjay_dm_installed_object_t) entry =
                     &access_control->obj_def_ptr;
             if (_anjay_register_object_unlocked(anjay, &entry)) {

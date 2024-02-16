@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -1021,18 +1021,18 @@ int fw_update_common_perform_upgrade(
 
 int fw_update_common_maybe_create_firmware_file(
         advanced_fw_update_logic_t *fw) {
-    if (!fw->next_target_path) {
-        if (fw->administratively_set_target_path) {
-            fw->next_target_path =
-                    avs_strdup(fw->administratively_set_target_path);
-        } else {
-            fw->next_target_path = generate_random_target_filepath();
-        }
-        if (!fw->next_target_path) {
-            return -1;
-        }
-        demo_log(INFO, "Created %s", fw->next_target_path);
+    if (fw->next_target_path) {
+        return 0;
     }
+    if (fw->administratively_set_target_path) {
+        fw->next_target_path = avs_strdup(fw->administratively_set_target_path);
+    } else {
+        fw->next_target_path = generate_random_target_filepath();
+    }
+    if (!fw->next_target_path) {
+        return -1;
+    }
+    demo_log(INFO, "Created %s", fw->next_target_path);
     return 0;
 }
 

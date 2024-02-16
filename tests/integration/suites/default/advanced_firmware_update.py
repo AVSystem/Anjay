@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -121,18 +121,19 @@ class AdvancedFirmwareUpdate:
                                                             'expect_send_after_state_machine_reset',
                                                             False)
             try:
-                if check_marker:
-                    for _ in range(10):
-                        time.sleep(0.5)
+                if not check_marker:
+                    return
+                for _ in range(10):
+                    time.sleep(0.5)
 
-                        if os.path.isfile(self.ANJAY_MARKER_FILE):
-                            break
-                    else:
-                        self.fail('firmware marker not created')
-                    with open(self.ANJAY_MARKER_FILE, "rb") as f:
-                        line = f.readline()[:-1]
-                        self.assertEqual(line, b"updated")
-                    os.unlink(self.ANJAY_MARKER_FILE)
+                    if os.path.isfile(self.ANJAY_MARKER_FILE):
+                        break
+                else:
+                    self.fail('firmware marker not created')
+                with open(self.ANJAY_MARKER_FILE, "rb") as f:
+                    line = f.readline()[:-1]
+                    self.assertEqual(line, b"updated")
+                os.unlink(self.ANJAY_MARKER_FILE)
             finally:
                 os.unlink(self.ORIGINAL_IMG_FILE)
                 if reset_machine:

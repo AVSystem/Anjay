@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -8,6 +8,7 @@
  */
 
 #include <anjay/ipso_objects.h>
+#include <anjay/ipso_objects_v2.h>
 
 #include <avsystem/commons/avs_log.h>
 
@@ -32,19 +33,11 @@ static double get_temperature(thermometer_t *thermometer) {
     return (double) (thermometer->value);
 }
 
-static int
-temperature_get_value(anjay_iid_t iid, void *thermometer, double *value) {
-    (void) iid;
-
-    *value = get_temperature((thermometer_t *) thermometer);
-
-    return 0;
-}
-
 int install_temperature_object(anjay_t *anjay) {
-    if (anjay_ipso_basic_sensor_install(
+    if (anjay_ipso_v2_basic_sensor_install(
                 anjay,
                 ANJAY_DEMO_TEMPERATURE_OID,
+                NULL,
                 ANJAY_DEMO_TEMPERATURE_MAX_INSTANCE_NUM)) {
         avs_log(ipso, ERROR, "Could not install Temperature object");
         return -1;
@@ -56,25 +49,29 @@ int install_temperature_object(anjay_t *anjay) {
 }
 
 void temperature_update_handler(anjay_t *anjay) {
-    (void) anjay_ipso_basic_sensor_update(anjay, ANJAY_DEMO_TEMPERATURE_OID, 0);
+    (void) anjay_ipso_v2_basic_sensor_value_update(anjay,
+                                                   ANJAY_DEMO_TEMPERATURE_OID,
+                                                   0,
+                                                   get_temperature(
+                                                           &THERMOMETER));
 }
 
 void temperature_add_instance(anjay_t *anjay, anjay_iid_t iid) {
-    (void) anjay_ipso_basic_sensor_instance_add(
+    (void) anjay_ipso_v2_basic_sensor_instance_add(
             anjay,
             ANJAY_DEMO_TEMPERATURE_OID,
             iid,
-            (anjay_ipso_basic_sensor_impl_t) {
+            get_temperature(&THERMOMETER),
+            &(anjay_ipso_v2_basic_sensor_meta_t) {
                 .unit = ANJAY_DEMO_TEMPERATURE_UNIT,
-                .get_value = temperature_get_value,
-                .user_context = (void *) &THERMOMETER,
+                .min_max_measured_value_present = true,
                 .min_range_value = 0,
                 .max_range_value = (double) ANJAY_DEMO_TEMPERATURE_MAX_VALUE
             });
 }
 
 void temperature_remove_instance(anjay_t *anjay, anjay_iid_t iid) {
-    (void) anjay_ipso_basic_sensor_instance_remove(
+    (void) anjay_ipso_v2_basic_sensor_instance_remove(
             anjay, ANJAY_DEMO_TEMPERATURE_OID, iid);
 }
 
@@ -85,43 +82,44 @@ void temperature_remove_instance(anjay_t *anjay, anjay_iid_t iid) {
 
 #define ANJAY_DEMO_ACCELEROMETER_MAX_INSTANCE_NUM 16
 
-static int accelerometer_get_values(anjay_iid_t iid,
-                                    void *ctx,
-                                    double *x_value,
-                                    double *y_value,
-                                    double *z_value) {
-    (void) iid;
-    (void) ctx;
-
+static anjay_ipso_v2_3d_sensor_value_t get_accelerometer_value(void) {
     static int counter = 1;
-    *x_value = (double) counter;
+    double x_value = (double) counter;
     counter = (counter + ANJAY_DEMO_ACCELEROMETER_CHANGE)
               % (ANJAY_DEMO_ACCELEROMETER_MAX + 1);
-    *y_value = (double) counter;
+    double y_value = (double) counter;
     counter = (counter + ANJAY_DEMO_ACCELEROMETER_CHANGE)
               % (ANJAY_DEMO_ACCELEROMETER_MAX + 1);
-    *z_value = (double) counter;
+    double z_value = (double) counter;
     counter = (counter + ANJAY_DEMO_ACCELEROMETER_CHANGE)
               % (ANJAY_DEMO_ACCELEROMETER_MAX + 1);
-    return 0;
+    return (anjay_ipso_v2_3d_sensor_value_t) {
+        .x = x_value,
+        .y = y_value,
+        .z = z_value
+    };
 }
 
 int install_accelerometer_object(anjay_t *anjay) {
-    if (anjay_ipso_3d_sensor_install(anjay,
-                                     ANJAY_DEMO_ACCELEROMETER_OID,
-                                     ANJAY_DEMO_ACCELEROMETER_MAX_INSTANCE_NUM)
-            || anjay_ipso_3d_sensor_instance_add(
+    anjay_ipso_v2_3d_sensor_value_t value = get_accelerometer_value();
+    if (anjay_ipso_v2_3d_sensor_install(
+                anjay,
+                ANJAY_DEMO_ACCELEROMETER_OID,
+                NULL,
+                ANJAY_DEMO_ACCELEROMETER_MAX_INSTANCE_NUM)
+            || anjay_ipso_v2_3d_sensor_instance_add(
                        anjay,
                        ANJAY_DEMO_ACCELEROMETER_OID,
                        0,
-                       (anjay_ipso_3d_sensor_impl_t) {
+                       &value,
+                       &(anjay_ipso_v2_3d_sensor_meta_t) {
                            .unit = ANJAY_DEMO_ACCELEROMETER_UNIT,
-                           .get_values = accelerometer_get_values,
-                           .use_y_value = true,
-                           .use_z_value = true,
                            .min_range_value = 0.0,
                            .max_range_value =
-                                   (double) ANJAY_DEMO_ACCELEROMETER_MAX
+                                   (double) ANJAY_DEMO_ACCELEROMETER_MAX,
+                           .y_axis_present = true,
+                           .z_axis_present = true
+
                        })) {
         avs_log(ipso, ERROR, "Could not install Accelerometer object");
         return -1;
@@ -131,27 +129,29 @@ int install_accelerometer_object(anjay_t *anjay) {
 }
 
 void accelerometer_update_handler(anjay_t *anjay) {
-    (void) anjay_ipso_3d_sensor_update(anjay, ANJAY_DEMO_ACCELEROMETER_OID, 0);
+    anjay_ipso_v2_3d_sensor_value_t value = get_accelerometer_value();
+    (void) anjay_ipso_v2_3d_sensor_value_update(
+            anjay, ANJAY_DEMO_ACCELEROMETER_OID, 0, &value);
 }
 
 void accelerometer_add_instance(anjay_t *anjay, anjay_iid_t iid) {
-
-    (void) anjay_ipso_3d_sensor_instance_add(
+    anjay_ipso_v2_3d_sensor_value_t value = get_accelerometer_value();
+    (void) anjay_ipso_v2_3d_sensor_instance_add(
             anjay,
             ANJAY_DEMO_ACCELEROMETER_OID,
             iid,
-            (anjay_ipso_3d_sensor_impl_t) {
+            &value,
+            &(anjay_ipso_v2_3d_sensor_meta_t) {
                 .unit = ANJAY_DEMO_ACCELEROMETER_UNIT,
-                .get_values = accelerometer_get_values,
-                .use_y_value = true,
-                .use_z_value = true,
                 .min_range_value = 0.0,
-                .max_range_value = (double) ANJAY_DEMO_ACCELEROMETER_MAX
+                .max_range_value = (double) ANJAY_DEMO_ACCELEROMETER_MAX,
+                .y_axis_present = true,
+                .z_axis_present = true
             });
 }
 
 void accelerometer_remove_instance(anjay_t *anjay, anjay_iid_t iid) {
-    (void) anjay_ipso_3d_sensor_instance_remove(
+    (void) anjay_ipso_v2_3d_sensor_instance_remove(
             anjay, ANJAY_DEMO_ACCELEROMETER_OID, iid);
 }
 

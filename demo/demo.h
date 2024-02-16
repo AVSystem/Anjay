@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -27,6 +27,10 @@
 #ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
 #    include "advanced_firmware_update.h"
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+
+#ifdef ANJAY_WITH_MODULE_SW_MGMT
+#    include "software_mgmt.h"
+#endif // ANJAY_WITH_MODULE_SW_MGMT
 #include "objects.h"
 
 typedef int anjay_demo_object_get_instances_t(const anjay_dm_object_def_t **,
@@ -66,6 +70,10 @@ struct anjay_demo_struct {
     advanced_fw_update_logic_t
             advanced_fw_update_logic_table[FW_UPDATE_IID_IMAGE_SLOTS];
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_SW_MGMT
+    sw_mgmt_common_logic_t sw_mgmt_common;
+    sw_mgmt_logic_t sw_mgmt_table[SW_MGMT_PACKAGE_COUNT];
+#endif // ANJAY_WITH_MODULE_SW_MGMT
 
 #ifdef WITH_DEMO_USE_STANDALONE_OBJECTS
     const anjay_dm_object_def_t **security_obj_ptr;

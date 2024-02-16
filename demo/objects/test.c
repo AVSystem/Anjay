@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -508,7 +508,8 @@ static int test_resource_write(anjay_t *anjay,
             return ANJAY_ERR_BAD_REQUEST;
         }
         inst->bytes_size = value;
-        return 0;
+        return anjay_notify_changed(anjay, (*obj_ptr)->oid, iid,
+                                    TEST_RES_BYTES);
     }
     case TEST_RES_BYTES_BURST: {
         assert(riid == ANJAY_ID_INVALID);

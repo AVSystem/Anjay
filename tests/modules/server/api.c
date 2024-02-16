@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -88,4 +88,21 @@ AVS_UNIT_TEST(server_object_api, set_lifetime) {
             anjay_server_object_add_instance(env->anjay, &instance1, &iid));
     AVS_UNIT_ASSERT_SUCCESS(
             anjay_server_object_set_lifetime(env->anjay, iid, 1234));
+}
+
+static const anjay_server_instance_t instance_lifetime_zero = {
+    .ssid = 1,
+    .lifetime = 0,
+    .default_min_period = -1,
+    .default_max_period = -1,
+    .disable_timeout = -1,
+    .binding = "U",
+    .notification_storing = false
+};
+
+AVS_UNIT_TEST(server_object_api, add_instances_with_inifinite_lifetime) {
+    SCOPED_SERVER_TEST_ENV(env);
+    anjay_iid_t iid = 1;
+    AVS_UNIT_ASSERT_SUCCESS(anjay_server_object_add_instance(
+            env->anjay, &instance_lifetime_zero, &iid));
 }

@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
@@ -92,3 +92,14 @@ support.
 
 To build Anjay from source, `CMake <https://www.cmake.org/>`_ version 3.6.0 or
 newer is necessary.
+
+Deprecated and experimental features
+------------------------------------
+
+Anjay's Doxygen documentation contains, among others, **@deprecated** and
+**@experimental** tags:
+
+- features tagged with **@deprecated** are no longer supported and will be
+  deleted in the future versions,
+- features tagged with **@experimental** may contain changes (in the future
+  versions) that will break their backward compatibility.

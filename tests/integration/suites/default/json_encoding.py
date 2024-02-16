@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -101,4 +101,4 @@ class JsonEncodingArrayOfOpaqueValues(JsonEncodingTest.Test):
             key = int(instance['n'][1:])
             expected_bytes = struct.pack('!i', values[key])
             expected_value = base64.encodebytes(expected_bytes).replace(b'\n', b'')
-            self.assertEquals(expected_value, bytes(instance['sv'], encoding='utf-8'))
+            self.assertEqual(expected_value, bytes(instance['sv'], encoding='utf-8'))

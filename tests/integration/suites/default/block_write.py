@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -93,6 +93,12 @@ class Block:
 
             self.assertEqual(request.get_options(coap.Option.BLOCK1),
                              response.options)
+
+        def perform_firmware_update_expect_success(self):
+            req = Lwm2mExecute(ResPath.FirmwareUpdate.Update)
+            self.serv.send(req)
+            self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                                self.serv.recv())
 
         def setUp(self, *args, **kwargs):
             super().setUp(*args, **kwargs)

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem CoAP library
  * All rights reserved.
  *
@@ -522,7 +522,7 @@ static avs_error_t perform_request(coap_stream_t *coap_stream,
         buffer_size = in_buffer_capacity;
     }
     if (avs_buffer_create(&coap_stream->chunk_buffer, buffer_size)) {
-        LOG(ERROR, _("out of memory"));
+        LOG_OOM();
         return avs_errno(AVS_ENOMEM);
     }
 

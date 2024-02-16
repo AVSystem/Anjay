@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -63,10 +63,8 @@ static int validate_instance(server_instance_t *it) {
                                 "when disabled or offline' resource value"));
         return -1;
     }
-
-    if (it->lifetime <= 0) {
-        LOG_VALIDATION_FAILED(it,
-                              _("Lifetime value is non-positive: ") "%" PRId32,
+    if (it->lifetime < 0) {
+        LOG_VALIDATION_FAILED(it, _("Lifetime value is negative: ") "%" PRId32,
                               it->lifetime);
         return -1;
     }

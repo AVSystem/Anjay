@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -276,12 +276,12 @@ class NoDuplicatedAclTest(AccessControl.Test):
 
         tlv = TLV.parse(res.content)
         # One Multiple Resource
-        self.assertEquals(len(tlv), 1)
+        self.assertEqual(len(tlv), 1)
         # with valid ID
-        self.assertEquals(tlv[0].identifier, RID.AccessControl.ACL)
+        self.assertEqual(tlv[0].identifier, RID.AccessControl.ACL)
         # with exactly one Instance (2,AccessMask.OWNER)
-        self.assertEquals(len(tlv[0].value), 1)
-        self.assertEquals(tlv[0].value[0].value, AccessMask.OWNER.to_bytes(1, byteorder='big'))
+        self.assertEqual(len(tlv[0].value), 1)
+        self.assertEqual(tlv[0].value[0].value, AccessMask.OWNER.to_bytes(1, byteorder='big'))
 
 
 class DefaultAclTest(AccessControl.Test):
@@ -341,11 +341,11 @@ class ReadObjectWithPartialReadAccessTest(AccessControl.Test):
 
         tlv = TLV.parse(res.content)
         expected_instances = set([0, 1, 2])
-        self.assertEquals(len(tlv), len(expected_instances))
+        self.assertEqual(len(tlv), len(expected_instances))
         for instance in tlv:
-            self.assertEquals(instance.tlv_type, TLVType.INSTANCE)
+            self.assertEqual(instance.tlv_type, TLVType.INSTANCE)
             expected_instances.remove(instance.identifier)
-        self.assertEquals(len(expected_instances), 0)
+        self.assertEqual(len(expected_instances), 0)
 
         # And SSID=1 should see only IID=1 and IID=3
         res = self.read_object(server=self.servers[0], oid=OID.Test)
@@ -353,11 +353,11 @@ class ReadObjectWithPartialReadAccessTest(AccessControl.Test):
 
         tlv = TLV.parse(res.content)
         expected_instances = set([0, 2])
-        self.assertEquals(len(tlv), len(expected_instances))
+        self.assertEqual(len(tlv), len(expected_instances))
         for instance in tlv:
-            self.assertEquals(instance.tlv_type, TLVType.INSTANCE)
+            self.assertEqual(instance.tlv_type, TLVType.INSTANCE)
             expected_instances.remove(instance.identifier)
-        self.assertEquals(len(expected_instances), 0)
+        self.assertEqual(len(expected_instances), 0)
 
 
 class ReadObjectWithNoInstancesTest(AccessControl.Test):
@@ -366,7 +366,7 @@ class ReadObjectWithNoInstancesTest(AccessControl.Test):
         self.assertEqual(coap.ContentFormat.APPLICATION_LWM2M_TLV, res.get_content_format())
 
         tlv = TLV.parse(res.content)
-        self.assertEquals(len(tlv), 0)
+        self.assertEqual(len(tlv), 0)
         self.create_instance(server=self.servers[1], oid=OID.Test)
         self.create_instance(server=self.servers[1], oid=OID.Test)
         self.create_instance(server=self.servers[1], oid=OID.Test)
@@ -375,7 +375,7 @@ class ReadObjectWithNoInstancesTest(AccessControl.Test):
         self.assertEqual(coap.ContentFormat.APPLICATION_LWM2M_TLV, res.get_content_format())
 
         tlv = TLV.parse(res.content)
-        self.assertEquals(len(tlv), 0)
+        self.assertEqual(len(tlv), 0)
 
 
 class ActionOnNonexistentInstanceTest(AccessControl.Test):

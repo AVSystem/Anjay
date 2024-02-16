@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -287,7 +287,7 @@ avs_error_t anjay_download(anjay_t *anjay,
  *    download process
  *  - <c>avs_errno(AVS_EINVAL)</c> if @p next_block_offset is smaller than the
  *    currently recognized value
- *  - <c>avs_errno(AVS_ENOTSUP</c> if Anjay has been compiled without support
+ *  - <c>avs_errno(AVS_ENOTSUP)</c> if Anjay has been compiled without support
  *    for downloads
  */
 avs_error_t

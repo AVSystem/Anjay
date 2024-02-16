@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem CoAP library
  * All rights reserved.
  *
@@ -72,3 +72,9 @@ avs_error_t _avs_coap_parse_token(avs_coap_token_t *out_token,
 
     return AVS_OK;
 }
+
+#ifdef WITH_AVS_COAP_LOGS
+void _avs_coap_log_oom__(void) {
+    LOG(ERROR, _("out of memory"));
+}
+#endif // WITH_AVS_COAP_LOGS

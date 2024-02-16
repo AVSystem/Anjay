@@ -738,7 +738,6 @@ const anjay_dm_object_def_t **standalone_server_object_install(anjay_t *anjay) {
     }
     repr->def = &SERVER;
     repr->anjay = anjay;
-    AVS_STATIC_ASSERT(offsetof(server_repr_t, def) == 0, def_is_first_field);
     if (anjay_register_object(anjay, &repr->def)) {
         avs_free(repr);
         return NULL;

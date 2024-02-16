@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem CoAP library
  * All rights reserved.
  *
@@ -221,9 +221,12 @@ static bool is_last_response_block_sent(const avs_coap_exchange_t *exchange) {
 static bool is_exchange_done(const avs_coap_exchange_t *exchange) {
     switch (exchange->by_type.server.reliability_hint) {
     case AVS_COAP_NOTIFY_PREFER_CONFIRMABLE:
-        // CON response? we're not done until the delivery handler is called.
-        // send_result_handler will take care of cleanup
-        return false;
+        // CON response? we're not done until the initial CON request has been
+        // ACKed, which is handled in send_result_handler
+        if (!exchange->by_type.server.con_block_acked) {
+            return false;
+        }
+        break;
     case AVS_COAP_NOTIFY_PREFER_NON_CONFIRMABLE:
         break;
     }
@@ -285,13 +288,16 @@ send_result_handler(avs_coap_ctx_t *ctx,
         break;
     }
 
-#ifdef WITH_AVS_COAP_BLOCK
-    if (avs_is_ok(fail_err) && !is_last_response_block_sent(exchange)) {
-        return AVS_COAP_RESPONSE_ACCEPTED;
-    }
-#endif // WITH_AVS_COAP_BLOCK
-
     avs_coap_server_exchange_data_t *server = &exchange->by_type.server;
+    if (avs_is_ok(fail_err)) {
+        server->con_block_acked = true;
+#ifdef WITH_AVS_COAP_BLOCK
+        if (!is_last_response_block_sent(exchange)) {
+            return AVS_COAP_RESPONSE_ACCEPTED;
+        }
+#endif // WITH_AVS_COAP_BLOCK
+    }
+
     AVS_ASSERT(server->delivery_handler,
                "send_result_handler called for an exchange without "
                "user-defined delivery handler; this should not happen");
@@ -349,9 +355,10 @@ static avs_error_t send_ise(avs_coap_ctx_t *ctx,
                                      result_handler_arg);
 }
 
-static avs_error_t
-server_exchange_send_next_chunk(avs_coap_ctx_t *ctx,
-                                AVS_LIST(avs_coap_exchange_t) *exchange_ptr) {
+static avs_error_t server_exchange_send_next_chunk(
+        avs_coap_ctx_t *ctx,
+        AVS_LIST(avs_coap_exchange_t) *exchange_ptr,
+        avs_coap_notify_reliability_hint_t reliability_hint) {
     AVS_ASSERT(AVS_LIST_FIND_PTR(&_avs_coap_get_base(ctx)->server_exchanges,
                                  *exchange_ptr)
                        != NULL,
@@ -359,8 +366,7 @@ server_exchange_send_next_chunk(avs_coap_ctx_t *ctx,
 
     avs_coap_exchange_id_t id = (*exchange_ptr)->id;
     avs_coap_send_result_handler_t *handler = NULL;
-    if ((*exchange_ptr)->by_type.server.reliability_hint
-            == AVS_COAP_NOTIFY_PREFER_CONFIRMABLE) {
+    if (reliability_hint == AVS_COAP_NOTIFY_PREFER_CONFIRMABLE) {
         handler = send_result_handler;
     }
 
@@ -931,7 +937,9 @@ static avs_error_t continue_request_exchange(avs_coap_ctx_t *ctx) {
     update_exchange_block2_option(*exchange_ptr,
                                   &coap_base->request_ctx.request);
 #endif // WITH_AVS_COAP_BLOCK
-    return server_exchange_send_next_chunk(ctx, exchange_ptr);
+    return server_exchange_send_next_chunk(
+            ctx, exchange_ptr,
+            (*exchange_ptr)->by_type.server.reliability_hint);
 }
 
 static void cleanup_exchange_by_id(avs_coap_ctx_t *ctx,
@@ -1093,7 +1101,12 @@ static avs_error_t handle_request(avs_coap_ctx_t *ctx,
         // Figure 12: "Observe Sequence with Block-Wise Response"
         avs_coap_options_remove_by_number(&(*existing_exchange_ptr)->options,
                                           AVS_COAP_OPTION_OBSERVE);
-        return server_exchange_send_next_chunk(ctx, existing_exchange_ptr);
+        // Also, subsequent blocks in a blockwise notification are just regular
+        // responses; don't send them as Confirmable because we don't support
+        // acknowledging Separate Responses properly
+        return server_exchange_send_next_chunk(
+                ctx, existing_exchange_ptr,
+                AVS_COAP_NOTIFY_PREFER_NON_CONFIRMABLE);
     }
 #else  // WITH_AVS_COAP_BLOCK
     *out_exchange = *existing_exchange_ptr;
@@ -1369,7 +1382,9 @@ avs_coap_notify_async(avs_coap_ctx_t *ctx,
 #    ifdef WITH_AVS_COAP_BLOCK
     update_exchange_block2_option(exchange, exchange_create_args.request);
 #    endif // WITH_AVS_COAP_BLOCK
-    err = server_exchange_send_next_chunk(ctx, &coap_base->server_exchanges);
+    err = server_exchange_send_next_chunk(
+            ctx, &coap_base->server_exchanges,
+            coap_base->server_exchanges->by_type.server.reliability_hint);
     AVS_LIST(avs_coap_exchange_t) *exchange_ptr =
             _avs_coap_find_server_exchange_ptr_by_id(
                     ctx, exchange_create_args.exchange_id);

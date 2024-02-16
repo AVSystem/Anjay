@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
@@ -265,7 +265,10 @@ which holds:
          * Object version: a string with static lifetime, containing two digits
          * separated by a dot (for example: "1.1").
          * If left NULL, client will not include the "ver=" attribute in Register
-         * and Discover messages, which implies version 1.0.
+         * and Discover messages. This implies:
+         * 1. Version 1.0 for Non-Core Objects.
+         * 2. The version corresponding to the version in the LwM2M Enabler for Core
+         * Objects.
          */
         const char *version;
 

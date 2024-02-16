@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -74,6 +74,21 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
     },
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
 
+#ifdef ANJAY_WITH_MODULE_SW_MGMT
+    .sw_mgmt_delayed_first_instance_install_result = UINT8_MAX,
+#    if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
+            && defined(AVS_COMMONS_STREAM_WITH_FILE)
+    .sw_mgmt_persistence_file = "/tmp/anjay-sw-mgmt",
+    .sw_mgmt_terminate_after_downloading = false,
+#    endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
+           // defined(AVS_COMMONS_STREAM_WITH_FILE)
+#    ifdef ANJAY_WITH_DOWNLOADER
+    .sw_mgmt_security_info = {
+        .mode = (avs_net_security_mode_t) -1
+    },
+#    endif // ANJAY_WITH_DOWNLOADER
+#endif     // ANJAY_WITH_MODULE_SW_MGMT
+
 #ifdef AVS_COMMONS_STREAM_WITH_FILE
 #    ifdef ANJAY_WITH_ATTR_STORAGE
     .attr_storage_file = NULL,
@@ -101,6 +116,12 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
     .advanced_fwu_tx_params = ANJAY_COAP_DEFAULT_UDP_TX_PARAMS,
     .advanced_fwu_tcp_request_timeout = { 0, -1 },
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_SW_MGMT
+    .sw_mgmt_tx_params_modified = false,
+    .sw_mgmt_tx_params = ANJAY_COAP_DEFAULT_UDP_TX_PARAMS,
+    .sw_mgmt_tcp_request_timeout = { 0, -1 },
+// AVS_TIME_DURATION_INVALID
+#endif // ANJAY_WITH_MODULE_SW_MGMT
 #ifdef ANJAY_WITH_LWM2M11
     .lwm2m_version_config = {
         .minimum_version = ANJAY_LWM2M_VERSION_1_0,
@@ -266,8 +287,9 @@ static void print_help(const struct option *options) {
           "daemon." },
 #endif // _WIN32
         { 'l', "SECONDS", "86400",
-          "set registration lifetime. If SECONDS <= 0, use default value and "
-          "don't send lifetime in Register/Update messages." },
+          "set registration lifetime. If SECONDS == 0, the lifetime is "
+          "infinite and register updates are not being sent automatically. "
+          "Negative values are not allowed." },
         { 'L', "MAX_NOTIFICATIONS", "0",
           "set limit of queued notifications in queue/offline mode. 0: "
           "unlimited; >0: keep that much newest ones" },
@@ -406,7 +428,7 @@ static void print_help(const struct option *options) {
 #endif // ANJAY_WITH_LWM2M11
         { 283, NULL, NULL,
           "Configures preference of re-using existing LwM2M CoAP contexts for "
-          "firmware download" },
+          "firmware and software download" },
         { 284, "NSTART", "1", "Configures NSTART (defined in RFC7252)" },
 #if defined(ANJAY_WITH_SEND) && defined(ANJAY_WITH_MODULE_FW_UPDATE)
         { 287, NULL, NULL,
@@ -518,6 +540,60 @@ static void print_help(const struct option *options) {
           "Request timeout (in seconds) to use for Advanced Firmware Update "
           "downloads performed over CoAP+TCP and HTTP" },
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_SW_MGMT
+        { 335, "RESULT", NULL,
+          "If specified, initializes first Software Management "
+          "object in DELIVERED state, and sets the result to given value after "
+          "a short "
+          "while" },
+        { 336, NULL, NULL,
+          "Terminate the program after downloading package for instance 0. "
+          "Useful for testing purposes only." },
+        { 337, NULL, NULL,
+          "Do not execute code related to activation/deactivation and return "
+          "an error from the activation/deactivation handler when the package "
+          "is already activated/deactivated." },
+#    if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
+            && defined(AVS_COMMONS_STREAM_WITH_FILE)
+        { 338, "PATH", DEFAULT_CMDLINE_ARGS.sw_mgmt_persistence_file,
+          "Persistence file path" },
+#    endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
+           // defined(AVS_COMMONS_STREAM_WITH_FILE)
+#    ifdef ANJAY_WITH_DOWNLOADER
+        { 339, "CERT_FILE", NULL,
+          "Require certificate validation against specified file when "
+          "downloading software over encrypted channels" },
+        { 340, "CERT_DIR", NULL,
+          "Require certificate validation against files in specified path when "
+          "downloading software over encrypted channels; note that the TLS "
+          "backend may impose specific requirements for file names and "
+          "formats" },
+        { 341, "PSK identity", NULL,
+          "Download software over encrypted channels using PSK-mode encryption "
+          "with the specified identity (provided as hexlified string); must be "
+          "used together with --sw-mgmt-psk-key" },
+        { 342, "PSK key", NULL,
+          "Download software over encrypted channels using PSK-mode encryption "
+          "with the specified key (provided as hexlified string); must be used "
+          "together with --sw-mgmt-psk-identity" },
+        { 343, "ACK_RANDOM_FACTOR", "1.5",
+          "Configures ACK_RANDOM_FACTOR (defined in RFC7252) for software "
+          "update" },
+        { 344, "ACK_TIMEOUT", "2.0",
+          "Configures ACK_TIMEOUT (defined in RFC7252) in seconds for software "
+          "update" },
+        { 345, "MAX_RETRANSMIT", "4",
+          "Configures MAX_RETRANSMIT (defined in RFC7252) for software "
+          "update" },
+        { 346, NULL, NULL,
+          "Start the software downloads in suspended mode and resume "
+          "them just when they are requested. Useful for testing purposes "
+          "only." },
+        { 347, "TIMEOUT", NULL,
+          "Request timeout (in seconds) to use for software download performed "
+          "over CoAP+TCP and HTTP" },
+#    endif // ANJAY_WITH_DOWNLOADER
+#endif     // ANJAY_WITH_MODULE_SW_MGMT
     };
 
     const size_t screen_width = get_screen_width();
@@ -899,6 +975,25 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
 #ifdef ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
         { "afu-tcp-request-timeout",       required_argument, 0, 334 },
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_SW_MGMT
+        { "delayed-sw-mgmt-result",        required_argument, 0, 335 },
+        { "sw-mgmt-terminate-after-downloading", no_argument, 0, 336 },
+        { "sw-mgmt-disable-repeated-activation-deactivation", no_argument, 0, 337 },
+#   if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
+        { "sw-mgmt-persistence-file",      required_argument, 0, 338 },
+#   endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
+#    ifdef ANJAY_WITH_DOWNLOADER
+        { "sw-mgmt-cert-file",             required_argument, 0, 339 },
+        { "sw-mgmt-cert-path",             required_argument, 0, 340 },
+        { "sw-mgmt-psk-identity",          required_argument, 0, 341 },
+        { "sw-mgmt-psk-key",               required_argument, 0, 342 },
+        { "sw-mgmt-ack-random-factor",     required_argument, 0, 343 },
+        { "sw-mgmt-ack-timeout",           required_argument, 0, 344 },
+        { "sw-mgmt-max-retransmit",        required_argument, 0, 345 },
+        { "sw-mgmt-auto-suspend",          no_argument,       0, 346 },
+        { "sw-mgmt-tcp-request-timeout",   required_argument, 0, 347 },
+#    endif // ANJAY_WITH_DOWNLOADER
+#endif // ANJAY_WITH_MODULE_SW_MGMT
         { 0, 0, 0, 0 }
         // clang-format on
     };
@@ -1330,8 +1425,8 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             break;
         }
         case 269: {
-            int32_t max_retransmit;
-            if (parse_i32(optarg, &max_retransmit) || max_retransmit < 0) {
+            uint32_t max_retransmit;
+            if (parse_u32(optarg, &max_retransmit)) {
                 demo_log(ERROR, "Expected MAX_RETRANSMIT to be an unsigned "
                                 "integer");
                 goto finish;
@@ -1382,8 +1477,8 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             break;
         }
         case 274: {
-            int32_t max_retransmit;
-            if (parse_i32(optarg, &max_retransmit) || max_retransmit < 0) {
+            uint32_t max_retransmit;
+            if (parse_u32(optarg, &max_retransmit)) {
                 demo_log(ERROR, "Expected MAX_RETRANSMIT to be an unsigned "
                                 "integer");
                 goto finish;
@@ -1737,6 +1832,175 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             break;
         }
 #endif // ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_SW_MGMT
+        case 335: {
+            uint16_t result;
+            if (parse_u16(optarg, &result) || (result != 0 && result != 1)) {
+                demo_log(ERROR, "invalid install result value: %s", optarg);
+                goto finish;
+            }
+            parsed_args->sw_mgmt_delayed_first_instance_install_result =
+                    (uint8_t) result;
+            break;
+        }
+        case 336: {
+            parsed_args->sw_mgmt_terminate_after_downloading = true;
+            break;
+        }
+        case 337: {
+            parsed_args->sw_mgmt_disable_repeated_activation_deactivation =
+                    true;
+            break;
+        }
+#    if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
+            && defined(AVS_COMMONS_STREAM_WITH_FILE)
+        case 338: {
+            parsed_args->sw_mgmt_persistence_file = optarg;
+            break;
+        }
+#    endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
+           // defined(AVS_COMMONS_STREAM_WITH_FILE)
+#    ifdef ANJAY_WITH_DOWNLOADER
+        case 339: {
+            if (parsed_args->sw_mgmt_security_info.mode
+                    != (avs_net_security_mode_t) -1) {
+                demo_log(ERROR, "Multiple incompatible security information "
+                                "specified for software managment");
+                goto finish;
+            }
+
+            const avs_net_certificate_info_t cert_info = {
+                .server_cert_validation = true,
+                .trusted_certs =
+                        avs_crypto_certificate_chain_info_from_file(optarg)
+            };
+            parsed_args->sw_mgmt_security_info =
+                    avs_net_security_info_from_certificates(cert_info);
+            break;
+        }
+        case 340: {
+            if (parsed_args->sw_mgmt_security_info.mode
+                    != (avs_net_security_mode_t) -1) {
+                demo_log(ERROR, "Multiple incompatible security information "
+                                "specified for software managment");
+                goto finish;
+            }
+            const avs_net_certificate_info_t cert_info = {
+                .server_cert_validation = true,
+                .trusted_certs =
+                        avs_crypto_certificate_chain_info_from_path(optarg)
+            };
+            parsed_args->sw_mgmt_security_info =
+                    avs_net_security_info_from_certificates(cert_info);
+            break;
+        }
+        case 341: {
+            if (parsed_args->sw_mgmt_security_info.mode != AVS_NET_SECURITY_PSK
+                    && parsed_args->sw_mgmt_security_info.mode
+                                   != (avs_net_security_mode_t) -1) {
+                demo_log(ERROR, "Multiple incompatible security information "
+                                "specified for software managment");
+                goto finish;
+            }
+            if (parsed_args->sw_mgmt_security_info.mode == AVS_NET_SECURITY_PSK
+                    && parsed_args->sw_mgmt_security_info.data.psk.identity.desc
+                                       .source
+                                   != AVS_CRYPTO_DATA_SOURCE_EMPTY) {
+                demo_log(ERROR,
+                         "--sw-mgmt-psk-identity specified more than once");
+                goto finish;
+            }
+            uint8_t *identity_buf = NULL;
+            size_t identity_size = 0;
+            if (parse_hexstring(parsed_args, optarg, &identity_buf,
+                                &identity_size)) {
+                demo_log(ERROR, "Invalid PSK identity for software managment");
+                goto finish;
+            }
+            parsed_args->sw_mgmt_security_info.mode = AVS_NET_SECURITY_PSK;
+            parsed_args->sw_mgmt_security_info.data.psk.identity =
+                    avs_crypto_psk_identity_info_from_buffer(identity_buf,
+                                                             identity_size);
+            break;
+        }
+        case 342: {
+            if (parsed_args->sw_mgmt_security_info.mode != AVS_NET_SECURITY_PSK
+                    && parsed_args->sw_mgmt_security_info.mode
+                                   != (avs_net_security_mode_t) -1) {
+                demo_log(ERROR, "Multiple incompatible security information "
+                                "specified for software managment");
+                goto finish;
+            }
+            if (parsed_args->sw_mgmt_security_info.mode == AVS_NET_SECURITY_PSK
+                    && parsed_args->sw_mgmt_security_info.data.psk.key.desc
+                                       .source
+                                   != AVS_CRYPTO_DATA_SOURCE_EMPTY) {
+                demo_log(ERROR, "--sw-mgmt-psk-key specified more than once");
+                goto finish;
+            }
+            uint8_t *psk_buf = NULL;
+            size_t psk_size = 0;
+            if (parse_hexstring(parsed_args, optarg, &psk_buf, &psk_size)) {
+                demo_log(ERROR,
+                         "Invalid pre-shared key for software managment");
+                goto finish;
+            }
+            parsed_args->sw_mgmt_security_info.mode = AVS_NET_SECURITY_PSK;
+            parsed_args->sw_mgmt_security_info.data.psk.key =
+                    avs_crypto_psk_key_info_from_buffer(psk_buf, psk_size);
+            break;
+        }
+        case 343:
+            if (parse_double(
+                        optarg,
+                        &parsed_args->sw_mgmt_tx_params.ack_random_factor)) {
+                demo_log(ERROR, "Expected ACK_RANDOM_FACTOR to be a floating "
+                                "point number");
+                goto finish;
+            }
+            parsed_args->sw_mgmt_tx_params_modified = true;
+            break;
+        case 344: {
+            double ack_timeout_s;
+            if (parse_double(optarg, &ack_timeout_s)) {
+                demo_log(ERROR,
+                         "Expected ACK_TIMEOUT to be a floating point number");
+                goto finish;
+            }
+            parsed_args->sw_mgmt_tx_params.ack_timeout =
+                    avs_time_duration_from_fscalar(ack_timeout_s, AVS_TIME_S);
+            parsed_args->sw_mgmt_tx_params_modified = true;
+            break;
+        }
+        case 345: {
+            uint32_t max_retransmit;
+            if (parse_u32(optarg, &max_retransmit)) {
+                demo_log(ERROR, "Expected MAX_RETRANSMIT to be an unsigned "
+                                "integer");
+                goto finish;
+            }
+            parsed_args->sw_mgmt_tx_params.max_retransmit =
+                    (unsigned) max_retransmit;
+            parsed_args->sw_mgmt_tx_params_modified = true;
+            break;
+        }
+        case 346:
+            parsed_args->sw_mgmt_auto_suspend = true;
+            break;
+        case 347: {
+            double timeout_s;
+            if (parse_double(optarg, &timeout_s) || !isfinite(timeout_s)
+                    || timeout_s <= 0.0) {
+                demo_log(ERROR, "Expected TCP request timeout to be a positive "
+                                "floating point number");
+                goto finish;
+            }
+            parsed_args->sw_mgmt_tcp_request_timeout =
+                    avs_time_duration_from_fscalar(timeout_s, AVS_TIME_S);
+            break;
+        }
+#    endif // ANJAY_WITH_DOWNLOADER
+#endif     // ANJAY_WITH_MODULE_SW_MGMT
         case 0:
             goto process;
         }

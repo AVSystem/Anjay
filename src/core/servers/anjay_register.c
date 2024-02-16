@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -90,7 +90,8 @@ int anjay_schedule_register(anjay_t *anjay_locked, anjay_ssid_t ssid) {
 
 static avs_time_real_t
 calculate_time_of_next_update(anjay_server_info_t *server) {
-    avs_time_real_t expire_time = _anjay_registration_expire_time(server);
+    avs_time_real_t expire_time =
+            _anjay_registration_expire_time_with_status(server, NULL);
     if (!avs_time_real_valid(expire_time)) {
         return AVS_TIME_REAL_INVALID;
     }
@@ -132,9 +133,10 @@ static avs_time_real_t get_time_of_next_update(anjay_server_info_t *server) {
 }
 
 static int schedule_next_update(anjay_server_info_t *server) {
-    if (!_anjay_server_active(server)) {
-        // This may happen if the server is in the process of being disabled.
-        // Skip scheduling Update in that case.
+    if (server->registration_info.last_update_params.lifetime_s == 0
+            || !_anjay_server_active(server)) {
+        // Skip scheduling Update if the server is in the process of being
+        // disabled or when lifetime is set to infinity (lifetime==0).
         return 0;
     }
     avs_time_real_t update_time = calculate_time_of_next_update(server);
@@ -251,7 +253,7 @@ static int get_server_lifetime(anjay_unlocked_t *anjay,
         anjay_log(ERROR, _("could not read lifetime for LwM2M server ") "%u",
                   ssid);
         return -1;
-    } else if (lifetime <= 0) {
+    } else if (lifetime < 0) {
         anjay_log(ERROR,
                   _("lifetime returned by LwM2M server ") "%u" _(" is <= 0"),
                   ssid);
@@ -977,11 +979,11 @@ on_registration_update_result(anjay_server_info_t *server,
                 _("could not send registration update for SSID==") "%" PRIu16 _(
                         ": ") "%d",
                 server->ssid, (int) result);
+
         update_parameters_cleanup(move_params);
         _anjay_server_on_updated_registration(server, result, err);
     }
 }
-
 static void
 receive_update_response(avs_coap_ctx_t *coap,
                         avs_coap_exchange_id_t exchange_id,
@@ -1296,6 +1298,10 @@ _anjay_server_registration_info(anjay_server_info_t *server) {
 }
 
 static avs_time_real_t get_registration_expire_time(int64_t lifetime_s) {
+    if (lifetime_s == 0) {
+        return AVS_TIME_REAL_INVALID;
+    }
+
     return avs_time_real_add(avs_time_real_now(),
                              avs_time_duration_from_scalar(lifetime_s,
                                                            AVS_TIME_S));
@@ -1405,13 +1411,22 @@ bool anjay_ongoing_registration_exists(anjay_t *anjay_locked) {
     return result;
 }
 
-avs_time_real_t anjay_registration_expiration_time(anjay_t *anjay_locked,
-                                                   anjay_ssid_t ssid) {
+avs_time_real_t anjay_registration_expiration_time_with_status(
+        anjay_t *anjay_locked,
+        anjay_ssid_t ssid,
+        anjay_registration_expiration_status_t *out_status) {
     avs_time_real_t result = AVS_TIME_REAL_INVALID;
+
+    if (out_status) {
+        *out_status = ANJAY_REGISTRATION_EXPIRATION_STATUS_EXPIRED;
+    }
+
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     anjay_server_info_t *server = _anjay_servers_find_active(anjay, ssid);
-    if (server && !_anjay_server_registration_expired(server)) {
-        result = _anjay_server_registration_info(server)->expire_time;
+
+    if (server) {
+        result =
+                _anjay_registration_expire_time_with_status(server, out_status);
     }
     ANJAY_MUTEX_UNLOCK(anjay_locked);
     return result;

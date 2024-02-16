@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -522,10 +522,21 @@
 /* #undef ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE */
 
 /**
- * Enables ipso_objects module (generic implementation of the following kinds of
- * the basic sensor and three axis sensor IPSO objects).
+ * Enable sw_mgmt module (implementation of the Software Management object).
+ */
+/* #undef ANJAY_WITH_MODULE_SW_MGMT */
+
+/**
+ * Enables ipso_objects module (generic implementation of basic sensor, three
+ * axis sensor and Push Button IPSO objects).
  */
 #define ANJAY_WITH_MODULE_IPSO_OBJECTS
+
+/**
+ * Enables experimental ipso_objects_v2 module (generic implementation of basic
+ * sensor and three axis sensor IPSO objects).
+ */
+#define ANJAY_WITH_MODULE_IPSO_OBJECTS_V2
 
 /**
  * Enable at_sms module (implementation of an SMS driver for AT modem devices).

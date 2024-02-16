@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem CoAP library
  * All rights reserved.
  *
@@ -38,7 +38,7 @@ create_observe(avs_coap_observe_id_t id,
             (AVS_LIST(avs_coap_observe_t)) AVS_LIST_NEW_BUFFER(
                     sizeof(avs_coap_observe_t) + options_capacity);
     if (!observe) {
-        LOG(ERROR, _("out of memory"));
+        LOG_OOM();
         return NULL;
     }
 
@@ -251,7 +251,7 @@ avs_error_t avs_coap_observe_restore_with_id(
     observe = (AVS_LIST(avs_coap_observe_t)) AVS_LIST_NEW_BUFFER(
             sizeof(avs_coap_observe_t) + options_size);
     if (!observe) {
-        LOG(ERROR, _("Out of memory"));
+        LOG_OOM();
         return avs_errno(AVS_ENOMEM);
     }
     *observe = (avs_coap_observe_t) {

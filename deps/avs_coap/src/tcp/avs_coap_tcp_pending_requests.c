@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem CoAP library
  * All rights reserved.
  *
@@ -234,7 +234,7 @@ avs_error_t _avs_coap_tcp_create_pending_request(
     AVS_LIST(avs_coap_tcp_pending_request_t) req =
             AVS_LIST_NEW_ELEMENT(avs_coap_tcp_pending_request_t);
     if (!req) {
-        LOG(DEBUG, _("failed to create pending request - out of memory"));
+        LOG_OOM();
         return avs_errno(AVS_ENOMEM);
     }
 

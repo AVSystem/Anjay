@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -129,10 +129,21 @@ _anjay_servers_find_active_primary_connection(anjay_unlocked_t *anjay,
     return ref;
 }
 
-avs_time_real_t _anjay_registration_expire_time(anjay_server_info_t *server) {
+static inline void
+update_expiration_status(anjay_registration_expiration_status_t *status,
+                         anjay_registration_expiration_status_t new_status) {
+    if (status) {
+        *status = new_status;
+    }
+}
+
+avs_time_real_t _anjay_registration_expire_time_with_status(
+        anjay_server_info_t *server,
+        anjay_registration_expiration_status_t *status) {
     const anjay_registration_info_t *registration_info =
             _anjay_server_registration_info(server);
     assert(registration_info);
+
     if (!_anjay_conn_session_tokens_equal(_anjay_server_primary_session_token(
                                                   server),
                                           registration_info->session_token)) {
@@ -140,8 +151,17 @@ avs_time_real_t _anjay_registration_expire_time(anjay_server_info_t *server) {
                   _("Registration session changed for SSID = ") "%u" _(
                           ", needs re-register"),
                   _anjay_server_ssid(server));
+        update_expiration_status(status,
+                                 ANJAY_REGISTRATION_EXPIRATION_STATUS_EXPIRED);
         return AVS_TIME_REAL_INVALID;
     }
+
+    if (registration_info->last_update_params.lifetime_s == 0) {
+        update_expiration_status(
+                status, ANJAY_REGISTRATION_EXPIRATION_STATUS_INFINITE_LIFETIME);
+        return AVS_TIME_REAL_INVALID;
+    }
+
     // avs_time_real_before() returns false when either argument is INVALID;
     // the direction of this comparison is chosen so that it causes the
     // registration to be considered expired in such case
@@ -151,13 +171,20 @@ avs_time_real_t _anjay_registration_expire_time(anjay_server_info_t *server) {
                   _("Registration Lifetime expired for SSID = ") "%u" _(
                           ", needs re-register"),
                   _anjay_server_ssid(server));
+        update_expiration_status(status,
+                                 ANJAY_REGISTRATION_EXPIRATION_STATUS_EXPIRED);
         return AVS_TIME_REAL_INVALID;
     }
+
+    update_expiration_status(status,
+                             ANJAY_REGISTRATION_EXPIRATION_STATUS_VALID);
     return registration_info->expire_time;
 }
 
 bool _anjay_server_registration_expired(anjay_server_info_t *server) {
-    return !avs_time_real_valid(_anjay_registration_expire_time(server));
+    anjay_registration_expiration_status_t expiration;
+    _anjay_registration_expire_time_with_status(server, &expiration);
+    return expiration == ANJAY_REGISTRATION_EXPIRATION_STATUS_EXPIRED;
 }
 
 int _anjay_schedule_socket_update(anjay_unlocked_t *anjay,

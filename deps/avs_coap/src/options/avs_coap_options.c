@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem CoAP library
  * All rights reserved.
  *
@@ -620,7 +620,7 @@ avs_error_t avs_coap_options_add_string_fv(avs_coap_options_t *opts,
     uint16_t size = (uint16_t) result;
     char *buf = (char *) avs_malloc(size + 1u); // +1 for nullbyte
     if (!buf) {
-        LOG(ERROR, _("out of memory"));
+        LOG_OOM();
         return avs_errno(AVS_ENOMEM);
     }
 

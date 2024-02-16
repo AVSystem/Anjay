@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -32,6 +32,10 @@ class IpsoBasicSensorObjectReadTest(test_suite.Lwm2mSingleServerTest,
         self.assertGreaterEqual(response_1, lower_bound)
         self.assertLessEqual(response_1, upper_bound)
 
+        # IPSO sensor objects in demo are refreshed every second, make sure that
+        # the value will be updated
+        time.sleep(2)
+
         # Read the sensor value
         response_2 = float((self.read_resource(
             self.serv, OID.Temperature, 0, RID.Temperature.SensorValue)).content)
@@ -41,7 +45,7 @@ class IpsoBasicSensorObjectReadTest(test_suite.Lwm2mSingleServerTest,
         self.assertLessEqual(response_2, upper_bound)
 
         # The values of the two consequtive reads should be different
-        # (not in general, ut in the case of the demo)
+        # (not in general, but in the case of the demo)
         self.assertNotEqual(response_1, response_2)
 
 
@@ -70,6 +74,10 @@ class Ipso3dSensorObjectReadTest(test_suite.Lwm2mSingleServerTest,
             self.assertGreaterEqual(response_1, lower_bound)
             self.assertLessEqual(response_1, upper_bound)
 
+            # IPSO sensor objects in demo are refreshed every second, make sure
+            # that the value will be updated
+            time.sleep(2)
+
             # Read the sensor value
             response_2 = float(
                 (self.read_resource(self.serv, OID.Accelerometer, 0, rid)).content)
@@ -79,7 +87,7 @@ class Ipso3dSensorObjectReadTest(test_suite.Lwm2mSingleServerTest,
             self.assertLessEqual(response_2, upper_bound)
 
             # The values of the two consequtive reads should be different
-            # (not in general, ut in the case of the demo)
+            # (not in general, but in the case of the demo)
             self.assertNotEqual(response_1, response_2)
 
 

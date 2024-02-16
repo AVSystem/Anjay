@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -204,6 +204,11 @@ static inline void _anjay_log_feature_list(void) {
 #else // ANJAY_WITH_MODULE_IPSO_OBJECTS
     _anjay_log(anjay, TRACE, "ANJAY_WITH_MODULE_IPSO_OBJECTS = OFF");
 #endif // ANJAY_WITH_MODULE_IPSO_OBJECTS
+#ifdef ANJAY_WITH_MODULE_IPSO_OBJECTS_V2
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_MODULE_IPSO_OBJECTS_V2 = ON");
+#else // ANJAY_WITH_MODULE_IPSO_OBJECTS_V2
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_MODULE_IPSO_OBJECTS_V2 = OFF");
+#endif // ANJAY_WITH_MODULE_IPSO_OBJECTS_V2
 #ifdef ANJAY_WITH_MODULE_OSCORE
     _anjay_log(anjay, TRACE, "ANJAY_WITH_MODULE_OSCORE = ON");
 #else // ANJAY_WITH_MODULE_OSCORE
@@ -229,6 +234,11 @@ static inline void _anjay_log_feature_list(void) {
 #else // ANJAY_WITH_MODULE_SIM_BOOTSTRAP
     _anjay_log(anjay, TRACE, "ANJAY_WITH_MODULE_SIM_BOOTSTRAP = OFF");
 #endif // ANJAY_WITH_MODULE_SIM_BOOTSTRAP
+#ifdef ANJAY_WITH_MODULE_SW_MGMT
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_MODULE_SW_MGMT = ON");
+#else // ANJAY_WITH_MODULE_SW_MGMT
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_MODULE_SW_MGMT = OFF");
+#endif // ANJAY_WITH_MODULE_SW_MGMT
 #ifdef ANJAY_WITH_NET_STATS
     _anjay_log(anjay, TRACE, "ANJAY_WITH_NET_STATS = ON");
 #else // ANJAY_WITH_NET_STATS

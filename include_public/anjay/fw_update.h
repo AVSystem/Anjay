@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -361,7 +361,8 @@ typedef const char *anjay_fw_update_get_version_t(void *user_ptr);
  * - perform firmware upgrade, terminate outermost event loop and return,
  *   call reboot after @ref anjay_event_loop_run()
  * - perform the firmware upgrade internally and then reboot, it means that
- *   the return will never happen
+ *   the return will never happen (although the library won't be able to send
+ *   the acknowledgement to execution of Update resource)
  *
  * After rebooting, the result of the upgrade process may be passed to the
  * library during initialization via the <c>initial_result</c> argument to
@@ -581,7 +582,7 @@ typedef struct {
     anjay_fw_update_get_coap_tx_params_t *get_coap_tx_params;
 
     /** Queries request timeout to be used during firmware update over CoAP+TCP
-     * or HTTP; @ref anjay_advanced_fw_update_get_tcp_request_timeout */
+     * or HTTP; @ref anjay_fw_update_get_tcp_request_timeout_t */
     anjay_fw_update_get_tcp_request_timeout_t *get_tcp_request_timeout;
 } anjay_fw_update_handlers_t;
 

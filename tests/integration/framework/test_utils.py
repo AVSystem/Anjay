@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2023 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -86,6 +86,7 @@ class OID:
     FirmwareUpdate = 5
     Location = 6
     ConnectivityStatistics = 7
+    SoftwareManagement = 9
     CellularConnectivity = 10
     ApnConnectionProfile = 11
     Portfolio = 16
@@ -222,6 +223,27 @@ class RID:
         Stop = 7
         CollectionPeriod = 8
         CollectionDuration = 9
+
+    class SoftwareManagement:
+        PkgName = 0
+        PkgVersion = 1
+        Package = 2
+        PackageURI = 3
+        Install = 4
+        Checkpoint = 5
+        Uninstall = 6
+        UpdateState = 7
+        UpdateSupportedObjects = 8
+        UpdateResult = 9
+        Activate = 10
+        Deactivate = 11
+        ActivationState = 12
+        PackageSettings = 13
+        UserName = 14
+        Password = 15
+        StatusReason = 16
+        SoftwareComponentLink = 17
+        SoftwareComponentTreeLength = 18
 
     class CellularConnectivity:
         SMSCAddress = 0
@@ -458,6 +480,7 @@ class ResPath:
         RID.Location, oid=OID.Location)
     ConnectivityStatistics = _Lwm2mResourcePathHelper.from_rid_object(RID.ConnectivityStatistics,
                                                                       oid=OID.ConnectivityStatistics)
+    SoftwareManagement = _Lwm2mResourcePathHelper.from_rid_object(RID.SoftwareManagement, oid=OID.SoftwareManagement,  multi_instance=True)
     CellularConnectivity = _Lwm2mResourcePathHelper.from_rid_object(RID.CellularConnectivity,
                                                                     oid=OID.CellularConnectivity,
                                                                     version='1.1')
