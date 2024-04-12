@@ -11,6 +11,7 @@
 #define FLUF_ATTRIBUTES_H
 
 #include <fluf/fluf.h>
+#include <fluf/fluf_config.h>
 
 #include "fluf_options.h"
 

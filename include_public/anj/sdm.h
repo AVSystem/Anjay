@@ -14,6 +14,7 @@
 #include <fluf/fluf_defs.h>
 #include <fluf/fluf_io.h>
 
+#include <anj/anj_config.h>
 #include <anj/sdm_io.h>
 
 #ifdef __cplusplus
@@ -43,8 +44,6 @@ extern "C" {
 #define SDM_ERR_MEMORY (-2)
 /** Invalid call. */
 #define SDM_ERR_LOGIC (-3)
-/** Currently unsupported. */
-#define SDM_ERR_CURRENTLY_UNSUPPORTED (-4)
 
 /**
  * Must be called at the beginning of each operation on the data model. It is to
@@ -112,8 +111,9 @@ int sdm_get_read_entry(sdm_data_model_t *dm, fluf_io_out_entry_t *out_record);
  * can be read for the READ operation currently in progress.
  *
  * IMPORTANT: Call this function only after a successful @ref
- * sdm_operation_begin call for @ref FLUF_OP_DM_READ or @ref
- * FLUF_OP_DM_READ_COMP operation.
+ * sdm_operation_begin call for @ref FLUF_OP_DM_READ operation.
+ * If @p out_res_count is set to <c>0</c>, immediately call @ref
+ * sdm_operation_end.
  *
  * @param      dm            Data model to operate on.
  * @param[out] out_res_count Return number of the readable Resources.
@@ -152,6 +152,8 @@ int sdm_get_composite_read_entry(sdm_data_model_t *dm,
  *
  * IMPORTANT: Call this function only after a successful @ref
  * sdm_operation_begin call for @ref FLUF_OP_DM_READ_COMP operation.
+ * If @p out_res_count is set to <c>0</c>, immediately call @ref
+ * sdm_operation_end or process the next record.
  *
  * @param      dm            Data model to operate on.
  * @param      path          Target uri path.
@@ -164,6 +166,22 @@ int sdm_get_composite_read_entry(sdm_data_model_t *dm,
 int sdm_get_composite_readable_res_count(sdm_data_model_t *dm,
                                          const fluf_uri_path_t *path,
                                          size_t *out_res_count);
+
+/**
+ * Creates a new instance of the object. Call this function only after a
+ * successful @ref sdm_operation_begin call for @ref FLUF_OP_DM_CREATE operation
+ * and before any @ref sdm_write_entry call.
+ *
+ * @param dm   Data model to operate on.
+ * @param iid  New instance ID. Set to FLUF_ID_INVALID if the value was not
+ *             specified in the LwM2M server request, in which case the first
+ *             free value will be selected.
+ *
+ * @returns
+ * - 0 on success,
+ * - a negative value in case of error.
+ */
+int sdm_create_object_instance(sdm_data_model_t *dm, fluf_iid_t iid);
 
 /**
  * Adds another record during any kind of WRITE and CREATE operation. Depending
@@ -188,6 +206,9 @@ int sdm_write_entry(sdm_data_model_t *dm, fluf_io_out_entry_t *record);
 /**
  * Returns information Resource value type, might be useful when payload format
  * does not contain information about the type of data.
+ *
+ * IMPORTANT: Call this function only after a successful @ref
+ * sdm_operation_begin call, which involved the object which you're accessing.
  *
  * @param      dm        Data model to operate on.
  * @param      path      Resource or Resource Instance path.

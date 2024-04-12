@@ -10,6 +10,7 @@
 #ifndef FLUF_IN_CTX_FLUF_TLV_DECODER_H
 #define FLUF_IN_CTX_FLUF_TLV_DECODER_H
 
+#include <fluf/fluf_config.h>
 #include <fluf/fluf_io.h>
 
 int _fluf_tlv_decoder_init(fluf_io_in_ctx_t *ctx,

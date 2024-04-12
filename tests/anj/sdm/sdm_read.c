@@ -113,11 +113,13 @@ static sdm_res_t res_0[] = {
 };
 static sdm_res_inst_t res_inst_0 = {
     .riid = 0,
-    .res_value.value.int_value = 33
+    .res_value =
+            &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(0, SDM_INIT_RES_VAL_I64(33))
 };
 static sdm_res_inst_t res_inst_1 = {
     .riid = 1,
-    .res_value.value.int_value = 44
+    .res_value =
+            &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(0, SDM_INIT_RES_VAL_I64(44))
 };
 static sdm_res_inst_t *res_insts[9] = { &res_inst_0, &res_inst_1 };
 static sdm_res_inst_t *res_insts_2[9] = { &res_inst_0 };
@@ -128,11 +130,13 @@ static sdm_res_t res_1[] = {
     },
     {
         .res_spec = &res_spec_1,
-        .value.res_value.value.int_value = 17
+        .value.res_value =
+                &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(0, SDM_INIT_RES_VAL_I64(17))
     },
     {
         .res_spec = &res_spec_2,
-        .value.res_value.value.int_value = 18
+        .value.res_value =
+                &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(0, SDM_INIT_RES_VAL_I64(18))
     },
     {
         .res_spec = &res_spec_3,
@@ -257,16 +261,22 @@ AVS_UNIT_TEST(sdm_read, read_res_error) {
             sdm_operation_begin(&dm, FLUF_OP_DM_READ, false, &path),
             SDM_ERR_NOT_FOUND);
     AVS_UNIT_ASSERT_EQUAL(sdm_operation_end(&dm), SDM_ERR_NOT_FOUND);
-    path = FLUF_MAKE_RESOURCE_PATH(1, 1, 3);
-    AVS_UNIT_ASSERT_EQUAL(
-            sdm_operation_begin(&dm, FLUF_OP_DM_READ, false, &path),
-            SDM_ERR_NOT_FOUND);
-    AVS_UNIT_ASSERT_EQUAL(sdm_operation_end(&dm), SDM_ERR_NOT_FOUND);
     path = FLUF_MAKE_RESOURCE_PATH(1, 0, 6);
     AVS_UNIT_ASSERT_EQUAL(
             sdm_operation_begin(&dm, FLUF_OP_DM_READ, false, &path),
             SDM_ERR_NOT_FOUND);
     AVS_UNIT_ASSERT_EQUAL(sdm_operation_end(&dm), SDM_ERR_NOT_FOUND);
+}
+
+AVS_UNIT_TEST(sdm_read, empty_read) {
+    READ_INIT(dm, obj);
+    size_t out_res_count = 0;
+    fluf_uri_path_t path = FLUF_MAKE_RESOURCE_PATH(1, 1, 3);
+    AVS_UNIT_ASSERT_SUCCESS(
+            sdm_operation_begin(&dm, FLUF_OP_DM_READ, false, &path));
+    AVS_UNIT_ASSERT_SUCCESS(sdm_get_readable_res_count(&dm, &out_res_count));
+    AVS_UNIT_ASSERT_EQUAL(0, out_res_count);
+    AVS_UNIT_ASSERT_SUCCESS(sdm_operation_end(&dm));
 }
 
 AVS_UNIT_TEST(sdm_read, read_res) {
@@ -346,7 +356,6 @@ AVS_UNIT_TEST(sdm_read, read_obj) {
 
     call_counter_read = 0;
     call_counter_begin = 0;
-    call_counter_read = 0;
     call_counter_end = 0;
 
     callback_value.int_value = 225;
@@ -438,7 +447,10 @@ AVS_UNIT_TEST(sdm_read, get_res_val) {
     fluf_res_value_t out_value;
 
     callback_value.int_value = 3333;
-    fluf_uri_path_t path = FLUF_MAKE_RESOURCE_PATH(1, 0, 0);
+    fluf_uri_path_t path = FLUF_MAKE_OBJECT_PATH(1);
+    AVS_UNIT_ASSERT_SUCCESS(
+            sdm_operation_begin(&dm, FLUF_OP_DM_READ, false, &path));
+    path = FLUF_MAKE_RESOURCE_PATH(1, 0, 0);
     fluf_data_type_t type = 0;
     AVS_UNIT_ASSERT_SUCCESS(
             _sdm_get_resource_value(&dm, &path, &out_value, &type));
@@ -481,7 +493,10 @@ AVS_UNIT_TEST(sdm_read, get_res_val) {
 AVS_UNIT_TEST(sdm_read, get_res_type) {
     READ_INIT(dm, obj);
     fluf_data_type_t out_type = 0;
-    fluf_uri_path_t path = FLUF_MAKE_RESOURCE_PATH(1, 0, 0);
+    fluf_uri_path_t path = FLUF_MAKE_OBJECT_PATH(1);
+    AVS_UNIT_ASSERT_SUCCESS(
+            sdm_operation_begin(&dm, FLUF_OP_DM_READ, false, &path));
+    path = FLUF_MAKE_RESOURCE_PATH(1, 0, 0);
     AVS_UNIT_ASSERT_SUCCESS(sdm_get_resource_type(&dm, &path, &out_type));
     AVS_UNIT_ASSERT_EQUAL(FLUF_DATA_TYPE_INT, out_type);
     path = FLUF_MAKE_RESOURCE_INSTANCE_PATH(1, 1, 5, 0);
@@ -497,4 +512,57 @@ AVS_UNIT_TEST(sdm_read, get_res_type) {
     path = FLUF_MAKE_OBJECT_PATH(2);
     AVS_UNIT_ASSERT_EQUAL(sdm_get_resource_type(&dm, &path, &out_type),
                           SDM_ERR_INPUT_ARG);
+}
+
+AVS_UNIT_TEST(sdm_read, composite_read) {
+    READ_INIT(dm, obj);
+    fluf_io_out_entry_t record = { 0 };
+    size_t out_res_count = 0;
+
+    call_counter_begin = 0;
+    call_counter_read = 0;
+    call_counter_end = 0;
+    callback_value.int_value = 755;
+
+    AVS_UNIT_ASSERT_SUCCESS(
+            sdm_operation_begin(&dm, FLUF_OP_DM_READ_COMP, false, NULL));
+
+    AVS_UNIT_ASSERT_SUCCESS(sdm_get_composite_readable_res_count(
+            &dm, &FLUF_MAKE_INSTANCE_PATH(1, 0), &out_res_count));
+    AVS_UNIT_ASSERT_EQUAL(out_res_count, 1);
+    AVS_UNIT_ASSERT_SUCCESS(sdm_get_composite_readable_res_count(
+            &dm, &FLUF_MAKE_INSTANCE_PATH(1, 1), &out_res_count));
+    AVS_UNIT_ASSERT_EQUAL(out_res_count, 5);
+
+    AVS_UNIT_ASSERT_EQUAL(sdm_get_composite_read_entry(
+                                  &dm, &FLUF_MAKE_INSTANCE_PATH(1, 0), &record),
+                          SDM_LAST_RECORD);
+    VERIFY_ENTRY(record, &FLUF_MAKE_RESOURCE_PATH(1, 0, 0), 755);
+    callback_value.int_value = 7;
+    AVS_UNIT_ASSERT_EQUAL(sdm_get_composite_read_entry(
+                                  &dm, &FLUF_MAKE_INSTANCE_PATH(1, 1), &record),
+                          0);
+    VERIFY_ENTRY(record, &FLUF_MAKE_RESOURCE_PATH(1, 1, 0), 7);
+    AVS_UNIT_ASSERT_EQUAL(sdm_get_composite_read_entry(
+                                  &dm, &FLUF_MAKE_INSTANCE_PATH(1, 1), &record),
+                          0);
+    VERIFY_ENTRY(record, &FLUF_MAKE_RESOURCE_PATH(1, 1, 1), 17);
+    AVS_UNIT_ASSERT_EQUAL(sdm_get_composite_read_entry(
+                                  &dm, &FLUF_MAKE_INSTANCE_PATH(1, 1), &record),
+                          0);
+    VERIFY_ENTRY(record, &FLUF_MAKE_RESOURCE_INSTANCE_PATH(1, 1, 4, 0), 33);
+    AVS_UNIT_ASSERT_EQUAL(sdm_get_composite_read_entry(
+                                  &dm, &FLUF_MAKE_INSTANCE_PATH(1, 1), &record),
+                          0);
+    VERIFY_ENTRY(record, &FLUF_MAKE_RESOURCE_INSTANCE_PATH(1, 1, 4, 1), 44);
+    AVS_UNIT_ASSERT_EQUAL(sdm_get_composite_read_entry(
+                                  &dm, &FLUF_MAKE_INSTANCE_PATH(1, 1), &record),
+                          SDM_LAST_RECORD);
+    VERIFY_ENTRY(record, &FLUF_MAKE_RESOURCE_INSTANCE_PATH(1, 1, 5, 0), 7);
+    AVS_UNIT_ASSERT_SUCCESS(sdm_operation_end(&dm));
+
+    AVS_UNIT_ASSERT_EQUAL(call_counter_read, 3);
+    AVS_UNIT_ASSERT_EQUAL(call_counter_begin, 1);
+    AVS_UNIT_ASSERT_EQUAL(call_counter_end, 1);
+    AVS_UNIT_ASSERT_EQUAL(call_result, SDM_OP_RESULT_SUCCESS_NOT_MODIFIED);
 }

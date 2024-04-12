@@ -55,43 +55,7 @@ static int finish_ongoing_operation(sdm_data_model_t *dm) {
     return dm->result;
 }
 
-static inline sdm_obj_t *find_obj(sdm_data_model_t *dm, fluf_oid_t oid) {
-    for (uint16_t idx = 0; idx < dm->objs_count; idx++) {
-        if (dm->objs[idx]->oid == oid) {
-            return dm->objs[idx];
-        }
-    }
-    return NULL;
-}
-
-static inline sdm_obj_inst_t *find_inst(sdm_obj_t *obj, fluf_iid_t iid) {
-    for (uint16_t idx = 0; idx < obj->inst_count; idx++) {
-        if (obj->insts[idx]->iid == iid) {
-            return obj->insts[idx];
-        }
-    }
-    return NULL;
-}
-
-static inline sdm_res_t *find_res(sdm_obj_inst_t *inst, fluf_rid_t rid) {
-    for (uint16_t idx = 0; idx < inst->res_count; idx++) {
-        if (inst->resources[idx].res_spec->rid == rid) {
-            return &inst->resources[idx];
-        }
-    }
-    return NULL;
-}
-
-static inline sdm_res_inst_t *find_res_inst(sdm_res_t *res, fluf_riid_t riid) {
-    for (uint16_t idx = 0; idx < res->value.res_inst.inst_count; idx++) {
-        if (res->value.res_inst.insts[idx]->riid == riid) {
-            return res->value.res_inst.insts[idx];
-        }
-    }
-    return NULL;
-}
-
-static int call_operation_begin(sdm_obj_t *obj, fluf_op_t operation) {
+int _sdm_call_operation_begin(sdm_obj_t *obj, fluf_op_t operation) {
     if (!obj->in_transaction) {
         obj->in_transaction = true;
         if (obj->obj_handlers && obj->obj_handlers->operation_begin) {
@@ -104,20 +68,19 @@ static int call_operation_begin(sdm_obj_t *obj, fluf_op_t operation) {
 int _sdm_get_obj_ptr_call_operation_begin(sdm_data_model_t *dm,
                                           fluf_oid_t oid,
                                           sdm_obj_t **out_obj) {
-    *out_obj = NULL;
-    *out_obj = find_obj(dm, oid);
+    *out_obj = _sdm_find_obj(dm, oid);
     if (!*out_obj) {
-        sdm_log(ERROR, "Object not found in data model");
+        sdm_log(ERROR, "Object /%" PRIu16 " not found in data model", oid);
         return SDM_ERR_NOT_FOUND;
     }
-    return call_operation_begin(*out_obj, dm->operation);
+    return _sdm_call_operation_begin(*out_obj, dm->operation);
 }
 
 int _sdm_get_obj_ptrs(sdm_obj_t *obj,
                       const fluf_uri_path_t *path,
                       _sdm_entity_ptrs_t *out_ptrs) {
-    assert(fluf_uri_path_has(path, FLUF_ID_OID));
-    assert(obj);
+    assert(obj && path && out_ptrs);
+    assert(obj->in_transaction);
 
     sdm_obj_inst_t *inst = NULL;
     sdm_res_t *res = NULL;
@@ -127,7 +90,7 @@ int _sdm_get_obj_ptrs(sdm_obj_t *obj,
         goto finalize;
     }
 
-    inst = find_inst(obj, path->ids[FLUF_ID_IID]);
+    inst = _sdm_find_inst(obj, path->ids[FLUF_ID_IID]);
     if (!inst) {
         goto not_found;
     }
@@ -135,7 +98,7 @@ int _sdm_get_obj_ptrs(sdm_obj_t *obj,
         goto finalize;
     }
 
-    res = find_res(inst, path->ids[FLUF_ID_RID]);
+    res = _sdm_find_res(inst, path->ids[FLUF_ID_RID]);
     if (!res) {
         goto not_found;
     }
@@ -147,7 +110,7 @@ int _sdm_get_obj_ptrs(sdm_obj_t *obj,
         return SDM_ERR_NOT_FOUND;
     }
 
-    res_inst = find_res_inst(res, path->ids[FLUF_ID_RIID]);
+    res_inst = _sdm_find_res_inst(res, path->ids[FLUF_ID_RIID]);
     if (!res_inst) {
         goto not_found;
     }
@@ -169,9 +132,7 @@ int _sdm_get_entity_ptrs(sdm_data_model_t *dm,
                          const fluf_uri_path_t *path,
                          _sdm_entity_ptrs_t *out_ptrs) {
     assert(fluf_uri_path_has(path, FLUF_ID_OID));
-    sdm_obj_t *obj = NULL;
-
-    obj = find_obj(dm, path->ids[FLUF_ID_OID]);
+    sdm_obj_t *obj = _sdm_find_obj(dm, path->ids[FLUF_ID_OID]);
     if (!obj) {
         sdm_log(ERROR, "Object not found in data model");
         return SDM_ERR_NOT_FOUND;
@@ -184,10 +145,7 @@ int sdm_operation_begin(sdm_data_model_t *dm,
                         bool is_bootstrap_request,
                         const fluf_uri_path_t *path) {
     assert(dm);
-    if (dm->op_in_progress) {
-        sdm_log(ERROR, "Operation already underway");
-        return SDM_ERR_LOGIC;
-    }
+    assert(!dm->op_in_progress);
 
     dm->operation = operation;
     dm->boostrap_operation = is_bootstrap_request;
@@ -198,7 +156,6 @@ int sdm_operation_begin(sdm_data_model_t *dm,
     switch (operation) {
     case FLUF_OP_DM_READ_COMP:
         dm->op_count = 0;
-        dm->is_transactional = true;
         dm->op_ctx.read_ctx.path = FLUF_MAKE_ROOT_PATH();
         return 0;
     case FLUF_OP_DM_WRITE_COMP:
@@ -234,16 +191,7 @@ int sdm_operation_begin(sdm_data_model_t *dm,
 
 int sdm_operation_end(sdm_data_model_t *dm) {
     assert(dm);
-    _SDM_ONGOING_OP_ERROR_CHECK(dm);
-
-    if (dm->operation == FLUF_OP_DM_CREATE && !dm->result) {
-        // HACK: Create operation is ended without any record being added so we
-        // create an instance without IID specified.
-        if (!dm->op_ctx.write_ctx.instance_created) {
-            dm->result = _sdm_create_object_instance(dm, FLUF_ID_INVALID);
-        }
-    }
-
+    assert(dm->op_in_progress);
     return finish_ongoing_operation(dm);
 }
 
@@ -276,14 +224,18 @@ static int check_res(sdm_res_t *res) {
                  || res->res_spec->type == FLUF_DATA_TYPE_EXTERNAL_STRING)) {
         goto res_error;
     }
-    if (_sdm_is_multi_instance_resource(res->res_spec->operation)
-            && res->value.res_inst.inst_count) {
+    if (_sdm_is_multi_instance_resource(res->res_spec->operation)) {
         if (res->value.res_inst.inst_count > res->value.res_inst.max_inst_count
                 || res->value.res_inst.max_inst_count == UINT16_MAX) {
             goto res_error;
         }
-        fluf_rid_t last_riid;
+        fluf_rid_t last_riid = 0;
         for (uint16_t idx = 0; idx < res->value.res_inst.inst_count; idx++) {
+            // at least one of res_value and res_handlers must be defined
+            if (!res->value.res_inst.insts[idx]->res_value
+                    && !res->res_handlers) {
+                goto res_error;
+            }
             if (!res->value.res_inst.insts[idx]
                     || res->value.res_inst.insts[idx]->riid == FLUF_ID_INVALID
                     || (idx != 0
@@ -292,6 +244,10 @@ static int check_res(sdm_res_t *res) {
             }
             last_riid = res->value.res_inst.insts[idx]->riid;
         }
+    }
+    // at least one of res_value and res_handlers must be defined
+    else if (!res->value.res_value && !res->res_handlers) {
+        goto res_error;
     }
     return 0;
 
@@ -312,7 +268,7 @@ int _sdm_check_obj(sdm_obj_t *obj) {
         goto obj_error;
     }
 
-    fluf_iid_t last_iid;
+    fluf_iid_t last_iid = 0;
     for (uint16_t idx = 0; idx < obj->inst_count; idx++) {
         sdm_obj_inst_t *inst = obj->insts[idx];
         if (!inst || inst->iid == FLUF_ID_INVALID
@@ -337,7 +293,7 @@ int _sdm_check_obj_instance(sdm_obj_inst_t *inst) {
         return 0;
     }
 
-    fluf_rid_t last_rid;
+    fluf_rid_t last_rid = 0;
     for (uint16_t res_idx = 0; res_idx < inst->res_count; res_idx++) {
         sdm_res_t *res = &inst->resources[res_idx];
         if (!res->res_spec || res->res_spec->rid == FLUF_ID_INVALID
@@ -415,4 +371,22 @@ int sdm_remove_obj(sdm_data_model_t *dm, fluf_oid_t oid) {
     }
     dm->objs_count--;
     return 0;
+}
+
+int sdm_remove_obj_inst(sdm_obj_t *obj, fluf_iid_t iid) {
+    assert(obj);
+    bool found = false;
+    uint16_t inst_count = obj->inst_count;
+    for (uint16_t idx = 0; idx < inst_count; idx++) {
+        if (obj->insts[idx]->iid == iid) {
+            obj->insts[idx]->iid = FLUF_ID_INVALID;
+            obj->inst_count--;
+            obj->insts[idx] = NULL;
+            found = true;
+        } else if (obj->insts[idx]->iid > iid) {
+            assert(idx > 0);
+            obj->insts[idx - 1] = obj->insts[idx];
+        }
+    }
+    return found ? 0 : -1;
 }

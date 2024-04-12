@@ -11,15 +11,17 @@ site/
 
 # make
 CMakeFiles/
-anjay_basic_example
 cmake_install.cmake
 CMakeCache.txt
 libfluf.a
 libavs_commons.a
 Makefile
 
-/anjay_basic_with_dm_example
+/minimal_client_example
+/bootstrap_example
+/send_example
+/firmware_update_example
+
 /dm_tests
 /sdm_tests
-/example_coap_udp
 /fluf_tests

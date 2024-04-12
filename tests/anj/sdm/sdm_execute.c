@@ -76,7 +76,8 @@ static sdm_res_t res[] = {
         .res_handlers = &res_handlers
     },
     {
-        .res_spec = &res_spec_1
+        .res_spec = &res_spec_1,
+        .value.res_value = &SDM_MAKE_RES_VALUE(0)
     }
 };
 static sdm_obj_inst_t obj_inst = {
@@ -162,5 +163,4 @@ AVS_UNIT_TEST(sdm_execute, error_calls) {
     AVS_UNIT_ASSERT_SUCCESS(sdm_operation_begin(
             &dm, FLUF_OP_DM_EXECUTE, false, &FLUF_MAKE_RESOURCE_PATH(1, 1, 0)));
     AVS_UNIT_ASSERT_SUCCESS(sdm_operation_end(&dm));
-    AVS_UNIT_ASSERT_EQUAL(sdm_operation_end(&dm), SDM_ERR_LOGIC);
 }

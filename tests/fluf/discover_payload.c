@@ -115,7 +115,7 @@ AVS_UNIT_TEST(discover_payload, second_example_from_specification) {
     size_t msg_len = 0;
 
     fluf_uri_path_t base_path = FLUF_MAKE_OBJECT_PATH(1);
-    uint8_t depth = 1;
+    uint32_t depth = 1;
     AVS_UNIT_ASSERT_SUCCESS(
             fluf_io_discover_ctx_init(&ctx, &base_path, &depth));
     AVS_UNIT_ASSERT_SUCCESS(
@@ -147,7 +147,7 @@ AVS_UNIT_TEST(discover_payload, third_example_from_specification) {
     size_t msg_len = 0;
 
     fluf_uri_path_t base_path = FLUF_MAKE_INSTANCE_PATH(3, 0);
-    uint8_t depth = 3;
+    uint32_t depth = 3;
     fluf_attr_notification_t obj_inst_attr = { 0 };
     obj_inst_attr.has_min_period = true;
     obj_inst_attr.min_period = 10;
@@ -270,7 +270,7 @@ AVS_UNIT_TEST(discover_payload, fourth_example_from_specification) {
     size_t msg_len = 0;
 
     fluf_uri_path_t base_path = FLUF_MAKE_INSTANCE_PATH(3, 0);
-    uint8_t depth = 0;
+    uint32_t depth = 0;
     fluf_attr_notification_t attributes = { 0 };
     attributes.has_max_period = true;
     attributes.has_min_period = true;
@@ -389,4 +389,112 @@ AVS_UNIT_TEST(discover_payload, block_transfer) {
                        "0>,</3/0/7/1>;lt=45",
                        out_buff, msg_len);
     }
+}
+
+AVS_UNIT_TEST(discover_payload, errors) {
+    fluf_io_discover_ctx_t ctx;
+    char out_buff[300] = { 0 };
+    size_t copied_bytes = 0;
+    size_t msg_len = 0;
+
+    // root path
+    AVS_UNIT_ASSERT_EQUAL(
+            fluf_io_discover_ctx_init(&ctx, &FLUF_MAKE_ROOT_PATH(), NULL),
+            FLUF_IO_ERR_INPUT_ARG);
+    // resource instance path
+    AVS_UNIT_ASSERT_EQUAL(
+            fluf_io_discover_ctx_init(
+                    &ctx, &FLUF_MAKE_RESOURCE_INSTANCE_PATH(3, 3, 3, 3), NULL),
+            FLUF_IO_ERR_INPUT_ARG);
+    uint32_t depth = 4;
+    // depth greater than 3
+    AVS_UNIT_ASSERT_EQUAL(
+            fluf_io_discover_ctx_init(&ctx, &FLUF_MAKE_OBJECT_PATH(3), &depth),
+            FLUF_IO_ERR_INPUT_ARG);
+    depth = 3;
+    AVS_UNIT_ASSERT_SUCCESS(
+            fluf_io_discover_ctx_init(&ctx, &FLUF_MAKE_OBJECT_PATH(3), &depth));
+    // given path is outside the base_path
+    AVS_UNIT_ASSERT_EQUAL(
+            fluf_io_discover_ctx_new_entry(&ctx, &FLUF_MAKE_INSTANCE_PATH(2, 1),
+                                           NULL, NULL, NULL),
+            FLUF_IO_ERR_INPUT_ARG);
+
+    AVS_UNIT_ASSERT_SUCCESS(fluf_io_discover_ctx_new_entry(
+            &ctx, &FLUF_MAKE_INSTANCE_PATH(3, 1), NULL, NULL, NULL));
+    AVS_UNIT_ASSERT_SUCCESS(fluf_io_discover_ctx_get_payload(
+            &ctx, &out_buff[msg_len], 300, &copied_bytes));
+    msg_len += copied_bytes;
+    // ascending order of path is not respected
+    AVS_UNIT_ASSERT_EQUAL(
+            fluf_io_discover_ctx_new_entry(&ctx, &FLUF_MAKE_INSTANCE_PATH(3, 0),
+                                           NULL, NULL, NULL),
+            FLUF_IO_ERR_INPUT_ARG);
+    // dim is given for path that is not Resource
+    uint16_t dim = 0;
+    AVS_UNIT_ASSERT_EQUAL(
+            fluf_io_discover_ctx_new_entry(&ctx, &FLUF_MAKE_INSTANCE_PATH(3, 2),
+                                           NULL, NULL, &dim),
+            FLUF_IO_ERR_INPUT_ARG);
+    AVS_UNIT_ASSERT_SUCCESS(fluf_io_discover_ctx_new_entry(
+            &ctx, &FLUF_MAKE_INSTANCE_PATH(3, 2), NULL, NULL, NULL));
+    // internal buffer not empty
+    AVS_UNIT_ASSERT_EQUAL(
+            fluf_io_discover_ctx_new_entry(&ctx, &FLUF_MAKE_INSTANCE_PATH(3, 3),
+                                           NULL, NULL, NULL),
+            FLUF_IO_ERR_LOGIC);
+    AVS_UNIT_ASSERT_SUCCESS(fluf_io_discover_ctx_get_payload(
+            &ctx, &out_buff[msg_len], 300, &copied_bytes));
+    msg_len += copied_bytes;
+    dim = 1;
+    AVS_UNIT_ASSERT_SUCCESS(fluf_io_discover_ctx_new_entry(
+            &ctx, &FLUF_MAKE_RESOURCE_PATH(3, 2, 2), NULL, NULL, &dim));
+    AVS_UNIT_ASSERT_SUCCESS(fluf_io_discover_ctx_get_payload(
+            &ctx, &out_buff[msg_len], 300, &copied_bytes));
+    msg_len += copied_bytes;
+    // expected resource instance
+    AVS_UNIT_ASSERT_EQUAL(fluf_io_discover_ctx_new_entry(
+                                  &ctx, &FLUF_MAKE_RESOURCE_PATH(3, 2, 3), NULL,
+                                  NULL, NULL),
+                          FLUF_IO_ERR_LOGIC);
+    // no more data in internal buffer
+    AVS_UNIT_ASSERT_EQUAL(fluf_io_discover_ctx_get_payload(
+                                  &ctx, &out_buff[msg_len], 300, &copied_bytes),
+                          FLUF_IO_ERR_LOGIC);
+
+    VERIFY_PAYLOAD("</3/1>,</3/2>,</3/2/2>;dim=1", out_buff, msg_len);
+}
+
+AVS_UNIT_TEST(discover_payload, depth_warning) {
+    fluf_io_discover_ctx_t ctx;
+    char out_buff[300] = { 0 };
+    size_t copied_bytes = 0;
+    size_t msg_len = 0;
+
+    uint32_t depth = 1;
+    AVS_UNIT_ASSERT_SUCCESS(fluf_io_discover_ctx_init(
+            &ctx, &FLUF_MAKE_INSTANCE_PATH(3, 1), &depth));
+
+    AVS_UNIT_ASSERT_SUCCESS(fluf_io_discover_ctx_new_entry(
+            &ctx, &FLUF_MAKE_INSTANCE_PATH(3, 1), NULL, NULL, NULL));
+    AVS_UNIT_ASSERT_SUCCESS(fluf_io_discover_ctx_get_payload(
+            &ctx, &out_buff[msg_len], 300, &copied_bytes));
+    msg_len += copied_bytes;
+    uint16_t dim = 1;
+    AVS_UNIT_ASSERT_SUCCESS(fluf_io_discover_ctx_new_entry(
+            &ctx, &FLUF_MAKE_RESOURCE_PATH(3, 1, 1), NULL, NULL, &dim));
+    AVS_UNIT_ASSERT_SUCCESS(fluf_io_discover_ctx_get_payload(
+            &ctx, &out_buff[msg_len], 300, &copied_bytes));
+    msg_len += copied_bytes;
+    AVS_UNIT_ASSERT_EQUAL(fluf_io_discover_ctx_new_entry(
+                                  &ctx,
+                                  &FLUF_MAKE_RESOURCE_INSTANCE_PATH(3, 1, 1, 0),
+                                  NULL, NULL, NULL),
+                          FLUF_IO_WARNING_DEPTH);
+    AVS_UNIT_ASSERT_SUCCESS(fluf_io_discover_ctx_new_entry(
+            &ctx, &FLUF_MAKE_RESOURCE_PATH(3, 1, 2), NULL, NULL, NULL));
+    AVS_UNIT_ASSERT_SUCCESS(fluf_io_discover_ctx_get_payload(
+            &ctx, &out_buff[msg_len], 300, &copied_bytes));
+    msg_len += copied_bytes;
+    VERIFY_PAYLOAD("</3/1>,</3/1/1>;dim=1,</3/1/2>", out_buff, msg_len);
 }

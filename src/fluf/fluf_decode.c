@@ -8,6 +8,7 @@
  */
 
 #include <fluf/fluf.h>
+#include <fluf/fluf_config.h>
 #include <fluf/fluf_utils.h>
 
 #include "fluf_attributes.h"
@@ -32,7 +33,7 @@ static int get_uri_path(fluf_coap_options_t *options,
     *is_bs_uri = false;
     uri->uri_len = 0;
 
-    while (1) {
+    while (true) {
         int res = _fluf_coap_options_get_data_iterate(
                 options, _FLUF_COAP_OPTION_URI_PATH, &it, &out_option_size,
                 buff, sizeof(buff));
@@ -56,8 +57,8 @@ static int get_uri_path(fluf_coap_options_t *options,
             }
             // try to convert string value to int
             uint32_t converted_value;
-            if (fluf_string_to_uint32_value(buff, out_option_size,
-                                            &converted_value)) {
+            if (fluf_string_to_uint32_value(&converted_value, buff,
+                                            out_option_size)) {
                 return FLUF_ERR_MALFORMED_MESSAGE;
             }
             uri->ids[uri->uri_len] = (uint16_t) converted_value;
@@ -87,7 +88,7 @@ static int get_location_path(fluf_coap_options_t *opt,
                 }
             } else {
                 if (loc_path->location_count
-                        >= FLUL_MAX_ALLOWED_LOCATION_PATHS_NUMBER) {
+                        >= FLUF_MAX_ALLOWED_LOCATION_PATHS_NUMBER) {
                     return FLUF_ERR_LOCATION_PATHS_NUMBER;
                 }
                 loc_path->location_len[loc_path->location_count] =
@@ -170,8 +171,7 @@ static int validate_uri_path(fluf_op_t operation, fluf_uri_path_t *uri) {
         }
         break;
     case FLUF_OP_DM_DELETE:
-        if (!(fluf_uri_path_is(uri, FLUF_ID_IID)
-              || fluf_uri_path_is(uri, FLUF_ID_RIID))) {
+        if (fluf_uri_path_is(uri, FLUF_ID_RID)) {
             return FLUF_ERR_INPUT_ARG;
         }
         break;

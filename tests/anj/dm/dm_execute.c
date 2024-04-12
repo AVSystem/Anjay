@@ -12,7 +12,7 @@
 #include <anj/dm.h>
 #include <anj/dm_io.h>
 
-#include "../../../src/anj/dm_core.h"
+#include "../../../src/anj/dm/dm_core.h"
 
 #define OID_4 4 // test object
 

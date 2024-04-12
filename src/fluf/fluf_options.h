@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include <fluf/fluf_config.h>
 #include <fluf/fluf_defs.h>
 
 #ifdef __cplusplus

@@ -16,17 +16,13 @@
 
 #include <avsystem/commons/avs_defs.h>
 
+#include <fluf/fluf_config.h>
 #include <fluf/fluf_defs.h>
 #include <fluf/fluf_io.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#define FLUF_U16_STR_MAX_LEN (sizeof("65535") - 1)
-#define FLUF_U32_STR_MAX_LEN (sizeof("4294967295") - 1)
-#define FLUF_U64_STR_MAX_LEN (sizeof("18446744073709551615") - 1)
-#define FLUF_DOUBLE_STR_MAX_LEN (sizeof("-2.2250738585072014E-308") - 1)
 
 #define FLUF_ID_INVALID UINT16_MAX
 
@@ -70,9 +66,7 @@ static inline bool fluf_uri_path_equal(const fluf_uri_path_t *left,
         return false;
     }
     for (size_t i = 0; i < left->uri_len; ++i) {
-        if (left->ids[i] < right->ids[i]) {
-            return false;
-        } else if (left->ids[i] > right->ids[i]) {
+        if (left->ids[i] != right->ids[i]) {
             return false;
         }
     }
@@ -115,8 +109,8 @@ bool fluf_uri_path_increasing(const fluf_uri_path_t *previous_path,
  *
  * @param version  Object version.
  *
- * @returns 0 on success or NULL @p version pointer, a @ref
- * FLUF_IO_ERR_INPUT_ARG value in case of incorrect format.
+ * @returns 0 on success or @ref FLUF_IO_ERR_INPUT_ARG value in case of
+ * incorrect format.
  */
 int fluf_validate_obj_version(const char *version);
 
@@ -125,36 +119,49 @@ int fluf_validate_obj_version(const char *version);
  * terminating nullbyte). The minimum required @p out_buff size is @ref
  * FLUF_U16_STR_MAX_LEN.
  *
- * @param      value    Input value.
  * @param[out] out_buff Output buffer.
+ * @param      value    Input value.
+
  *
  * @return Number of bytes written.
  */
-size_t fluf_uint16_to_string_value(uint16_t value, char *out_buff);
+size_t fluf_uint16_to_string_value(char *out_buff, uint16_t value);
 
 /**
  * Converts uint32_t value to string and copies it to @p out_buff (without the
  * terminating nullbyte). The minimum required @p out_buff size is @ref
  * FLUF_U32_STR_MAX_LEN.
  *
- * @param      value    Input value.
  * @param[out] out_buff Output buffer.
+ * @param      value    Input value.
  *
  * @return Number of bytes written.
  */
-size_t fluf_uint32_to_string_value(uint32_t value, char *out_buff);
+size_t fluf_uint32_to_string_value(char *out_buff, uint32_t value);
 
 /**
  * Converts uint64_t value to string and copies it to @p out_buff (without the
  * terminating nullbyte). The minimum required @p out_buff size is @ref
  * FLUF_U64_STR_MAX_LEN.
  *
- * @param      value    Input value.
  * @param[out] out_buff Output buffer.
+ * @param      value    Input value.
  *
  * @return Number of bytes written.
  */
-size_t fluf_uint64_to_string_value(uint64_t value, char *out_buff);
+size_t fluf_uint64_to_string_value(char *out_buff, uint64_t value);
+
+/**
+ * Converts int64_t value to string and copies it to @p out_buff (without the
+ * terminating nullbyte). The minimum required @p out_buff size is @ref
+ * FLUF_I64_STR_MAX_LEN.
+ *
+ * @param[out] out_buff Output buffer.
+ * @param      value    Input value.
+ *
+ * @return Number of bytes written.
+ */
+size_t fluf_int64_to_string_value(char *out_buff, int64_t value);
 
 /**
  * Converts double value to string and copies it to @p out_buff (without the
@@ -172,42 +179,92 @@ size_t fluf_uint64_to_string_value(uint64_t value, char *out_buff);
  * lightweight. For very large and very small numbers, a rounding error may
  * occur.
  *
- * @param      value      Input value.
  * @param[out] out_buff   Output buffer.
+ * @param      value      Input value.
  *
  * @return Number of bytes written.
  */
-size_t fluf_double_to_simple_str_value(double value, char *out_buff);
+size_t fluf_double_to_simple_str_value(char *out_buff, double value);
 
 /**
  * Converts string representation of numerical value to uint32_t value.
  *
+ * @param[out] out_val   Output value.
  * @param      buff      Input buffer.
  * @param      buff_len  Input buffer length.
- * @param[out] out_val   Output value.
  *
- * @return 0 in case of success and -1 if @p buff_len is equal to 0 or there are
- * characters in the @p buff that are not digits.
+ * @return 0 in case of success and -1 in case of:
+ *  - @p buff_len is equal to 0
+ *  - there are characters in the @p buff that are not digits
+ *  - string represented numerical value exceeds UINT32_MAX
+ *  - string is too long
  */
-int fluf_string_to_uint32_value(const char *buff,
-                                size_t buff_len,
-                                uint32_t *out_val);
+int fluf_string_to_uint32_value(uint32_t *out_val,
+                                const char *buff,
+                                size_t buff_len);
+
+/**
+ * Converts string representation of numerical value to uint64_t value.
+ *
+ * @param[out] out_val   Output value.
+ * @param      buff      Input buffer.
+ * @param      buff_len  Input buffer length.
+ *
+ * @return 0 in case of success and -1 in case of:
+ *  - @p buff_len is equal to 0
+ *  - there are characters in the @p buff that are not digits
+ *  - string represented numerical value exceeds UINT64_MAX
+ *  - string is too long
+ */
+int fluf_string_to_uint64_value(uint64_t *out_val,
+                                const char *buff,
+                                size_t buff_len);
+
+/**
+ * Converts string representation of numerical value to int64_t value.
+ *
+ * @param[out] out_val   Output value.
+ * @param      buff      Input buffer.
+ * @param      buff_len  Input buffer length.
+ *
+ * @return 0 in case of success and -1 in case of:
+ *  - @p buff_len is equal to 0
+ *  - there are characters in the @p buff that are not digits
+ *  - string represented numerical value exceeds INT64_MAX or is less than
+ * INT64_MIN
+ *  - string is too long
+ */
+int fluf_string_to_int64_value(int64_t *out_val,
+                               const char *buff,
+                               size_t buff_len);
+
+/**
+ * Converts string representation of an LwM2M Objlnk value to
+ * a <c>fluf_objlnk_value_t</c> strucure.
+ *
+ * @param out    Structure to store the parsed value in.
+ * @param objlnk Null-terminated string.
+ *
+ * @retunr 0 in case of success or -1 if the input was not a valid Objlnk
+ * string.
+ */
+int fluf_string_to_objlnk_value(fluf_objlnk_value_t *out, const char *objlnk);
 
 /**
  * Converts string representation of numerical value to double value. Does not
  * supports exponential notation, infinitive and NAN values (LwM2M attributes
  * representation doesn't allow for this).
  *
+ * @param[out] out_val   Output value.
  * @param      buff      Input buffer.
  * @param      buff_len  Input buffer length.
- * @param[out] out_val   Output value.
  *
  * @return 0 in case of success and -1 if @p buff_len is equal to 0 or there are
  * characters in the @p buff that are not digits (exceptions shown above).
  */
-int fluf_string_to_simple_double_value(const char *buff,
-                                       size_t buff_len,
-                                       double *out_val);
+int fluf_string_to_simple_double_value(double *out_val,
+                                       const char *buff,
+                                       size_t buff_len);
 
 #ifdef __cplusplus
 }

@@ -12,17 +12,25 @@
 #include <anj/anj_config.h>
 #include <anj/anj_time.h>
 
-#if ANJ_TIME_POSIX_COMPAT
+#ifdef ANJ_WITH_TIME_POSIX_COMPAT
 
 #    include <time.h>
 
-uint64_t anj_time_now(void) {
+static uint64_t get_time(clockid_t clk_id) {
     struct timespec res;
-    if (clock_gettime(CLOCK_MONOTONIC, &res)) {
+    if (clock_gettime(clk_id, &res)) {
         return 0;
     }
     return (uint64_t) res.tv_sec * 1000
            + (uint64_t) res.tv_nsec / (1000 * 1000);
 }
 
-#endif // ANJ_TIME_POSIX_COMPAT
+uint64_t anj_time_now(void) {
+    return get_time(CLOCK_MONOTONIC);
+}
+
+uint64_t anj_time_real_now(void) {
+    return get_time(CLOCK_REALTIME);
+}
+
+#endif // ANJ_WITH_TIME_POSIX_COMPAT

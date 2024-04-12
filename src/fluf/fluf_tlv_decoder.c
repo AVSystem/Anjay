@@ -7,9 +7,9 @@
  * See the attached LICENSE file for details.
  */
 
-#include <avsystem/commons/avs_list.h>
 #include <avsystem/commons/avs_utils.h>
 
+#include <fluf/fluf_config.h>
 #include <fluf/fluf_defs.h>
 #include <fluf/fluf_io.h>
 #include <fluf/fluf_io_ctx.h>
@@ -487,7 +487,6 @@ int _fluf_tlv_decoder_get_entry(fluf_io_in_ctx_t *ctx,
     if (ctx->_decoder._tlv.payload_finished
             && (ctx->_decoder._tlv.buff_size == ctx->_decoder._tlv.buff_offset)
             && !ctx->_decoder._tlv.want_disambiguation) {
-        *out_path = NULL;
         return FLUF_IO_EOF;
     }
 
@@ -503,15 +502,16 @@ int _fluf_tlv_decoder_get_entry(fluf_io_in_ctx_t *ctx,
             }
             return result;
         }
-        *out_path = &ctx->_out_path;
         if (ctx->_decoder._tlv.entries->length == 0) {
             if (ctx->_decoder._tlv.entries->type == FLUF_ID_IID
                     || ctx->_decoder._tlv.entries->type == FLUF_ID_RIID) {
+                *out_path = &ctx->_out_path;
                 *inout_type_bitmask = FLUF_DATA_TYPE_NULL;
                 return tlv_next_entry(ctx);
             }
         }
     }
+    *out_path = &ctx->_out_path;
 
     ctx->_decoder._tlv.want_disambiguation = false;
     switch (*inout_type_bitmask) {
@@ -542,7 +542,6 @@ int _fluf_tlv_decoder_get_entry(fluf_io_in_ctx_t *ctx,
         break;
     default:
         ctx->_decoder._tlv.want_disambiguation = true;
-        *out_path = &ctx->_out_path;
         return FLUF_IO_WANT_TYPE_DISAMBIGUATION;
     }
     if (result) {

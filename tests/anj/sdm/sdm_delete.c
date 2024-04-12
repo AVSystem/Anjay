@@ -132,15 +132,18 @@ static int inst_delete(sdm_obj_t *obj, sdm_obj_inst_t *obj_inst) {
     };                                                                        \
     sdm_res_inst_t res_inst_0 = {                                             \
         .riid = 0,                                                            \
-        .res_value.value.int_value = 33                                       \
+        .res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(                     \
+                0, SDM_INIT_RES_VAL_I64(33))                                  \
     };                                                                        \
     sdm_res_inst_t res_inst_1 = {                                             \
         .riid = 1,                                                            \
-        .res_value.value.int_value = 44                                       \
+        .res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(                     \
+                0, SDM_INIT_RES_VAL_I64(44))                                  \
     };                                                                        \
     sdm_res_inst_t res_inst_2 = {                                             \
         .riid = 2,                                                            \
-        .res_value.value.int_value = 44                                       \
+        .res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(                     \
+                0, SDM_INIT_RES_VAL_I64(44))                                  \
     };                                                                        \
     sdm_res_inst_t *res_insts[9] = { &res_inst_0, &res_inst_1, &res_inst_2 }; \
     sdm_res_inst_t *res_insts_2[9] = { &res_inst_0 };                         \
@@ -151,11 +154,13 @@ static int inst_delete(sdm_obj_t *obj, sdm_obj_inst_t *obj_inst) {
         },                                                                    \
         {                                                                     \
             .res_spec = &res_spec_1,                                          \
-            .value.res_value.value.int_value = 17                             \
+            .value.res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(           \
+                    0, SDM_INIT_RES_VAL_I64(17))                              \
         },                                                                    \
         {                                                                     \
             .res_spec = &res_spec_2,                                          \
-            .value.res_value.value.int_value = 18                             \
+            .value.res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(           \
+                    0, SDM_INIT_RES_VAL_I64(18))                              \
         },                                                                    \
         {                                                                     \
             .res_spec = &res_spec_3,                                          \
@@ -374,7 +379,7 @@ AVS_UNIT_TEST(sdm_delete, delete_error_no_callback) {
     fluf_uri_path_t path = FLUF_MAKE_INSTANCE_PATH(1, 0);
     AVS_UNIT_ASSERT_EQUAL(
             sdm_operation_begin(&dm, FLUF_OP_DM_DELETE, false, &path),
-            SDM_ERR_INTERNAL);
+            SDM_ERR_METHOD_NOT_ALLOWED);
     AVS_UNIT_ASSERT_EQUAL(obj.inst_count, 3);
     AVS_UNIT_ASSERT_EQUAL(obj.insts[0]->iid, 0);
     AVS_UNIT_ASSERT_EQUAL(obj.insts[1]->iid, 1);

@@ -17,6 +17,7 @@
 #include <avsystem/commons/avs_defs.h>
 #include <avsystem/commons/avs_utils.h>
 
+#include <fluf/fluf_config.h>
 #include <fluf/fluf_defs.h>
 
 #ifdef __cplusplus

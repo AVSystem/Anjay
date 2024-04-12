@@ -51,25 +51,31 @@ static const sdm_res_spec_t res_spec_4 = {
 };
 static sdm_res_t inst_1_res[] = {
     {
-        .res_spec = &res_spec_0
+        .res_spec = &res_spec_0,
+        .value.res_value = &SDM_MAKE_RES_VALUE(0)
     },
     {
-        .res_spec = &res_spec_1
+        .res_spec = &res_spec_1,
+        .value.res_value = &SDM_MAKE_RES_VALUE(0)
     }
 };
 static sdm_res_inst_t res_inst_1 = {
-    .riid = 1
+    .riid = 1,
+    .res_value = &SDM_MAKE_RES_VALUE(0)
 };
 static sdm_res_inst_t res_inst_2 = {
-    .riid = 2
+    .riid = 2,
+    .res_value = &SDM_MAKE_RES_VALUE(0)
 };
 static sdm_res_inst_t *res_insts[] = { &res_inst_1, &res_inst_2 };
 static sdm_res_t inst_2_res[] = {
     {
-        .res_spec = &res_spec_0
+        .res_spec = &res_spec_0,
+        .value.res_value = &SDM_MAKE_RES_VALUE(0)
     },
     {
-        .res_spec = &res_spec_1
+        .res_spec = &res_spec_1,
+        .value.res_value = &SDM_MAKE_RES_VALUE(0)
     },
     {
         .res_spec = &res_spec_2,
@@ -82,7 +88,8 @@ static sdm_res_t inst_2_res[] = {
         .value.res_inst.inst_count = 0
     },
     {
-        .res_spec = &res_spec_4
+        .res_spec = &res_spec_4,
+        .value.res_value = &SDM_MAKE_RES_VALUE(0)
     }
 };
 #define OBJ_1_INST_MAX_COUNT 3

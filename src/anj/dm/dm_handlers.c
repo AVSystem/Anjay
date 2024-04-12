@@ -7,8 +7,8 @@
  * See the attached LICENSE file for details.
  */
 
-#include "../dm_core.h"
-#include "../dm_utils/dm_utils_core.h"
+#include "dm_core.h"
+#include "dm_utils_core.h"
 
 int _dm_call_list_instances(dm_t *dm,
                             const dm_installed_object_t *obj,

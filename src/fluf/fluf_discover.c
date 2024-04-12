@@ -15,6 +15,7 @@
 
 #include <avsystem/commons/avs_defs.h>
 
+#include <fluf/fluf_config.h>
 #include <fluf/fluf_defs.h>
 #include <fluf/fluf_io.h>
 #include <fluf/fluf_io_ctx.h>
@@ -95,7 +96,7 @@ int fluf_io_bootstrap_discover_ctx_new_entry(
         memcpy(&ctx->buff.internal_buff[write_pointer], ";ssid=", 6);
         write_pointer += 6;
         char ssid_str[FLUF_U16_STR_MAX_LEN];
-        size_t ssid_str_len = fluf_uint16_to_string_value(*ssid, ssid_str);
+        size_t ssid_str_len = fluf_uint16_to_string_value(ssid_str, *ssid);
         memcpy(&ctx->buff.internal_buff[write_pointer], ssid_str, ssid_str_len);
         write_pointer += ssid_str_len;
         ctx->buff.bytes_in_internal_buff = write_pointer;
@@ -118,14 +119,61 @@ int fluf_io_bootstrap_discover_ctx_new_entry(
     return 0;
 }
 
+static int add_bootstrap_uri(fluf_io_buff_t *ctx,
+                             const char *uri,
+                             void *out_buff,
+                             size_t out_buff_len,
+                             size_t *copied_bytes) {
+    size_t buff_len = out_buff_len - *copied_bytes;
+    size_t bytes_to_copy = AVS_MIN(ctx->remaining_bytes, buff_len);
+
+    if (ctx->remaining_bytes <= buff_len) {
+        memcpy(&((uint8_t *) out_buff)[*copied_bytes],
+               &uri[ctx->offset - ctx->bytes_in_internal_buff],
+               bytes_to_copy - 1);
+        ((uint8_t *) out_buff)[*copied_bytes + bytes_to_copy - 1] = '\"';
+    } else {
+        memcpy(&((uint8_t *) out_buff)[*copied_bytes],
+               &uri[ctx->offset - ctx->bytes_in_internal_buff], bytes_to_copy);
+    }
+    *copied_bytes += bytes_to_copy;
+    ctx->remaining_bytes -= bytes_to_copy;
+    ctx->offset += bytes_to_copy;
+
+    // no more records
+    if (!ctx->remaining_bytes) {
+        _fluf_io_reset_internal_buff(ctx);
+        return 0;
+    }
+    return FLUF_IO_NEED_NEXT_CALL;
+}
+
 int fluf_io_bootstrap_discover_ctx_get_payload(
         fluf_io_bootstrap_discover_ctx_t *ctx,
         void *out_buff,
         size_t out_buff_len,
         size_t *out_copied_bytes) {
-    assert(ctx);
-    return _fluf_io_get_payload(out_buff, out_buff_len, out_copied_bytes,
-                                &ctx->buff, NULL, ctx->uri);
+    assert(ctx && out_buff && out_buff_len && out_copied_bytes);
+    fluf_io_buff_t *buff_ctx = &ctx->buff;
+
+    if (!buff_ctx->remaining_bytes) {
+        return FLUF_IO_ERR_LOGIC;
+    }
+    _fluf_io_get_payload_from_internal_buff(&ctx->buff, out_buff, out_buff_len,
+                                            out_copied_bytes);
+
+    if (buff_ctx->is_extended_type
+            && buff_ctx->offset >= buff_ctx->bytes_in_internal_buff) {
+        return add_bootstrap_uri(buff_ctx, ctx->uri, out_buff, out_buff_len,
+                                 out_copied_bytes);
+    }
+
+    if (!buff_ctx->remaining_bytes) {
+        _fluf_io_reset_internal_buff(buff_ctx);
+    } else {
+        return FLUF_IO_NEED_NEXT_CALL;
+    }
+    return 0;
 }
 
 #endif // FLUF_WITHOUT_BOOTSTRAP_DISCOVER_CTX
@@ -152,10 +200,10 @@ static size_t add_attribute(fluf_io_buff_t *ctx,
 
     if (uint_value) {
         record_len += fluf_uint32_to_string_value(
-                *uint_value, (char *) &ctx->internal_buff[record_len]);
+                (char *) &ctx->internal_buff[record_len], *uint_value);
     } else {
         record_len += fluf_double_to_simple_str_value(
-                *double_value, (char *) &ctx->internal_buff[record_len]);
+                (char *) &ctx->internal_buff[record_len], *double_value);
     }
     return record_len;
 }
@@ -212,7 +260,7 @@ static int get_attributes_payload(fluf_io_discover_ctx_t *ctx,
                                   void *out_buff,
                                   size_t out_buff_len,
                                   size_t *copied_bytes) {
-    while (1) {
+    while (true) {
         if (ctx->attr_record_offset == ctx->attr_record_len) {
             ctx->attr_record_len = get_attribute_record(&ctx->buff, &ctx->attr);
             ctx->attr_record_offset = 0;
@@ -229,7 +277,6 @@ static int get_attributes_payload(fluf_io_discover_ctx_t *ctx,
 
         // no more records
         if (ctx->attr_record_len == ctx->attr_record_offset) {
-            ctx->buff.remaining_bytes = 0;
             ctx->buff.offset = 0;
             ctx->buff.bytes_in_internal_buff = 0;
             ctx->buff.is_extended_type = false;
@@ -245,7 +292,7 @@ static int get_attributes_payload(fluf_io_discover_ctx_t *ctx,
 
 int fluf_io_discover_ctx_init(fluf_io_discover_ctx_t *ctx,
                               const fluf_uri_path_t *base_path,
-                              const uint8_t *depth) {
+                              const uint32_t *depth) {
     assert(ctx && base_path);
 
     if ((depth && *depth > 3) || !fluf_uri_path_has(base_path, FLUF_ID_OID)
@@ -256,7 +303,7 @@ int fluf_io_discover_ctx_init(fluf_io_discover_ctx_t *ctx,
     ctx->base_path = *base_path;
 
     if (depth) {
-        ctx->depth = *depth;
+        ctx->depth = (uint8_t) *depth;
     } else {
         // default depth value
         if (fluf_uri_path_is(base_path, FLUF_ID_OID)) {
@@ -276,19 +323,16 @@ int fluf_io_discover_ctx_new_entry(fluf_io_discover_ctx_t *ctx,
                                    const uint16_t *dim) {
     assert(ctx && path);
 
-    if (ctx->buff.bytes_in_internal_buff) {
+    if (ctx->buff.bytes_in_internal_buff || ctx->buff.is_extended_type) {
         return FLUF_IO_ERR_LOGIC;
     }
-
     if (path->uri_len - ctx->base_path.uri_len > ctx->depth) {
         return FLUF_IO_WARNING_DEPTH;
     }
-
     if ((ctx->dim_counter && !fluf_uri_path_is(path, FLUF_ID_RIID))
             || (!ctx->dim_counter && fluf_uri_path_is(path, FLUF_ID_RIID))) {
         return FLUF_IO_ERR_LOGIC;
     }
-
     if (fluf_uri_path_outside_base(path, &ctx->base_path)
             || !fluf_uri_path_has(path, FLUF_ID_OID)
             || !fluf_uri_path_increasing(&ctx->last_path, path)
@@ -310,8 +354,6 @@ int fluf_io_discover_ctx_new_entry(fluf_io_discover_ctx_t *ctx,
     if (attributes) {
         ctx->attr = *attributes;
         ctx->buff.is_extended_type = true;
-        // HACK: add one byte to add attributes when copying
-        ctx->buff.remaining_bytes++;
     }
 
     ctx->first_record_added = true;
@@ -327,17 +369,27 @@ int fluf_io_discover_ctx_get_payload(fluf_io_discover_ctx_t *ctx,
                                      size_t out_buff_len,
                                      size_t *out_copied_bytes) {
     assert(ctx && out_buff && out_buff_len && out_copied_bytes);
+    fluf_io_buff_t *buff_ctx = &ctx->buff;
 
-    int ret = _fluf_io_get_payload(out_buff, out_buff_len, out_copied_bytes,
-                                   &ctx->buff, NULL, NULL);
+    if (!buff_ctx->remaining_bytes && !buff_ctx->is_extended_type) {
+        return FLUF_IO_ERR_LOGIC;
+    }
+    _fluf_io_get_payload_from_internal_buff(&ctx->buff, out_buff, out_buff_len,
+                                            out_copied_bytes);
 
     // there are attributes left and link_format record is copied
-    if (ctx->buff.is_extended_type
-            && ctx->buff.offset >= ctx->buff.bytes_in_internal_buff) {
+    if (buff_ctx->is_extended_type
+            && buff_ctx->offset >= buff_ctx->bytes_in_internal_buff) {
         return get_attributes_payload(ctx, out_buff, out_buff_len,
                                       out_copied_bytes);
     }
-    return ret;
+
+    if (!buff_ctx->remaining_bytes) {
+        _fluf_io_reset_internal_buff(buff_ctx);
+    } else {
+        return FLUF_IO_NEED_NEXT_CALL;
+    }
+    return 0;
 }
 
 #endif // FLUF_WITHOUT_DISCOVER_CTX

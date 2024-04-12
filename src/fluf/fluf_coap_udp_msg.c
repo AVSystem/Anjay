@@ -8,6 +8,7 @@
  */
 
 #include <fluf/fluf.h>
+#include <fluf/fluf_config.h>
 
 #include "fluf_coap_udp_msg.h"
 #include "fluf_options.h"

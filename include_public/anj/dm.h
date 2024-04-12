@@ -14,6 +14,7 @@
 #include <fluf/fluf_io.h>
 #include <fluf/fluf_utils.h>
 
+#include <anj/anj_config.h>
 #include <anj/dm_io.h>
 
 typedef struct dm_object_def_struct dm_object_def_t;

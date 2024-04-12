@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include <fluf/fluf.h>
+#include <fluf/fluf_config.h>
 #include <fluf/fluf_utils.h>
 
 #include "fluf_attributes.h"
@@ -30,7 +31,7 @@ static int get_attr(const fluf_coap_options_t *opts,
     size_t it = 0;
     uint8_t attr_buff[FLUF_ATTR_OPTION_MAX_SIZE];
 
-    while (1) {
+    while (true) {
         size_t attr_option_size = 0;
         memset(attr_buff, 0, sizeof(attr_buff));
         int res = _fluf_coap_options_get_data_iterate(
@@ -52,14 +53,14 @@ static int get_attr(const fluf_coap_options_t *opts,
             *variable_flag = true;
             if (uint_value) {
                 res = fluf_string_to_uint32_value(
+                        uint_value,
                         (const char *) (attr_buff + value_offset),
-                        attr_option_size - value_offset,
-                        (uint32_t *) uint_value);
+                        attr_option_size - value_offset);
             } else if (double_value) {
                 res = fluf_string_to_simple_double_value(
+                        double_value,
                         (const char *) (attr_buff + value_offset),
-                        attr_option_size - value_offset,
-                        (double *) double_value);
+                        attr_option_size - value_offset);
             }
             if (res) {
                 return FLUF_ERR_ATTR_BUFF;
@@ -146,7 +147,7 @@ int fluf_attr_register_prepare(fluf_coap_options_t *opts,
     _RET_IF_ERROR(res);
     if (attr->has_lifetime) {
         char lifetime_buff[FLUF_U32_STR_MAX_LEN + 1] = { 0 };
-        fluf_uint32_to_string_value(attr->lifetime, lifetime_buff);
+        fluf_uint32_to_string_value(lifetime_buff, attr->lifetime);
         res = add_str_attr(opts, "lt", lifetime_buff, attr->has_lifetime);
         _RET_IF_ERROR(res);
     }
@@ -167,7 +168,7 @@ int fluf_attr_bootstrap_prepare(fluf_coap_options_t *opts,
     _RET_IF_ERROR(res);
     if (attr->has_pct) {
         char pct_buff[FLUF_U32_STR_MAX_LEN + 1] = { 0 };
-        fluf_uint16_to_string_value(attr->pct, pct_buff);
+        fluf_uint16_to_string_value(pct_buff, attr->pct);
         res = add_str_attr(opts, "pct", pct_buff, attr->has_pct);
     }
 

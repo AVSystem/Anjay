@@ -48,7 +48,7 @@ int sdm_execute(sdm_data_model_t *dm,
                 size_t execute_arg_len) {
     assert(dm && dm->entity_ptrs.res && dm->entity_ptrs.res->res_handlers
            && dm->entity_ptrs.res->res_handlers->res_execute);
-    _SDM_ONGOING_OP_ERROR_CHECK(dm);
+    assert(dm->op_in_progress && !dm->result);
     dm->result =
             dm->entity_ptrs.res->res_handlers->res_execute(dm->entity_ptrs.obj,
                                                            dm->entity_ptrs.inst,

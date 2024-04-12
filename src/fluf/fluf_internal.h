@@ -14,6 +14,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <fluf/fluf_config.h>
 #include <fluf/fluf_defs.h>
 #include <fluf/fluf_io.h>
 #include <fluf/fluf_io_ctx.h>
@@ -93,6 +94,8 @@ typedef enum {
 
 #define CBOR_INDEFINITE_STRUCTURE_BREAK 0xFF
 
+void _fluf_io_reset_internal_buff(fluf_io_buff_t *ctx);
+
 size_t _fluf_io_out_add_objlink(fluf_io_buff_t *buff_ctx,
                                 size_t buf_pos,
                                 fluf_oid_t oid,
@@ -104,11 +107,9 @@ int _fluf_io_add_link_format_record(const fluf_uri_path_t *uri_path,
                                     bool first_record,
                                     fluf_io_buff_t *ctx);
 
-int _fluf_io_get_payload(void *out_buff,
-                         size_t out_buff_len,
-                         size_t *copied_bytes,
-                         fluf_io_buff_t *ctx,
-                         const fluf_io_out_entry_t *entry,
-                         const char *bootstrap_uri);
+void _fluf_io_get_payload_from_internal_buff(fluf_io_buff_t *ctx,
+                                             void *out_buff,
+                                             size_t out_buff_len,
+                                             size_t *copied_bytes);
 
 #endif // FLUF_INTERNAL_H

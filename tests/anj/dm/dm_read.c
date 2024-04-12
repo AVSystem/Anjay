@@ -22,7 +22,7 @@
 #include <anj/dm.h>
 #include <anj/dm_io.h>
 
-#include "../../../src/anj/dm_core.h"
+#include "../../../src/anj/dm/dm_core.h"
 
 #define OID_4 4 // test object
 
@@ -308,8 +308,8 @@ AVS_UNIT_TEST(DataModelRead, ReadMultiInstanceResource) {
                 (const char *) USER_BUFFER[i].value.bytes_or_string.data,
                 RESOURCE_INSTANCES_STRINGS[i]);
         uri.ids[FLUF_ID_RIID] = i;
-        AVS_UNIT_ASSERT_SUCCESS(
-                fluf_uri_path_equal(&uri, &USER_BUFFER[i].path));
+        uri.uri_len = 4;
+        AVS_UNIT_ASSERT_TRUE(fluf_uri_path_equal(&uri, &USER_BUFFER[i].path));
     }
     AVS_UNIT_ASSERT_EQUAL(USER_BUFFER_STRUCT.count,
                           AVS_ARRAY_SIZE(RESOURCE_INSTANCES_STRINGS));

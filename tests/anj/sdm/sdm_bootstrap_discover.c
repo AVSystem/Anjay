@@ -44,39 +44,46 @@ static const sdm_res_spec_t res_spec_017 = {
 static sdm_res_t inst_00_res[] = {
     {
         .res_spec = &res_spec_00,
-        .value.res_value.value.bytes_or_string.data = "DDD"
+        .value.res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(
+                0, SDM_INIT_RES_VAL_STRING("DDD"))
     },
     {
         .res_spec = &res_spec_01,
-        .value.res_value.value.bool_value = true
+        .value.res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(
+                0, SDM_INIT_RES_VAL_BOOL(true))
+
     },
     {
         .res_spec = &res_spec_010,
-        .value.res_value.value.uint_value = 99
+        .value.res_value =
+                &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(0, SDM_INIT_RES_VAL_U64(99))
     },
     {
         .res_spec = &res_spec_017,
-        .value.res_value.value.objlnk.oid = 21,
-        .value.res_value.value.objlnk.iid = 0
+        .value.res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(
+                0, SDM_INIT_RES_VAL_OBJLNK(21, 0))
     }
 };
 static sdm_res_t inst_01_res[] = {
     {
         .res_spec = &res_spec_00,
-        .value.res_value.value.bytes_or_string.data = "SSS"
+        .value.res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(
+                0, SDM_INIT_RES_VAL_STRING("SSS"))
     },
     {
         .res_spec = &res_spec_01,
-        .value.res_value.value.bool_value = false
+        .value.res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(
+                0, SDM_INIT_RES_VAL_BOOL(false))
     },
     {
         .res_spec = &res_spec_010,
-        .value.res_value.value.uint_value = 199
+        .value.res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(
+                0, SDM_INIT_RES_VAL_U64(199))
     },
     {
         .res_spec = &res_spec_017,
-        .value.res_value.value.objlnk.oid = 21,
-        .value.res_value.value.objlnk.iid = 0
+        .value.res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(
+                0, SDM_INIT_RES_VAL_OBJLNK(21, 0))
     }
 };
 
@@ -112,19 +119,23 @@ static const sdm_res_spec_t res_spec_1 = {
 static sdm_res_t inst_1_res[] = {
     {
         .res_spec = &res_spec_0,
-        .value.res_value.value.int_value = 11
+        .value.res_value =
+                &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(0, SDM_INIT_RES_VAL_I64(11))
     },
     {
-        .res_spec = &res_spec_1
+        .res_spec = &res_spec_1,
+        .value.res_value = &SDM_MAKE_RES_VALUE(0)
     }
 };
 static sdm_res_t inst_2_res[] = {
     {
         .res_spec = &res_spec_0,
-        .value.res_value.value.int_value = 22
+        .value.res_value =
+                &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(0, SDM_INIT_RES_VAL_I64(22))
     },
     {
-        .res_spec = &res_spec_1
+        .res_spec = &res_spec_1,
+        .value.res_value = &SDM_MAKE_RES_VALUE(0)
     }
 };
 

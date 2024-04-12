@@ -10,6 +10,7 @@
 #include <avsystem/commons/avs_utils.h>
 
 #include <fluf/fluf_cbor_encoder_ll.h>
+#include <fluf/fluf_config.h>
 
 #include "fluf_internal.h"
 

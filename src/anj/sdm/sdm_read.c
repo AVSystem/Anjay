@@ -64,31 +64,36 @@ static int get_readable_res_count_and_set_start_level(sdm_data_model_t *dm) {
     _sdm_read_ctx_t *read_ctx = &dm->op_ctx.read_ctx;
     _sdm_entity_ptrs_t *entity_ptrs = &dm->entity_ptrs;
     if (entity_ptrs->res_inst) {
-        read_ctx->level = FLUF_ID_RIID;
+        read_ctx->base_level = FLUF_ID_RIID;
         read_ctx->total_op_count =
                 is_readable_resource(entity_ptrs->res->res_spec->operation,
                                      dm->boostrap_operation)
                         ? 1
                         : 0;
+        if (read_ctx->total_op_count == 0) {
+            sdm_log(ERROR, "Resource is not readable");
+            return SDM_ERR_NOT_FOUND;
+        }
     } else if (entity_ptrs->res) {
-        read_ctx->level = FLUF_ID_RID;
+        if (!is_readable_resource(entity_ptrs->res->res_spec->operation,
+                                  dm->boostrap_operation)) {
+            sdm_log(ERROR, "Resource is not readable");
+            return SDM_ERR_NOT_FOUND;
+        }
+        read_ctx->base_level = FLUF_ID_RID;
         read_ctx->total_op_count =
                 get_readable_res_count_from_resource(entity_ptrs->res,
                                                      dm->boostrap_operation);
     } else if (entity_ptrs->inst) {
-        read_ctx->level = FLUF_ID_IID;
+        read_ctx->base_level = FLUF_ID_IID;
         read_ctx->total_op_count =
                 get_readable_res_count_from_instance(entity_ptrs->inst,
                                                      dm->boostrap_operation);
     } else {
-        read_ctx->level = FLUF_ID_OID;
+        read_ctx->base_level = FLUF_ID_OID;
         read_ctx->total_op_count =
                 get_readable_res_count_from_object(entity_ptrs->obj,
                                                    dm->boostrap_operation);
-    }
-    if (!read_ctx->total_op_count) {
-        sdm_log(ERROR, "No readable resources");
-        return SDM_ERR_NOT_FOUND;
     }
 
     dm->op_count = read_ctx->total_op_count;
@@ -111,8 +116,9 @@ static int get_read_value(fluf_io_out_entry_t *out_record,
         return res->res_handlers->res_read(obj, obj_inst, res, res_inst,
                                            &out_record->value);
     }
+    assert(res_inst ? res_inst->res_value : res->value.res_value);
     out_record->value =
-            res_inst ? res_inst->res_value.value : res->value.res_value.value;
+            res_inst ? res_inst->res_value->value : res->value.res_value->value;
     return 0;
 }
 
@@ -142,7 +148,7 @@ static void get_readable_resource(sdm_data_model_t *dm) {
     sdm_res_t *res;
     bool found = false;
     while (!found) {
-        if (read_ctx->level == FLUF_ID_OID) {
+        if (read_ctx->base_level == FLUF_ID_OID) {
             assert(read_ctx->inst_idx < obj->inst_count);
             entity_ptrs->inst = obj->insts[read_ctx->inst_idx];
         }
@@ -178,22 +184,19 @@ static void get_readable_resource(sdm_data_model_t *dm) {
 
 int sdm_get_read_entry(sdm_data_model_t *dm, fluf_io_out_entry_t *out_record) {
     assert(dm && out_record);
+    assert(dm->op_in_progress && !dm->result);
+    assert(dm->op_count);
+    assert(dm->operation == FLUF_OP_DM_READ);
+
     _sdm_read_ctx_t *read_ctx = &dm->op_ctx.read_ctx;
     _sdm_entity_ptrs_t *entity_ptrs = &dm->entity_ptrs;
 
-    if (dm->operation != FLUF_OP_DM_READ) {
-        sdm_log(ERROR, "Incorrect operation");
-        dm->result = SDM_ERR_LOGIC;
-        return dm->result;
-    }
-    _SDM_ONGOING_OP_ERROR_CHECK(dm);
-    _SDM_ONGOING_OP_COUNT_ERROR_CHECK(dm);
-
-    if (read_ctx->level == FLUF_ID_OID || read_ctx->level == FLUF_ID_IID) {
+    if (read_ctx->base_level == FLUF_ID_OID
+            || read_ctx->base_level == FLUF_ID_IID) {
         get_readable_resource(dm);
     }
     // there is nothing to do on FLUF_ID_RIID level
-    if (read_ctx->level == FLUF_ID_RID) {
+    if (read_ctx->base_level == FLUF_ID_RID) {
         if (_sdm_is_multi_instance_resource(
                     entity_ptrs->res->res_spec->operation)) {
             assert(read_ctx->res_inst_idx
@@ -216,12 +219,9 @@ int sdm_get_read_entry(sdm_data_model_t *dm, fluf_io_out_entry_t *out_record) {
 
 int sdm_get_readable_res_count(sdm_data_model_t *dm, size_t *out_res_count) {
     assert(dm && out_res_count);
-    if (dm->operation != FLUF_OP_DM_READ) {
-        sdm_log(ERROR, "Incorrect operation");
-        dm->result = SDM_ERR_LOGIC;
-        return dm->result;
-    }
-    _SDM_ONGOING_OP_ERROR_CHECK(dm);
+    assert(dm->op_in_progress && !dm->result);
+    assert(dm->operation == FLUF_OP_DM_READ);
+
     *out_res_count = dm->op_ctx.read_ctx.total_op_count;
     return 0;
 }
@@ -230,11 +230,8 @@ int sdm_get_composite_readable_res_count(sdm_data_model_t *dm,
                                          const fluf_uri_path_t *path,
                                          size_t *out_res_count) {
     assert(dm && path && out_res_count);
-    if (dm->operation != FLUF_OP_DM_READ_COMP) {
-        dm->result = SDM_ERR_LOGIC;
-        return dm->result;
-    }
-    _SDM_ONGOING_OP_ERROR_CHECK(dm);
+    assert(dm->op_in_progress && !dm->result);
+    assert(dm->operation == FLUF_OP_DM_READ_COMP);
 
     _sdm_entity_ptrs_t ptrs;
     sdm_obj_t *obj;
@@ -270,13 +267,8 @@ int sdm_get_composite_read_entry(sdm_data_model_t *dm,
                                  const fluf_uri_path_t *path,
                                  fluf_io_out_entry_t *out_record) {
     assert(dm && out_record && path);
-
-    if (dm->operation != FLUF_OP_DM_READ_COMP) {
-        sdm_log(ERROR, "Incorrect operation");
-        dm->result = SDM_ERR_LOGIC;
-        return dm->result;
-    }
-    _SDM_ONGOING_OP_ERROR_CHECK(dm);
+    assert(dm->op_in_progress && !dm->result);
+    assert(dm->operation == FLUF_OP_DM_READ_COMP);
 
     _sdm_read_ctx_t *read_ctx = &dm->op_ctx.read_ctx;
     _sdm_entity_ptrs_t *entity_ptrs = &dm->entity_ptrs;
@@ -303,14 +295,14 @@ int sdm_get_composite_read_entry(sdm_data_model_t *dm,
         read_ctx->res_idx = 0;
         read_ctx->res_inst_idx = 0;
     }
+    assert(dm->op_count);
 
-    _SDM_ONGOING_OP_COUNT_ERROR_CHECK(dm);
-
-    if (read_ctx->level == FLUF_ID_OID || read_ctx->level == FLUF_ID_IID) {
+    if (read_ctx->base_level == FLUF_ID_OID
+            || read_ctx->base_level == FLUF_ID_IID) {
         get_readable_resource(dm);
     }
     // there is nothing to do on FLUF_ID_RIID level
-    if (read_ctx->level == FLUF_ID_RID) {
+    if (read_ctx->base_level == FLUF_ID_RID) {
         if (_sdm_is_multi_instance_resource(
                     entity_ptrs->res->res_spec->operation)) {
             assert(read_ctx->res_inst_idx
@@ -362,8 +354,10 @@ int _sdm_get_resource_value(sdm_data_model_t *dm,
         return ptrs.res->res_handlers->res_read(ptrs.obj, ptrs.inst, ptrs.res,
                                                 ptrs.res_inst, out_value);
     }
-    *out_value = is_multi_instance ? ptrs.res_inst->res_value.value
-                                   : ptrs.res->value.res_value.value;
+    assert(is_multi_instance ? ptrs.res_inst->res_value
+                             : ptrs.res->value.res_value);
+    *out_value = is_multi_instance ? ptrs.res_inst->res_value->value
+                                   : ptrs.res->value.res_value->value;
 
     return 0;
 
@@ -380,6 +374,7 @@ int sdm_get_resource_type(sdm_data_model_t *dm,
         sdm_log(ERROR, "Incorect path");
         return SDM_ERR_INPUT_ARG;
     }
+
     _sdm_entity_ptrs_t ptrs;
     int ret = _sdm_get_entity_ptrs(dm, path, &ptrs);
     if (ret) {

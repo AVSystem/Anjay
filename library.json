@@ -1,0 +1,23 @@
+{
+    "description": "Configuration file of Anjay PlatformIO integration.",
+    "$schema": "https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/schema/library.json",
+    "name": "anjay",
+    "version": "4.0.0-alpha.2",
+    "keywords": [],
+    "build": {
+        "srcDir": ".",
+        "srcFilter": [
+            "+<platformio/compat/**/*.cpp>",
+            "+<deps/avs_commons/src/**/*.c>",
+            "+<src/**/*.c>"
+        ],
+        "flags": [
+            "-Ideps/avs_commons/include_public",
+            "-Ideps/avs_commons/src",
+            "-Iinclude_public/anj",
+            "-Iinclude_public/fluf",
+            "-Iinclude_public",
+            "-Iplatformio/config"
+        ]
+    }
+}

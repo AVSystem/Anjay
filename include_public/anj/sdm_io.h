@@ -13,9 +13,153 @@
 #include <fluf/fluf.h>
 #include <fluf/fluf_defs.h>
 
+#include <anj/anj_config.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/** Allows to handling writing of bytes in @ref sdm_res_write_t handler. Data
+ * are copied to the @p Buffer. In case of overflow, this macro returns @ref
+ * SDM_ERR_BAD_REQUEST. For last chunk @p Bytes_len will be set.
+ */
+#define SDM_RES_WRITE_HANDLING_BYTES(Value, Buffer, Buffer_len, Bytes_len) \
+    do {                                                                   \
+        if ((Value)->bytes_or_string.offset                                \
+                        + (Value)->bytes_or_string.chunk_length            \
+                > (Buffer_len)) {                                          \
+            return SDM_ERR_BAD_REQUEST;                                    \
+        }                                                                  \
+        memcpy(&(Buffer)[(Value)->bytes_or_string.offset],                 \
+               (Value)->bytes_or_string.data,                              \
+               (Value)->bytes_or_string.chunk_length);                     \
+        if ((Value)->bytes_or_string.offset                                \
+                        + (Value)->bytes_or_string.chunk_length            \
+                == (Value)->bytes_or_string.full_length_hint) {            \
+            (Bytes_len) = (Value)->bytes_or_string.full_length_hint;       \
+        }                                                                  \
+    } while (0)
+
+/** Allows to handling writing of string in @ref sdm_res_write_t handler. Data
+ * are copied to the @p Buffer. In case of overflow, this macro returns @ref
+ * SDM_ERR_BAD_REQUEST. For the last chunk, null character is added.
+ */
+#define SDM_RES_WRITE_HANDLING_STRING(Value, Buffer, Buffer_len)        \
+    do {                                                                \
+        if ((Value)->bytes_or_string.offset                             \
+                        + (Value)->bytes_or_string.chunk_length         \
+                > ((Buffer_len) -1)) {                                  \
+            return SDM_ERR_BAD_REQUEST;                                 \
+        }                                                               \
+        memcpy(&(Buffer)[(Value)->bytes_or_string.offset],              \
+               (Value)->bytes_or_string.data,                           \
+               (Value)->bytes_or_string.chunk_length);                  \
+        if ((Value)->bytes_or_string.offset                             \
+                        + (Value)->bytes_or_string.chunk_length         \
+                == (Value)->bytes_or_string.full_length_hint) {         \
+            (Buffer)[(Value)->bytes_or_string.full_length_hint] = '\0'; \
+        }                                                               \
+    } while (0)
+
+/** Allows to create a Resource. If @p Handlers with appropriate callbacks is
+ * given then @p Res_val can be NULL. If the Resource is created as a global
+ * variable then inside the call of this macro @ref SDM_MAKE_RES_SPEC, @ref
+ * SDM_MAKE_RES_VALUE, or @ref SDM_MAKE_RES_VALUE_WITH_INITIALIZE can be called.
+ *
+ * IMPORTANT: If Resource is not created as a global variable then you CANNOT
+ * use any of the macros that create Res_val.
+ *
+ * Below are two examples of how to create a SSID Resource of a Server Object
+ * @code
+ * // Create a Resource with Handlers pointer set to NULL and Res_val defined
+ * // and initialized to a value of 2.
+ * sdm_res_t ssid_res = SDM_MAKE_RES(
+ *       &SDM_MAKE_RES_SPEC(0, FLUF_DATA_TYPE_INT, SDM_RES_R),
+ *       NULL,
+ *       &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(0, SDM_INIT_RES_VAL_I64(2)));
+ *
+ * // Create a Resource with Res_val pointer set to NULL and Handlers defined.
+ * sdm_res_t ssid_res = SDM_MAKE_RES(
+ *       &SDM_MAKE_RES_SPEC(0, FLUF_DATA_TYPE_INT, SDM_RES_R),
+ *       &ssid_res_handlers, NULL);
+ * @endcode
+ */
+#define SDM_MAKE_RES(Res_spec, Handlers, Res_val) \
+    ((sdm_res_t) {                                \
+        .res_spec = (Res_spec),                   \
+        .res_handlers = (Handlers),               \
+        .value.res_value = (Res_val)              \
+    })
+
+/** Allows to create a Multiple Resource. If @p Handlers with appropriate
+ * callbacks is given then @p Res_val can be NULL. If the Resource is created as
+ * a global variable then inside the call of this macro @ref SDM_MAKE_RES_SPEC
+ * can be called. */
+#define SDM_MAKE_MULTI_RES(                                   \
+        Res_spec, Handlers, Inst, Inst_count, Max_inst_count) \
+    ((sdm_res_t) {                                            \
+        .res_spec = (Res_spec),                               \
+        .res_handlers = (Handlers),                           \
+        .value.res_inst.insts = (Inst),                       \
+        .value.res_inst.inst_count = (Inst_count),            \
+        .value.res_inst.max_inst_count = (Max_inst_count)     \
+    })
+
+/**
+ * Allows to create a Resource Instance, Res_val can be NULL. If the Resource
+ * Instance is created as a global variable then inside the call of this macro
+ * @ref SDM_MAKE_RES_VALUE, or @ref SDM_MAKE_RES_VALUE_WITH_INITIALIZE can be
+ * called.
+ *
+ * IMPORTANT: If Resource Instance is not created as a global variable then you
+ * CANNOT use any of the macros that create Res_val.
+ */
+#define SDM_MAKE_RES_INST(Riid, Res_val) \
+    ((sdm_res_inst_t) {                  \
+        .riid = (Riid),                  \
+        .res_value = (Res_val)           \
+    })
+
+/** Allows to initialize a @ref sdm_res_spec_t struct. */
+#define SDM_MAKE_RES_SPEC(Rid, Data_type, Operation_type) \
+    ((const sdm_res_spec_t) {                             \
+        .rid = (Rid),                                     \
+        .type = (Data_type),                              \
+        .operation = (Operation_type)                     \
+    })
+
+/** Allows to initialize a @ref sdm_res_value_t struct. Set Buff_size to zero if
+ * the variable is not of type bytes or string, res_value field can be
+ * set using a macro from the SDM_SET_RES_VAL_ group. */
+#define SDM_MAKE_RES_VALUE(Buff_size)       \
+    ((sdm_res_value_t) {                    \
+        .resource_buffer_size = (Buff_size) \
+    })
+
+/** Allows initialization of @ref sdm_res_value_t struct with assignment of
+ * initial values. Set Buff_size to zero if the variable is not of type bytes or
+ * string. To use, it is necessary to use one of the macros from the
+ * SDM_INIT_RES_VAL_ group. */
+#define SDM_MAKE_RES_VALUE_WITH_INITIALIZE(Buff_size, Sdm_init_res_val_macro) \
+    ((sdm_res_value_t) {                                                      \
+        .resource_buffer_size = (Buff_size), Sdm_init_res_val_macro           \
+    })
+
+/** Group of macros that allow to init the value of a resource
+ * stored in @ref res_value, intended for use only
+ * with @ref SDM_MAKE_RES_VALUE_WITH_INITIALIZE. */
+#define SDM_INIT_RES_VAL_U64(U64) .value.uint_value = (U64)
+#define SDM_INIT_RES_VAL_I64(I64) .value.int_value = (I64)
+#define SDM_INIT_RES_VAL_BOOL(Bool) .value.bool_value = (Bool)
+#define SDM_INIT_RES_VAL_DOUBLE(Double) .value.double_value = (Double)
+#define SDM_INIT_RES_VAL_OBJLNK(Oid, Iid) \
+    .value.objlnk.oid = (Oid),            \
+    .value.objlnk.iid = (Iid)
+#define SDM_INIT_RES_VAL_TIME_VAL(Time) .value.time_value = (Time)
+#define SDM_INIT_RES_VAL_STRING(String) .value.bytes_or_string.data = (String)
+#define SDM_INIT_RES_VAL_BYTES(Bytes, Bytes_len) \
+    .value.bytes_or_string.data = (Bytes),       \
+    .value.bytes_or_string.chunk_length = (Bytes_len)
 
 typedef struct sdm_res_inst_struct sdm_res_inst_t;
 typedef struct sdm_res_struct sdm_res_t;
@@ -194,7 +338,10 @@ typedef int sdm_res_execute_t(sdm_obj_t *obj,
                               size_t execute_arg_len);
 
 /**
- * A handler called in order to create a new Instance of the Resource.
+ * A handler called in order to create a new Instance of the Resource. If the
+ * creation of the Instance succeeds but @ref sdm_operation_end_t returns
+ * information about the failure of the transaction, the user is responsible for
+ * deleting the Instance.
  *
  * @param       obj          Object definition pointer.
  * @param       obj_inst     Object Instance pointer.
@@ -221,7 +368,11 @@ typedef int sdm_res_inst_create_t(sdm_obj_t *obj,
 
 /**
  * A handler called in order to delete an Instance of the Resource. After this
- * call @p res_inst will be removed from the instances array in the @p res.
+ * call @p res_inst will be removed from the instances array in the @p res and
+ * iid field of this Instance will be set to @ref FLUF_ID_INVALID. If @ref
+ * sdm_res_inst_delete_t call was successful but @ref sdm_operation_end_t
+ * returned information about the failure of the transaction, the user is
+ * responsible for restoring the Instance.
  *
  * @param obj       Object definition pointer.
  * @param obj_inst  Object Instance pointer.
@@ -241,7 +392,10 @@ typedef int sdm_res_inst_delete_t(sdm_obj_t *obj,
                                   sdm_res_inst_t *res_inst);
 
 /**
- * A handler that creates an Object Instance.
+ * A handler that creates an Object Instance. If the creation of the Instance
+ * succeeds but @ref sdm_operation_end_t returns information about the failure
+ * of the transaction, the user is responsible for deleting the Instance. To
+ * achieve this, the user should call @ref sdm_remove_obj_inst.
  *
  * @param       obj          Object definition pointer.
  * @param [out] out_obj_inst Points to the Instances array field in @ref
@@ -264,7 +418,11 @@ typedef int sdm_inst_create_t(sdm_obj_t *obj,
 
 /**
  * A handler that deletes an Object Instance. After this call @p obj_inst will
- * be removed from the Instances array in the @p obj.
+ * be removed from the Instances array in the @p obj and iid field of this
+ * Instance will be set to @ref FLUF_ID_INVALID. If @ref sdm_inst_delete_t call
+ * was successful but @ref sdm_operation_end_t returned information about the
+ * failure of the transaction, the user is responsible for restoring the
+ * Instance.
  *
  * @param obj       Object definition pointer.
  * @param obj_inst  Object Instance pointer.
@@ -405,8 +563,11 @@ typedef struct {
 
 /** A struct defining a value of Resource Instance. */
 struct sdm_res_inst_struct {
-    /** Resource Instance value. */
-    sdm_res_value_t res_value;
+    /**
+     * Resource Instance value. If not set, and the resource is writable or
+     * readable @ref res_handlers will be used instead.
+     */
+    sdm_res_value_t *res_value;
     /** Resource Instance ID number. */
     fluf_riid_t riid;
 };
@@ -417,8 +578,9 @@ struct sdm_res_struct {
     const sdm_res_spec_t *res_spec;
     /**
      * Resource handlers, can be NULL, unless the Resource is of type @ref
-     * SDM_RES_E, or we want to fully support the LwM2M WRITE operation (adding
-     * and removing Resource Instances).
+     * SDM_RES_E, or @ref res_value is not set, in this case, @ref res_read is
+     * required if the resource is readable and @ref res_write if it is
+     * writable.
      */
     const sdm_res_handlers_t *res_handlers;
     /**
@@ -453,8 +615,7 @@ struct sdm_res_struct {
              *      .res_spec = &custom_res_spec,
              *      .value.res_inst.insts = res_insts,
              *      .value.res_inst.inst_count = 2,
-             *      .value.res_inst.max_inst_count =
-             *                                          RES_INST_MAX_COUNT};
+             *      .value.res_inst.max_inst_count = RES_INST_MAX_COUNT};
              * @endcode
              */
             sdm_res_inst_t **insts;
@@ -463,8 +624,12 @@ struct sdm_res_struct {
             /** Number of the Resource Instances. */
             uint16_t inst_count;
         } res_inst;
-        /** For single-instance Resource stores the value of the Resource. */
-        sdm_res_value_t res_value;
+        /**
+         * For single-instance Resource stores the value of the Resource.
+         * If not set, and the resource is writable or readable @ref
+         * res_handlers will be used instead.
+         */
+        sdm_res_value_t *res_value;
     } value;
 };
 
@@ -588,7 +753,7 @@ typedef struct {
 /** WRITE operation context, do not modify this structure directly. */
 typedef struct {
     fluf_uri_path_t path;
-    bool instance_created;
+    bool instance_creation_attempted;
 } _sdm_write_ctx_t;
 
 /** READ operation context, do not modify this structure directly. */
@@ -597,7 +762,7 @@ typedef struct {
     uint16_t res_idx;
     uint16_t res_inst_idx;
     size_t total_op_count;
-    fluf_id_type_t level;
+    fluf_id_type_t base_level;
     fluf_uri_path_t path;
 } _sdm_read_ctx_t;
 
@@ -669,6 +834,20 @@ int sdm_add_obj(sdm_data_model_t *dm, sdm_obj_t *obj);
  * @returns 0 on success, a negative value in case of error.
  */
 int sdm_remove_obj(sdm_data_model_t *dm, fluf_oid_t oid);
+
+/**
+ * Removes Instance with given @p iid from Object. The function will remove an
+ * instance from the <c>insts array</c> set its <c>iid</c> to @ref
+ * FLUF_ID_INVALID, update <c>inst_count</c> and reorganize the indexes of the
+ * remaining instances.
+ *
+ * @param obj  Pointer to the Object definition struct.
+ * @param iid  ID number of the Instance to be removed.
+ *
+ * @returns 0 on success, a negative value if the Instance with given @p iid
+ *          does not exist.
+ */
+int sdm_remove_obj_inst(sdm_obj_t *obj, fluf_iid_t iid);
 
 #ifdef __cplusplus
 }

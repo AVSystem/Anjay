@@ -52,18 +52,13 @@ int sdm_get_register_record(sdm_data_model_t *dm,
                             fluf_uri_path_t *out_path,
                             const char **out_version) {
     assert(dm && out_path && out_version);
+    assert(dm->op_in_progress && !dm->result);
+    assert(dm->op_count);
+    assert(dm->operation == FLUF_OP_REGISTER
+           || dm->operation == FLUF_OP_UPDATE);
 
     _sdm_reg_ctx_t *reg_ctx = &dm->op_ctx.reg_ctx;
     assert(reg_ctx->obj_idx < dm->objs_count);
-
-    if (dm->operation != FLUF_OP_REGISTER && dm->operation != FLUF_OP_UPDATE) {
-        sdm_log(ERROR, "Incorrect operation");
-        dm->result = SDM_ERR_LOGIC;
-        return dm->result;
-    }
-
-    _SDM_ONGOING_OP_ERROR_CHECK(dm);
-    _SDM_ONGOING_OP_COUNT_ERROR_CHECK(dm);
 
     if (reg_ctx->level == FLUF_ID_OID) {
         if (dm->objs[reg_ctx->obj_idx]->oid == FLUF_OBJ_ID_SECURITY

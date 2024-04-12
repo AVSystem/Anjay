@@ -55,13 +55,16 @@ static int res_write(sdm_obj_t *obj,
 }
 
 static sdm_res_inst_t res_inst_new_1 = {
-    .riid = 0xFFFF
+    .riid = 0xFFFF,
+    .res_value = &SDM_MAKE_RES_VALUE(0)
 };
 static sdm_res_inst_t res_inst_new_2 = {
-    .riid = 0xFFFF
+    .riid = 0xFFFF,
+    .res_value = &SDM_MAKE_RES_VALUE(0)
 };
 static sdm_res_inst_t res_inst_new_3 = {
-    .riid = 0xFFFF
+    .riid = 0xFFFF,
+    .res_value = &SDM_MAKE_RES_VALUE(0)
 };
 static int res_inst_create(sdm_obj_t *obj,
                            sdm_obj_inst_t *obj_inst,
@@ -193,11 +196,13 @@ static int inst_reset(sdm_obj_t *obj, sdm_obj_inst_t *obj_inst) {
     };                                                                        \
     sdm_res_inst_t res_inst_1 = {                                             \
         .riid = 1,                                                            \
-        .res_value.value.int_value = 44                                       \
+        .res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(                     \
+                0, SDM_INIT_RES_VAL_I64(44))                                  \
     };                                                                        \
     sdm_res_inst_t res_inst_3 = {                                             \
         .riid = 3,                                                            \
-        .res_value.value.int_value = 44                                       \
+        .res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(                     \
+                0, SDM_INIT_RES_VAL_I64(44))                                  \
     };                                                                        \
     sdm_res_inst_t *res_insts[9] = { &res_inst_1, &res_inst_3 };              \
     sdm_res_inst_t *res_insts_5[1] = { &res_inst_1 };                         \
@@ -209,11 +214,13 @@ static int inst_reset(sdm_obj_t *obj, sdm_obj_inst_t *obj_inst) {
         },                                                                    \
         {                                                                     \
             .res_spec = &res_spec_1,                                          \
-            .value.res_value.value.int_value = 17                             \
+            .value.res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(           \
+                    0, SDM_INIT_RES_VAL_I64(17))                              \
         },                                                                    \
         {                                                                     \
             .res_spec = &res_spec_2,                                          \
-            .value.res_value.value.double_value = 18.0                        \
+            .value.res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(           \
+                    0, SDM_INIT_RES_VAL_DOUBLE(18.0))                         \
         },                                                                    \
         {                                                                     \
             .res_spec = &res_spec_3,                                          \
@@ -236,12 +243,13 @@ static int inst_reset(sdm_obj_t *obj, sdm_obj_inst_t *obj_inst) {
         },                                                                    \
         {                                                                     \
             .res_spec = &res_spec_6,                                          \
-            .value.res_value.value.int_value = 17                             \
+            .value.res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(           \
+                    0, SDM_INIT_RES_VAL_I64(17))                              \
         },                                                                    \
         {                                                                     \
             .res_spec = &res_spec_7,                                          \
-            .value.res_value.value.bytes_or_string.data = res_7_buff,         \
-            .value.res_value.resource_buffer_size = 50                        \
+            .value.res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(           \
+                    50, SDM_INIT_RES_VAL_STRING(res_7_buff))                  \
         }                                                                     \
     };                                                                        \
     sdm_obj_inst_t obj_inst_0 = {                                             \
@@ -341,8 +349,8 @@ AVS_UNIT_TEST(sdm_write_replace, write_no_handler) {
     AVS_UNIT_ASSERT_EQUAL(call_counter_validate, 1);
     AVS_UNIT_ASSERT_EQUAL(call_counter_res_write, 0);
     AVS_UNIT_ASSERT_EQUAL(call_counter_reset, 1);
-    AVS_UNIT_ASSERT_EQUAL(res_1[1].value.res_value.value.int_value, 77777);
-    AVS_UNIT_ASSERT_EQUAL(res_1[6].value.res_value.value.int_value, 88888);
+    AVS_UNIT_ASSERT_EQUAL(res_1[1].value.res_value->value.int_value, 77777);
+    AVS_UNIT_ASSERT_EQUAL(res_1[6].value.res_value->value.int_value, 88888);
     AVS_UNIT_ASSERT_EQUAL(call_result, SDM_OP_RESULT_SUCCESS_MODIFIED);
 }
 
@@ -447,7 +455,7 @@ AVS_UNIT_TEST(sdm_write_replace, multi_res_write_no_handler) {
     AVS_UNIT_ASSERT_SUCCESS(sdm_write_entry(&dm, &record));
     AVS_UNIT_ASSERT_SUCCESS(sdm_operation_end(&dm));
 
-    AVS_UNIT_ASSERT_EQUAL(res_inst_new_1.res_value.value.int_value, 555555);
+    AVS_UNIT_ASSERT_EQUAL(res_inst_new_1.res_value->value.int_value, 555555);
     AVS_UNIT_ASSERT_EQUAL(res_inst_new_1.riid, 188);
     AVS_UNIT_ASSERT_EQUAL(call_counter_begin, 1);
     AVS_UNIT_ASSERT_EQUAL(call_counter_end, 1);
@@ -478,7 +486,7 @@ AVS_UNIT_TEST(sdm_write_replace, bootstrap_write) {
     AVS_UNIT_ASSERT_EQUAL(call_counter_end, 1);
     AVS_UNIT_ASSERT_EQUAL(call_counter_validate, 1);
     AVS_UNIT_ASSERT_EQUAL(call_counter_res_write, 0);
-    AVS_UNIT_ASSERT_EQUAL(res_1[2].value.res_value.value.double_value, 1.25);
+    AVS_UNIT_ASSERT_EQUAL(res_1[2].value.res_value->value.double_value, 1.25);
     AVS_UNIT_ASSERT_EQUAL(call_result, SDM_OP_RESULT_SUCCESS_MODIFIED);
 
     AVS_UNIT_ASSERT_SUCCESS(
@@ -717,14 +725,14 @@ AVS_UNIT_TEST(sdm_write_replace, string_in_chunk_error) {
         .value.bytes_or_string.chunk_length = 3
     };
 
-    res_1[7].value.res_value.resource_buffer_size = 7;
+    res_1[7].value.res_value->resource_buffer_size = 7;
     AVS_UNIT_ASSERT_SUCCESS(
             sdm_operation_begin(&dm, FLUF_OP_DM_WRITE_REPLACE, false, &path));
     AVS_UNIT_ASSERT_SUCCESS(sdm_write_entry(&dm, &record_1));
     AVS_UNIT_ASSERT_SUCCESS(sdm_write_entry(&dm, &record_2));
     AVS_UNIT_ASSERT_EQUAL(sdm_write_entry(&dm, &record_3), SDM_ERR_MEMORY);
     AVS_UNIT_ASSERT_EQUAL(sdm_operation_end(&dm), SDM_ERR_MEMORY);
-    res_1[7].value.res_value.resource_buffer_size = 50;
+    res_1[7].value.res_value->resource_buffer_size = 50;
 
     AVS_UNIT_ASSERT_EQUAL(call_counter_begin, 1);
     AVS_UNIT_ASSERT_EQUAL(call_counter_end, 1);
@@ -740,5 +748,156 @@ AVS_UNIT_TEST(sdm_write_replace, lack_of_inst_reset_error) {
     handlers.inst_reset = NULL;
     AVS_UNIT_ASSERT_EQUAL(
             sdm_operation_begin(&dm, FLUF_OP_DM_WRITE_REPLACE, false, &path),
-            SDM_ERR_INTERNAL);
+            SDM_ERR_METHOD_NOT_ALLOWED);
+}
+
+static int res_write_bootstrap(sdm_obj_t *obj,
+                               sdm_obj_inst_t *obj_inst,
+                               sdm_res_t *res,
+                               sdm_res_inst_t *res_inst,
+                               const fluf_res_value_t *value) {
+    (void) obj;
+    (void) obj_inst;
+    (void) res;
+    (void) res_inst;
+    (void) value;
+    return 0;
+}
+
+static sdm_res_spec_t res_spec_0_bootstrap = {
+    .rid = 0,
+    .operation = SDM_RES_RW,
+    .type = FLUF_DATA_TYPE_INT
+};
+
+static sdm_res_handlers_t res_handlers_bootstrap = {
+    .res_write = res_write_bootstrap
+};
+
+static sdm_res_t res_0_bootstrap[] = {
+    {
+        .res_spec = &res_spec_0_bootstrap,
+        .res_handlers = &res_handlers_bootstrap
+    }
+};
+
+static sdm_obj_inst_t obj_inst_new = {
+    .res_count = 1,
+    .resources = res_0_bootstrap
+};
+
+static int inst_create_bootstrap(sdm_obj_t *obj,
+                                 sdm_obj_inst_t **out_obj_inst,
+                                 fluf_iid_t iid) {
+    (void) obj;
+    (void) iid;
+    *out_obj_inst = &obj_inst_new;
+    return 0;
+}
+
+static int inst_reset_bootstrap(sdm_obj_t *obj, sdm_obj_inst_t *obj_inst) {
+    (void) obj;
+    (void) obj_inst;
+    return 0;
+}
+
+static sdm_obj_inst_t obj_inst_0_bootstrap = {
+    .iid = 0,
+    .res_count = 1,
+    .resources = res_0_bootstrap
+};
+
+static sdm_obj_inst_t *obj_insts_bootstrap[2] = { &obj_inst_0_bootstrap, NULL };
+
+static sdm_obj_handlers_t handlers_bootstrap = {
+    .inst_create = inst_create_bootstrap,
+    .inst_reset = inst_reset_bootstrap
+};
+
+static sdm_obj_t Obj_Bootstrap = {
+    .oid = 1,
+    .insts = obj_insts_bootstrap,
+    .inst_count = 1,
+    .obj_handlers = &handlers_bootstrap,
+    .max_inst_count = 2
+};
+
+AVS_UNIT_TEST(sdm_write_replace, write_with_create_instance_level) {
+    sdm_data_model_t dm;
+    sdm_obj_t *objs[1];
+    sdm_initialize(&dm, objs, 1);
+    AVS_UNIT_ASSERT_SUCCESS(sdm_add_obj(&dm, &Obj_Bootstrap));
+
+    fluf_io_out_entry_t record = {
+        .type = FLUF_DATA_TYPE_INT,
+        .path = FLUF_MAKE_RESOURCE_PATH(1, 1, 0)
+    };
+    fluf_uri_path_t path = FLUF_MAKE_INSTANCE_PATH(1, 1);
+    AVS_UNIT_ASSERT_SUCCESS(
+            sdm_operation_begin(&dm, FLUF_OP_DM_WRITE_REPLACE, true, &path));
+    AVS_UNIT_ASSERT_SUCCESS(sdm_write_entry(&dm, &record));
+    AVS_UNIT_ASSERT_SUCCESS(sdm_operation_end(&dm));
+
+    AVS_UNIT_ASSERT_TRUE(obj_insts_bootstrap[1] == &obj_inst_new);
+    obj_insts_bootstrap[1] = NULL;
+    Obj_Bootstrap.inst_count = 1;
+}
+
+AVS_UNIT_TEST(sdm_write_replace, write_with_create_resource_level) {
+    sdm_data_model_t dm;
+    sdm_obj_t *objs[1];
+    sdm_initialize(&dm, objs, 1);
+    AVS_UNIT_ASSERT_SUCCESS(sdm_add_obj(&dm, &Obj_Bootstrap));
+
+    fluf_io_out_entry_t record = {
+        .type = FLUF_DATA_TYPE_INT,
+        .path = FLUF_MAKE_RESOURCE_PATH(1, 1, 0)
+    };
+    fluf_uri_path_t path = FLUF_MAKE_RESOURCE_PATH(1, 1, 0);
+    AVS_UNIT_ASSERT_SUCCESS(
+            sdm_operation_begin(&dm, FLUF_OP_DM_WRITE_REPLACE, true, &path));
+    AVS_UNIT_ASSERT_SUCCESS(sdm_write_entry(&dm, &record));
+    AVS_UNIT_ASSERT_SUCCESS(sdm_operation_end(&dm));
+
+    AVS_UNIT_ASSERT_TRUE(obj_insts_bootstrap[1] == &obj_inst_new);
+    obj_insts_bootstrap[1] = NULL;
+    Obj_Bootstrap.inst_count = 1;
+}
+
+AVS_UNIT_TEST(sdm_write_replace, write_with_create_write_error) {
+    sdm_data_model_t dm;
+    sdm_obj_t *objs[1];
+    sdm_initialize(&dm, objs, 1);
+    AVS_UNIT_ASSERT_SUCCESS(sdm_add_obj(&dm, &Obj_Bootstrap));
+
+    fluf_io_out_entry_t record = {
+        .type = FLUF_DATA_TYPE_INT,
+        .path = FLUF_MAKE_RESOURCE_PATH(1, 1, 1)
+    };
+    fluf_uri_path_t path = FLUF_MAKE_INSTANCE_PATH(1, 1);
+    AVS_UNIT_ASSERT_SUCCESS(
+            sdm_operation_begin(&dm, FLUF_OP_DM_WRITE_REPLACE, true, &path));
+    AVS_UNIT_ASSERT_EQUAL(sdm_write_entry(&dm, &record), SDM_ERR_NOT_FOUND);
+    AVS_UNIT_ASSERT_EQUAL(sdm_operation_end(&dm), SDM_ERR_NOT_FOUND);
+    obj_insts_bootstrap[1] = NULL;
+    Obj_Bootstrap.inst_count = 1;
+}
+
+AVS_UNIT_TEST(sdm_write_replace, write_with_create_error) {
+    sdm_data_model_t dm;
+    sdm_obj_t *objs[1];
+    Obj_Bootstrap.max_inst_count = 1;
+    sdm_initialize(&dm, objs, 1);
+    AVS_UNIT_ASSERT_SUCCESS(sdm_add_obj(&dm, &Obj_Bootstrap));
+
+    fluf_io_out_entry_t record = {
+        .type = FLUF_DATA_TYPE_INT,
+        .path = FLUF_MAKE_RESOURCE_PATH(1, 1, 0)
+    };
+    fluf_uri_path_t path = FLUF_MAKE_INSTANCE_PATH(1, 1);
+    AVS_UNIT_ASSERT_EQUAL(
+            sdm_operation_begin(&dm, FLUF_OP_DM_WRITE_REPLACE, true, &path),
+            SDM_ERR_MEMORY);
+    AVS_UNIT_ASSERT_EQUAL(sdm_operation_end(&dm), SDM_ERR_MEMORY);
+    Obj_Bootstrap.max_inst_count = 2;
 }

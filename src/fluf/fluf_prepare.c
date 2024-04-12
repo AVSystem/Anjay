@@ -10,6 +10,7 @@
 #include <avsystem/commons/avs_utils.h>
 
 #include <fluf/fluf.h>
+#include <fluf/fluf_config.h>
 #include <fluf/fluf_utils.h>
 
 #include "fluf_attributes.h"
@@ -36,7 +37,8 @@ static int add_uri_path(fluf_coap_options_t *opts, fluf_data_t *data) {
     } else if (data->operation == FLUF_OP_REGISTER) {
         res = _fluf_coap_options_add_string(opts, _FLUF_COAP_OPTION_URI_PATH,
                                             "rd");
-    } else if (data->operation == FLUF_OP_INF_SEND) {
+    } else if (data->operation == FLUF_OP_INF_CON_SEND
+               || data->operation == FLUF_OP_INF_NON_CON_SEND) {
         res = _fluf_coap_options_add_string(opts, _FLUF_COAP_OPTION_URI_PATH,
                                             "dp");
     } else if (data->operation == FLUF_OP_UPDATE
@@ -80,7 +82,9 @@ static int prepare_udp_msg(uint8_t *buff,
         data->coap.coap_udp.type = FLUF_COAP_UDP_TYPE_ACKNOWLEDGEMENT;
     } else {
         // client request with new msg_id and token
-        data->coap.coap_udp.type = FLUF_COAP_UDP_TYPE_CONFIRMABLE;
+        data->coap.coap_udp.type = (data->operation == FLUF_OP_INF_NON_CON_SEND)
+                                           ? FLUF_COAP_UDP_TYPE_NON_CONFIRMABLE
+                                           : FLUF_COAP_UDP_TYPE_CONFIRMABLE;
         data->coap.coap_udp.message_id = ++g_fluf_msg_id;
         data->coap.coap_udp.token.size = FLUF_COAP_MAX_TOKEN_LENGTH;
 
@@ -109,7 +113,8 @@ static int prepare_udp_msg(uint8_t *buff,
     case FLUF_OP_INF_NON_CON_NOTIFY:
         data->msg_code = FLUF_COAP_CODE_CONTENT;
         break;
-    case FLUF_OP_INF_SEND:
+    case FLUF_OP_INF_CON_SEND:
+    case FLUF_OP_INF_NON_CON_SEND:
         data->msg_code = FLUF_COAP_CODE_POST;
         break;
     case FLUF_OP_RESPONSE:

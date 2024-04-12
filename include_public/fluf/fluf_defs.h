@@ -44,6 +44,7 @@ extern "C" {
 #define FLUF_OBJ_ID_SECURITY 0U
 #define FLUF_OBJ_ID_SERVER 1U
 #define FLUF_OBJ_ID_ACCESS_CONTROL 2U
+#define FLUF_OBJ_ID_DEVICE 3U
 #define FLUF_OBJ_ID_OSCORE 21U
 
 /** Object ID */
@@ -71,6 +72,12 @@ typedef uint16_t fluf_riid_t;
     ((((cls) << _FLUF_COAP_CODE_CLASS_SHIFT) & _FLUF_COAP_CODE_CLASS_MASK) \
      | (((detail) << _FLUF_COAP_CODE_DETAIL_SHIFT)                         \
         & _FLUF_COAP_CODE_DETAIL_MASK))
+
+#define FLUF_I64_STR_MAX_LEN (sizeof("-9223372036854775808") - 1)
+#define FLUF_U16_STR_MAX_LEN (sizeof("65535") - 1)
+#define FLUF_U32_STR_MAX_LEN (sizeof("4294967295") - 1)
+#define FLUF_U64_STR_MAX_LEN (sizeof("18446744073709551615") - 1)
+#define FLUF_DOUBLE_STR_MAX_LEN (sizeof("-2.2250738585072014E-308") - 1)
 
 /**
  * @anchor fluf_coap_code_constants
@@ -312,6 +319,62 @@ typedef int fluf_get_external_data_t(void *buffer,
                                      size_t offset,
                                      void *user_args);
 
+typedef struct {
+    /**
+     * Pointer to the data buffer.
+     */
+    void *data;
+
+    /**
+     * Offset, in bytes, of the entire resource value, that the <c>data</c>
+     * field points to.
+     *
+     * For output contexts (e.g. responding to a Read operation), this currently
+     * MUST be 0. Please use the <c>external_data</c> variant for outputting
+     * large resources.
+     *
+     * For input contexts (e.g. parsing a Write operation payload), non-zero
+     * values will be returned when parsing large resources that span multiple
+     * data packets.
+     */
+    size_t offset;
+
+    /**
+     * Length, in bytes, of valid data at the buffer pointed to by <c>data</c>.
+     *
+     * For output contexts (e.g. responding to a Read operation) and resources
+     * of type @ref FLUF_DATA_TYPE_STRING, if you leave both <c>chunk_length</c>
+     * and <c>full_length_hint</c> as 0 and <c>data</c> is non-NULL, then
+     * <c>data</c> will be assumed to point to a null-terminated string and
+     * <c>strlen()</c> will be called to calculate its length instead.
+     */
+    size_t chunk_length;
+
+    /**
+     * Full length, in bytes, of the entire resource, if available. If all three
+     * of <c>offset</c>, <c>chunk_length</c> and <c>full_length_hint</c> are
+     * zero, this object refers to a zero-length resource. In all other cases,
+     * a value of 0 signifies that information about total length is not
+     * available.
+     *
+     * For output contexts (e.g. responding to a Read operation), this can be
+     * set to either 0 or a value equal to <c>chunk_length</c>. Other values
+     * will be treated as an error.
+     *
+     * For input contexts (e.g. parsing a Write operation payload), this will be
+     * set to 0 when parsing content formats that do not provide length
+     * information upfront (e.g. Plain Text or SenML JSON), until the entire
+     * resource is parsed. End of resource will always be marked with
+     * <c>full_length_hint</c> set to <c>offset + chunk_length</c>.
+     */
+    size_t full_length_hint;
+} fluf_bytes_or_string_value_t;
+
+typedef struct {
+    fluf_oid_t oid;
+    fluf_iid_t iid;
+} fluf_objlnk_value_t;
+
 /**
  * Stores a complete or partial value of a data model entry, check "Data Types"
  * appendix in LwM2M specification for more information.
@@ -321,58 +384,7 @@ typedef union {
      * Chunk of information valid for when the underlying data type is
      * @ref FLUF_DATA_TYPE_BYTES or @ref FLUF_DATA_TYPE_STRING.
      */
-    struct {
-        /**
-         * Pointer to the data buffer.
-         */
-        void *data;
-
-        /**
-         * Offset, in bytes, of the entire resource value, that the <c>data</c>
-         * field points to.
-         *
-         * For output contexts (e.g. responding to a Read operation), this
-         * currently MUST be 0. Please use the <c>external_data</c> variant for
-         * outputting large resources.
-         *
-         * For input contexts (e.g. parsing a Write operation payload), non-zero
-         * values will be returned when parsing large resources that span
-         * multiple data packtes.
-         */
-        size_t offset;
-
-        /**
-         * Length, in bytes, of valid data at the buffer pointed to by
-         * <c>data</c>.
-         *
-         * For output contexts (e.g. responding to a Read operation) and
-         * resources of type @ref FLUF_DATA_TYPE_STRING, if you leave both
-         * <c>chunk_length</c> and <c>full_length_hint</c> as 0 and <c>data</c>
-         * is non-NULL, then <c>data</c> will be assumed to point to a
-         * null-terminated string and <c>strlen()</c> will be called to
-         * calculate its length instead.
-         */
-        size_t chunk_length;
-
-        /**
-         * Full length, in bytes, of the entire resource, if available. If all
-         * three of <c>offset</c>, <c>chunk_length</c> and
-         * <c>full_length_hint</c> are zero, this object refers to a zero-length
-         * resource. In all other cases, a value of 0 signifies that information
-         * about total length is not available.
-         *
-         * For output contexts (e.g. responding to a Read operation), this can
-         * be set to either 0 or a value equal to <c>chunk_length</c>. Other
-         * values will be treated as an error.
-         *
-         * For input contexts (e.g. parsing a Write operation payload), this
-         * will be set to 0 when parsing content formats that do not provide
-         * length information upfront (e.g. Plain Text or SenML JSON), until the
-         * entire resource is parsed. End of resource will always be marked with
-         * <c>full_length_hint</c> set to <c>offset + chunk_length</c>.
-         */
-        size_t full_length_hint;
-    } bytes_or_string;
+    fluf_bytes_or_string_value_t bytes_or_string;
 
     /**
      * Configuration for resources generated using an external data callback,
@@ -429,10 +441,7 @@ typedef union {
      * Objlnk value, valid when the underlying data type is
      * @ref FLUF_DATA_TYPE_OBJLNK.
      */
-    struct {
-        fluf_oid_t oid;
-        fluf_iid_t iid;
-    } objlnk;
+    fluf_objlnk_value_t objlnk;
 
     /**
      * Time value, expressed as a UNIX timestamp, valid when the underlying data

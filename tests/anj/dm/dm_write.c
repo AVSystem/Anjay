@@ -22,7 +22,7 @@
 #include <anj/dm.h>
 #include <anj/dm_io.h>
 
-#include "../../../src/anj/dm_core.h"
+#include "../../../src/anj/dm/dm_core.h"
 
 #define OID_4 4 // test object
 
@@ -200,7 +200,7 @@ static int resource_write(dm_t *dm,
         return 0;
     }
     case RID_9_TIME: {
-        uint64_t time;
+        int64_t time;
         int retval = dm_get_time(ctx, &time);
         if (retval) {
             return retval;

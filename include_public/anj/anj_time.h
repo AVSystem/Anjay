@@ -12,10 +12,23 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @return The number of milliseconds that have elapsed since the system was
- * started
+ * started.
  */
 uint64_t anj_time_now(void);
+
+/**
+ * @return The current system Unix time expressed in milliseconds.
+ */
+uint64_t anj_time_real_now(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // ANJ_TIME_H

@@ -10,6 +10,8 @@
 #ifndef FLUF_IO_CBOR_DECODER_LL_H
 #define FLUF_IO_CBOR_DECODER_LL_H
 
+#include <fluf/fluf_config.h>
+
 #if defined(FLUF_WITH_SENML_CBOR) || defined(FLUF_WITH_LWM2M_CBOR) \
         || defined(FLUF_WITH_CBOR)
 
@@ -120,6 +122,7 @@ typedef struct {
 
 typedef enum {
     FLUF_CBOR_LL_SUBPARSER_NONE,
+    FLUF_CBOR_LL_SUBPARSER_STRING,
     FLUF_CBOR_LL_SUBPARSER_BYTES,
     FLUF_CBOR_LL_SUBPARSER_EPOCH_BASED_TIME,
 #    ifdef FLUF_WITH_CBOR_STRING_TIME
@@ -175,7 +178,7 @@ struct fluf_cbor_ll_decoder_struct {
 
     fluf_cbor_ll_subparser_type_t subparser_type;
     union {
-        fluf_cbor_ll_decoder_bytes_ctx_t bytes_or_string_time;
+        fluf_cbor_ll_decoder_bytes_ctx_t string_or_bytes_or_string_time;
 #    ifdef FLUF_WITH_CBOR_DECIMAL_FRACTIONS
         struct {
             size_t array_level;

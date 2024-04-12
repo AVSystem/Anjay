@@ -13,6 +13,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <fluf/fluf_config.h>
+
 #include "fluf_coap_udp_header.h"
 #include "fluf_options.h"
 

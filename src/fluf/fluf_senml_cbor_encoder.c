@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include <fluf/fluf_cbor_encoder_ll.h>
+#include <fluf/fluf_config.h>
 #include <fluf/fluf_io.h>
 #include <fluf/fluf_io_ctx.h>
 #include <fluf/fluf_utils.h>
@@ -19,7 +20,9 @@
 #include "fluf_cbor_encoder.h"
 #include "fluf_internal.h"
 
-#define _SENML_CBOR_PATH_MAX_LEN sizeof("/65534/65534/65534/65534")
+#ifdef FLUF_WITH_SENML_CBOR
+
+#    define _SENML_CBOR_PATH_MAX_LEN sizeof("/65534/65534/65534/65534")
 
 static size_t add_path(uint8_t *out_buff,
                        const fluf_uri_path_t *path,
@@ -32,8 +35,8 @@ static size_t add_path(uint8_t *out_buff,
 
     for (size_t i = start_index; i < end_index; i++) {
         path_buff[path_buf_pos++] = '/';
-        path_buf_pos += fluf_uint16_to_string_value(path->ids[i],
-                                                    &path_buff[path_buf_pos]);
+        path_buf_pos += fluf_uint16_to_string_value(&path_buff[path_buf_pos],
+                                                    path->ids[i]);
     }
 
     out_buf_pos += fluf_cbor_ll_encode_int(out_buff, label);
@@ -254,3 +257,4 @@ int _fluf_senml_cbor_encoder_init(fluf_io_out_ctx_t *ctx,
     senml_cbor->last_timestamp = 0.0;
     return 0;
 }
+#endif // FLUF_WITH_SENML_CBOR

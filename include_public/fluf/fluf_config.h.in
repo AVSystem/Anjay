@@ -1,0 +1,31 @@
+/*
+ * Copyright 2023-2024 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
+ *
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
+ */
+
+#ifndef FLUF_CONFIG_H
+#define FLUF_CONFIG_H
+
+#cmakedefine FLUF_WITH_CBOR
+#cmakedefine FLUF_WITH_CBOR_DECIMAL_FRACTIONS
+#cmakedefine FLUF_WITH_CBOR_HALF_FLOAT
+#cmakedefine FLUF_WITH_CBOR_INDEFINITE_BYTES
+#cmakedefine FLUF_WITH_CBOR_STRING_TIME
+#cmakedefine FLUF_WITH_LWM2M12
+#cmakedefine FLUF_WITH_LWM2M_CBOR
+#cmakedefine FLUF_WITHOUT_BOOTSTRAP_DISCOVER_CTX
+#cmakedefine FLUF_WITHOUT_DISCOVER_CTX
+#cmakedefine FLUF_WITHOUT_REGISTER_CTX
+#cmakedefine FLUF_WITH_PLAINTEXT
+#cmakedefine FLUF_WITH_SENML_CBOR
+#cmakedefine FLUF_WITH_OPAQUE
+
+#cmakedefine FLUF_MAX_ALLOWED_OPTIONS_NUMBER @FLUF_MAX_ALLOWED_OPTIONS_NUMBER@
+#cmakedefine FLUF_MAX_ALLOWED_LOCATION_PATHS_NUMBER @FLUF_MAX_ALLOWED_LOCATION_PATHS_NUMBER@
+#cmakedefine FLUF_ATTR_OPTION_MAX_SIZE @FLUF_ATTR_OPTION_MAX_SIZE@
+
+#endif // FLUF_CONFIG_H

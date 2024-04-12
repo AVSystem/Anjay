@@ -19,7 +19,7 @@
 #include <anj/dm.h>
 #include <anj/dm_io.h>
 
-#include "../../../src/anj/dm_core.h"
+#include "../../../src/anj/dm/dm_core.h"
 
 #define OID_4 4 // test object 4
 #define OID_5 5 // test object 5
@@ -135,7 +135,7 @@ static dm_installed_object_t objects[OBJ_MAX];
 static void fluf_uri_path_t_compare(const fluf_uri_path_t *a,
                                     const fluf_uri_path_t *b) {
     AVS_UNIT_ASSERT_EQUAL(a->uri_len, b->uri_len);
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(a->ids, b->ids, FLUF_URI_PATH_MAX_LENGTH);
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(a->ids, b->ids, sizeof(a->ids));
 }
 
 AVS_UNIT_TEST(DataModelRegisterDiscover, QueryDMForRegister) {

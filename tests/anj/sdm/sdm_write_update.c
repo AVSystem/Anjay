@@ -163,11 +163,13 @@ static int operation_validate(sdm_obj_t *obj) {
     };                                                                        \
     sdm_res_inst_t res_inst_1 = {                                             \
         .riid = 1,                                                            \
-        .res_value.value.int_value = 44                                       \
+        .res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(                     \
+                0, SDM_INIT_RES_VAL_I64(44))                                  \
     };                                                                        \
     sdm_res_inst_t res_inst_3 = {                                             \
         .riid = 3,                                                            \
-        .res_value.value.int_value = 44                                       \
+        .res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(                     \
+                0, SDM_INIT_RES_VAL_I64(44))                                  \
     };                                                                        \
     sdm_res_inst_t *res_insts[9] = { &res_inst_1, &res_inst_3 };              \
     sdm_res_inst_t *res_insts_5[1] = { &res_inst_1 };                         \
@@ -179,11 +181,13 @@ static int operation_validate(sdm_obj_t *obj) {
         },                                                                    \
         {                                                                     \
             .res_spec = &res_spec_1,                                          \
-            .value.res_value.value.int_value = 17                             \
+            .value.res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(           \
+                    0, SDM_INIT_RES_VAL_I64(17))                              \
         },                                                                    \
         {                                                                     \
             .res_spec = &res_spec_2,                                          \
-            .value.res_value.value.double_value = 18.0                        \
+            .value.res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(           \
+                    0, SDM_INIT_RES_VAL_DOUBLE(18.0))                         \
         },                                                                    \
         {                                                                     \
             .res_spec = &res_spec_3,                                          \
@@ -205,12 +209,13 @@ static int operation_validate(sdm_obj_t *obj) {
         },                                                                    \
         {                                                                     \
             .res_spec = &res_spec_6,                                          \
-            .value.res_value.value.int_value = 17                             \
+            .value.res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(           \
+                    0, SDM_INIT_RES_VAL_I64(17))                              \
         },                                                                    \
         {                                                                     \
             .res_spec = &res_spec_7,                                          \
-            .value.res_value.value.bytes_or_string.data = res_7_buff,         \
-            .value.res_value.resource_buffer_size = 50                        \
+            .value.res_value = &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(           \
+                    50, SDM_INIT_RES_VAL_STRING(res_7_buff))                  \
         }                                                                     \
     };                                                                        \
     sdm_obj_inst_t obj_inst_0 = {                                             \
@@ -302,8 +307,8 @@ AVS_UNIT_TEST(sdm_write_update, write_no_handler) {
     AVS_UNIT_ASSERT_EQUAL(call_counter_end, 1);
     AVS_UNIT_ASSERT_EQUAL(call_counter_validate, 1);
     AVS_UNIT_ASSERT_EQUAL(call_counter_res_write, 0);
-    AVS_UNIT_ASSERT_EQUAL(res_1[1].value.res_value.value.int_value, 77777);
-    AVS_UNIT_ASSERT_EQUAL(res_1[6].value.res_value.value.int_value, 88888);
+    AVS_UNIT_ASSERT_EQUAL(res_1[1].value.res_value->value.int_value, 77777);
+    AVS_UNIT_ASSERT_EQUAL(res_1[6].value.res_value->value.int_value, 88888);
     AVS_UNIT_ASSERT_EQUAL(call_result, SDM_OP_RESULT_SUCCESS_MODIFIED);
 }
 
@@ -347,7 +352,8 @@ AVS_UNIT_TEST(sdm_write_update, write_string_in_chunk) {
     AVS_UNIT_ASSERT_EQUAL(call_counter_res_write, 0);
     AVS_UNIT_ASSERT_SUCCESS(strcmp(res_7_buff, "123ABCDEF"));
     AVS_UNIT_ASSERT_EQUAL(
-            res_1[7].value.res_value.value.bytes_or_string.full_length_hint, 9);
+            res_1[7].value.res_value->value.bytes_or_string.full_length_hint,
+            9);
     AVS_UNIT_ASSERT_EQUAL(call_result, SDM_OP_RESULT_SUCCESS_MODIFIED);
 }
 
@@ -399,7 +405,7 @@ AVS_UNIT_TEST(sdm_write_update, multi_res_write_no_handler) {
     AVS_UNIT_ASSERT_SUCCESS(sdm_write_entry(&dm, &record));
     AVS_UNIT_ASSERT_SUCCESS(sdm_operation_end(&dm));
 
-    AVS_UNIT_ASSERT_EQUAL(res_inst_1.res_value.value.int_value, 555555);
+    AVS_UNIT_ASSERT_EQUAL(res_inst_1.res_value->value.int_value, 555555);
     AVS_UNIT_ASSERT_EQUAL(call_counter_begin, 1);
     AVS_UNIT_ASSERT_EQUAL(call_counter_end, 1);
     AVS_UNIT_ASSERT_EQUAL(call_counter_validate, 1);
@@ -427,7 +433,7 @@ AVS_UNIT_TEST(sdm_write_update, bootstrap_write) {
     AVS_UNIT_ASSERT_EQUAL(call_counter_end, 1);
     AVS_UNIT_ASSERT_EQUAL(call_counter_validate, 1);
     AVS_UNIT_ASSERT_EQUAL(call_counter_res_write, 0);
-    AVS_UNIT_ASSERT_EQUAL(res_1[2].value.res_value.value.double_value, 1.25);
+    AVS_UNIT_ASSERT_EQUAL(res_1[2].value.res_value->value.double_value, 1.25);
     AVS_UNIT_ASSERT_EQUAL(call_result, SDM_OP_RESULT_SUCCESS_MODIFIED);
 
     AVS_UNIT_ASSERT_SUCCESS(sdm_operation_begin(
@@ -646,14 +652,14 @@ AVS_UNIT_TEST(sdm_write_update, string_in_chunk_error) {
         .value.bytes_or_string.chunk_length = 3
     };
 
-    res_1[7].value.res_value.resource_buffer_size = 7;
+    res_1[7].value.res_value->resource_buffer_size = 7;
     AVS_UNIT_ASSERT_SUCCESS(sdm_operation_begin(
             &dm, FLUF_OP_DM_WRITE_PARTIAL_UPDATE, false, &path));
     AVS_UNIT_ASSERT_SUCCESS(sdm_write_entry(&dm, &record_1));
     AVS_UNIT_ASSERT_SUCCESS(sdm_write_entry(&dm, &record_2));
     AVS_UNIT_ASSERT_EQUAL(sdm_write_entry(&dm, &record_3), SDM_ERR_MEMORY);
     AVS_UNIT_ASSERT_EQUAL(sdm_operation_end(&dm), SDM_ERR_MEMORY);
-    res_1[7].value.res_value.resource_buffer_size = 50;
+    res_1[7].value.res_value->resource_buffer_size = 50;
 
     AVS_UNIT_ASSERT_EQUAL(call_counter_begin, 1);
     AVS_UNIT_ASSERT_EQUAL(call_counter_end, 1);

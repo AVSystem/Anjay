@@ -7,46 +7,45 @@
  * See the attached LICENSE file for details.
  */
 
-#ifndef CORE_OBJECTS_SDM_DEVICE
-#define CORE_OBJECTS_SDM_DEVICE
+#ifndef SDM_DEVICE_OBJECT_H
+#define SDM_DEVICE_OBJECT_H
 
+#include <anj/anj_config.h>
+
+#include <anj/anj_config.h>
 #include <anj/sdm_io.h>
 
-/**
- * /3/0/11 resource error codes.
- */
-typedef enum {
-    SDM_DEVICE_OBJ_ERR_CODE_NO_ERROR = 0,
-    SDM_DEVICE_OBJ_ERR_CODE_LOW_BATTERY_POWER = 1,
-    SDM_DEVICE_OBJ_ERR_CODE_EXT_POWER_SUPPLY_OFF = 2,
-    SDM_DEVICE_OBJ_ERR_CODE_GPS_MODULE_FAILURE = 3,
-    SDM_DEVICE_OBJ_ERR_CODE_LOW_RECV_SIGNAL_STRENGTH = 4,
-    SDM_DEVICE_OBJ_ERR_CODE_OUT_OF_MEMORY = 5,
-    SDM_DEVICE_OBJ_ERR_CODE_SMS_FAILURE = 6,
-    SDM_DEVICE_OBJ_ERR_CODE_IP_CONN_FAILURE = 7,
-    SDM_DEVICE_OBJ_ERR_CODE_PERIPHERAL_MALFUNCTION = 8,
-} sdm_device_obj_err_code_t;
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifdef ANJ_WITH_DEFAULT_DEVICE_OBJ
 
 /**
  * Device object initialization structure. Should be filled before passing to
  * @ref sdm_device_object_install .
+ *
+ * NOTE: when passing this structure to @ref sdm_device_object_install, its
+ * fields ARE NOT copied internally to SDM, which means all dynamically
+ * allocated strings MUST NOT be freed before removing the device object from
+ * the SDM.
  */
 typedef struct {
     // /3/0/0 resource value, optional
-    char *manufacturer;
+    const char *manufacturer;
     // /3/0/1 resource value, optional
-    char *model_number;
+    const char *model_number;
     // /3/0/2 resource value, optional
-    char *serial_number;
+    const char *serial_number;
     // /3/0/3 resource value, optional
-    char *firmware_version;
+    const char *firmware_version;
     // /3/0/4 resource callback, mandatory
     // if not set, execute on /3/0/4 (reboot) resource will fail
     sdm_res_execute_t *reboot_handler;
     // 3/0/16 resource value, mandatory
     // possible values: U (UDP), M (MQTT), H (HTTP), T (TCP), S (SMS),
     //                  N (Non-IP)
-    char *supported_binding_modes;
+    const char *supported_binding_modes;
 } sdm_device_object_init_t;
 
 /**
@@ -81,4 +80,10 @@ typedef struct {
 int sdm_device_object_install(sdm_data_model_t *dm,
                               sdm_device_object_init_t *obj_init);
 
-#endif // CORE_OBJECTS_SDM_DEVICE
+#endif // ANJ_WITH_DEFAULT_DEVICE_OBJ
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // SDM_DEVICE_OBJECT_H

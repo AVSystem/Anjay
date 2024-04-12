@@ -51,6 +51,7 @@ sdm_res_spec_t res_spec_new = {
 sdm_res_t res_new[] = {
     {
         .res_spec = &res_spec_new,
+        .value.res_value = &SDM_MAKE_RES_VALUE(0)
     }
 };
 sdm_obj_inst_t new_1 = {
@@ -60,7 +61,6 @@ sdm_obj_inst_t new_1 = {
 sdm_obj_inst_t new_2;
 static int
 inst_create(sdm_obj_t *obj, sdm_obj_inst_t **out_obj_inst, fluf_iid_t iid) {
-    (void) obj;
     (void) obj;
     call_iid = iid;
     if (!call_counter_create) {
@@ -92,6 +92,7 @@ static int operation_validate(sdm_obj_t *obj) {
     sdm_res_t res_1[] = {                                        \
         {                                                        \
             .res_spec = &res_spec_0,                             \
+            .value.res_value = &SDM_MAKE_RES_VALUE(0)            \
         }                                                        \
     };                                                           \
     sdm_obj_inst_t obj_inst_1 = {                                \
@@ -107,7 +108,7 @@ static int operation_validate(sdm_obj_t *obj) {
         .operation_begin = operation_begin,                      \
         .operation_end = operation_end,                          \
         .operation_validate = operation_validate,                \
-        .inst_create = inst_create                               \
+        .inst_create = inst_create,                              \
     };                                                           \
     sdm_obj_t Obj = {                                            \
         .oid = 1,                                                \
@@ -133,18 +134,24 @@ AVS_UNIT_TEST(sdm_create, create) {
     fluf_uri_path_t path = FLUF_MAKE_OBJECT_PATH(1);
     AVS_UNIT_ASSERT_SUCCESS(
             sdm_operation_begin(&dm, FLUF_OP_DM_CREATE, false, &path));
+    fluf_iid_t iid = FLUF_ID_INVALID;
+    AVS_UNIT_ASSERT_SUCCESS(sdm_create_object_instance(&dm, iid));
     AVS_UNIT_ASSERT_SUCCESS(sdm_operation_end(&dm));
     AVS_UNIT_ASSERT_EQUAL(call_iid, 0);
 
     path = FLUF_MAKE_OBJECT_PATH(1);
     AVS_UNIT_ASSERT_SUCCESS(
             sdm_operation_begin(&dm, FLUF_OP_DM_CREATE, false, &path));
+    iid = FLUF_ID_INVALID;
+    AVS_UNIT_ASSERT_SUCCESS(sdm_create_object_instance(&dm, iid));
     AVS_UNIT_ASSERT_SUCCESS(sdm_operation_end(&dm));
     AVS_UNIT_ASSERT_EQUAL(call_iid, 2);
 
     path = FLUF_MAKE_OBJECT_PATH(1);
     AVS_UNIT_ASSERT_SUCCESS(
             sdm_operation_begin(&dm, FLUF_OP_DM_CREATE, false, &path));
+    iid = FLUF_ID_INVALID;
+    AVS_UNIT_ASSERT_SUCCESS(sdm_create_object_instance(&dm, iid));
     AVS_UNIT_ASSERT_SUCCESS(sdm_operation_end(&dm));
     AVS_UNIT_ASSERT_EQUAL(call_iid, 4);
 
@@ -172,12 +179,16 @@ AVS_UNIT_TEST(sdm_create, create_with_write) {
     fluf_uri_path_t path = FLUF_MAKE_OBJECT_PATH(1);
     AVS_UNIT_ASSERT_SUCCESS(
             sdm_operation_begin(&dm, FLUF_OP_DM_CREATE, false, &path));
+    fluf_iid_t iid = FLUF_ID_INVALID;
+    AVS_UNIT_ASSERT_SUCCESS(sdm_create_object_instance(&dm, iid));
     AVS_UNIT_ASSERT_SUCCESS(sdm_operation_end(&dm));
     AVS_UNIT_ASSERT_EQUAL(call_iid, 0);
 
     path = FLUF_MAKE_OBJECT_PATH(1);
     AVS_UNIT_ASSERT_SUCCESS(
             sdm_operation_begin(&dm, FLUF_OP_DM_CREATE, false, &path));
+    iid = FLUF_ID_INVALID;
+    AVS_UNIT_ASSERT_SUCCESS(sdm_create_object_instance(&dm, iid));
     fluf_io_out_entry_t record = {
         .type = FLUF_DATA_TYPE_DOUBLE,
         .path = FLUF_MAKE_RESOURCE_PATH(1, 2, 7),
@@ -190,6 +201,8 @@ AVS_UNIT_TEST(sdm_create, create_with_write) {
     path = FLUF_MAKE_OBJECT_PATH(1);
     AVS_UNIT_ASSERT_SUCCESS(
             sdm_operation_begin(&dm, FLUF_OP_DM_CREATE, false, &path));
+    iid = FLUF_ID_INVALID;
+    AVS_UNIT_ASSERT_SUCCESS(sdm_create_object_instance(&dm, iid));
     AVS_UNIT_ASSERT_SUCCESS(sdm_operation_end(&dm));
     AVS_UNIT_ASSERT_EQUAL(call_iid, 4);
 
@@ -210,7 +223,8 @@ AVS_UNIT_TEST(sdm_create, create_with_write) {
     AVS_UNIT_ASSERT_EQUAL(call_counter_create, 3);
     AVS_UNIT_ASSERT_EQUAL(call_result, SDM_OP_RESULT_SUCCESS_MODIFIED);
 
-    AVS_UNIT_ASSERT_EQUAL(res_new[0].value.res_value.value.double_value, 17.25);
+    AVS_UNIT_ASSERT_EQUAL(res_new[0].value.res_value->value.double_value,
+                          17.25);
 }
 
 AVS_UNIT_TEST(sdm_create, create_error_write_path) {
@@ -219,18 +233,16 @@ AVS_UNIT_TEST(sdm_create, create_error_write_path) {
     fluf_uri_path_t path = FLUF_MAKE_OBJECT_PATH(1);
     AVS_UNIT_ASSERT_SUCCESS(
             sdm_operation_begin(&dm, FLUF_OP_DM_CREATE, false, &path));
+    fluf_iid_t iid = FLUF_ID_INVALID;
+    AVS_UNIT_ASSERT_SUCCESS(sdm_create_object_instance(&dm, iid));
     AVS_UNIT_ASSERT_SUCCESS(sdm_operation_end(&dm));
     AVS_UNIT_ASSERT_EQUAL(call_iid, 0);
 
     path = FLUF_MAKE_OBJECT_PATH(1);
     AVS_UNIT_ASSERT_SUCCESS(
             sdm_operation_begin(&dm, FLUF_OP_DM_CREATE, false, &path));
-    fluf_io_out_entry_t record = {
-        .type = FLUF_DATA_TYPE_DOUBLE,
-        .path = FLUF_MAKE_RESOURCE_PATH(1, 1, 0),
-        .value.int_value = 1
-    };
-    AVS_UNIT_ASSERT_EQUAL(sdm_write_entry(&dm, &record),
+    iid = 1;
+    AVS_UNIT_ASSERT_EQUAL(sdm_create_object_instance(&dm, iid),
                           SDM_ERR_METHOD_NOT_ALLOWED);
     AVS_UNIT_ASSERT_EQUAL(sdm_operation_end(&dm), SDM_ERR_METHOD_NOT_ALLOWED);
 
@@ -248,6 +260,8 @@ AVS_UNIT_TEST(sdm_create, callback_error) {
     inst_create_return_eror = true;
     AVS_UNIT_ASSERT_SUCCESS(
             sdm_operation_begin(&dm, FLUF_OP_DM_CREATE, false, &path));
+    fluf_iid_t iid = FLUF_ID_INVALID;
+    AVS_UNIT_ASSERT_EQUAL(sdm_create_object_instance(&dm, iid), -1);
     AVS_UNIT_ASSERT_EQUAL(sdm_operation_end(&dm), -1);
 
     AVS_UNIT_ASSERT_EQUAL(call_counter_begin, 1);
@@ -265,6 +279,8 @@ AVS_UNIT_TEST(sdm_create, error_no_space) {
     fluf_uri_path_t path = FLUF_MAKE_OBJECT_PATH(1);
     AVS_UNIT_ASSERT_SUCCESS(
             sdm_operation_begin(&dm, FLUF_OP_DM_CREATE, false, &path));
+    fluf_iid_t iid = FLUF_ID_INVALID;
+    AVS_UNIT_ASSERT_SUCCESS(sdm_create_object_instance(&dm, iid));
     AVS_UNIT_ASSERT_SUCCESS(sdm_operation_end(&dm));
     AVS_UNIT_ASSERT_EQUAL(call_iid, 0);
 
@@ -278,4 +294,27 @@ AVS_UNIT_TEST(sdm_create, error_no_space) {
     AVS_UNIT_ASSERT_EQUAL(call_counter_validate, 1);
     AVS_UNIT_ASSERT_EQUAL(call_counter_create, 1);
     AVS_UNIT_ASSERT_EQUAL(call_result, SDM_OP_RESULT_SUCCESS_MODIFIED);
+}
+
+AVS_UNIT_TEST(sdm_create, create_with_write_error) {
+    TEST_INIT(dm, obj);
+
+    fluf_uri_path_t path = FLUF_MAKE_OBJECT_PATH(1);
+    AVS_UNIT_ASSERT_SUCCESS(
+            sdm_operation_begin(&dm, FLUF_OP_DM_CREATE, false, &path));
+    fluf_iid_t iid = FLUF_ID_INVALID;
+    AVS_UNIT_ASSERT_SUCCESS(sdm_create_object_instance(&dm, iid));
+    fluf_io_out_entry_t record = {
+        .type = FLUF_DATA_TYPE_DOUBLE,
+        .path = FLUF_MAKE_RESOURCE_PATH(3, 2, 7),
+        .value.double_value = 17.25
+    };
+    AVS_UNIT_ASSERT_EQUAL(sdm_write_entry(&dm, &record), SDM_ERR_BAD_REQUEST);
+    AVS_UNIT_ASSERT_EQUAL(sdm_operation_end(&dm), SDM_ERR_BAD_REQUEST);
+
+    AVS_UNIT_ASSERT_EQUAL(call_counter_begin, 1);
+    AVS_UNIT_ASSERT_EQUAL(call_counter_end, 1);
+    AVS_UNIT_ASSERT_EQUAL(call_counter_validate, 0);
+    AVS_UNIT_ASSERT_EQUAL(call_counter_create, 1);
+    AVS_UNIT_ASSERT_EQUAL(call_result, SDM_OP_RESULT_FAILURE);
 }

@@ -21,8 +21,8 @@
     fluf_io_in_ctx_t ctx;                                                    \
     ASSERT_OK(fluf_io_in_ctx_init(&ctx, FLUF_OP_DM_WRITE_PARTIAL_UPDATE,     \
                                   &(Path), FLUF_COAP_FORMAT_OMA_LWM2M_TLV)); \
-    const fluf_res_value_t *value = NULL;                                    \
-    const fluf_uri_path_t *path = NULL;                                      \
+    const fluf_res_value_t *value;                                           \
+    const fluf_uri_path_t *path;                                             \
     ASSERT_OK(fluf_io_in_ctx_feed_payload(&ctx, Data, sizeof(Data) - 1,      \
                                           PayloadFinished))
 
@@ -156,19 +156,32 @@ AVS_UNIT_TEST(tlv_in_bytes, premature_end_with_payload_finished) {
 }
 
 AVS_UNIT_TEST(tlv_in_bytes, premature_end_with_feeding) {
-    static char DATA[] = "\xC7\x2A"
+    static char DATA[] = "\xC8\x2A\x0A"
                          "012";
     TEST_ENV(DATA, TEST_INSTANCE_PATH, false);
     fluf_data_type_t type_bitmask = FLUF_DATA_TYPE_BYTES;
     ASSERT_OK(fluf_io_in_ctx_get_entry(&ctx, &type_bitmask, &value, &path));
+    ASSERT_TRUE(fluf_uri_path_equal(path, &FLUF_MAKE_RESOURCE_PATH(3, 4, 42)));
     ASSERT_EQ(value->bytes_or_string.chunk_length, 3);
     ASSERT_EQ_BYTES(value->bytes_or_string.data, "012");
     ASSERT_EQ(fluf_io_in_ctx_get_entry(&ctx, &type_bitmask, &value, &path),
               FLUF_IO_WANT_NEXT_PAYLOAD);
-    ASSERT_OK(fluf_io_in_ctx_feed_payload(&ctx, "3456", 4, true));
+
+    ASSERT_OK(fluf_io_in_ctx_feed_payload(&ctx, "3456", 4, false));
+    path = &FLUF_MAKE_ROOT_PATH();
     ASSERT_OK(fluf_io_in_ctx_get_entry(&ctx, &type_bitmask, &value, &path));
+    ASSERT_TRUE(fluf_uri_path_equal(path, &FLUF_MAKE_RESOURCE_PATH(3, 4, 42)));
     ASSERT_EQ(value->bytes_or_string.chunk_length, 4);
     ASSERT_EQ_BYTES(value->bytes_or_string.data, "3456");
+    ASSERT_EQ(fluf_io_in_ctx_get_entry(&ctx, &type_bitmask, &value, &path),
+              FLUF_IO_WANT_NEXT_PAYLOAD);
+
+    ASSERT_OK(fluf_io_in_ctx_feed_payload(&ctx, "789", 3, true));
+    path = &FLUF_MAKE_ROOT_PATH();
+    ASSERT_OK(fluf_io_in_ctx_get_entry(&ctx, &type_bitmask, &value, &path));
+    ASSERT_TRUE(fluf_uri_path_equal(path, &FLUF_MAKE_RESOURCE_PATH(3, 4, 42)));
+    ASSERT_EQ(value->bytes_or_string.chunk_length, 3);
+    ASSERT_EQ_BYTES(value->bytes_or_string.data, "789");
     ASSERT_EQ(fluf_io_in_ctx_get_entry(&ctx, &type_bitmask, &value, &path),
               FLUF_IO_EOF);
 }
@@ -748,13 +761,22 @@ AVS_UNIT_TEST(tlv_in_general_tests, check_want_disambiguation) {
                                   &TEST_INSTANCE_PATH,
                                   FLUF_COAP_FORMAT_OMA_LWM2M_TLV));
     fluf_data_type_t type_bitmask = FLUF_DATA_TYPE_ANY;
-    const fluf_res_value_t *value = NULL;
-    const fluf_uri_path_t *path = NULL;
+    const fluf_res_value_t *value;
+    const fluf_uri_path_t *path;
     ASSERT_OK(fluf_io_in_ctx_feed_payload(&ctx, in_tlv, 9, true));
     ASSERT_EQ(fluf_io_in_ctx_get_entry(&ctx, &type_bitmask, &value, &path),
               FLUF_IO_WANT_TYPE_DISAMBIGUATION);
+    ASSERT_NOT_NULL(path);
     ASSERT_TRUE(fluf_uri_path_equal(path, &FLUF_MAKE_RESOURCE_PATH(3, 4, 5)));
     ASSERT_NULL(value);
+
+    // make sure that calling get_entry() again is handled
+    ASSERT_EQ(fluf_io_in_ctx_get_entry(&ctx, &type_bitmask, &value, &path),
+              FLUF_IO_WANT_TYPE_DISAMBIGUATION);
+    ASSERT_NOT_NULL(path);
+    ASSERT_TRUE(fluf_uri_path_equal(path, &FLUF_MAKE_RESOURCE_PATH(3, 4, 5)));
+    ASSERT_NULL(value);
+
     type_bitmask = FLUF_DATA_TYPE_BYTES;
     ASSERT_OK(fluf_io_in_ctx_get_entry(&ctx, &type_bitmask, &value, &path));
     ASSERT_TRUE(fluf_uri_path_equal(path, &MAKE_TEST_RESOURCE_PATH(5)));

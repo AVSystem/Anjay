@@ -20,9 +20,9 @@
 #include <anj/dm.h>
 #include <anj/dm_io.h>
 
-#include "../dm_core.h"
-#include "../dm_utils/dm_utils.h"
-#include "../dm_utils/dm_utils_core.h"
+#include "dm_core.h"
+#include "dm_utils.h"
+#include "dm_utils_core.h"
 
 static int
 preverify_resource_before_writing(dm_t *dm,

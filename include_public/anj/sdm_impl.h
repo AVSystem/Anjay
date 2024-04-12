@@ -14,6 +14,7 @@
 #include <fluf/fluf_defs.h>
 #include <fluf/fluf_io.h>
 
+#include <anj/anj_config.h>
 #include <anj/sdm.h>
 
 #ifdef __cplusplus
@@ -36,38 +37,57 @@ extern "C" {
  */
 typedef struct {
     union {
+        /** Used in handling @ref FLUF_OP_DM_READ operation. */
         fluf_io_out_ctx_t out_ctx;
+        /**
+         * Used in handling @ref FLUF_OP_DM_WRITE_REPLACE,
+         * @ref FLUF_OP_DM_WRITE_PARTIAL_UPDATE and @ref FLUF_OP_DM_CREATE
+         * operations.
+         */
         fluf_io_in_ctx_t in_ctx;
+        /**
+         * Used in handling @ref FLUF_OP_REGISTER and @ref FLUF_OP_UPDATE
+         * operation.
+         */
         fluf_io_register_ctx_t register_ctx;
+        /** Used in handling @ref FLUF_OP_DM_DISCOVER operation. */
         fluf_io_discover_ctx_t discover_ctx;
+        /**
+         * Used in handling @ref FLUF_OP_DM_DISCOVER operation for Bootstrap
+         * Server connection.
+         */
         fluf_io_bootstrap_discover_ctx_t bootstrap_discover_ctx;
     } fluf_io;
     bool in_progress;
     bool data_to_copy;
     fluf_op_t op;
     uint32_t block_number;
+    size_t block_buff_size;
 } sdm_process_ctx_t;
 
 /**
  * Model implementation of <c>SDM API</c> handling. Call it after @ref
  * fluf_msg_decode call. Processes all LwM2M requests related to the data model.
  * For all operations that read data from data model, the read values encoded in
- * the format indicated in @p msg will be written to the @p out_buff. This
- * function is designed to handle block operations (RFC7252). If the request
- * comes in several packets, call it separately for each @p msg. If the response
- * does not fit in the @p out_buff then @ref SDM_IMPL_BLOCK_TRANSFER_NEEDED will
- * be returned, in which case send the response as a single block and call the
- * function again. After message handling @p in_out_msg is used to prepare the
- * answer. If response payload doesn't fit in @p out_buff, block option will be
- * added to the @p in_out_msg.
+ * the format indicated in @p in_out_msg will be written to the @p out_buff.
+ * This function is designed to handle block operations (RFC7252). If the
+ * request comes in several packets, call it separately for each @p in_out_msg.
+ * If the response does not fit in the @p out_buff then @ref
+ * SDM_IMPL_BLOCK_TRANSFER_NEEDED will be returned, in which case send the
+ * response as a single block and call the function again. After message
+ * handling @p in_out_msg is used to prepare the answer. If response payload
+ * doesn't fit in @p out_buff, block option will be added to the @p in_out_msg.
  *
  * IMPORTANT: In Block-Wise Transfer in CoAP single block size is always
- * power of two. If @p out_buff_len does not meet this condition and the entire
- * payload does not fit in @p out_buff then an error will be returned.
+ * power of two (range from <c>16</c> to <c>1024</c>). If @p out_buff_len does
+ * not meet this condition then an error will be returned.
  *
  * IMPORTANT: If for some reason you want to handle data model related requests
  * by yourself, then use @ref sdm_process as a reference. However, in most
  * applications, the use of this function meets all requirements.
+ *
+ * IMPORTANT: For @ref FLUF_OP_UPDATE operation use this API only if the date
+ * model has changed, otherwise message doesn't contain payload.
  *
  * @param      ctx                      SDM implementation context.
  * @param      dm                       Data model context.
@@ -96,9 +116,8 @@ int sdm_process(sdm_process_ctx_t *ctx,
                 size_t out_buff_len);
 
 /**
- * Can be used to cancel ongoing operation. There are 2 main usage scenarios:
- *  - the lack of support for block operations,
- *  - transaction is cancelled.
+ * Can be used by user to force an abort of an ongoing operation, for example,
+ * when a timeout occurs or when a connection to the server is closed.
  *
  * @param ctx  SDM implementation context.
  * @param dm   Data model context.

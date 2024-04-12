@@ -36,10 +36,11 @@ static int update_res_val(sdm_data_model_t *dm, fluf_res_value_t *value) {
     sdm_res_value_t *res_val;
     if (_sdm_is_multi_instance_resource(
                 entity_ptrs->res->res_spec->operation)) {
-        res_val = &entity_ptrs->res_inst->res_value;
+        res_val = entity_ptrs->res_inst->res_value;
     } else {
-        res_val = &entity_ptrs->res->value.res_value;
+        res_val = entity_ptrs->res->value.res_value;
     }
+    assert(res_val);
 
     switch (entity_ptrs->res->res_spec->type) {
     case FLUF_DATA_TYPE_INT:
@@ -71,7 +72,7 @@ static int update_res_val(sdm_data_model_t *dm, fluf_res_value_t *value) {
                value->bytes_or_string.chunk_length);
         break;
     default:
-        break;
+        return SDM_ERR_BAD_REQUEST;
     }
 
     return 0;
@@ -81,15 +82,12 @@ static int resource_type_check(sdm_data_model_t *dm,
                                fluf_io_out_entry_t *record) {
     _sdm_entity_ptrs_t *entity_ptrs = &dm->entity_ptrs;
     if (entity_ptrs->res->res_spec->type != record->type) {
-        // Bootstrap Server can try to modify
-        // FLUF_DATA_TYPE_EXTERNAL_STRING/BYTES.
-        if (dm->boostrap_operation
-                && ((record->type == FLUF_DATA_TYPE_STRING
-                     && entity_ptrs->res->res_spec->type
-                                == FLUF_DATA_TYPE_EXTERNAL_STRING)
-                    || (record->type == FLUF_DATA_TYPE_BYTES
-                        && entity_ptrs->res->res_spec->type
-                                   == FLUF_DATA_TYPE_EXTERNAL_BYTES))) {
+        if ((record->type == FLUF_DATA_TYPE_STRING
+             && entity_ptrs->res->res_spec->type
+                        == FLUF_DATA_TYPE_EXTERNAL_STRING)
+                || (record->type == FLUF_DATA_TYPE_BYTES
+                    && entity_ptrs->res->res_spec->type
+                               == FLUF_DATA_TYPE_EXTERNAL_BYTES)) {
             return 0;
         }
         return SDM_ERR_BAD_REQUEST;
@@ -99,7 +97,24 @@ static int resource_type_check(sdm_data_model_t *dm,
 
 static bool is_writable_resource(sdm_res_operation_t op, bool is_bootstrap) {
     return op == SDM_RES_W || op == SDM_RES_RW || op == SDM_RES_WM
-           || op == SDM_RES_RWM || (is_bootstrap && op == SDM_RES_BS_RW);
+           || op == SDM_RES_RWM || (is_bootstrap && op != SDM_RES_E);
+}
+
+// HACK: booststrap server can write to instance that does not exist in that
+// case we need to create it first
+static void maybe_create_instance(sdm_data_model_t *dm) {
+    fluf_uri_path_t *path = &dm->op_ctx.write_ctx.path;
+    if (!dm->boostrap_operation) {
+        dm->result == SDM_ERR_NOT_FOUND;
+        return;
+    }
+    dm->op_ctx.write_ctx.instance_creation_attempted = false;
+    dm->result = 0;
+    dm->result = sdm_create_object_instance(dm, path->ids[FLUF_ID_IID]);
+    if (dm->result) {
+        return;
+    }
+    dm->result = _sdm_get_obj_ptrs(dm->entity_ptrs.obj, path, &dm->entity_ptrs);
 }
 
 static int begin_write_replace_operation(sdm_data_model_t *dm) {
@@ -111,6 +126,10 @@ static int begin_write_replace_operation(sdm_data_model_t *dm) {
         return dm->result;
     }
     dm->result = _sdm_get_obj_ptrs(obj, path, &dm->entity_ptrs);
+    if (dm->result == SDM_ERR_NOT_FOUND) {
+        dm->entity_ptrs.obj = obj;
+        maybe_create_instance(dm);
+    }
     if (dm->result) {
         return dm->result;
     }
@@ -120,7 +139,7 @@ static int begin_write_replace_operation(sdm_data_model_t *dm) {
     if (fluf_uri_path_is(path, FLUF_ID_IID)) {
         if (!obj->obj_handlers || !obj->obj_handlers->inst_reset) {
             sdm_log(ERROR, "inst_reset handler not defined");
-            dm->result = SDM_ERR_INTERNAL;
+            dm->result = SDM_ERR_METHOD_NOT_ALLOWED;
             return dm->result;
         }
         dm->result = obj->obj_handlers->inst_reset(obj, entity_ptrs->inst);
@@ -165,7 +184,7 @@ static int handle_res_instances(sdm_data_model_t *dm,
     }
     if (!res->res_handlers || !res->res_handlers->res_inst_create) {
         sdm_log(ERROR, "res_inst_create handler not defined");
-        return SDM_ERR_INTERNAL;
+        return SDM_ERR_METHOD_NOT_ALLOWED;
     }
 
     entity_ptrs->res_inst = NULL;
@@ -227,15 +246,12 @@ static int verify_resource_before_writing(sdm_data_model_t *dm,
 
 int sdm_write_entry(sdm_data_model_t *dm, fluf_io_out_entry_t *record) {
     assert(dm && record);
-
-    if (dm->operation != FLUF_OP_DM_CREATE
-            && dm->operation != FLUF_OP_DM_WRITE_REPLACE
-            && dm->operation != FLUF_OP_DM_WRITE_PARTIAL_UPDATE) {
-        sdm_log(ERROR, "Incorrect operation");
-        dm->result = SDM_ERR_LOGIC;
-        return dm->result;
-    }
-    _SDM_ONGOING_OP_ERROR_CHECK(dm);
+    assert(dm->op_in_progress && !dm->result);
+    assert(dm->operation == FLUF_OP_DM_CREATE
+           || dm->operation == FLUF_OP_DM_WRITE_REPLACE
+           || dm->operation == FLUF_OP_DM_WRITE_PARTIAL_UPDATE);
+    assert(dm->operation != FLUF_OP_DM_CREATE
+           || dm->op_ctx.write_ctx.instance_creation_attempted);
 
     if (!fluf_uri_path_has(&record->path, FLUF_ID_RID)) {
         sdm_log(ERROR, "Invalid path");
@@ -248,23 +264,11 @@ int sdm_write_entry(sdm_data_model_t *dm, fluf_io_out_entry_t *record) {
         return dm->result;
     }
 
-    if (dm->operation == FLUF_OP_DM_CREATE
-            && !dm->op_ctx.write_ctx.instance_created) {
-        dm->op_ctx.write_ctx.instance_created = true;
-        // HACK: We can create instance now because we didn't know its ID
-        // before.
-        dm->result =
-                _sdm_create_object_instance(dm, record->path.ids[FLUF_ID_IID]);
-        if (dm->result) {
-            return dm->result;
-        }
-    }
-
-    // lack of resource instance is not the error
+    // lack of resource instance is not an error
     dm->result = _sdm_get_obj_ptrs(
             dm->entity_ptrs.obj,
-            &FLUF_MAKE_RESOURCE_PATH(record->path.ids[FLUF_ID_OID],
-                                     record->path.ids[FLUF_ID_IID],
+            &FLUF_MAKE_RESOURCE_PATH(dm->op_ctx.write_ctx.path.ids[FLUF_ID_OID],
+                                     dm->op_ctx.write_ctx.path.ids[FLUF_ID_IID],
                                      record->path.ids[FLUF_ID_RID]),
             &dm->entity_ptrs);
     if (dm->result) {

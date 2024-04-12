@@ -22,7 +22,7 @@
 #include <anj/dm.h>
 #include <anj/dm_io.h>
 
-#include "../../../src/anj/dm_core.h"
+#include "../../../src/anj/dm/dm_core.h"
 
 #define OID_4 4 // test object 1
 #define OID_5 5 // test object 2

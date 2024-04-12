@@ -7,11 +7,14 @@
  * See the attached LICENSE file for details.
  */
 
-#include <string.h>
+#ifdef FLUF_WITH_CBOR
 
-#include <avsystem/commons/avs_unit_test.h>
+#    include <string.h>
 
-#include <fluf/fluf_io.h>
+#    include <avsystem/commons/avs_unit_test.h>
+
+#    include <fluf/fluf_io.h>
+#    include <fluf/fluf_utils.h>
 
 typedef struct {
     fluf_io_out_ctx_t ctx;
@@ -24,8 +27,9 @@ typedef struct {
 static void cbor_test_setup(cbor_test_env_t *env) {
     memset(env, 0, sizeof(cbor_test_env_t));
     env->buffer_length = sizeof(env->buf);
-    AVS_UNIT_ASSERT_SUCCESS(fluf_io_out_ctx_init(
-            &env->ctx, FLUF_OP_DM_READ, NULL, 1, FLUF_COAP_FORMAT_NOT_DEFINED));
+    AVS_UNIT_ASSERT_SUCCESS(fluf_io_out_ctx_init(&env->ctx, FLUF_OP_DM_READ,
+                                                 &FLUF_MAKE_ROOT_PATH(), 1,
+                                                 FLUF_COAP_FORMAT_CBOR));
     AVS_UNIT_ASSERT_EQUAL(fluf_io_out_ctx_get_format(&env->ctx),
                           FLUF_COAP_FORMAT_CBOR);
 }
@@ -35,11 +39,11 @@ typedef struct {
     size_t size;
 } test_data_t;
 
-#define MAKE_TEST_DATA(Data)     \
-    (test_data_t) {              \
-        .data = Data,            \
-        .size = sizeof(Data) - 1 \
-    }
+#    define MAKE_TEST_DATA(Data)     \
+        (test_data_t) {              \
+            .data = Data,            \
+            .size = sizeof(Data) - 1 \
+        }
 
 static void verify_bytes(cbor_test_env_t *env, test_data_t *data) {
     AVS_UNIT_ASSERT_EQUAL(env->out_length, data->size);
@@ -59,16 +63,17 @@ static void test_simple_variable(test_data_t *data,
     verify_bytes(&env, data);
 }
 
-#define TEST_INT_IMPL(Name, Num, Data)           \
-    AVS_UNIT_TEST(cbor_encoder, Name) {          \
-        test_data_t data = MAKE_TEST_DATA(Data); \
-        fluf_io_out_entry_t value = { 0 };       \
-        value.type = FLUF_DATA_TYPE_INT;         \
-        value.value.int_value = Num;             \
-        test_simple_variable(&data, &value);     \
-    }
+#    define TEST_INT_IMPL(Name, Num, Data)           \
+        AVS_UNIT_TEST(cbor_encoder, Name) {          \
+            test_data_t data = MAKE_TEST_DATA(Data); \
+            fluf_io_out_entry_t value = { 0 };       \
+            value.type = FLUF_DATA_TYPE_INT;         \
+            value.value.int_value = Num;             \
+            test_simple_variable(&data, &value);     \
+        }
 
-#define TEST_INT(Num, Data) TEST_INT_IMPL(AVS_CONCAT(int, __LINE__), Num, Data);
+#    define TEST_INT(Num, Data) \
+        TEST_INT_IMPL(AVS_CONCAT(int, __LINE__), Num, Data);
 
 TEST_INT(0, "\x00")
 TEST_INT(1, "\x01")
@@ -100,47 +105,47 @@ TEST_INT(-257, "\x39\x01\x00")
 TEST_INT(-1000, "\x39\x03\xE7")
 TEST_INT(INT64_MIN, "\x3B\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF")
 
-#define TEST_TIME_IMPL(Name, Num, Data)          \
-    AVS_UNIT_TEST(cbor_encoder, Name) {          \
-        test_data_t data = MAKE_TEST_DATA(Data); \
-        fluf_io_out_entry_t value = { 0 };       \
-        value.type = FLUF_DATA_TYPE_TIME;        \
-        value.value.time_value = Num;            \
-        test_simple_variable(&data, &value);     \
-    }
+#    define TEST_TIME_IMPL(Name, Num, Data)          \
+        AVS_UNIT_TEST(cbor_encoder, Name) {          \
+            test_data_t data = MAKE_TEST_DATA(Data); \
+            fluf_io_out_entry_t value = { 0 };       \
+            value.type = FLUF_DATA_TYPE_TIME;        \
+            value.value.time_value = Num;            \
+            test_simple_variable(&data, &value);     \
+        }
 
-#define TEST_TIME(Num, Data) \
-    TEST_TIME_IMPL(AVS_CONCAT(time_, __LINE__), Num, Data);
+#    define TEST_TIME(Num, Data) \
+        TEST_TIME_IMPL(AVS_CONCAT(time_, __LINE__), Num, Data);
 
 TEST_TIME(24, "\xC1\x18\x18")
 TEST_TIME(UINT32_MAX, "\xC1\x1A\xFF\xFF\xFF\xFF")
 
-#define TEST_BOOL_IMPL(Name, Num, Data)          \
-    AVS_UNIT_TEST(cbor_encoder, Name) {          \
-        test_data_t data = MAKE_TEST_DATA(Data); \
-        fluf_io_out_entry_t value = { 0 };       \
-        value.type = FLUF_DATA_TYPE_BOOL;        \
-        value.value.bool_value = Num;            \
-        test_simple_variable(&data, &value);     \
-    }
+#    define TEST_BOOL_IMPL(Name, Num, Data)          \
+        AVS_UNIT_TEST(cbor_encoder, Name) {          \
+            test_data_t data = MAKE_TEST_DATA(Data); \
+            fluf_io_out_entry_t value = { 0 };       \
+            value.type = FLUF_DATA_TYPE_BOOL;        \
+            value.value.bool_value = Num;            \
+            test_simple_variable(&data, &value);     \
+        }
 
-#define TEST_BOOL(Num, Data) \
-    TEST_BOOL_IMPL(AVS_CONCAT(bool, __LINE__), Num, Data);
+#    define TEST_BOOL(Num, Data) \
+        TEST_BOOL_IMPL(AVS_CONCAT(bool, __LINE__), Num, Data);
 
 TEST_BOOL(true, "\xF5")
 TEST_BOOL(false, "\xF4")
 
-#define TEST_DOUBLE_IMPL(Name, Num, Data)        \
-    AVS_UNIT_TEST(cbor_encoder, Name) {          \
-        test_data_t data = MAKE_TEST_DATA(Data); \
-        fluf_io_out_entry_t value = { 0 };       \
-        value.type = FLUF_DATA_TYPE_DOUBLE;      \
-        value.value.double_value = Num;          \
-        test_simple_variable(&data, &value);     \
-    }
+#    define TEST_DOUBLE_IMPL(Name, Num, Data)        \
+        AVS_UNIT_TEST(cbor_encoder, Name) {          \
+            test_data_t data = MAKE_TEST_DATA(Data); \
+            fluf_io_out_entry_t value = { 0 };       \
+            value.type = FLUF_DATA_TYPE_DOUBLE;      \
+            value.value.double_value = Num;          \
+            test_simple_variable(&data, &value);     \
+        }
 
-#define TEST_DOUBLE(Num, Data) \
-    TEST_DOUBLE_IMPL(AVS_CONCAT(double, __LINE__), Num, Data);
+#    define TEST_DOUBLE(Num, Data) \
+        TEST_DOUBLE_IMPL(AVS_CONCAT(double, __LINE__), Num, Data);
 
 TEST_DOUBLE(-0.0, "\xFA\x80\x00\x00\x00")
 TEST_DOUBLE(100000.0, "\xFA\x47\xC3\x50\x00")
@@ -150,18 +155,18 @@ TEST_DOUBLE(100000.0, "\xFA\x47\xC3\x50\x00")
 TEST_DOUBLE(1.0e+300, "\xFB\x7E\x37\xE4\x3C\x88\x00\x75\x9C")
 TEST_DOUBLE(-4.1, "\xFB\xC0\x10\x66\x66\x66\x66\x66\x66")
 
-#define TEST_OBJLINK_IMPL(Name, Oid, Iid, Data)  \
-    AVS_UNIT_TEST(cbor_encoder, Name) {          \
-        test_data_t data = MAKE_TEST_DATA(Data); \
-        fluf_io_out_entry_t value = { 0 };       \
-        value.type = FLUF_DATA_TYPE_OBJLNK;      \
-        value.value.objlnk.oid = Oid;            \
-        value.value.objlnk.iid = Iid;            \
-        test_simple_variable(&data, &value);     \
-    }
+#    define TEST_OBJLINK_IMPL(Name, Oid, Iid, Data)  \
+        AVS_UNIT_TEST(cbor_encoder, Name) {          \
+            test_data_t data = MAKE_TEST_DATA(Data); \
+            fluf_io_out_entry_t value = { 0 };       \
+            value.type = FLUF_DATA_TYPE_OBJLNK;      \
+            value.value.objlnk.oid = Oid;            \
+            value.value.objlnk.iid = Iid;            \
+            test_simple_variable(&data, &value);     \
+        }
 
-#define TEST_OBJLINK(Oid, Iid, Data) \
-    TEST_OBJLINK_IMPL(AVS_CONCAT(objlink, __LINE__), Oid, Iid, Data);
+#    define TEST_OBJLINK(Oid, Iid, Data) \
+        TEST_OBJLINK_IMPL(AVS_CONCAT(objlink, __LINE__), Oid, Iid, Data);
 
 TEST_OBJLINK(0, 0, "\x63\x30\x3A\x30");
 TEST_OBJLINK(1, 1, "\x63\x31\x3A\x31");
@@ -186,17 +191,17 @@ static void test_string(test_data_t *data, fluf_io_out_entry_t *value) {
     verify_bytes(&env, data);
 };
 
-#define TEST_STRING_NAMED(Name, Text, ExpectedHeader)               \
-    AVS_UNIT_TEST(cbor_encoder, string_##Name) {                    \
-        test_data_t expected = MAKE_TEST_DATA(ExpectedHeader Text); \
-        fluf_io_out_entry_t value = { 0 };                          \
-        value.type = FLUF_DATA_TYPE_STRING;                         \
-        value.value.bytes_or_string.data = Text;                    \
-        test_string(&expected, &value);                             \
-    }
+#    define TEST_STRING_NAMED(Name, Text, ExpectedHeader)               \
+        AVS_UNIT_TEST(cbor_encoder, string_##Name) {                    \
+            test_data_t expected = MAKE_TEST_DATA(ExpectedHeader Text); \
+            fluf_io_out_entry_t value = { 0 };                          \
+            value.type = FLUF_DATA_TYPE_STRING;                         \
+            value.value.bytes_or_string.data = Text;                    \
+            test_string(&expected, &value);                             \
+        }
 
-#define TEST_STRING(Text, ExpectedHeader) \
-    TEST_STRING_NAMED(Text, AVS_QUOTE(Text), ExpectedHeader)
+#    define TEST_STRING(Text, ExpectedHeader) \
+        TEST_STRING_NAMED(Text, AVS_QUOTE(Text), ExpectedHeader)
 
 TEST_STRING(, "\x60")
 TEST_STRING(a, "\x61")
@@ -218,15 +223,15 @@ TEST_STRING_NAMED(
         "atfqeavhvfdfbnsumtletbaheyacrkwgectlrdrizenuvi",
         "\x79\x01\x00")
 
-#define TEST_BYTES(Name, Data, ExpectedHeader)                       \
-    AVS_UNIT_TEST(cbor_encoder, bytes_##Name) {                      \
-        fluf_io_out_entry_t value = { 0 };                           \
-        value.type = FLUF_DATA_TYPE_BYTES;                           \
-        value.value.bytes_or_string.chunk_length = sizeof(Data) - 1; \
-        value.value.bytes_or_string.data = Data;                     \
-        test_data_t expected = MAKE_TEST_DATA(ExpectedHeader Data);  \
-        test_string(&expected, &value);                              \
-    }
+#    define TEST_BYTES(Name, Data, ExpectedHeader)                       \
+        AVS_UNIT_TEST(cbor_encoder, bytes_##Name) {                      \
+            fluf_io_out_entry_t value = { 0 };                           \
+            value.type = FLUF_DATA_TYPE_BYTES;                           \
+            value.value.bytes_or_string.chunk_length = sizeof(Data) - 1; \
+            value.value.bytes_or_string.data = Data;                     \
+            test_data_t expected = MAKE_TEST_DATA(ExpectedHeader Data);  \
+            test_string(&expected, &value);                              \
+        }
 
 TEST_BYTES(0bytes, "", "\x40")
 TEST_BYTES(4bytes, "\x01\x02\x03\x04", "\x44")
@@ -286,27 +291,29 @@ static int external_data_handler(void *buffer,
     return 0;
 }
 
-#define TEST_STRING_EXT(Name, Text, ExpectedHeader)                          \
-    AVS_UNIT_TEST(cbor_encoder, string_ext_##Name) {                         \
-        test_data_t expected = MAKE_TEST_DATA(ExpectedHeader Text);          \
-        fluf_io_out_entry_t value = { 0 };                                   \
-        value.type = FLUF_DATA_TYPE_EXTERNAL_STRING;                         \
-        value.value.external_data.get_external_data = external_data_handler; \
-        value.value.external_data.length = sizeof(Text) - 1;                 \
-        ptr_for_callback = Text;                                             \
-        test_string(&expected, &value);                                      \
-    }
+#    define TEST_STRING_EXT(Name, Text, ExpectedHeader)                 \
+        AVS_UNIT_TEST(cbor_encoder, string_ext_##Name) {                \
+            test_data_t expected = MAKE_TEST_DATA(ExpectedHeader Text); \
+            fluf_io_out_entry_t value = { 0 };                          \
+            value.type = FLUF_DATA_TYPE_EXTERNAL_STRING;                \
+            value.value.external_data.get_external_data =               \
+                    external_data_handler;                              \
+            value.value.external_data.length = sizeof(Text) - 1;        \
+            ptr_for_callback = Text;                                    \
+            test_string(&expected, &value);                             \
+        }
 
-#define TEST_BYTES_EXT(Name, Text, ExpectedHeader)                           \
-    AVS_UNIT_TEST(cbor_encoder, bytes_ext_##Name) {                          \
-        test_data_t expected = MAKE_TEST_DATA(ExpectedHeader Text);          \
-        fluf_io_out_entry_t value = { 0 };                                   \
-        value.type = FLUF_DATA_TYPE_EXTERNAL_BYTES;                          \
-        value.value.external_data.get_external_data = external_data_handler; \
-        value.value.external_data.length = sizeof(Text) - 1;                 \
-        ptr_for_callback = Text;                                             \
-        test_string(&expected, &value);                                      \
-    }
+#    define TEST_BYTES_EXT(Name, Text, ExpectedHeader)                  \
+        AVS_UNIT_TEST(cbor_encoder, bytes_ext_##Name) {                 \
+            test_data_t expected = MAKE_TEST_DATA(ExpectedHeader Text); \
+            fluf_io_out_entry_t value = { 0 };                          \
+            value.type = FLUF_DATA_TYPE_EXTERNAL_BYTES;                 \
+            value.value.external_data.get_external_data =               \
+                    external_data_handler;                              \
+            value.value.external_data.length = sizeof(Text) - 1;        \
+            ptr_for_callback = Text;                                    \
+            test_string(&expected, &value);                             \
+        }
 
 TEST_STRING_EXT(empty, "", "\x60")
 TEST_STRING_EXT(a, "a", "\x61")
@@ -478,3 +485,4 @@ AVS_UNIT_TEST(cbor_encoder, partial_read_ext) {
         env.ctx._encoder._cbor.entry_added = false;
     }
 }
+#endif // FLUF_WITH_CBOR

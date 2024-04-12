@@ -40,7 +40,7 @@ int _sdm_begin_create_op(sdm_data_model_t *dm,
 
     dm->is_transactional = true;
     dm->op_ctx.write_ctx.path = *base_path;
-    dm->op_ctx.write_ctx.instance_created = false;
+    dm->op_ctx.write_ctx.instance_creation_attempted = false;
 
     sdm_obj_t *obj;
     dm->result = _sdm_get_obj_ptr_call_operation_begin(
@@ -60,53 +60,65 @@ int _sdm_begin_create_op(sdm_data_model_t *dm,
     return dm->result;
 }
 
-int _sdm_create_object_instance(sdm_data_model_t *dm, fluf_iid_t iid) {
+int sdm_create_object_instance(sdm_data_model_t *dm, fluf_iid_t iid) {
+    assert(dm && !dm->result && dm->op_in_progress
+           && (dm->operation == FLUF_OP_DM_CREATE
+               || (dm->operation == FLUF_OP_DM_WRITE_REPLACE
+                   && dm->boostrap_operation))
+           && !dm->op_ctx.write_ctx.instance_creation_attempted);
     sdm_obj_t *obj = dm->entity_ptrs.obj;
+    if (obj->inst_count == obj->max_inst_count) {
+        sdm_log(ERROR, "Maximum number of instances reached");
+        dm->result = SDM_ERR_MEMORY;
+        return dm->result;
+    }
     if (iid == FLUF_ID_INVALID) {
         iid = find_free_iid(obj);
     } else {
         for (uint16_t idx = 0; idx < obj->inst_count; idx++) {
             if (iid == obj->insts[idx]->iid) {
                 sdm_log(ERROR, "Instance already exists");
-                return SDM_ERR_METHOD_NOT_ALLOWED;
+                dm->result = SDM_ERR_METHOD_NOT_ALLOWED;
+                return dm->result;
             }
         }
     }
-    dm->entity_ptrs.inst = NULL;
+    sdm_obj_inst_t *inst = NULL;
 
     if (!obj->obj_handlers || !obj->obj_handlers->inst_create) {
         sdm_log(ERROR, "inst_create handler not defined");
-        return SDM_ERR_INTERNAL;
+        dm->result = SDM_ERR_METHOD_NOT_ALLOWED;
+        return dm->result;
     }
 
-    int res = obj->obj_handlers->inst_create(obj, &dm->entity_ptrs.inst, iid);
-    if (res || !dm->entity_ptrs.inst) {
+    dm->result = obj->obj_handlers->inst_create(obj, &inst, iid);
+    if (dm->result || !inst) {
         sdm_log(ERROR, "inst_create failed");
-        if (!res) {
+        if (!dm->result) {
             // operation failed but inst_create didn't return error
-            res = SDM_ERR_INTERNAL;
+            dm->result = SDM_ERR_INTERNAL;
         }
-        return res;
+        return dm->result;
     }
-    dm->entity_ptrs.inst->iid = iid;
-    assert(!_sdm_check_obj_instance(dm->entity_ptrs.inst));
 
-    uint16_t idx_to_write = UINT16_MAX;
+    inst->iid = iid;
+    assert(!_sdm_check_obj_instance(inst));
+
+    uint16_t idx_to_write = obj->inst_count;
     for (uint16_t idx = 0; idx < obj->inst_count; idx++) {
         if (obj->insts[idx]->iid > iid) {
             idx_to_write = idx;
             break;
         }
     }
-    if (idx_to_write == UINT16_MAX) {
-        obj->insts[obj->inst_count] = dm->entity_ptrs.inst;
-    } else {
-        for (uint16_t idx = obj->inst_count; idx > idx_to_write; idx--) {
-            obj->insts[idx] = obj->insts[idx - 1];
-        }
-        obj->insts[idx_to_write] = dm->entity_ptrs.inst;
+    for (uint16_t idx = obj->inst_count; idx > idx_to_write; idx--) {
+        obj->insts[idx] = obj->insts[idx - 1];
     }
+    obj->insts[idx_to_write] = inst;
     obj->inst_count++;
+    dm->op_ctx.write_ctx.path.ids[FLUF_ID_IID] = iid;
 
+    dm->op_ctx.write_ctx.instance_creation_attempted = true;
+    dm->entity_ptrs.inst = inst;
     return 0;
 }

@@ -9,8 +9,8 @@
 
 #include <anj/dm.h>
 
-#include "../dm_core.h"
-#include "../dm_utils/dm_utils_core.h"
+#include "dm_core.h"
+#include "dm_utils_core.h"
 
 int dm_execute(dm_t *dm, const fluf_uri_path_t *uri) {
     AVS_ASSERT(dm, "dm is NULL");

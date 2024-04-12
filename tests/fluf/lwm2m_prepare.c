@@ -210,7 +210,7 @@ AVS_UNIT_TEST(fluf_prepare, prepare_send) {
     size_t out_msg_size;
 
     data.binding = FLUF_BINDING_UDP;
-    data.operation = FLUF_OP_INF_SEND;
+    data.operation = FLUF_OP_INF_CON_SEND;
     data.content_format = FLUF_COAP_FORMAT_OPAQUE_STREAM;
     data.payload = "<1/1>";
     data.payload_size = 5;
@@ -220,6 +220,34 @@ AVS_UNIT_TEST(fluf_prepare, prepare_send) {
 
     uint8_t EXPECTED[] = "\x48"         // Confirmable, tkl 8
                          "\x02\x00\x07" // POST 0x02, msg id 0007
+                         "\x00\x00\x00\x00\x00\x00\x00\x00" // token
+                         "\xb2\x64\x70"                     // uri path /dp
+                         "\x11\x2A" // content_format: octet-stream
+                         "\xFF"
+                         "\x3c\x31\x2f\x31\x3e";
+    memcpy(&EXPECTED[4], data.coap.coap_udp.token.bytes, 8); // copy token
+
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(buff, EXPECTED, sizeof(EXPECTED) - 1);
+    AVS_UNIT_ASSERT_EQUAL(out_msg_size, 23);
+}
+
+AVS_UNIT_TEST(fluf_prepare, prepare_non_con_send) {
+    fluf_data_t data;
+    memset(&data, 0, sizeof(fluf_data_t));
+    uint8_t buff[100];
+    size_t out_msg_size;
+
+    data.binding = FLUF_BINDING_UDP;
+    data.operation = FLUF_OP_INF_NON_CON_SEND;
+    data.content_format = FLUF_COAP_FORMAT_OPAQUE_STREAM;
+    data.payload = "<1/1>";
+    data.payload_size = 5;
+
+    AVS_UNIT_ASSERT_SUCCESS(
+            fluf_msg_prepare(&data, buff, sizeof(buff), &out_msg_size));
+
+    uint8_t EXPECTED[] = "\x58"         // NonConfirmable, tkl 8
+                         "\x02\x00\x08" // POST 0x02, msg id 0008
                          "\x00\x00\x00\x00\x00\x00\x00\x00" // token
                          "\xb2\x64\x70"                     // uri path /dp
                          "\x11\x2A" // content_format: octet-stream
@@ -251,7 +279,7 @@ AVS_UNIT_TEST(fluf_prepare, prepare_con_notify) {
             fluf_msg_prepare(&data, buff, sizeof(buff), &out_msg_size));
 
     uint8_t EXPECTED[] = "\x42"         // Confirmable, tkl 2
-                         "\x45\x00\x08" // CONTENT 2.5 msg id 0008
+                         "\x45\x00\x09" // CONTENT 2.5 msg id 0009
                          "\x44\x44"     // token
                          "\x62\x22\x33" // observe 0x2233
                          "\x60"         // content-format 0

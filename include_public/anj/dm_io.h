@@ -17,6 +17,8 @@
 #include <fluf/fluf_defs.h>
 #include <fluf/fluf_io.h>
 
+#include <anj/anj_config.h>
+
 typedef struct dm_list_ctx_struct dm_list_ctx_t;
 typedef struct dm_resource_list_ctx_struct dm_resource_list_ctx_t;
 typedef struct dm_output_ctx_struct dm_output_ctx_t;

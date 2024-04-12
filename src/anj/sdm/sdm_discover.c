@@ -22,12 +22,6 @@
 
 #include "sdm_core.h"
 
-#define _SDM_OBJ_SERVER_SSID_RID 0
-#define _SDM_OBJ_SECURITY_SERVER_URI_RID 0
-#define _SDM_OBJ_SECURITY_BOOTSTRAP_SERVER_RID 1
-#define _SDM_OBJ_SECURITY_SSID_RID 10
-#define _SDM_OBJ_SECURITY_OSCORE_RID 17
-
 static void get_security_obj_ssid_value(sdm_data_model_t *dm,
                                         sdm_obj_t *obj,
                                         sdm_obj_inst_t *inst,
@@ -58,21 +52,28 @@ static void get_security_obj_ssid_value(sdm_data_model_t *dm,
 static void get_security_instance_ssid_for_oscore_obj(sdm_data_model_t *dm,
                                                       fluf_iid_t iid,
                                                       const uint16_t **ssid) {
+    sdm_obj_t *security_object = _sdm_find_obj(dm, FLUF_OBJ_ID_SECURITY);
+    if (!security_object) {
+        *ssid = NULL;
+        return;
+    }
+    dm->result =
+            _sdm_call_operation_begin(security_object, FLUF_OP_DM_DISCOVER);
     // Instance have _SDM_OBJ_SECURITY_OSCORE_RID equal to given oid and iid,
     // it's not a bootstrap server instance and SSID value is present.
     fluf_res_value_t value;
     fluf_data_type_t type;
-    for (uint16_t idx = 0; idx < dm->objs[0]->inst_count; idx++) {
+    for (uint16_t idx = 0; idx < security_object->inst_count; idx++) {
         if (!_sdm_get_resource_value(
                     dm,
-                    &FLUF_MAKE_RESOURCE_PATH(dm->objs[0]->oid,
-                                             dm->objs[0]->insts[idx]->iid,
+                    &FLUF_MAKE_RESOURCE_PATH(security_object->oid,
+                                             security_object->insts[idx]->iid,
                                              _SDM_OBJ_SECURITY_OSCORE_RID),
                     &value, &type)
                 && type == FLUF_DATA_TYPE_OBJLNK && value.objlnk.iid == iid) {
             assert(value.objlnk.oid == FLUF_OBJ_ID_OSCORE);
-            get_security_obj_ssid_value(dm, dm->objs[0],
-                                        dm->objs[0]->insts[idx], ssid);
+            get_security_obj_ssid_value(dm, security_object,
+                                        security_object->insts[idx], ssid);
         }
     }
 }
@@ -140,10 +141,7 @@ int _sdm_begin_bootstrap_discover_op(sdm_data_model_t *dm,
     disc_ctx->obj_idx = 0;
     disc_ctx->inst_idx = 0;
     disc_ctx->level = FLUF_ID_OID;
-    bool all_objects = true;
-    if (base_path && fluf_uri_path_has(base_path, FLUF_ID_OID)) {
-        all_objects = false;
-    }
+    bool all_objects = !base_path || !fluf_uri_path_has(base_path, FLUF_ID_OID);
     for (uint16_t idx = 0; idx < dm->objs_count; idx++) {
         if (all_objects || dm->objs[idx]->oid == base_path->ids[FLUF_ID_OID]) {
             if (!all_objects) {
@@ -170,17 +168,12 @@ int sdm_get_bootstrap_discover_record(sdm_data_model_t *dm,
                                       const uint16_t **ssid,
                                       const char **uri) {
     assert(dm && out_path && out_version && ssid && uri);
+    assert(dm->op_in_progress && !dm->result);
+    assert(dm->op_count);
+    assert(dm->operation == FLUF_OP_DM_DISCOVER && dm->boostrap_operation);
 
     _sdm_disc_ctx_t *disc_ctx = &dm->op_ctx.disc_ctx;
     assert(disc_ctx->obj_idx < dm->objs_count);
-
-    if (dm->operation != FLUF_OP_DM_DISCOVER || !dm->boostrap_operation) {
-        sdm_log(ERROR, "Incorrect operation");
-        dm->result = SDM_ERR_LOGIC;
-        return dm->result;
-    }
-    _SDM_ONGOING_OP_ERROR_CHECK(dm);
-    _SDM_ONGOING_OP_COUNT_ERROR_CHECK(dm);
 
     *out_version = NULL;
     *ssid = NULL;
@@ -351,15 +344,11 @@ int sdm_get_discover_record(sdm_data_model_t *dm,
                             const char **out_version,
                             const uint16_t **out_dim) {
     assert(dm && out_path && out_version && out_dim);
-    _sdm_disc_ctx_t *disc_ctx = &dm->op_ctx.disc_ctx;
+    assert(dm->op_in_progress && !dm->result);
+    assert(dm->op_count);
+    assert(dm->operation == FLUF_OP_DM_DISCOVER && !dm->boostrap_operation);
 
-    if (dm->operation != FLUF_OP_DM_DISCOVER || dm->boostrap_operation) {
-        sdm_log(ERROR, "Incorrect operation");
-        dm->result = SDM_ERR_LOGIC;
-        return dm->result;
-    }
-    _SDM_ONGOING_OP_ERROR_CHECK(dm);
-    _SDM_ONGOING_OP_COUNT_ERROR_CHECK(dm);
+    _sdm_disc_ctx_t *disc_ctx = &dm->op_ctx.disc_ctx;
 
     *out_version = NULL;
     *out_dim = NULL;

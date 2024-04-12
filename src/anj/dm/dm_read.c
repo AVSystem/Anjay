@@ -9,8 +9,8 @@
 
 #include <anj/dm.h>
 
-#include "../dm_core.h"
-#include "../dm_utils/dm_utils_core.h"
+#include "dm_core.h"
+#include "dm_utils_core.h"
 
 static int read_resource_instance_internal(dm_t *dm,
                                            const dm_installed_object_t *obj,

@@ -7,6 +7,8 @@
  * See the attached LICENSE file for details.
  */
 
+#include <fluf/fluf_config.h>
+
 #if defined(FLUF_WITH_SENML_CBOR) || defined(FLUF_WITH_LWM2M_CBOR) \
         || defined(FLUF_WITH_CBOR)
 
@@ -165,6 +167,17 @@ nested_state_top(fluf_cbor_ll_decoder_t *ctx) {
 
 static int preprocess_next_value(fluf_cbor_ll_decoder_t *ctx) {
     while (ctx->state == FLUF_CBOR_LL_DECODER_STATE_OK) {
+#    if FLUF_MAX_CBOR_NEST_STACK_SIZE > 0
+        while (ctx->nest_stack_size) {
+            fluf_cbor_ll_nested_state_t *top = nested_state_top(ctx);
+            if (is_indefinite(top)
+                    || (size_t) top->all_items != top->items_parsed.total) {
+                break;
+            }
+            nested_state_pop(ctx);
+        }
+#    endif // FLUF_MAX_CBOR_NEST_STACK_SIZE > 0
+
         // We might need to skip the tag, which might be up to 8 bytes
         int result = fill_prebuffer(ctx, 9);
         if (result) {
@@ -173,7 +186,11 @@ static int preprocess_next_value(fluf_cbor_ll_decoder_t *ctx) {
         assert(ctx->prebuffer_offset <= ctx->prebuffer_size);
         if (ctx->prebuffer_offset == ctx->prebuffer_size) {
             // EOF
-            if (ctx->after_tag) {
+            if (ctx->after_tag
+#    if FLUF_MAX_CBOR_NEST_STACK_SIZE > 0
+                    || ctx->nest_stack_size
+#    endif // FLUF_MAX_CBOR_NEST_STACK_SIZE > 0
+            ) {
                 /* All tags must be followed with data, otherwise the CBOR
                  * payload is malformed */
                 ctx->state = FLUF_CBOR_LL_DECODER_STATE_ERROR;
@@ -187,10 +204,9 @@ static int preprocess_next_value(fluf_cbor_ll_decoder_t *ctx) {
         if (byte == CBOR_INDEFINITE_STRUCTURE_BREAK) {
             /* end of the indefinite map, array or byte/text string */
 #    if FLUF_MAX_CBOR_NEST_STACK_SIZE > 0
-            if (ctx->nest_stack_size
+            if (ctx->nest_stack_size && is_indefinite(nested_state_top(ctx))
                     && (nested_state_top(ctx)->type != FLUF_CBOR_LL_VALUE_MAP
-                        || !nested_state_top(ctx)->items_parsed.odd)
-                    && is_indefinite(nested_state_top(ctx))) {
+                        || !nested_state_top(ctx)->items_parsed.odd)) {
                 nested_state_pop(ctx);
             } else
 #    endif // FLUF_MAX_CBOR_NEST_STACK_SIZE > 0
@@ -295,17 +311,15 @@ static int preprocess_next_value(fluf_cbor_ll_decoder_t *ctx) {
     }
 
 #    if FLUF_MAX_CBOR_NEST_STACK_SIZE > 0
-    while (ctx->nest_stack_size) {
+    if (ctx->nest_stack_size
+            && get_major_type(ctx->current_item.initial_byte)
+                           != CBOR_MAJOR_TYPE_TAG) {
         fluf_cbor_ll_nested_state_t *top = nested_state_top(ctx);
         if (is_indefinite(top)) {
             top->items_parsed.odd = !top->items_parsed.odd;
-            return 0;
-        }
-        if ((size_t) top->all_items - top->items_parsed.total) {
+        } else {
             top->items_parsed.total++;
-            return 0;
         }
-        nested_state_pop(ctx);
     }
 #    endif // FLUF_MAX_CBOR_NEST_STACK_SIZE > 0
     return 0;
@@ -783,6 +797,7 @@ static int cbor_get_bytes_size(fluf_cbor_ll_decoder_t *ctx,
                                size_t *out_bytes_size) {
     if (ctx->state != FLUF_CBOR_LL_DECODER_STATE_OK
             || (ctx->subparser_type != FLUF_CBOR_LL_SUBPARSER_NONE
+                && ctx->subparser_type != FLUF_CBOR_LL_SUBPARSER_STRING
                 && ctx->subparser_type != FLUF_CBOR_LL_SUBPARSER_BYTES
 #    ifdef FLUF_WITH_CBOR_STRING_TIME
                 && ctx->subparser_type != FLUF_CBOR_LL_SUBPARSER_STRING_TIME
@@ -832,11 +847,12 @@ static int initialize_bytes_subparser(fluf_cbor_ll_decoder_t *ctx) {
         return result;
     }
 
-    ctx->subparser.bytes_or_string_time.bytes_available = bytes_available;
+    ctx->subparser.string_or_bytes_or_string_time.bytes_available =
+            bytes_available;
 #    ifdef FLUF_WITH_CBOR_INDEFINITE_BYTES
-    ctx->subparser.bytes_or_string_time.initial_nesting_level =
+    ctx->subparser.string_or_bytes_or_string_time.initial_nesting_level =
             ctx->nest_stack_size;
-    ctx->subparser.bytes_or_string_time.indefinite =
+    ctx->subparser.string_or_bytes_or_string_time.indefinite =
             (get_additional_info(ctx->current_item.initial_byte)
              == CBOR_EXT_LENGTH_INDEFINITE);
 #    endif // FLUF_WITH_CBOR_INDEFINITE_BYTES
@@ -1009,8 +1025,8 @@ static int decode_timestamp(fluf_cbor_ll_decoder_t *ctx,
 #    ifdef FLUF_WITH_CBOR_STRING_TIME
         if (get_additional_info(ctx->current_item.initial_byte)
                 == CBOR_DECODER_TAG_STRING_TIME) {
-            memset(&ctx->subparser.bytes_or_string_time, 0,
-                   sizeof(ctx->subparser.bytes_or_string_time));
+            memset(&ctx->subparser.string_or_bytes_or_string_time, 0,
+                   sizeof(ctx->subparser.string_or_bytes_or_string_time));
             ctx->subparser_type = FLUF_CBOR_LL_SUBPARSER_STRING_TIME;
             ctx->needs_preprocessing = true;
             ctx->after_tag = true;
@@ -1029,7 +1045,8 @@ static int decode_timestamp(fluf_cbor_ll_decoder_t *ctx,
     switch (ctx->subparser_type) {
 #    ifdef FLUF_WITH_CBOR_STRING_TIME
     case FLUF_CBOR_LL_SUBPARSER_STRING_TIME: {
-        if (!ctx->subparser.bytes_or_string_time.string_time.initialized) {
+        if (!ctx->subparser.string_or_bytes_or_string_time.string_time
+                     .initialized) {
             if ((result = initialize_bytes_subparser(ctx))) {
                 return result;
             }
@@ -1038,46 +1055,51 @@ static int decode_timestamp(fluf_cbor_ll_decoder_t *ctx,
                 ctx->state = FLUF_CBOR_LL_DECODER_STATE_ERROR;
                 return FLUF_IO_ERR_FORMAT;
             }
-            ctx->subparser.bytes_or_string_time.string_time.initialized = true;
+            ctx->subparser.string_or_bytes_or_string_time.string_time
+                    .initialized = true;
         }
         bool message_finished = false;
         while (!message_finished) {
             const void *buf;
             size_t buf_size;
             if ((result = fluf_cbor_ll_decoder_bytes_get_some(
-                         &ctx->subparser.bytes_or_string_time, &buf, &buf_size,
-                         &message_finished))) {
+                         &ctx->subparser.string_or_bytes_or_string_time, &buf,
+                         &buf_size, &message_finished))) {
                 return result;
             }
             if (buf_size) {
-                if (ctx->subparser.bytes_or_string_time.string_time.bytes_read
+                if (ctx->subparser.string_or_bytes_or_string_time.string_time
+                                    .bytes_read
                                 + buf_size
-                        >= sizeof(ctx->subparser.bytes_or_string_time
+                        >= sizeof(ctx->subparser.string_or_bytes_or_string_time
                                           .string_time.buffer)) {
                     ctx->state = FLUF_CBOR_LL_DECODER_STATE_ERROR;
                     return FLUF_IO_ERR_FORMAT;
                 }
-                memcpy(ctx->subparser.bytes_or_string_time.string_time.buffer
-                               + ctx->subparser.bytes_or_string_time.string_time
-                                         .bytes_read,
+                memcpy(ctx->subparser.string_or_bytes_or_string_time.string_time
+                                       .buffer
+                               + ctx->subparser.string_or_bytes_or_string_time
+                                         .string_time.bytes_read,
                        buf,
                        buf_size);
-                ctx->subparser.bytes_or_string_time.string_time.bytes_read +=
-                        buf_size;
+                ctx->subparser.string_or_bytes_or_string_time.string_time
+                        .bytes_read += buf_size;
             }
         }
         // after message_finished, fluf_cbor_ll_decoder_bytes_get_some() will
         // reset subparser_type to FLUF_CBOR_LL_SUBPARSER_NONE
         assert(ctx->subparser_type == FLUF_CBOR_LL_SUBPARSER_NONE);
-        assert(ctx->subparser.bytes_or_string_time.string_time.bytes_read
-               < sizeof(ctx->subparser.bytes_or_string_time.string_time
-                                .buffer));
-        ctx->subparser.bytes_or_string_time.string_time
-                .buffer[ctx->subparser.bytes_or_string_time.string_time
-                                .bytes_read] = '\0';
+        assert(ctx->subparser.string_or_bytes_or_string_time.string_time
+                       .bytes_read
+               < sizeof(ctx->subparser.string_or_bytes_or_string_time
+                                .string_time.buffer));
+        ctx->subparser.string_or_bytes_or_string_time.string_time
+                .buffer[ctx->subparser.string_or_bytes_or_string_time
+                                .string_time.bytes_read] = '\0';
         if ((result = parse_time_string(
                      out_value,
-                     ctx->subparser.bytes_or_string_time.string_time.buffer))) {
+                     ctx->subparser.string_or_bytes_or_string_time.string_time
+                             .buffer))) {
             ctx->state = FLUF_CBOR_LL_DECODER_STATE_ERROR;
         }
         return result;
@@ -1100,21 +1122,24 @@ static int decode_timestamp(fluf_cbor_ll_decoder_t *ctx,
 static int try_preprocess_next_bytes_chunk(fluf_cbor_ll_decoder_t *ctx,
                                            bool *out_message_finished) {
 #        ifdef FLUF_WITH_CBOR_STRING_TIME
-    assert(ctx->subparser_type == FLUF_CBOR_LL_SUBPARSER_BYTES
+    assert(ctx->subparser_type == FLUF_CBOR_LL_SUBPARSER_STRING
+           || ctx->subparser_type == FLUF_CBOR_LL_SUBPARSER_BYTES
            || ctx->subparser_type == FLUF_CBOR_LL_SUBPARSER_STRING_TIME);
 #        else  // FLUF_WITH_CBOR_STRING_TIME
-    assert(ctx->subparser_type == FLUF_CBOR_LL_SUBPARSER_BYTES);
+    assert(ctx->subparser_type == FLUF_CBOR_LL_SUBPARSER_STRING
+           || ctx->subparser_type == FLUF_CBOR_LL_SUBPARSER_BYTES);
 #        endif // FLUF_WITH_CBOR_STRING_TIME
-    assert(ctx->subparser.bytes_or_string_time.indefinite);
-    assert(!ctx->subparser.bytes_or_string_time.bytes_available);
+    assert(ctx->subparser.string_or_bytes_or_string_time.indefinite);
+    assert(!ctx->subparser.string_or_bytes_or_string_time.bytes_available);
     int result = ensure_value_or_error_available(ctx);
     if (result) {
         return result;
     }
-    if (ctx->subparser.bytes_or_string_time.initial_nesting_level
+    if (ctx->subparser.string_or_bytes_or_string_time.initial_nesting_level
             == ctx->nest_stack_size) {
         if ((result = cbor_get_bytes_size(
-                     ctx, &ctx->subparser.bytes_or_string_time.bytes_available))
+                     ctx, &ctx->subparser.string_or_bytes_or_string_time
+                                   .bytes_available))
                 < 0) {
             ctx->state = FLUF_CBOR_LL_DECODER_STATE_ERROR;
         }
@@ -1134,7 +1159,8 @@ static int bytes_get_some_impl(fluf_cbor_ll_decoder_bytes_ctx_t *bytes_ctx,
     assert(bytes_ctx);
     fluf_cbor_ll_decoder_t *ctx =
             AVS_CONTAINER_OF(bytes_ctx, fluf_cbor_ll_decoder_t, subparser);
-    if (ctx->subparser_type != FLUF_CBOR_LL_SUBPARSER_BYTES
+    if (ctx->subparser_type != FLUF_CBOR_LL_SUBPARSER_STRING
+            && ctx->subparser_type != FLUF_CBOR_LL_SUBPARSER_BYTES
 #    ifdef FLUF_WITH_CBOR_STRING_TIME
             && ctx->subparser_type != FLUF_CBOR_LL_SUBPARSER_STRING_TIME
 #    endif // FLUF_WITH_CBOR_STRING_TIME
@@ -1146,7 +1172,7 @@ static int bytes_get_some_impl(fluf_cbor_ll_decoder_bytes_ctx_t *bytes_ctx,
 #    ifdef FLUF_WITH_CBOR_INDEFINITE_BYTES
     int result = 0;
     if (ctx->state == FLUF_CBOR_LL_DECODER_STATE_OK && bytes_ctx->indefinite
-            && !ctx->subparser.bytes_or_string_time.bytes_available
+            && !ctx->subparser.string_or_bytes_or_string_time.bytes_available
             && (result = try_preprocess_next_bytes_chunk(
                         ctx, out_message_finished))) {
         return result;
@@ -1188,7 +1214,7 @@ static int bytes_get_some_impl(fluf_cbor_ll_decoder_bytes_ctx_t *bytes_ctx,
         if (!bytes_ctx->bytes_available) {
 #    ifdef FLUF_WITH_CBOR_INDEFINITE_BYTES
             *out_message_finished =
-                    !ctx->subparser.bytes_or_string_time.indefinite;
+                    !ctx->subparser.string_or_bytes_or_string_time.indefinite;
 #    else  // FLUF_WITH_CBOR_INDEFINITE_BYTES
             *out_message_finished = true;
 #    endif // FLUF_WITH_CBOR_INDEFINITE_BYTES
@@ -1197,7 +1223,8 @@ static int bytes_get_some_impl(fluf_cbor_ll_decoder_bytes_ctx_t *bytes_ctx,
         } else {
             *out_message_finished = false;
             if (!*out_buf_size) {
-                return FLUF_IO_WANT_NEXT_PAYLOAD;
+                return ctx->input_last ? FLUF_IO_ERR_FORMAT
+                                       : FLUF_IO_WANT_NEXT_PAYLOAD;
             }
         }
     }
@@ -1252,31 +1279,38 @@ int fluf_cbor_ll_decoder_errno(fluf_cbor_ll_decoder_t *ctx) {
 
 int fluf_cbor_ll_decoder_current_value_type(
         fluf_cbor_ll_decoder_t *ctx, fluf_cbor_ll_value_type_t *out_type) {
-    int result = ensure_value_or_error_available(ctx);
-    if (result) {
-        return result;
-    }
-    if (ctx->state == FLUF_CBOR_LL_DECODER_STATE_FINISHED) {
-        return FLUF_IO_ERR_LOGIC;
-    }
-    if (ctx->state == FLUF_CBOR_LL_DECODER_STATE_OK) {
-        switch (ctx->subparser_type) {
-        case FLUF_CBOR_LL_SUBPARSER_NONE:
-        case FLUF_CBOR_LL_SUBPARSER_BYTES:
+    switch (ctx->subparser_type) {
+    case FLUF_CBOR_LL_SUBPARSER_NONE: {
+        int result = ensure_value_or_error_available(ctx);
+        if (result) {
+            return result;
+        }
+        if (ctx->state == FLUF_CBOR_LL_DECODER_STATE_FINISHED) {
+            return FLUF_IO_ERR_LOGIC;
+        }
+        if (ctx->state == FLUF_CBOR_LL_DECODER_STATE_OK) {
             *out_type = ctx->current_item.value_type;
             return 0;
-        case FLUF_CBOR_LL_SUBPARSER_EPOCH_BASED_TIME:
-#    ifdef FLUF_WITH_CBOR_STRING_TIME
-        case FLUF_CBOR_LL_SUBPARSER_STRING_TIME:
-#    endif // FLUF_WITH_CBOR_STRING_TIME
-            *out_type = FLUF_CBOR_LL_VALUE_TIMESTAMP;
-            return 0;
-#    ifdef FLUF_WITH_CBOR_DECIMAL_FRACTIONS
-        case FLUF_CBOR_LL_SUBPARSER_DECIMAL_FRACTION:
-            *out_type = FLUF_CBOR_LL_VALUE_DOUBLE;
-            return 0;
-#    endif // FLUF_WITH_CBOR_DECIMAL_FRACTIONS
         }
+        break;
+    }
+    case FLUF_CBOR_LL_SUBPARSER_STRING:
+        *out_type = FLUF_CBOR_LL_VALUE_TEXT_STRING;
+        return 0;
+    case FLUF_CBOR_LL_SUBPARSER_BYTES:
+        *out_type = FLUF_CBOR_LL_VALUE_BYTE_STRING;
+        return 0;
+    case FLUF_CBOR_LL_SUBPARSER_EPOCH_BASED_TIME:
+#    ifdef FLUF_WITH_CBOR_STRING_TIME
+    case FLUF_CBOR_LL_SUBPARSER_STRING_TIME:
+#    endif // FLUF_WITH_CBOR_STRING_TIME
+        *out_type = FLUF_CBOR_LL_VALUE_TIMESTAMP;
+        return 0;
+#    ifdef FLUF_WITH_CBOR_DECIMAL_FRACTIONS
+    case FLUF_CBOR_LL_SUBPARSER_DECIMAL_FRACTION:
+        *out_type = FLUF_CBOR_LL_VALUE_DOUBLE;
+        return 0;
+#    endif // FLUF_WITH_CBOR_DECIMAL_FRACTIONS
     }
     return FLUF_IO_ERR_FORMAT;
 }
@@ -1357,6 +1391,7 @@ int fluf_cbor_ll_decoder_number(fluf_cbor_ll_decoder_t *ctx,
         out_value->type = FLUF_CBOR_LL_VALUE_DOUBLE;
         return decode_decimal_fraction(ctx, &out_value->value.f64);
 #    endif // FLUF_WITH_CBOR_DECIMAL_FRACTIONS
+    case FLUF_CBOR_LL_SUBPARSER_STRING:
     case FLUF_CBOR_LL_SUBPARSER_BYTES:;
     }
     return FLUF_IO_ERR_LOGIC;
@@ -1371,19 +1406,28 @@ int fluf_cbor_ll_decoder_bytes(fluf_cbor_ll_decoder_t *ctx,
     }
     int result = initialize_bytes_subparser(ctx);
     if (!result) {
-        ctx->subparser_type = FLUF_CBOR_LL_SUBPARSER_BYTES;
-        *out_bytes_ctx = &ctx->subparser.bytes_or_string_time;
+        if (ctx->current_item.value_type == FLUF_CBOR_LL_VALUE_TEXT_STRING) {
+            ctx->subparser_type = FLUF_CBOR_LL_SUBPARSER_STRING;
+        } else {
+            assert(ctx->current_item.value_type
+                   == FLUF_CBOR_LL_VALUE_BYTE_STRING);
+            ctx->subparser_type = FLUF_CBOR_LL_SUBPARSER_BYTES;
+        }
+        *out_bytes_ctx = &ctx->subparser.string_or_bytes_or_string_time;
         if (out_total_size) {
             if (
 #    ifdef FLUF_WITH_CBOR_INDEFINITE_BYTES
-                        ctx->subparser.bytes_or_string_time.indefinite ||
+                        ctx->subparser.string_or_bytes_or_string_time.indefinite
+                            ||
 #    endif // FLUF_WITH_CBOR_INDEFINITE_BYTES
-                            ctx->subparser.bytes_or_string_time.bytes_available
+                            ctx->subparser.string_or_bytes_or_string_time
+                                            .bytes_available
                                         > SIZE_MAX / 2) {
                 *out_total_size = FLUF_CBOR_LL_DECODER_ITEMS_INDEFINITE;
             } else {
-                *out_total_size = (ptrdiff_t) ctx->subparser
-                                          .bytes_or_string_time.bytes_available;
+                *out_total_size =
+                        (ptrdiff_t) ctx->subparser
+                                .string_or_bytes_or_string_time.bytes_available;
             }
         }
     }
@@ -1472,18 +1516,20 @@ int fluf_cbor_ll_decoder_nesting_level(fluf_cbor_ll_decoder_t *ctx,
     switch (ctx->subparser_type) {
 #        ifdef FLUF_WITH_CBOR_STRING_TIME
     case FLUF_CBOR_LL_SUBPARSER_STRING_TIME:
-        if (!ctx->subparser.bytes_or_string_time.string_time.initialized) {
+        if (!ctx->subparser.string_or_bytes_or_string_time.string_time
+                     .initialized) {
             *out_nesting_level = ctx->nest_stack_size;
             return 0;
         }
 #        endif // FLUF_WITH_CBOR_STRING_TIME
         // fall through
+    case FLUF_CBOR_LL_SUBPARSER_STRING:
     case FLUF_CBOR_LL_SUBPARSER_BYTES:
 #        ifdef FLUF_WITH_CBOR_INDEFINITE_BYTES
-        if (ctx->subparser.bytes_or_string_time.indefinite) {
-            *out_nesting_level =
-                    ctx->subparser.bytes_or_string_time.initial_nesting_level
-                    - 1;
+        if (ctx->subparser.string_or_bytes_or_string_time.indefinite) {
+            *out_nesting_level = ctx->subparser.string_or_bytes_or_string_time
+                                         .initial_nesting_level
+                                 - 1;
             return 0;
         }
 #        endif // FLUF_WITH_CBOR_INDEFINITE_BYTES

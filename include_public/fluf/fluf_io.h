@@ -17,6 +17,7 @@
 #include <avsystem/commons/avs_time.h>
 
 #include <fluf/fluf.h>
+#include <fluf/fluf_config.h>
 #include <fluf/fluf_io_ctx.h>
 
 #ifdef __cplusplus
@@ -88,8 +89,21 @@ typedef struct {
     fluf_io_buff_t _buff;
     /** stores the encoder's internal ctx for the duration of the operation */
     union {
+#ifdef FLUF_WITH_PLAINTEXT
+        fluf_internal_text_encoder_t _text;
+#endif // FLUF_WITH_PLAINTEXT
+#ifdef FLUF_WITH_OPAQUE
+        fluf_internal_opaque_encoder_t _opaque;
+#endif // FLUF_WITH_OPAQUE
+#ifdef FLUF_WITH_CBOR
         fluf_internal_cbor_encoder_t _cbor;
+#endif // FLUF_WITH_CBOR
+#ifdef FLUF_WITH_SENML_CBOR
         fluf_internal_senml_cbor_encoder_t _senml;
+#endif // FLUF_WITH_SENML_CBOR
+#ifdef FLUF_WITH_LWM2M_CBOR
+        fluf_internal_lwm2m_cbor_encoder_t _lwm2m;
+#endif // FLUF_WITH_LWM2M_CBOR
     } _encoder;
 } fluf_io_out_ctx_t;
 
@@ -122,16 +136,17 @@ typedef struct {
  *                       - @ref FLUF_OP_INF_CANCEL_OBSERVE
  *                       - @ref FLUF_OP_INF_CANCEL_OBSERVE_COMP
  *                       - @ref FLUF_OP_INF_NON_CON_NOTIFY
- *                       - @ref FLUF_OP_INF_SEND
+ *                       - @ref FLUF_OP_INF_CON_SEND
+ *                       - @ref FLUF_OP_INF_NON_CON_SEND
  *
  * @param base_path      Pointer to path.
  *
  * @param items_count    Number of resources or resource instanes that will be
- *                       in the message .
+ *                       in the message, value must be greater than <c>0</c>.
  *
  * @param format         If value is different from @ref
  *                       FLUF_COAP_FORMAT_NOT_DEFINED then it is taken into
- *                       account .
+ *                       account.
  *
  * @return 0 on success, a negative value in case of invalid arguments.
  */
@@ -243,6 +258,21 @@ typedef struct {
     fluf_uri_path_t _out_path;
     /** stores the decoder's internal ctx for the duration of the operation */
     union {
+#ifdef FLUF_WITH_PLAINTEXT
+        fluf_internal_text_decoder_t _text;
+#endif // FLUF_WITH_PLAINTEXT
+#ifdef FLUF_WITH_OPAQUE
+        fluf_internal_opaque_decoder_t _opaque;
+#endif // FLUF_WITH_OPAQUE
+#ifdef FLUF_WITH_CBOR
+        fluf_internal_cbor_decoder_t _cbor;
+#endif // FLUF_WITH_CBOR
+#ifdef FLUF_WITH_SENML_CBOR
+        fluf_internal_senml_cbor_decoder_t _senml_cbor;
+#endif // FLUF_WITH_SENML_CBOR
+#ifdef FLUF_WITH_LWM2M_CBOR
+        fluf_internal_lwm2m_cbor_decoder_t _lwm2m_cbor;
+#endif // FLUF_WITH_LWM2M_CBOR
         fluf_internal_tlv_decoder_t _tlv;
     } _decoder;
 } fluf_io_in_ctx_t;
@@ -849,7 +879,7 @@ int fluf_io_bootstrap_discover_ctx_get_payload(
  *     .has_max_period = true,
  *     .max_period = 60
  * };
- * uint8_t depth = 3;
+ * uint32_t depth = 3;
  * uint8_t dim = 2;
  *
  * fluf_io_discover_ctx_init(&ctx, &FLUF_MAKE_OBJECT_PATH(3), &depth,
@@ -928,7 +958,7 @@ int fluf_io_bootstrap_discover_ctx_get_payload(
  */
 int fluf_io_discover_ctx_init(fluf_io_discover_ctx_t *ctx,
                               const fluf_uri_path_t *base_path,
-                              const uint8_t *depth);
+                              const uint32_t *depth);
 
 /**
  * Adds another Object, Object Instance Resource or Resource Instance to the
@@ -959,10 +989,10 @@ int fluf_io_discover_ctx_init(fluf_io_discover_ctx_t *ctx,
  * @ref base_path points to Resource ID -> message contains Resource and
  *                                         Resource Instances
  *
- * IMPORTANT: The user doesn't need to check compliance with parameter @p depth
+ * IMPORTANT: The user doesn't need to check compliance with depth parameter
  * and ignore the appearance of FLUF_IO_WARNING_DEPTH warning. In this
- * situation, you can iterate over all elements of the the data model and this
- * function will not add records outside the defined range.
+ * situation, you can iterate over all elements of the the data model and skip
+ * the records for which this warning occurred.
  *
  * @param ctx        Context to operate on.
  * @param path       Object Instance path.
@@ -972,6 +1002,7 @@ int fluf_io_discover_ctx_init(fluf_io_discover_ctx_t *ctx,
  *
  * @return
  * - 0 on success,
+ * - FLUF_IO_WARNING_DEPTH if record can't be added beacuse of depth value,
  * - FLUF_IO_ERR_INPUT_ARG if:
  *  -  given @p path is outside the base_path,
  *  -  ascending order of @p path is not respected,

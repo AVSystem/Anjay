@@ -9,11 +9,15 @@
 
 #include <avsystem/commons/avs_defs.h>
 
+#include <anj/anj_config.h>
+
 #include <anj/sdm.h>
 #include <anj/sdm_device_object.h>
 
-#define ERR_CODE_RES_INST_MAX_COUNT 1
-#define DEVICE_OID 3
+#ifdef ANJ_WITH_DEFAULT_DEVICE_OBJ
+
+#    define ERR_CODE_RES_INST_MAX_COUNT 1
+#    define DEVICE_OID 3
 
 enum {
     RID_MANUFACTURER = 0,
@@ -23,6 +27,17 @@ enum {
     RID_REBOOT = 4,
     RID_ERROR_CODE = 11,
     RID_BINDING_MODES = 16,
+};
+
+enum {
+    RID_MANUFACTURER_IDX = 0,
+    RID_MODEL_NUMBER_IDX,
+    RID_SERIAL_NUMBER_IDX,
+    RID_FIRMWARE_VERSION_IDX,
+    RID_REBOOT_IDX,
+    RID_ERROR_CODE_IDX,
+    RID_BINDING_MODES_IDX,
+    _RID_COUNT
 };
 
 static const sdm_res_spec_t manufacturer_spec = {
@@ -69,7 +84,13 @@ static const sdm_res_spec_t supported_binding_modes_spec = {
 static sdm_res_inst_t err_code_res_inst[ERR_CODE_RES_INST_MAX_COUNT] = {
     {
         .riid = 0,
-        .res_value.value.int_value = SDM_DEVICE_OBJ_ERR_CODE_NO_ERROR
+        /*
+         * HACK: error handling is not supported so in order to comply with the
+         * definition of the object only one instance of Error Code resource is
+         * defined with the value set to 0 which means "no errors".
+         */
+        .res_value =
+                &SDM_MAKE_RES_VALUE_WITH_INITIALIZE(0, SDM_INIT_RES_VAL_I64(0))
     }
 };
 
@@ -93,7 +114,7 @@ static int res_execute(sdm_obj_t *obj,
 
     switch (rid) {
     case RID_REBOOT:
-        return !reboot_cb ? SDM_ERR_INPUT_ARG
+        return !reboot_cb ? SDM_ERR_INTERNAL
                           : reboot_cb(obj,
                                       obj_inst,
                                       res,
@@ -103,7 +124,7 @@ static int res_execute(sdm_obj_t *obj,
         break;
     }
 
-    return SDM_ERR_LOGIC;
+    return SDM_ERR_NOT_FOUND;
 }
 
 static int res_read(sdm_obj_t *obj,
@@ -124,14 +145,14 @@ static int res_read(sdm_obj_t *obj,
         if (res->value.res_inst.inst_count < riid - 1) {
             return SDM_ERR_INPUT_ARG;
         }
-        *out_value = res_inst->res_value.value;
+        *out_value = res_inst->res_value->value;
         return 0;
     }
     default:
         break;
     }
 
-    return SDM_ERR_LOGIC;
+    return SDM_ERR_NOT_FOUND;
 }
 
 static const sdm_res_handlers_t res_handlers = {
@@ -139,32 +160,37 @@ static const sdm_res_handlers_t res_handlers = {
     .res_read = res_read,
 };
 
-static sdm_res_t device_res[] = {
-    {
+static sdm_res_t device_res[_RID_COUNT] = {
+    [RID_MANUFACTURER_IDX] = {
         .res_spec = &manufacturer_spec,
+        .value.res_value = &SDM_MAKE_RES_VALUE(0)
     },
-    {
+    [RID_MODEL_NUMBER_IDX] = {
         .res_spec = &model_number_spec,
+        .value.res_value = &SDM_MAKE_RES_VALUE(0)
     },
-    {
+    [RID_SERIAL_NUMBER_IDX] = {
         .res_spec = &serial_number_spec,
+        .value.res_value = &SDM_MAKE_RES_VALUE(0)
     },
-    {
+    [RID_FIRMWARE_VERSION_IDX] = {
         .res_spec = &firmware_version_spec,
+        .value.res_value = &SDM_MAKE_RES_VALUE(0)
     },
-    {
+    [RID_REBOOT_IDX] = {
         .res_spec = &reboot_spec,
         .res_handlers = &res_handlers
     },
-    {
+    [RID_ERROR_CODE_IDX] = {
         .res_spec = &error_code_spec,
         .value.res_inst.insts = err_code_res_insts,
         .value.res_inst.inst_count = 1,
         .value.res_inst.max_inst_count = ERR_CODE_RES_INST_MAX_COUNT,
         .res_handlers = &res_handlers
     },
-    {
+    [RID_BINDING_MODES_IDX] = {
         .res_spec = &supported_binding_modes_spec,
+        .value.res_value = &SDM_MAKE_RES_VALUE(0)
     },
 };
 
@@ -185,41 +211,28 @@ static sdm_obj_t device_obj = {
     .obj_handlers = NULL
 };
 
-static int res_values_initialize(sdm_device_object_init_t *obj_init) {
-    for (size_t i = 0; i < AVS_ARRAY_SIZE(device_res); i++) {
-        fluf_rid_t curr_rid = device_res[i].res_spec->rid;
-        switch (curr_rid) {
-        case RID_MANUFACTURER:
-            device_res[i].value.res_value.value.bytes_or_string.data =
-                    obj_init->manufacturer ? obj_init->manufacturer : "";
-            break;
-        case RID_MODEL_NUMBER:
-            device_res[i].value.res_value.value.bytes_or_string.data =
-                    obj_init->model_number ? obj_init->model_number : "";
-            break;
-        case RID_SERIAL_NUMBER:
-            device_res[i].value.res_value.value.bytes_or_string.data =
-                    obj_init->serial_number ? obj_init->serial_number : "";
-            break;
-        case RID_FIRMWARE_VERSION:
-            device_res[i].value.res_value.value.bytes_or_string.data =
-                    obj_init->firmware_version ? obj_init->firmware_version
-                                               : "";
-            break;
-        case RID_BINDING_MODES:
-            device_res[i].value.res_value.value.bytes_or_string.data =
-                    obj_init->supported_binding_modes
-                            ? obj_init->supported_binding_modes
-                            : "";
-            break;
-        default:
-            break;
-        }
+static void string_res_initialize(sdm_res_t *res, const char *value) {
+    memset(&res->value.res_value->value, 0, sizeof(*res->value.res_value));
+    res->value.res_value->value.bytes_or_string.data =
+            (void *) (intptr_t) value;
+    if (value) {
+        res->value.res_value->value.bytes_or_string.chunk_length =
+                strlen(value);
     }
+}
 
+static void res_values_initialize(sdm_device_object_init_t *obj_init) {
+    string_res_initialize(&device_res[RID_MANUFACTURER_IDX],
+                          obj_init->manufacturer);
+    string_res_initialize(&device_res[RID_MODEL_NUMBER_IDX],
+                          obj_init->model_number);
+    string_res_initialize(&device_res[RID_SERIAL_NUMBER_IDX],
+                          obj_init->serial_number);
+    string_res_initialize(&device_res[RID_FIRMWARE_VERSION_IDX],
+                          obj_init->firmware_version);
+    string_res_initialize(&device_res[RID_BINDING_MODES_IDX],
+                          obj_init->supported_binding_modes);
     reboot_cb = obj_init->reboot_handler;
-
-    return 0;
 }
 
 int sdm_device_object_install(sdm_data_model_t *dm,
@@ -227,9 +240,9 @@ int sdm_device_object_install(sdm_data_model_t *dm,
     assert(dm);
     assert(obj_init);
 
-    if (res_values_initialize(obj_init)) {
-        return -1;
-    }
+    res_values_initialize(obj_init);
 
     return sdm_add_obj(dm, &device_obj);
 }
+
+#endif // ANJ_WITH_DEFAULT_DEVICE_OBJ

@@ -15,6 +15,7 @@
 #include <avsystem/commons/avs_utils.h>
 
 #include <fluf/fluf.h>
+#include <fluf/fluf_config.h>
 
 #include "fluf_coap_udp_header.h"
 #include "fluf_coap_udp_msg.h"
@@ -120,9 +121,9 @@ static size_t prepare_option_header(uint8_t *opt_header,
         opt_header[0] = _FLUF_COAP_EXT_U16 << _FLUF_COAP_OPTION_DELTA_SHIFT;
         header_size++;
         new_opt_number = new_opt_number - _FLUF_COAP_EXT_U16_BASE;
-        opt_header[header_size - 1] =
-                ((uint8_t) new_opt_number >> _FLUF_COAP_OPTION_U16_SHIFT)
-                & _FLUF_COAP_OPTION_U8_MASK;
+        opt_header[header_size - 1] = (uint8_t) ((uint8_t) new_opt_number
+                                                 >> _FLUF_COAP_OPTION_U16_SHIFT)
+                                      & _FLUF_COAP_OPTION_U8_MASK;
         header_size++;
         opt_header[header_size - 1] =
                 (uint8_t) new_opt_number & _FLUF_COAP_OPTION_U8_MASK;

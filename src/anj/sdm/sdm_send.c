@@ -11,7 +11,6 @@
 #include <fluf/fluf_io.h>
 #include <fluf/fluf_utils.h>
 
-#include <anj/anj_time.h>
 #include <anj/sdm.h>
 #include <anj/sdm_io.h>
 #include <anj/sdm_send.h>
@@ -40,6 +39,7 @@ static int get_item_count(sdm_data_model_t *dm,
 
 int sdm_send_create_msg_from_dm(sdm_data_model_t *dm,
                                 uint16_t format,
+                                double timestamp,
                                 uint8_t *out_buff,
                                 size_t *inout_size,
                                 const fluf_uri_path_t *paths,
@@ -53,7 +53,6 @@ int sdm_send_create_msg_from_dm(sdm_data_model_t *dm,
     int ret;
     size_t in_size = *inout_size;
     fluf_io_out_ctx_t out_ctx;
-    double timestamp = (double) anj_time_now() / 1000;
 
     *inout_size = 0;
 
@@ -67,7 +66,7 @@ int sdm_send_create_msg_from_dm(sdm_data_model_t *dm,
         return SDM_ERR_INPUT_ARG;
     }
 
-    if (fluf_io_out_ctx_init(&out_ctx, FLUF_OP_INF_SEND, NULL, item_cnt,
+    if (fluf_io_out_ctx_init(&out_ctx, FLUF_OP_INF_CON_SEND, NULL, item_cnt,
                              format)) {
         sdm_operation_end(dm);
         return SDM_ERR_INPUT_ARG;
@@ -124,7 +123,7 @@ int sdm_send_create_msg_from_list_of_records(uint16_t format,
 
     fluf_io_out_ctx_t out_ctx;
 
-    if (fluf_io_out_ctx_init(&out_ctx, FLUF_OP_INF_SEND, NULL, record_cnt,
+    if (fluf_io_out_ctx_init(&out_ctx, FLUF_OP_INF_CON_SEND, NULL, record_cnt,
                              format)) {
         return SDM_ERR_INPUT_ARG;
     }

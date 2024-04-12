@@ -7,6 +7,8 @@
  * See the attached LICENSE file for details.
  */
 
+#include <fluf/fluf_config.h>
+
 #include "fluf_block.h"
 #include "fluf_options.h"
 
@@ -60,8 +62,9 @@ int _fluf_block_decode(fluf_coap_options_t *opts, fluf_block_t *block) {
                                                                  // 2**(SZX + 4)
 
         if (block_option_size == 1) {
-            block->number = (block_buff[0] & _FLUF_BLOCK_OPTION_NUM_MASK)
-                            >> _FLUF_BLOCK_OPTION_NUM_SHIFT;
+            block->number =
+                    (uint32_t) (block_buff[0] & _FLUF_BLOCK_OPTION_NUM_MASK)
+                    >> _FLUF_BLOCK_OPTION_NUM_SHIFT;
         } else if (block_option_size == 2) {
             // network big-endian order
             block->number =

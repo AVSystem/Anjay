@@ -41,7 +41,7 @@ extern "C" {
 #define FLUF_ERR_BUFF (-6)
 /** COAP message not supported or not recognized. */
 #define FLUF_ERR_COAP_BAD_MSG (-6)
-/** Location paths number oversizes FLUL_MAX_ALLOWED_LOCATION_PATHS_NUMBER*/
+/** Location paths number oversizes FLUF_MAX_ALLOWED_LOCATION_PATHS_NUMBER*/
 #define FLUF_ERR_LOCATION_PATHS_NUMBER (-7)
 
 /**
@@ -74,7 +74,8 @@ typedef enum {
     FLUF_OP_INF_CANCEL_OBSERVE_COMP,
     FLUF_OP_INF_CON_NOTIFY,
     FLUF_OP_INF_NON_CON_NOTIFY,
-    FLUF_OP_INF_SEND,
+    FLUF_OP_INF_CON_SEND,
+    FLUF_OP_INF_NON_CON_SEND,
     // client/server ACK Piggybacked/non-con/con response
     FLUF_OP_RESPONSE,
     // CoAP related messages
@@ -182,7 +183,7 @@ typedef struct {
 
 /**
  * Location-Path from REGISTER operation response. If the number of
- * Location-Paths exceeds @ref FLUL_MAX_ALLOWED_LOCATION_PATHS_NUMBER then @ref
+ * Location-Paths exceeds @ref FLUF_MAX_ALLOWED_LOCATION_PATHS_NUMBER then @ref
  * fluf_msg_decode returns a @ref FLUF_ERR_LOCATION_PATHS_NUMBER error. For
  * every @ref fluf_msg_prepare calls for UPDATE and DEREGISTER operations, this
  * structure must be filled. After @ref fluf_msg_prepare @p location points to
@@ -190,8 +191,8 @@ typedef struct {
  */
 typedef struct {
     // doesn't point to /rd location-path - it's obligatory
-    const char *location[FLUL_MAX_ALLOWED_LOCATION_PATHS_NUMBER];
-    size_t location_len[FLUL_MAX_ALLOWED_LOCATION_PATHS_NUMBER];
+    const char *location[FLUF_MAX_ALLOWED_LOCATION_PATHS_NUMBER];
+    size_t location_len[FLUF_MAX_ALLOWED_LOCATION_PATHS_NUMBER];
     size_t location_count;
 } fluf_location_path_t;
 

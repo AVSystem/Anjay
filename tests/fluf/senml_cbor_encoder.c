@@ -7,15 +7,17 @@
  * See the attached LICENSE file for details.
  */
 
-#include <math.h>
-#include <string.h>
+#ifdef FLUF_WITH_SENML_CBOR
 
-#include <avsystem/commons/avs_unit_test.h>
+#    include <math.h>
+#    include <string.h>
 
-#include <fluf/fluf_io.h>
-#include <fluf/fluf_utils.h>
+#    include <avsystem/commons/avs_unit_test.h>
 
-#include "../../src/fluf/fluf_cbor_encoder.h"
+#    include <fluf/fluf_io.h>
+#    include <fluf/fluf_utils.h>
+
+#    include "../../src/fluf/fluf_cbor_encoder.h"
 
 typedef struct {
     fluf_io_out_ctx_t ctx;
@@ -35,27 +37,16 @@ static void senml_cbor_test_setup(senml_cbor_test_env_t *env,
                                                  FLUF_COAP_FORMAT_SENML_CBOR));
 }
 
-typedef struct {
-    const char *data;
-    size_t size;
-} test_data_t;
-
-#define MAKE_TEST_DATA(Data)     \
-    (test_data_t) {              \
-        .data = Data,            \
-        .size = sizeof(Data) - 1 \
-    }
-
-#define VERIFY_BYTES(Env, Data)                                  \
-    do {                                                         \
-        AVS_UNIT_ASSERT_EQUAL_BYTES(Env.buf, Data);              \
-        AVS_UNIT_ASSERT_EQUAL(Env.out_length, sizeof(Data) - 1); \
-    } while (0)
+#    define VERIFY_BYTES(Env, Data)                                  \
+        do {                                                         \
+            AVS_UNIT_ASSERT_EQUAL_BYTES(Env.buf, Data);              \
+            AVS_UNIT_ASSERT_EQUAL(Env.out_length, sizeof(Data) - 1); \
+        } while (0)
 
 AVS_UNIT_TEST(senml_cbor_encoder, single_send_record_with_all_fields) {
     senml_cbor_test_env_t env = { 0 };
 
-    senml_cbor_test_setup(&env, NULL, 1, FLUF_OP_INF_SEND);
+    senml_cbor_test_setup(&env, NULL, 1, FLUF_OP_INF_CON_SEND);
 
     fluf_io_out_entry_t entry = {
         .timestamp = 100000.0,
@@ -305,7 +296,7 @@ static int external_data_handler(void *buffer,
 AVS_UNIT_TEST(senml_cbor_encoder, ext_string) {
     senml_cbor_test_env_t env = { 0 };
 
-    senml_cbor_test_setup(&env, NULL, 1, FLUF_OP_INF_SEND);
+    senml_cbor_test_setup(&env, NULL, 1, FLUF_OP_INF_CON_SEND);
 
     fluf_io_out_entry_t entry = {
         .timestamp = NAN,
@@ -329,7 +320,7 @@ AVS_UNIT_TEST(senml_cbor_encoder, ext_string) {
 AVS_UNIT_TEST(senml_cbor_encoder, ext_bytes) {
     senml_cbor_test_env_t env = { 0 };
 
-    senml_cbor_test_setup(&env, NULL, 1, FLUF_OP_INF_SEND);
+    senml_cbor_test_setup(&env, NULL, 1, FLUF_OP_INF_CON_SEND);
 
     fluf_io_out_entry_t entry = {
         .timestamp = NAN,
@@ -493,55 +484,59 @@ AVS_UNIT_TEST(senml_cbor_encoder, complex_read_msg) {
         }
     };
 
-    senml_cbor_test_setup(&env, &base_path, AVS_ARRAY_SIZE(entries),
-                          FLUF_OP_DM_READ);
+    for (size_t chunk_len = 50; chunk_len < 370; chunk_len += 10) {
+        env.out_length = 0;
+        senml_cbor_test_setup(&env, &base_path, AVS_ARRAY_SIZE(entries),
+                              FLUF_OP_DM_READ);
 
-    for (size_t i = 0; i < AVS_ARRAY_SIZE(entries); i++) {
-        size_t record_len = 0;
-        AVS_UNIT_ASSERT_SUCCESS(
-                fluf_io_out_ctx_new_entry(&env.ctx, &entries[i]));
-        int res = -1;
-        while (res) {
-            size_t temp_len = 0;
-            res = fluf_io_out_ctx_get_payload(
-                    &env.ctx, &env.buf[env.out_length + record_len], 70,
-                    &temp_len);
-            AVS_UNIT_ASSERT_TRUE(res == 0 || res == FLUF_IO_NEED_NEXT_CALL);
-            record_len += temp_len;
+        for (size_t i = 0; i < AVS_ARRAY_SIZE(entries); i++) {
+            size_t record_len = 0;
+            AVS_UNIT_ASSERT_SUCCESS(
+                    fluf_io_out_ctx_new_entry(&env.ctx, &entries[i]));
+            int res = -1;
+            while (res) {
+                size_t temp_len = 0;
+                res = fluf_io_out_ctx_get_payload(
+                        &env.ctx, &env.buf[env.out_length + record_len],
+                        chunk_len, &temp_len);
+                AVS_UNIT_ASSERT_TRUE(res == 0 || res == FLUF_IO_NEED_NEXT_CALL);
+                record_len += temp_len;
+            }
+            env.out_length += record_len;
         }
-        env.out_length += record_len;
-    }
 
-    VERIFY_BYTES(env, "\x86\xA3"
-                      "\x21\x64\x2F\x38\x2F\x38"
-                      "\x00\x62\x2F\x30" // 8/8/0
-                      "\x02\x18\x19"
-                      "\xA2" // 8/8/1
-                      "\x00\x62\x2F\x31"
-                      "\x02\x18\x64"
-                      "\xA2" // 8/8/2
-                      "\x00\x62\x2F\x32"
-                      "\x03\x78\x64"
-                      "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"
-                      "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"
-                      "\xA2" // 8/8/3
-                      "\x00\x62\x2F\x33"
-                      "\x08\x58\xC8"
-                      "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"
-                      "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"
-                      "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"
-                      "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"
-                      "\xA2" // 8/8/4/0
-                      "\x00\x64\x2F\x34\x2F\x30"
-                      "\x04\xF4"
-                      "\xA2" // 8/8/4/1
-                      "\x00\x64\x2F\x34\x2F\x31"
-                      "\x63"
-                      "vlo"
-                      "\x65\x31\x37\x3A\x31\x39");
+        VERIFY_BYTES(env,
+                     "\x86\xA3"
+                     "\x21\x64\x2F\x38\x2F\x38"
+                     "\x00\x62\x2F\x30" // 8/8/0
+                     "\x02\x18\x19"
+                     "\xA2" // 8/8/1
+                     "\x00\x62\x2F\x31"
+                     "\x02\x18\x64"
+                     "\xA2" // 8/8/2
+                     "\x00\x62\x2F\x32"
+                     "\x03\x78\x64"
+                     "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"
+                     "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"
+                     "\xA2" // 8/8/3
+                     "\x00\x62\x2F\x33"
+                     "\x08\x58\xC8"
+                     "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"
+                     "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"
+                     "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"
+                     "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"
+                     "\xA2" // 8/8/4/0
+                     "\x00\x64\x2F\x34\x2F\x30"
+                     "\x04\xF4"
+                     "\xA2" // 8/8/4/1
+                     "\x00\x64\x2F\x34\x2F\x31"
+                     "\x63"
+                     "vlo"
+                     "\x65\x31\x37\x3A\x31\x39");
+    }
 }
 
-#define DATA_HANDLER_ERROR_CODE -888
+#    define DATA_HANDLER_ERROR_CODE -888
 static int external_data_handler_with_error(void *buffer,
                                             size_t bytes_to_copy,
                                             size_t offset,
@@ -598,3 +593,4 @@ AVS_UNIT_TEST(senml_cbor_encoder, read_error) {
                                                       &env.out_length),
                           DATA_HANDLER_ERROR_CODE);
 }
+#endif // FLUF_WITH_SENML_CBOR
