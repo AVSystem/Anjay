@@ -1206,7 +1206,7 @@ int advanced_firmware_update_install(
                      (int) state.result);
             result = advanced_firmware_update_additional_image_install(
                     anjay, fw_logic_add_inst->iid, fw_table, &state,
-                    ADD_IMG_NAMES[i]);
+                    security_info, ADD_IMG_NAMES[i]);
 
             if (result) {
                 demo_log(ERROR, "AFU instance %u install failed",
@@ -1260,4 +1260,18 @@ void advanced_firmware_update_uninstall(advanced_fw_update_logic_t *fw_table) {
     for (int i = 0; i < FW_UPDATE_IID_IMAGE_SLOTS; ++i) {
         afu_logic_destroy(&fw_table[i]);
     }
+}
+
+int advanced_firmware_update_get_security_config(
+        anjay_iid_t iid,
+        void *fw_,
+        anjay_security_config_t *out_security_config,
+        const char *download_uri) {
+    (void) iid;
+    advanced_fw_update_logic_t *fw_table = (advanced_fw_update_logic_t *) fw_;
+    advanced_fw_update_logic_t *fw = &fw_table[FW_UPDATE_IID_APP];
+    (void) download_uri;
+    memset(out_security_config, 0, sizeof(*out_security_config));
+    out_security_config->security_info = fw->security_info;
+    return 0;
 }

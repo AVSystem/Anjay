@@ -38,12 +38,8 @@ static int base64_ret_encode_and_write(base64_ret_bytes_ctx_t *ctx,
         return 0;
     }
     char encoded[4 * (TEXT_CHUNK_SIZE / 3) + 1];
-    size_t encoded_size;
-    if (ctx->config.padding_char) {
-        encoded_size = avs_base64_encoded_size(buffer_size);
-    } else {
-        encoded_size = avs_base64_encoded_size_without_padding(buffer_size);
-    }
+    size_t encoded_size =
+            avs_base64_encoded_size_custom(buffer_size, ctx->config);
     assert(encoded_size <= sizeof(encoded));
     int retval = avs_base64_encode_custom(encoded, encoded_size, buffer,
                                           buffer_size, ctx->config);

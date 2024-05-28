@@ -224,3 +224,57 @@ class TcpNotificationErrorTest(test_suite.Lwm2mSingleTcpServerTest, test_suite.L
         notif = self.serv.recv(timeout_s=5)
         self.assertEqual(notif.code, coap.Code.RES_NOT_FOUND)
         self.assertEqual(notif.token, orig_notif.token)
+
+
+class NextPlannedNotify(test_suite.Lwm2mSingleServerTest, test_suite.Lwm2mDmOperations):
+    def setUp(self):
+        super().setUp()
+
+    def runTest(self):
+        # set up observe without attributes
+        self.observe(self.serv, oid=OID.Device, iid=0, rid=RID.Device.ErrorCode)
+
+        # ensure there is no planned notify
+        self.communicate('next-planned-pmax-notify',
+                         match_regex='NEXT_PLANNED_PMAX_NOTIFY=TIME_INVALID\n')
+        self.communicate('next-planned-notify',
+                         match_regex='NEXT_PLANNED_NOTIFY=TIME_INVALID\n')
+        
+        # add an observation with pmin&pmax
+        write_atts = self.write_attributes(self.serv, oid=OID.Device, iid=0, rid=RID.Device.Timezone,
+                            query=['pmin=5','pmax=5'])
+        self.assertEqual(write_atts.code, coap.Code.RES_CHANGED)
+
+        second_notif = self.observe(self.serv, oid=OID.Device, iid=0, rid=RID.Device.Timezone)
+        self.assertEqual(second_notif.code, coap.Code.RES_CONTENT)
+
+        expected_notify_time = time.time() + 5.0
+
+        time.sleep(0.1)
+
+        # verify that Anjay schedules the notifications
+        planned_notify_time = float(
+            self.communicate('next-planned-notify',
+                             match_regex='NEXT_PLANNED_NOTIFY=(.*)\n').group(1))
+        self.assertAlmostEqual(expected_notify_time, planned_notify_time, delta=0.1)
+
+        # wait for the notification and check if next-planned-notify was rescheduled
+        notif = self.serv.recv(timeout_s=6)
+        self.assertEqual(notif.code, coap.Code.RES_CONTENT)
+        self.assertEqual(notif.token, second_notif.token)
+
+        expected_notify_time = expected_notify_time + 5
+        planned_notify_time = float(
+            self.communicate('next-planned-notify',
+                             match_regex='NEXT_PLANNED_NOTIFY=(.*)\n').group(1))
+        self.assertAlmostEqual(expected_notify_time, planned_notify_time, delta=0.1)
+
+        # cancel the observation
+        self.observe(self.serv, oid=OID.Device, iid=0, rid=RID.Device.Timezone, observe=1, token=notif.token)
+        time.sleep(0.2)
+
+        # ensure there is no planned notify
+        self.communicate('next-planned-pmax-notify',
+                         match_regex='NEXT_PLANNED_PMAX_NOTIFY=TIME_INVALID\n')
+        self.communicate('next-planned-notify',
+                         match_regex='NEXT_PLANNED_NOTIFY=TIME_INVALID\n')

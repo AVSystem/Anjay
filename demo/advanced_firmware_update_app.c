@@ -189,19 +189,6 @@ static anjay_advanced_fw_update_handlers_t handlers = {
     .perform_upgrade = fw_update_common_perform_upgrade
 };
 
-static int fw_get_security_config(anjay_iid_t iid,
-                                  void *fw_,
-                                  anjay_security_config_t *out_security_config,
-                                  const char *download_uri) {
-    (void) iid;
-    advanced_fw_update_logic_t *fw_table = (advanced_fw_update_logic_t *) fw_;
-    advanced_fw_update_logic_t *fw = &fw_table[FW_UPDATE_IID_APP];
-    (void) download_uri;
-    memset(out_security_config, 0, sizeof(*out_security_config));
-    out_security_config->security_info = fw->security_info;
-    return 0;
-}
-
 int advanced_firmware_update_application_install(
         anjay_t *anjay,
         advanced_fw_update_logic_t *fw_table,
@@ -215,7 +202,8 @@ int advanced_firmware_update_application_install(
     if (security_info) {
         memcpy(&fw_logic->security_info, security_info,
                sizeof(fw_logic->security_info));
-        handlers.get_security_config = fw_get_security_config;
+        handlers.get_security_config =
+                advanced_firmware_update_get_security_config;
     } else {
         handlers.get_security_config = NULL;
     }

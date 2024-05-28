@@ -567,6 +567,14 @@ static int dm_execute(anjay_unlocked_t *anjay,
                                                  request->uri.ids[ANJAY_ID_IID],
                                                  request->uri.ids[ANJAY_ID_RID],
                                                  execute_ctx);
+#ifdef ANJAY_WITH_CONN_STATUS_API
+        /* RID == 4 -> Disable resource */
+        if (!retval && request->uri.ids[ANJAY_ID_OID] == ANJAY_DM_OID_SERVER
+                && request->uri.ids[ANJAY_ID_RID]
+                               == ANJAY_DM_RID_SERVER_DISABLE) {
+            _anjay_set_server_suspending_flag(anjay, ssid, true);
+        }
+#endif // ANJAY_WITH_CONN_STATUS_API
         _anjay_execute_ctx_destroy(&execute_ctx);
     }
     return retval;

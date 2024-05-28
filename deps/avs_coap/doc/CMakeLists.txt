@@ -48,6 +48,7 @@ if(EXISTS "${AVS_COAP_SOURCE_DIR}/Doxyfile.in")
     # TODO: List these flags automatically
     foreach(FLAG WITH_AVS_COAP_BLOCK
                  WITH_AVS_COAP_OBSERVE
+                 WITH_AVS_COAP_OBSERVE_CANCEL_ON_TIMEOUT
                  WITH_AVS_COAP_OBSERVE_PERSISTENCE
                  WITH_AVS_COAP_STREAMING_API
                  WITH_AVS_COAP_TCP

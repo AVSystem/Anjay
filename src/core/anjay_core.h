@@ -130,6 +130,11 @@ struct
     char *endpoint_name;
     anjay_transaction_state_t transaction_state;
 
+#ifdef ANJAY_WITH_CONN_STATUS_API
+    anjay_server_connection_status_cb_t *server_connection_status_cb;
+    void *server_connection_status_cb_arg;
+#endif // ANJAY_WITH_CONN_STATUS_API
+
 #ifdef ANJAY_WITH_SEND
     anjay_sender_t sender;
 #endif // ANJAY_WITH_SEND
@@ -143,6 +148,7 @@ struct
     bool prefer_hierarchical_formats;
     bool update_immediately_on_dm_change;
     bool enable_self_notify;
+    bool connection_error_is_registration_failure;
 #ifdef ANJAY_WITH_NET_STATS
     closed_connections_stats_t closed_connections_stats;
 #endif // ANJAY_WITH_NET_STATS

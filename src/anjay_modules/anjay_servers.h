@@ -113,6 +113,15 @@ int _anjay_schedule_disable_server_with_explicit_timeout_unlocked(
  */
 int _anjay_enable_server_unlocked(anjay_unlocked_t *anjay, anjay_ssid_t ssid);
 
+#ifdef ANJAY_WITH_CONN_STATUS_API
+/**
+ * Set suspending flag for the server specified by the ssid argument.
+ */
+void _anjay_set_server_suspending_flag(anjay_unlocked_t *anjay,
+                                       anjay_ssid_t ssid,
+                                       bool val);
+#endif // ANJAY_WITH_CONN_STATUS_API
+
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif /* ANJAY_INCLUDE_ANJAY_MODULES_SERVERS_H */

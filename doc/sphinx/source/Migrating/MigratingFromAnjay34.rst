@@ -25,8 +25,9 @@ Changed flow of cancelling observations in case of errors
 ---------------------------------------------------------
 
 CoAP observations are implicitly cancelled if a notification bearing a 4.xx or
-5.xx error code is delivered, or if an attempt to deliver a notification times
-out.
+5.xx error code is delivered. If an attempt to deliver a confirmable
+notification times out, CoAP observation is not cancelled by default anymore.
+It can be adjusted by ``WITH_AVS_COAP_OBSERVE_CANCEL_ON_TIMEOUT``.
 
 In Anjay 3.4.x and earlier, this cancellation (which involves calling the
 ``avs_coap_observe_cancel_handler_t`` callback) was performed *before* calling

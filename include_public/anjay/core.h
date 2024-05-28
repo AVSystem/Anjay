@@ -100,6 +100,144 @@ typedef struct {
 } anjay_lwm2m_version_config_t;
 #endif // ANJAY_WITH_LWM2M11
 
+#ifdef ANJAY_WITH_CONN_STATUS_API
+/**
+ * @experimental This is experimental server connection status API. This API can
+ *               change in future versions without any notice.
+ *
+ * This enum represents the possible states of a server connection.
+ */
+typedef enum anjay_server_conn_status {
+    /**
+     * Invalid state. It is only returned if a given server connection object
+     * does not exist, or there was an error in determining its state.
+     */
+    ANJAY_SERV_CONN_STATUS_INVALID,
+    /**
+     * Generic state for any errors for which more specific states are not
+     * defined. For a regular LwM2M Server, this means that the primary
+     * connection is invalid or de-register/update operation has failed. For a
+     * LwM2M Bootstrap Server, it means that the bootstrap process failed.
+     */
+    ANJAY_SERV_CONN_STATUS_ERROR,
+    /**
+     * This status means that the server connection object has been just created
+     * as a result of the Security and Server object instances having been
+     * previously added to the data model. A connection attempt is scheduled to
+     * be made during subsequent calls to @ref anjay_sched_run.
+     */
+    ANJAY_SERV_CONN_STATUS_INITIAL,
+    /**
+     * This status is reported just before attempting the connection procedure,
+     * which may include binding the socket to a local port, performing DNS
+     * resolution, connecting the socket, and performing a (D)TLS handshake.
+     */
+    ANJAY_SERV_CONN_STATUS_CONNECTING,
+    /**
+     * This status means that the bootstrap process is in progress. It only
+     * applies to LwM2M Bootstrap Servers.
+     */
+    ANJAY_SERV_CONN_STATUS_BOOTSTRAPPING,
+    /**
+     * This status means that the bootstrap process has completed successfully.
+     * It only applies to LwM2M Bootstrap Servers.
+     */
+    ANJAY_SERV_CONN_STATUS_BOOTSTRAPPED,
+    /**
+     * This status means that the register operation is in progress. It only
+     * applies to regular LwM2M Servers.
+     */
+    ANJAY_SERV_CONN_STATUS_REGISTERING,
+    /**
+     * This status means that the Anjay is registered to the LwM2M Server. It
+     * only applies to regular LwM2M Servers.
+     */
+    ANJAY_SERV_CONN_STATUS_REGISTERED,
+    /**
+     * This status means that the last register operation has failed due to no
+     * response, a non-success CoAP response was received, or network problems.
+     * It only applies to regular LwM2M Servers.
+     */
+    ANJAY_SERV_CONN_STATUS_REG_FAILURE,
+    /**
+     * This status means that the de-register operation is in progress. It
+     * only applies to regular LwM2M Servers.
+     */
+    ANJAY_SERV_CONN_STATUS_DEREGISTERING,
+    /**
+     * This status means that the the library has de-registered with the LwM2M
+     * Server, either explicitly by successfully performing the De-register
+     * operation, or implicitly by discarding the registration state (which
+     * happens when the server is disabled while offline). It only applies to
+     * regular LwM2M Servers.
+     */
+    ANJAY_SERV_CONN_STATUS_DEREGISTERED,
+    /**
+     * This status means that the /1/x/4 resource has been executed and Anjay
+     * will try to suspend the LwM2M Server. It only applies to regular LwM2M
+     * Servers.
+     */
+    ANJAY_SERV_CONN_STATUS_SUSPENDING,
+    /**
+     * This status means that the suspend process has completed successfully. It
+     * only applies to regular LwM2M Servers.
+     */
+    ANJAY_SERV_CONN_STATUS_SUSPENDED,
+    /**
+     * This status means that the last update operation has failed due to either
+     * no response or a non-success CoAP response was received. It only
+     * applies to regular LwM2M Servers.
+     */
+    ANJAY_SERV_CONN_STATUS_REREGISTERING,
+    /**
+     * This status means that the update operation is in progress. It only
+     * applies to regular LwM2M Servers.
+     */
+    ANJAY_SERV_CONN_STATUS_UPDATING
+} anjay_server_conn_status_t;
+
+/**
+ * @experimental This is experimental server connection status API. This API can
+ *               change in future versions without any notice.
+ *
+ * Callback called each time there is a transition of a server connection status
+ * (as listed in @ref anjay_server_conn_status_t ).
+ *
+ * @param arg    Opaque argument as set through the @c
+ *               server_connection_status_cb_arg field in @ref
+ *               anjay_configuration_t
+ *
+ * @param anjay  Anjay object that calls this callback
+ *
+ * @param ssid   Short Server ID of the server for which the status is reported
+ *
+ * @param status New status of the server connection
+ */
+typedef void
+anjay_server_connection_status_cb_t(void *arg,
+                                    anjay_t *anjay,
+                                    anjay_ssid_t ssid,
+                                    anjay_server_conn_status_t status);
+
+/**
+ * @experimental This is experimental server connection status API. This API can
+ *               change in future versions without any notice.
+ *
+ * This function returns the server connection status. Possible statuses are
+ * given in the @ref anjay_server_conn_status_t. Statuses for a LwM2M Bootstrap
+ * Server are different from the statuses for a regular LwM2M Server.
+ *
+ * @param anjay Anjay object to operate on.
+ * @param ssid Short Server ID of the server which status will be returned. @ref
+ * ANJAY_SSID_ANY is not a valid argument.
+ *
+ * @returns Server status on success, in case of error
+ * ANJAY_SERV_CONN_STATUS_UNKNOWN.
+ */
+anjay_server_conn_status_t
+anjay_get_server_connection_status(anjay_t *anjay, anjay_ssid_t ssid);
+#endif // ANJAY_WITH_CONN_STATUS_API
+
 typedef struct anjay_configuration {
     /**
      * Endpoint name as presented to the LwM2M server. Must be non-NULL, or
@@ -286,6 +424,18 @@ typedef struct anjay_configuration {
     bool enable_self_notify;
 
     /**
+     * Treat failures of the "connect" socket operation (e.g. (D)TLS handshake
+     * failures) as a failed LwM2M Register operation. This enables automatic
+     * retrying of them as described in the "Bootstrap and LwM2M Server
+     * Registration Mechanisms" of LwM2M Core TS 1.1.
+     *
+     * When disabled, such failures are treated as fatal errors and cause the
+     * entire registration sequence for that server to be aborted (which will
+     * trigger a fallback to Bootstrap if applicable).
+     */
+    bool connection_error_is_registration_failure;
+
+    /**
      * (D)TLS ciphersuites to use if the "DTLS/TLS Ciphersuite" Resource
      * (/0/x/16) is not available or empty.
      *
@@ -424,6 +574,27 @@ typedef struct anjay_configuration {
     bool rebuild_client_cert_chain;
 #endif // ANJAY_WITH_LWM2M11
 
+#ifdef ANJAY_WITH_CONN_STATUS_API
+    /**
+     * @experimental This is experimental server connection status API. This API
+     *               can change in future versions without any notice.
+     *
+     * Function called each time there is a transition of a server connection
+     * status (as listed in @ref anjay_server_conn_status_t ).
+     */
+    anjay_server_connection_status_cb_t *server_connection_status_cb;
+
+    /**
+     * @experimental This is experimental server connection status API. This API
+     *               can change in future versions without any notice.
+     *
+     * Opaque argument that will be passed to the function configured in the
+     * <c>server_connection_status_cb</c> field.
+     *
+     * If <c>server_connection_status_cb</c> is NULL, this field is ignored.
+     */
+    void *server_connection_status_cb_arg;
+#endif // ANJAY_WITH_CONN_STATUS_API
 } anjay_configuration_t;
 
 /**

@@ -92,7 +92,7 @@ static int update(advanced_fw_update_logic_t *fw) {
     return 0;
 }
 
-static const anjay_advanced_fw_update_handlers_t handlers = {
+static anjay_advanced_fw_update_handlers_t handlers = {
     .stream_open = fw_stream_open,
     .stream_write = fw_update_common_write,
     .stream_finish = fw_update_common_finish,
@@ -107,10 +107,19 @@ int advanced_firmware_update_additional_image_install(
         anjay_iid_t iid,
         advanced_fw_update_logic_t *fw_table,
         anjay_advanced_fw_update_initial_state_t *init_state,
+        const avs_net_security_info_t *security_info,
         const char *component_name) {
     advanced_fw_update_logic_t *fw_logic = &fw_table[iid];
     memcpy(fw_logic->current_ver, VER_DEFAULT, sizeof(VER_DEFAULT));
     fw_global = fw_logic;
+    if (security_info) {
+        memcpy(&fw_logic->security_info, security_info,
+               sizeof(fw_logic->security_info));
+        handlers.get_security_config =
+                advanced_firmware_update_get_security_config;
+    } else {
+        handlers.get_security_config = NULL;
+    }
     int result =
             anjay_advanced_fw_update_instance_add(anjay, fw_logic->iid,
                                                   component_name, &handlers,

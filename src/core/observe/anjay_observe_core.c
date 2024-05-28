@@ -860,6 +860,31 @@ delete_observation(AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr,
     }
 }
 
+static void
+recalculate_conn_trigger_times(anjay_observe_connection_entry_t *conn) {
+    avs_time_monotonic_t monotonic_now = avs_time_monotonic_now();
+    avs_time_real_t real_now = avs_time_real_now();
+    conn->next_trigger = AVS_TIME_REAL_INVALID;
+    conn->next_pmax_trigger = AVS_TIME_REAL_INVALID;
+    AVS_SORTED_SET_ELEM(anjay_observation_t) observation;
+    AVS_SORTED_SET_FOREACH(observation, conn->observations) {
+        if (avs_time_real_valid(observation->next_pmax_trigger)
+                && !avs_time_real_before(conn->next_pmax_trigger,
+                                         observation->next_pmax_trigger)) {
+            conn->next_pmax_trigger = observation->next_pmax_trigger;
+        }
+        avs_time_real_t next_trigger = avs_time_real_add(
+                real_now,
+                avs_time_monotonic_diff(avs_sched_time(
+                                                &observation->notify_task),
+                                        monotonic_now));
+        if (avs_time_real_valid(next_trigger)
+                && !avs_time_real_before(conn->next_trigger, next_trigger)) {
+            conn->next_trigger = next_trigger;
+        }
+    }
+}
+
 static void observe_remove_entry(anjay_connection_ref_t connection,
                                  const avs_coap_token_t *token) {
     AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr =
@@ -873,6 +898,9 @@ static void observe_remove_entry(anjay_connection_ref_t connection,
                                 _anjay_observation_query(token));
     if (observation) {
         delete_observation(conn_ptr, &observation);
+    }
+    if (*conn_ptr) {
+        recalculate_conn_trigger_times(*conn_ptr);
     }
 }
 
@@ -1455,31 +1483,6 @@ static void remove_all_unsent_values(anjay_observe_connection_entry_t *conn) {
         AVS_LIST(anjay_observation_value_t) value =
                 detach_first_unsent_value(conn);
         delete_value(anjay, &value);
-    }
-}
-
-static void
-recalculate_conn_trigger_times(anjay_observe_connection_entry_t *conn) {
-    avs_time_monotonic_t monotonic_now = avs_time_monotonic_now();
-    avs_time_real_t real_now = avs_time_real_now();
-    conn->next_trigger = AVS_TIME_REAL_INVALID;
-    conn->next_pmax_trigger = AVS_TIME_REAL_INVALID;
-    AVS_SORTED_SET_ELEM(anjay_observation_t) observation;
-    AVS_SORTED_SET_FOREACH(observation, conn->observations) {
-        if (avs_time_real_valid(observation->next_pmax_trigger)
-                && !avs_time_real_before(conn->next_pmax_trigger,
-                                         observation->next_pmax_trigger)) {
-            conn->next_pmax_trigger = observation->next_pmax_trigger;
-        }
-        avs_time_real_t next_trigger = avs_time_real_add(
-                real_now,
-                avs_time_monotonic_diff(avs_sched_time(
-                                                &observation->notify_task),
-                                        monotonic_now));
-        if (avs_time_real_valid(next_trigger)
-                && !avs_time_real_before(conn->next_trigger, next_trigger)) {
-            conn->next_trigger = next_trigger;
-        }
     }
 }
 

@@ -102,6 +102,7 @@ int advanced_firmware_update_additional_image_install(
         anjay_iid_t iid,
         advanced_fw_update_logic_t *fw_table,
         anjay_advanced_fw_update_initial_state_t *init_state,
+        const avs_net_security_info_t *security_info,
         const char *component_name);
 
 const char *
@@ -142,6 +143,12 @@ int fw_update_common_perform_upgrade(
         const anjay_iid_t *requested_supplemental_iids,
         size_t requested_supplemental_iids_count);
 int fw_update_common_maybe_create_firmware_file(advanced_fw_update_logic_t *fw);
+
+int advanced_firmware_update_get_security_config(
+        anjay_iid_t iid,
+        void *fw_,
+        anjay_security_config_t *out_security_config,
+        const char *download_uri);
 
 typedef struct {
     anjay_advanced_fw_update_state_t inst_states[FW_UPDATE_IID_IMAGE_SLOTS];

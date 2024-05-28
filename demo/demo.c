@@ -498,6 +498,21 @@ static void reschedule_notify_time_dependent(anjay_demo_t *demo) {
     }
 }
 
+// !defined(ANJAY_WITH_CONN_STATUS_API)
+
+#ifdef ANJAY_WITH_CONN_STATUS_API
+static void
+server_connection_status_change_callback(void *demo_,
+                                         anjay_t *anjay,
+                                         anjay_ssid_t ssid,
+                                         anjay_server_conn_status_t status) {
+    (void) demo_;
+    (void) anjay;
+    demo_log(INFO, "Current status of the server with SSID %d is: %s", ssid,
+             translate_server_connection_status_enum_to_str(status));
+}
+#endif // ANJAY_WITH_CONN_STATUS_API
+
 static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
     demo->allocated_buffers = cmdline_args->allocated_buffers;
     cmdline_args->allocated_buffers = NULL;
@@ -544,6 +559,8 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         .update_immediately_on_dm_change =
                 cmdline_args->update_immediately_on_dm_change,
         .enable_self_notify = cmdline_args->enable_self_notify,
+        .connection_error_is_registration_failure =
+                cmdline_args->connection_error_is_registration_failure,
         .default_tls_ciphersuites = {
             .ids = cmdline_args->default_ciphersuites,
             .num_ids = cmdline_args->default_ciphersuites_count
@@ -555,6 +572,10 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
 #if defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
         .coap_tcp_request_timeout = cmdline_args->tcp_request_timeout,
 #endif // defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+#ifdef ANJAY_WITH_CONN_STATUS_API
+        .server_connection_status_cb = server_connection_status_change_callback,
+        .server_connection_status_cb_arg = demo,
+#endif // ANJAY_WITH_CONN_STATUS_API
     };
 
 #ifdef ANJAY_WITH_LWM2M11

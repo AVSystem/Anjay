@@ -131,6 +131,7 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
     .prefer_hierarchical_formats = false,
     .update_immediately_on_dm_change = false,
     .enable_self_notify = false,
+    .connection_error_is_registration_failure = false,
     .prefer_same_socket_downloads = false,
 };
 
@@ -594,6 +595,9 @@ static void print_help(const struct option *options) {
           "over CoAP+TCP and HTTP" },
 #    endif // ANJAY_WITH_DOWNLOADER
 #endif     // ANJAY_WITH_MODULE_SW_MGMT
+        { 348, NULL, NULL,
+          "Treat failures of the \"connect\" socket operation (e.g. (D)TLS "
+          "handshake failures) as a failed LwM2M Register operation." },
     };
 
     const size_t screen_width = get_screen_width();
@@ -994,6 +998,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "sw-mgmt-tcp-request-timeout",   required_argument, 0, 347 },
 #    endif // ANJAY_WITH_DOWNLOADER
 #endif // ANJAY_WITH_MODULE_SW_MGMT
+        { "connection-error-is-registration-failure", no_argument, 0, 348 },
         { 0, 0, 0, 0 }
         // clang-format on
     };
@@ -2001,6 +2006,9 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         }
 #    endif // ANJAY_WITH_DOWNLOADER
 #endif     // ANJAY_WITH_MODULE_SW_MGMT
+        case 348:
+            parsed_args->connection_error_is_registration_failure = true;
+            break;
         case 0:
             goto process;
         }

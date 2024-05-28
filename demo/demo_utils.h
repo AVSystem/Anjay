@@ -71,6 +71,11 @@ int copy_file_contents(FILE *dst, FILE *src);
 
 int calc_file_crc32(const char *filename, uint32_t *out_crc);
 
+#ifdef ANJAY_WITH_CONN_STATUS_API
+const char *translate_server_connection_status_enum_to_str(
+        anjay_server_conn_status_t status);
+#endif // ANJAY_WITH_CONN_STATUS_API
+
 #if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
         && defined(AVS_COMMONS_STREAM_WITH_FILE)
 avs_error_t store_etag(avs_persistence_context_t *ctx,

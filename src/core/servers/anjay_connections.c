@@ -43,6 +43,10 @@
 #include "anjay_security.h"
 #include "anjay_server_connections.h"
 
+#ifdef ANJAY_WITH_CONN_STATUS_API
+#    include "../anjay_servers_inactive.h"
+#endif // ANJAY_WITH_CONN_STATUS_API
+
 VISIBILITY_SOURCE_BEGIN
 
 avs_net_socket_t *_anjay_connection_internal_get_socket(
@@ -370,6 +374,14 @@ avs_error_t _anjay_server_connection_internal_bring_online(
         connection->needs_observe_flush = true;
         return AVS_OK;
     }
+
+#ifdef ANJAY_WITH_CONN_STATUS_API
+    if (conn_type == ANJAY_CONNECTION_PRIMARY) {
+        _anjay_set_server_connection_status(server,
+                                            ANJAY_SERV_CONN_STATUS_CONNECTING);
+    }
+#endif // ANJAY_WITH_CONN_STATUS_API
+       // defined(ANJAY_WITH_CORE_PERSISTENCE)
 
     bool session_resumed;
     avs_error_t err = AVS_OK;
@@ -734,6 +746,92 @@ bool _anjay_socket_transport_supported(anjay_unlocked_t *anjay,
     (void) anjay;
     return true;
 }
+
+#ifdef ANJAY_WITH_CONN_STATUS_API
+void _anjay_set_server_suspending_flag(anjay_unlocked_t *anjay,
+                                       anjay_ssid_t ssid,
+                                       bool val) {
+    assert(ssid != ANJAY_SSID_ANY);
+    anjay_server_info_t *server = _anjay_servers_find(anjay, ssid);
+    if (!server) {
+        return;
+    }
+    server->suspending = val;
+}
+
+void _anjay_set_server_connection_status(
+        anjay_server_info_t *server, anjay_server_conn_status_t new_status) {
+    if (new_status != server->connection_status) {
+        server->connection_status = new_status;
+        if (server->anjay->server_connection_status_cb) {
+            ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, server->anjay);
+            server->anjay->server_connection_status_cb(
+                    server->anjay->server_connection_status_cb_arg,
+                    anjay_locked, server->ssid, new_status);
+            ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
+        }
+    }
+
+    if (new_status == ANJAY_SERV_CONN_STATUS_REGISTERED
+            || new_status == ANJAY_SERV_CONN_STATUS_INVALID
+            || new_status == ANJAY_SERV_CONN_STATUS_INITIAL
+            || new_status == ANJAY_SERV_CONN_STATUS_ERROR
+            || new_status == ANJAY_SERV_CONN_STATUS_DEREGISTERING
+            || new_status == ANJAY_SERV_CONN_STATUS_SUSPENDING
+            || new_status == ANJAY_SERV_CONN_STATUS_UPDATING) {
+        server->reregistration = false;
+    }
+}
+
+void _anjay_check_server_connection_status(anjay_server_info_t *server) {
+    if (!server || server->ssid == ANJAY_SSID_BOOTSTRAP) {
+        return;
+    }
+    assert(server->ssid != ANJAY_SSID_ANY);
+
+    anjay_server_conn_status_t current_status = server->connection_status;
+
+    if (_anjay_server_connection_active((anjay_connection_ref_t) {
+            .server = server,
+            .conn_type = ANJAY_CONNECTION_PRIMARY
+        })) {
+        /* expired mean that we aren't registered or lifetime is exceeded */
+        if (!_anjay_server_registration_expired(server)) {
+            if (avs_coap_exchange_id_valid(
+                        server->registration_exchange_state.exchange_id)) {
+                current_status = ANJAY_SERV_CONN_STATUS_UPDATING;
+            } else {
+                current_status = ANJAY_SERV_CONN_STATUS_REGISTERED;
+            }
+        } else if (avs_coap_exchange_id_valid(
+                           server->registration_exchange_state.exchange_id)) {
+            current_status = server->reregistration
+                                     ? ANJAY_SERV_CONN_STATUS_REREGISTERING
+                                     : ANJAY_SERV_CONN_STATUS_REGISTERING;
+        }
+    } else {
+        // In the contexts in which this function is called,
+        // this could only be an error
+        current_status = ANJAY_SERV_CONN_STATUS_ERROR;
+    }
+    _anjay_set_server_connection_status(server, current_status);
+}
+
+anjay_server_conn_status_t
+anjay_get_server_connection_status(anjay_t *anjay, anjay_ssid_t ssid) {
+    if (ssid == ANJAY_SSID_ANY) {
+        return ANJAY_SERV_CONN_STATUS_INVALID;
+    }
+    anjay_server_conn_status_t ret = ANJAY_SERV_CONN_STATUS_INVALID;
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    anjay_server_info_t *server = _anjay_servers_find(anjay_unlocked, ssid);
+    if (server) {
+        ret = server->connection_status;
+    }
+    ANJAY_MUTEX_UNLOCK(anjay);
+    return ret;
+}
+#endif // ANJAY_WITH_CONN_STATUS_API
 
 #ifdef ANJAY_WITH_LWM2M11
 avs_error_t _anjay_server_read_sni(anjay_unlocked_t *anjay,

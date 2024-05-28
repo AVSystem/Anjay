@@ -536,6 +536,24 @@ _anjay_connection_transport(anjay_connection_ref_t conn_ref);
 AVS_LIST(const anjay_socket_entry_t)
 _anjay_collect_socket_entries(anjay_unlocked_t *anjay, bool include_offline);
 
+#ifdef ANJAY_WITH_CONN_STATUS_API
+/**
+ * Set connection status for the server specified by the server argument. This
+ * function supports LwM2M bootstrap and regular LwM2M servers.
+ */
+void _anjay_set_server_connection_status(anjay_server_info_t *server,
+                                         anjay_server_conn_status_t new_status);
+
+/**
+ * Check the server parameters and set one of the following server states:
+ * ANJAY_SERV_CONN_STATUS_UNKNOWN, ANJAY_SERV_CONN_STATUS_REGISTERING,
+ * ANJAY_SERV_CONN_STATUS_REREGISTERING, ANJAY_SERV_CONN_STATUS_REGISTERED or
+ * ANJAY_SERV_CONN_STATUS_UPDATING. This function supports only regular LwM2M
+ * servers.
+ */
+void _anjay_check_server_connection_status(anjay_server_info_t *server);
+#endif // ANJAY_WITH_CONN_STATUS_API
+
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif // ANJAY_SERVERS_PRIVATE_H

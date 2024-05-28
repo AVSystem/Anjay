@@ -29,6 +29,30 @@ static struct {
     char **argv;
 } g_saved_args;
 
+#ifdef ANJAY_WITH_CONN_STATUS_API
+const char *translate_server_connection_status_enum_to_str(
+        anjay_server_conn_status_t status) {
+    static const char *const demo_server_connection_states_str[] = {
+        [ANJAY_SERV_CONN_STATUS_INVALID] = "INVALID",
+        [ANJAY_SERV_CONN_STATUS_ERROR] = "ERROR",
+        [ANJAY_SERV_CONN_STATUS_INITIAL] = "INITIAL",
+        [ANJAY_SERV_CONN_STATUS_CONNECTING] = "CONNECTING",
+        [ANJAY_SERV_CONN_STATUS_BOOTSTRAPPING] = "BOOTSTRAPPING",
+        [ANJAY_SERV_CONN_STATUS_BOOTSTRAPPED] = "BOOTSTRAPPED",
+        [ANJAY_SERV_CONN_STATUS_REGISTERING] = "REGISTERING",
+        [ANJAY_SERV_CONN_STATUS_REGISTERED] = "REGISTERED",
+        [ANJAY_SERV_CONN_STATUS_REG_FAILURE] = "REG_FAILURE",
+        [ANJAY_SERV_CONN_STATUS_DEREGISTERING] = "DEREGISTERING",
+        [ANJAY_SERV_CONN_STATUS_DEREGISTERED] = "DEREGISTERED",
+        [ANJAY_SERV_CONN_STATUS_SUSPENDING] = "SUSPENDING",
+        [ANJAY_SERV_CONN_STATUS_SUSPENDED] = "SUSPENDED",
+        [ANJAY_SERV_CONN_STATUS_REREGISTERING] = "REREGISTERING",
+        [ANJAY_SERV_CONN_STATUS_UPDATING] = "UPDATING"
+    };
+    return demo_server_connection_states_str[status];
+}
+#endif // ANJAY_WITH_CONN_STATUS_API
+
 char **argv_get(void) {
     AVS_ASSERT(g_saved_args.argv, "argv_store not called before argv_get");
     return g_saved_args.argv;

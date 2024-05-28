@@ -47,7 +47,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "3.7.0"
+#    define ANJAY_VERSION "3.8.0"
 #endif // ANJAY_VERSION
 
 #ifdef ANJAY_WITH_LWM2M11
@@ -126,6 +126,15 @@ static int init_anjay(anjay_unlocked_t *anjay,
         anjay_log(ERROR, _("endpoint name could not be copied"));
         return -1;
     }
+
+#ifdef ANJAY_WITH_CONN_STATUS_API
+    anjay->server_connection_status_cb = config->server_connection_status_cb;
+
+    if (anjay->server_connection_status_cb) {
+        anjay->server_connection_status_cb_arg =
+                config->server_connection_status_cb_arg;
+    }
+#endif // ANJAY_WITH_CONN_STATUS_API
 
     anjay->socket_config = config->socket_config;
     anjay->udp_listen_port = config->udp_listen_port;
@@ -232,6 +241,8 @@ static int init_anjay(anjay_unlocked_t *anjay,
     anjay->prefer_hierarchical_formats = config->prefer_hierarchical_formats;
     anjay->update_immediately_on_dm_change =
             config->update_immediately_on_dm_change;
+    anjay->connection_error_is_registration_failure =
+            config->connection_error_is_registration_failure;
     anjay->enable_self_notify = config->enable_self_notify;
     anjay->use_connection_id = config->use_connection_id;
     anjay->additional_tls_config_clb = config->additional_tls_config_clb;

@@ -504,7 +504,8 @@ _anjay_senml_json_encoder_new(avs_stream_t *stream) {
         .alphabet = AVS_BASE64_URL_SAFE_CHARS,
         .padding_char = '\0',
         .allow_whitespace = false,
-        .require_padding = false
+        .require_padding = false,
+        .without_null_termination = false,
     };
     json_encoder_t *ctx = json_encoder_new(stream, &SENML_JSON_ENCODER_VTABLE,
                                            senml_encode_key, BASE64_CONFIG);

@@ -656,6 +656,13 @@
  * composite type request.
  */
 /* #undef ANJAY_WITHOUT_COMPOSITE_OPERATIONS */
+
+/**
+ * Enable support for the experimental
+ * <c>anjay_get_server_connection_status()</c> API and related
+ * <c>anjay_server_connection_status_cb_t</c> callback.
+ */
+#define ANJAY_WITH_CONN_STATUS_API
 /**@}*/
 
 #endif // ANJAY_CONFIG_H

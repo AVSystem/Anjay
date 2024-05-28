@@ -97,6 +97,13 @@ static avs_error_t start_bootstrap_if_not_already_started(
         avs_sched_del(&anjay->bootstrap.purge_bootstrap_handle);
     }
     anjay->bootstrap.in_progress = true;
+#    ifdef ANJAY_WITH_CONN_STATUS_API
+    if (bootstrap_connection.server) {
+        _anjay_set_server_connection_status(
+                bootstrap_connection.server,
+                ANJAY_SERV_CONN_STATUS_BOOTSTRAPPING);
+    }
+#    endif // ANJAY_WITH_CONN_STATUS_API
     return AVS_OK;
 }
 
@@ -705,6 +712,12 @@ static int bootstrap_finish_impl(anjay_unlocked_t *anjay,
         anjay_log(
                 WARNING,
                 _("Bootstrap configuration could not be committed, rejecting"));
+#    ifdef ANJAY_WITH_CONN_STATUS_API
+        if (bootstrap_connection.server) {
+            _anjay_set_server_connection_status(bootstrap_connection.server,
+                                                ANJAY_SERV_CONN_STATUS_ERROR);
+        }
+#    endif // ANJAY_WITH_CONN_STATUS_API
         return retval;
     }
     if ((retval = _anjay_notify_perform_without_servers(
@@ -736,7 +749,20 @@ static int bootstrap_finish_impl(anjay_unlocked_t *anjay,
             _anjay_server_on_server_communication_error(
                     bootstrap_connection.server, err);
         }
+#    ifdef ANJAY_WITH_CONN_STATUS_API
+        if (avs_is_err(err) && bootstrap_connection.server) {
+            _anjay_set_server_connection_status(bootstrap_connection.server,
+                                                ANJAY_SERV_CONN_STATUS_ERROR);
+        }
+#    endif // ANJAY_WITH_CONN_STATUS_API
     } else {
+#    ifdef ANJAY_WITH_CONN_STATUS_API
+        if (bootstrap_connection.server) {
+            _anjay_set_server_connection_status(
+                    bootstrap_connection.server,
+                    ANJAY_SERV_CONN_STATUS_BOOTSTRAPPED);
+        }
+#    endif // ANJAY_WITH_CONN_STATUS_API
         _anjay_schedule_reload_servers(anjay);
     }
     return retval;
@@ -783,6 +809,13 @@ int _anjay_bootstrap_notify_regular_connection_available(
                             BOOTSTRAP_FINISH_DISABLE_SERVER)));
     } else {
         cancel_client_initiated_bootstrap(anjay);
+#    ifdef ANJAY_WITH_CONN_STATUS_API
+        if (bootstrap_connection.server) {
+            _anjay_set_server_connection_status(
+                    bootstrap_connection.server,
+                    ANJAY_SERV_CONN_STATUS_BOOTSTRAPPED);
+        }
+#    endif // ANJAY_WITH_CONN_STATUS_API
     }
     if (!result) {
         reset_client_initiated_bootstrap_backoff(&anjay->bootstrap);

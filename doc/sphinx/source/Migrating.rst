@@ -35,3 +35,4 @@ Migrating from older versions
    Migrating/MigratingFromAnjay32
    Migrating/MigratingFromAnjay33
    Migrating/MigratingFromAnjay34
+   Migrating/MigratingFromAnjay37

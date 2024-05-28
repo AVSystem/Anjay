@@ -1,9 +1,9 @@
 563b9fc06ed0c55bae149f839ab80f11  deps/avs_coap/include_public/avsystem/coap/tcp.h
 8d609e7d1e46df8b37f8d694f6d78e7f  deps/avs_coap/include_public/avsystem/coap/udp.h
 6979acbbeda62d10befc6f7aa7e0865e  deps/avs_commons/include_public/avsystem/commons/avs_addrinfo.h
-65c5f1a934166ea7ffe0b427f87e0d2d  deps/avs_commons/include_public/avsystem/commons/avs_base64.h
+0e56e80e053a9afedc7a714f2acbcc7b  deps/avs_commons/include_public/avsystem/commons/avs_base64.h
 e9bc875ab314a3d88787889cfe282f8f  deps/avs_commons/include_public/avsystem/commons/avs_crypto_common.h
-9f284929ca4c327e8955e3e01fe8f007  deps/avs_commons/include_public/avsystem/commons/avs_crypto_pki.h
+c351a8bd3738a441a32749df2f1489ca  deps/avs_commons/include_public/avsystem/commons/avs_crypto_pki.h
 e23cc205e18c2bc699b7805ff2f04fe3  deps/avs_commons/include_public/avsystem/commons/avs_crypto_psk.h
 a9cad6508cf9c61d88f0dc809848bc9d  deps/avs_commons/include_public/avsystem/commons/avs_socket.h
 99c2b66c9d05b8af9138472a43014197  deps/avs_commons/include_public/avsystem/commons/avs_socket_v_table.h
@@ -84,7 +84,7 @@ f971df7872a8f052bb72ae64610a8031  examples/tutorial/firmware-update/basic-implem
 077f6b89dad59ef3b9b58e2abe93aff6  examples/tutorial/firmware-update/secure-downloads/src/firmware_update.c
 99ef6e1d741fbfefab9ddf0db97c61e7  include_public/anjay/advanced_fw_update.h
 be8a4c22a41c2ab79bf3a68f1f74f301  include_public/anjay/attr_storage.h
-6434100b9f5206dd350885fdab853504  include_public/anjay/core.h
+8da010b13c862c6730a6e41624f16266  include_public/anjay/core.h
 9771c6bc4940d778a12ab93cb400a11c  include_public/anjay/dm.h
 56b500ecbd5ffc8d468327c650883cbd  include_public/anjay/fw_update.h
 b49ca67d9f4f04bf20261c261ad41822  include_public/anjay/io.h

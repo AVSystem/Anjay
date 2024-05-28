@@ -22,10 +22,10 @@ class RetransmissionTest:
         # Note that these values differ from default ones in Anjay. This is done to
         # speed up the test execution a bit by limiting the number of retransmissions
         # as well as wait intervals between them.
-        ACK_RANDOM_FACTOR=1.0
-        ACK_TIMEOUT=2.0
-        MAX_RETRANSMIT=2
-        CONFIRMABLE_NOTIFICATIONS=False
+        ACK_RANDOM_FACTOR = 1.0
+        ACK_TIMEOUT = 2.0
+        MAX_RETRANSMIT = 2
+        CONFIRMABLE_NOTIFICATIONS = False
 
         def tx_params(self):
             return TxParams(ack_random_factor=self.ACK_RANDOM_FACTOR,
@@ -33,17 +33,20 @@ class RetransmissionTest:
                             max_retransmit=self.MAX_RETRANSMIT)
 
         def setUp(self, *args, **kwargs):
-            extra_cmdline_args=[
+            extra_cmdline_args = [
                 '--ack-random-factor', str(self.tx_params().ack_random_factor),
                 '--ack-timeout', str(self.tx_params().ack_timeout),
                 '--max-retransmit', str(self.tx_params().max_retransmit),
-                '--dtls-hs-retry-wait-min', str(self.tx_params().first_retransmission_timeout()),
-                '--dtls-hs-retry-wait-max', str(self.tx_params().last_retransmission_timeout()),
+                '--dtls-hs-retry-wait-min', str(
+                    self.tx_params().first_retransmission_timeout()),
+                '--dtls-hs-retry-wait-max', str(
+                    self.tx_params().last_retransmission_timeout()),
             ]
             if self.CONFIRMABLE_NOTIFICATIONS:
                 extra_cmdline_args += ['--confirmable-notifications']
             if 'extra_cmdline_args' in kwargs:
-                kwargs['extra_cmdline_args'] = extra_cmdline_args + kwargs['extra_cmdline_args']
+                kwargs['extra_cmdline_args'] = extra_cmdline_args + \
+                    kwargs['extra_cmdline_args']
                 super().setUp(*args, **kwargs)
             else:
                 super().setUp(*args, **kwargs, extra_cmdline_args=extra_cmdline_args)
@@ -98,7 +101,8 @@ class DtlsHsRetryOnTimeoutTest(RetransmissionTest.TestMixin,
 
     def runTest(self):
         for i in range(self.MAX_RETRANSMIT + 1):
-            self.assertPktIsDtlsClientHello(self.serv._raw_udp_socket.recv(4096), seq_number=i)
+            self.assertPktIsDtlsClientHello(
+                self.serv._raw_udp_socket.recv(4096), seq_number=i)
 
         self.wait_for_retransmission_response_timeout()
         # Ensure that the control is given back to the user.
@@ -108,8 +112,8 @@ class DtlsHsRetryOnTimeoutTest(RetransmissionTest.TestMixin,
 class DtlsRegisterTimeoutFallbacksToHsTest(RetransmissionTest.TestMixin,
                                            test_suite.Lwm2mDtlsSingleServerTest):
     # These settings speed up tests considerably.
-    MAX_RETRANSMIT=1
-    ACK_TIMEOUT=1
+    MAX_RETRANSMIT = 1
+    ACK_TIMEOUT = 1
 
     def tearDown(self):
         super().teardown_demo_with_servers(auto_deregister=False)
@@ -119,16 +123,19 @@ class DtlsRegisterTimeoutFallbacksToHsTest(RetransmissionTest.TestMixin,
         # Register only falls back to handshake if it's not performed immediately after one
         self.communicate('send-update')
         pkt = self.assertDemoUpdatesRegistration(respond=False)
-        self.serv.send(Lwm2mErrorResponse.matching(pkt)(code=coap.Code.RES_NOT_FOUND))
+        self.serv.send(Lwm2mErrorResponse.matching(pkt)
+                       (code=coap.Code.RES_NOT_FOUND))
 
         # Ignore register requests.
         for _ in range(self.MAX_RETRANSMIT + 1):
-            self.assertDemoRegisters(respond=False, timeout_s=self.last_retransmission_timeout())
+            self.assertDemoRegisters(
+                respond=False, timeout_s=self.last_retransmission_timeout())
 
         self.wait_for_retransmission_response_timeout()
 
         # Demo should fall back to DTLS handshake.
-        self.assertPktIsDtlsClientHello(self.serv._raw_udp_socket.recv(4096), seq_number=0)
+        self.assertPktIsDtlsClientHello(
+            self.serv._raw_udp_socket.recv(4096), seq_number=0)
 
         self.wait_for_retransmission_response_timeout()
         # Ensure that the control is given back to the user.
@@ -188,13 +195,15 @@ class DtlsRegisterFailsOnIcmpTest(test_suite.PcapEnabledTest,
         self.serv.close()
 
         # Wait for ICMP port unreachable.
-        self.wait_until_icmp_unreachable_count(1, timeout_s=self.last_retransmission_timeout())
+        self.wait_until_icmp_unreachable_count(
+            1, timeout_s=self.last_retransmission_timeout())
 
         self.wait_for_retransmission_response_timeout()
         # Ensure that no more retransmissions occurred.
         self.assertEqual(1, self.count_icmp_unreachable_packets())
         # Ensure that no more dtls handshake messages occurred.
-        self.assertEqual(num_initial_dtls_hs_packets, self.count_dtls_client_hello_packets())
+        self.assertEqual(num_initial_dtls_hs_packets,
+                         self.count_dtls_client_hello_packets())
 
         # Ensure that the control is given back to the user.
         self.assertTrue(self.get_all_connections_failed())
@@ -203,8 +212,8 @@ class DtlsRegisterFailsOnIcmpTest(test_suite.PcapEnabledTest,
 class RegisterIcmpTest(test_suite.PcapEnabledTest,
                        RetransmissionTest.TestMixin,
                        test_suite.Lwm2mSingleServerTest):
-    MAX_RETRANSMIT=1
-    ACK_TIMEOUT=4
+    MAX_RETRANSMIT = 1
+    ACK_TIMEOUT = 4
 
     def setUp(self):
         super().setUp(auto_register=False)
@@ -219,7 +228,8 @@ class RegisterIcmpTest(test_suite.PcapEnabledTest,
             # Force Register
             self.communicate('reconnect')
             # Wait for ICMP port unreachable.
-            self.wait_until_icmp_unreachable_count(1, timeout_s=self.last_retransmission_timeout())
+            self.wait_until_icmp_unreachable_count(
+                1, timeout_s=self.last_retransmission_timeout())
 
         # Ensure that the control is given back to the user.
         with self.assertRaises(socket.timeout, msg="unexpected packets from the client"):
@@ -264,7 +274,8 @@ class DeregisterIcmp:
             # Close socket to induce ICMP port unreachables.
             self.serv.close()
             self.communicate('trim-servers 0')
-            self.wait_until_icmp_unreachable_count(1, timeout_s=2 * self.last_retransmission_timeout())
+            self.wait_until_icmp_unreachable_count(
+                1, timeout_s=2 * self.last_retransmission_timeout())
             # Give demo time to realize deregister failed.
             time.sleep(self.ACK_TIMEOUT * self.ACK_RANDOM_FACTOR)
             # Ensure that no more retransmissions occurred.
@@ -291,22 +302,27 @@ class DtlsUpdateTimeoutFallbacksToRegisterTest(RetransmissionTest.TestMixin,
     def runTest(self):
         new_lifetime = int(2 * self.max_transmit_wait())
         # Change lifetime to 2*MAX_TRANSMIT_WAIT
-        self.write_resource(self.serv, oid=OID.Server, iid=1, rid=RID.Server.Lifetime, content=str(new_lifetime))
+        self.write_resource(self.serv, oid=OID.Server, iid=1,
+                            rid=RID.Server.Lifetime, content=str(new_lifetime))
         self.assertDemoUpdatesRegistration(lifetime=new_lifetime)
         # Demo should attempt to update registration.
         for _ in range(self.MAX_RETRANSMIT + 1):
-            self.assertDemoUpdatesRegistration(respond=False, timeout_s=new_lifetime)
+            self.assertDemoUpdatesRegistration(
+                respond=False, timeout_s=new_lifetime)
         self.wait_for_retransmission_response_timeout()
 
         # Demo should re-register
         for _ in range(self.MAX_RETRANSMIT + 1):
-            self.assertDemoRegisters(respond=False, lifetime=new_lifetime, timeout_s=self.max_transmit_wait())
+            self.assertDemoRegisters(
+                respond=False, lifetime=new_lifetime, timeout_s=self.max_transmit_wait())
         self.wait_for_retransmission_response_timeout()
 
-        self.serv._raw_udp_socket.settimeout(self.last_retransmission_timeout() + 1)
+        self.serv._raw_udp_socket.settimeout(
+            self.last_retransmission_timeout() + 1)
         # Demo should attempt handshake
         for i in range(self.MAX_RETRANSMIT + 1):
-            self.assertPktIsDtlsClientHello(self.serv._raw_udp_socket.recv(4096))
+            self.assertPktIsDtlsClientHello(
+                self.serv._raw_udp_socket.recv(4096))
         self.wait_for_retransmission_response_timeout()
 
         with self.assertRaises(socket.timeout, msg="unexpected packets from the client"):
@@ -321,11 +337,13 @@ class UpdateTimeoutFallbacksToRegisterTest(RetransmissionTest.TestMixin,
     def runTest(self):
         new_lifetime = int(2 * self.max_transmit_wait())
         # Change lifetime to 2*MAX_TRANSMIT_WAIT
-        self.write_resource(self.serv, oid=OID.Server, iid=1, rid=RID.Server.Lifetime, content=str(new_lifetime))
+        self.write_resource(self.serv, oid=OID.Server, iid=1,
+                            rid=RID.Server.Lifetime, content=str(new_lifetime))
         self.assertDemoUpdatesRegistration(lifetime=new_lifetime)
         # Demo should attempt to update registration.
         for _ in range(self.MAX_RETRANSMIT + 1):
-            self.assertDemoUpdatesRegistration(respond=False, timeout_s=new_lifetime)
+            self.assertDemoUpdatesRegistration(
+                respond=False, timeout_s=new_lifetime)
         self.wait_for_retransmission_response_timeout()
 
         # Demo should re-register
@@ -341,7 +359,8 @@ class UpdateTimeoutWithQueueModeTest(RetransmissionTest.TestMixin,
     def runTest(self):
         self.communicate('send-update')
         for _ in range(self.MAX_RETRANSMIT + 1):
-            self.assertDemoUpdatesRegistration(respond=False, timeout_s=2 * self.max_transmit_wait())
+            self.assertDemoUpdatesRegistration(
+                respond=False, timeout_s=2 * self.max_transmit_wait())
         self.wait_for_retransmission_response_timeout()
 
         # Demo should re-register
@@ -374,7 +393,8 @@ class UpdateFailsOnIcmpTest:
             # Ensure that no more retransmissions occurred.
             self.assertEqual(1, self.count_icmp_unreachable_packets())
             # Ensure that no more dtls handshake messages occurred.
-            self.assertEqual(num_initial_dtls_hs_packets, self.count_dtls_client_hello_packets())
+            self.assertEqual(num_initial_dtls_hs_packets,
+                             self.count_dtls_client_hello_packets())
 
             # Ensure that the control is given back to the user.
             self.assertTrue(self.get_all_connections_failed())
@@ -393,8 +413,8 @@ class UpdateIcmpTest(UpdateFailsOnIcmpTest.TestMixin,
 class DtlsRequestBootstrapTimeoutFallbacksToHsTest(RetransmissionTest.TestMixin,
                                                    test_suite.Lwm2mDtlsSingleServerTest):
     # These settings speed up tests considerably.
-    MAX_RETRANSMIT=1
-    ACK_TIMEOUT=1
+    MAX_RETRANSMIT = 1
+    ACK_TIMEOUT = 1
 
     def setUp(self):
         super().setUp(bootstrap_server=Lwm2mServer(coap.DtlsServer(psk_identity=self.PSK_IDENTITY, psk_key=self.PSK_KEY)),
@@ -411,19 +431,23 @@ class DtlsRequestBootstrapTimeoutFallbacksToHsTest(RetransmissionTest.TestMixin,
         # Request Bootstrap only falls back to handshake if it's not performed immediately after one
         self.communicate('send-update')
         pkt = self.assertDemoUpdatesRegistration(respond=False)
-        self.serv.send(Lwm2mErrorResponse.matching(pkt)(code=coap.Code.RES_FORBIDDEN))
+        self.serv.send(Lwm2mErrorResponse.matching(pkt)
+                       (code=coap.Code.RES_FORBIDDEN))
         pkt = self.assertDemoRegisters(respond=False)
-        self.serv.send(Lwm2mErrorResponse.matching(pkt)(code=coap.Code.RES_FORBIDDEN))
+        self.serv.send(Lwm2mErrorResponse.matching(pkt)
+                       (code=coap.Code.RES_FORBIDDEN))
 
         # Ignore Request Bootstrap requests.
         for _ in range(self.MAX_RETRANSMIT + 1):
-            pkt = self.bootstrap_server.recv(timeout_s=self.last_retransmission_timeout())
+            pkt = self.bootstrap_server.recv(
+                timeout_s=self.last_retransmission_timeout())
             self.assertIsInstance(pkt, Lwm2mRequestBootstrap)
 
         self.wait_for_retransmission_response_timeout()
 
         # Demo should fall back to DTLS handshake.
-        self.assertPktIsDtlsClientHello(self.bootstrap_server._raw_udp_socket.recv(4096), seq_number=0)
+        self.assertPktIsDtlsClientHello(
+            self.bootstrap_server._raw_udp_socket.recv(4096), seq_number=0)
 
         self.wait_for_retransmission_response_timeout()
         # Ensure that the control is given back to the user.
@@ -442,7 +466,8 @@ class RequestBootstrapTimeoutFails(RetransmissionTest.TestMixin,
     def runTest(self):
         # Ignore Request Bootstrap requests.
         for _ in range(self.MAX_RETRANSMIT + 1):
-            pkt = self.bootstrap_server.recv(timeout_s=self.last_retransmission_timeout() + 5)
+            pkt = self.bootstrap_server.recv(
+                timeout_s=self.last_retransmission_timeout() + 5)
             self.assertIsInstance(pkt, Lwm2mRequestBootstrap)
 
         self.wait_for_retransmission_response_timeout()
@@ -486,16 +511,19 @@ class DtlsRequestBootstrapFailsOnIcmpTest(test_suite.PcapEnabledTest,
         self.bootstrap_server.close()
 
         # respond with Forbidden to Register so that client falls back to Bootstrap
-        self.serv.send(Lwm2mErrorResponse.matching(pkt)(code=coap.Code.RES_FORBIDDEN))
+        self.serv.send(Lwm2mErrorResponse.matching(pkt)
+                       (code=coap.Code.RES_FORBIDDEN))
 
         # Wait for ICMP port unreachable.
-        self.wait_until_icmp_unreachable_count(1, timeout_s=self.last_retransmission_timeout())
+        self.wait_until_icmp_unreachable_count(
+            1, timeout_s=self.last_retransmission_timeout())
 
         self.wait_for_retransmission_response_timeout()
         # Ensure that no more retransmissions occurred.
         self.assertEqual(1, self.count_icmp_unreachable_packets())
         # Ensure that no more dtls handshake messages occurred.
-        self.assertEqual(num_initial_dtls_hs_packets, self.count_dtls_client_hello_packets())
+        self.assertEqual(num_initial_dtls_hs_packets,
+                         self.count_dtls_client_hello_packets())
 
         # Ensure that the control is given back to the user.
         self.assertTrue(self.get_all_connections_failed())
@@ -504,8 +532,8 @@ class DtlsRequestBootstrapFailsOnIcmpTest(test_suite.PcapEnabledTest,
 class RequestBootstrapIcmpTest(test_suite.PcapEnabledTest,
                                RetransmissionTest.TestMixin,
                                test_suite.Lwm2mTest):
-    MAX_RETRANSMIT=1
-    ACK_TIMEOUT=4
+    MAX_RETRANSMIT = 1
+    ACK_TIMEOUT = 4
 
     def setUp(self):
         super().setUp(servers=0, bootstrap_server=True)
@@ -522,7 +550,8 @@ class RequestBootstrapIcmpTest(test_suite.PcapEnabledTest,
             # Force Register
             self.communicate('reconnect')
             # Wait for ICMP port unreachable.
-            self.wait_until_icmp_unreachable_count(1, timeout_s=self.last_retransmission_timeout())
+            self.wait_until_icmp_unreachable_count(
+                1, timeout_s=self.last_retransmission_timeout())
 
         # Ensure that the control is given back to the user.
         with self.assertRaises(socket.timeout, msg="unexpected packets from the client"):
@@ -541,7 +570,7 @@ class NotificationIcmpTest(test_suite.PcapEnabledTest,
                            RetransmissionTest.TestMixin,
                            test_suite.Lwm2mSingleServerTest,
                            test_suite.Lwm2mDmOperations):
-    CONFIRMABLE_NOTIFICATIONS=True
+    CONFIRMABLE_NOTIFICATIONS = True
 
     def tearDown(self):
         super().teardown_demo_with_servers(auto_deregister=False)
@@ -567,7 +596,7 @@ class NotificationDtlsFailsOnIcmpTest(test_suite.PcapEnabledTest,
                                       RetransmissionTest.TestMixin,
                                       test_suite.Lwm2mDtlsSingleServerTest,
                                       test_suite.Lwm2mDmOperations):
-    CONFIRMABLE_NOTIFICATIONS=True
+    CONFIRMABLE_NOTIFICATIONS = True
 
     def tearDown(self):
         super().teardown_demo_with_servers(auto_deregister=False)
@@ -591,18 +620,30 @@ class NotificationDtlsFailsOnIcmpTest(test_suite.PcapEnabledTest,
         # Ensure that no more retransmissions occurred.
         self.assertEqual(1, self.count_icmp_unreachable_packets())
         # Ensure that no more dtls handshake messages occurred.
-        self.assertEqual(num_initial_dtls_hs_packets, self.count_dtls_client_hello_packets())
+        self.assertEqual(num_initial_dtls_hs_packets,
+                         self.count_dtls_client_hello_packets())
 
         # Ensure that the control is given back to the user.
         self.assertTrue(self.get_all_connections_failed())
 
 
-class NotificationTimeoutCancelsObservation:
+class NotificationTimeoutIsIgnored:
     class TestMixin(RetransmissionTest.TestMixin,
                     test_suite.Lwm2mDmOperations):
         CONFIRMABLE_NOTIFICATIONS = True
 
         def runTest(self):
+            import subprocess
+            import unittest
+
+            output = subprocess.run([self._get_demo_executable(), '-e', 'dummy', '-u', 'invalid'],
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout.decode(
+                'utf-8')
+
+            if 'WITH_AVS_COAP_OBSERVE_CANCEL_ON_TIMEOUT = ON' in output:
+                raise unittest.SkipTest(
+                    'Timeout cancels observation in that configuration')
+
             # Trigger a CON notification
             self.create_instance(self.serv, oid=OID.Test, iid=1)
 
@@ -611,28 +652,103 @@ class NotificationTimeoutCancelsObservation:
             self.assertDemoUpdatesRegistration(content=ANY)
 
             self.observe(self.serv, oid=OID.Test, iid=1, rid=RID.Test.Counter)
-            self.execute_resource(self.serv, oid=OID.Test, iid=1, rid=RID.Test.IncrementCounter)
+            self.execute_resource(self.serv, oid=OID.Test,
+                                  iid=1, rid=RID.Test.IncrementCounter)
 
             first_pkt = self.serv.recv(timeout_s=2)
             first_attempt = time.time()
             self.assertIsInstance(first_pkt, Lwm2mNotify)
 
             for attempt in range(self.MAX_RETRANSMIT):
-                self.assertIsInstance(self.serv.recv(timeout_s=30), Lwm2mNotify)
+                self.assertIsInstance(
+                    self.serv.recv(timeout_s=30), Lwm2mNotify)
             last_attempt = time.time()
 
-            transmit_span_lower_bound = self.ACK_TIMEOUT * ((2 ** self.MAX_RETRANSMIT) - 1)
+            transmit_span_lower_bound = self.ACK_TIMEOUT * \
+                ((2 ** self.MAX_RETRANSMIT) - 1)
             transmit_span_upper_bound = transmit_span_lower_bound * self.ACK_RANDOM_FACTOR
 
-            self.assertGreater(last_attempt - first_attempt, transmit_span_lower_bound - 1)
-            self.assertLess(last_attempt - first_attempt, transmit_span_upper_bound + 1)
+            self.assertGreater(last_attempt - first_attempt,
+                               transmit_span_lower_bound - 1)
+            self.assertLess(last_attempt - first_attempt,
+                            transmit_span_upper_bound + 1)
+
+            time.sleep(self.last_retransmission_timeout() + 1)
+
+            # check that following notifications still trigger attempts to send the value
+            self.execute_resource(self.serv, oid=OID.Test,
+                                  iid=1, rid=RID.Test.IncrementCounter)
+            pkt = self.serv.recv(
+                timeout_s=self.last_retransmission_timeout() + 2)
+            self.assertIsInstance(pkt, Lwm2mNotify)
+            self.assertEqual(pkt.content, first_pkt.content)
+            self.serv.send(Lwm2mReset.matching(pkt)())
+
+
+class NotificationTimeoutCancelsObservation:
+    class TestMixin(RetransmissionTest.TestMixin,
+                    test_suite.Lwm2mDmOperations):
+        CONFIRMABLE_NOTIFICATIONS = True
+
+        def runTest(self):
+            import subprocess
+            import unittest
+
+            output = subprocess.run([self._get_demo_executable(), '-e', 'dummy', '-u', 'invalid'],
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout.decode(
+                'utf-8')
+
+            if 'WITH_AVS_COAP_OBSERVE_CANCEL_ON_TIMEOUT = OFF' in output:
+                raise unittest.SkipTest(
+                    'Timeout does not cancel observation in that configuration')
+
+            # Trigger a CON notification
+            self.create_instance(self.serv, oid=OID.Test, iid=1)
+
+            # force an Update so that change to the data model does not get notified later
+            self.communicate('send-update')
+            self.assertDemoUpdatesRegistration(content=ANY)
+
+            self.observe(self.serv, oid=OID.Test, iid=1, rid=RID.Test.Counter)
+            self.execute_resource(self.serv, oid=OID.Test,
+                                  iid=1, rid=RID.Test.IncrementCounter)
+
+            first_pkt = self.serv.recv(timeout_s=2)
+            first_attempt = time.time()
+            self.assertIsInstance(first_pkt, Lwm2mNotify)
+
+            for attempt in range(self.MAX_RETRANSMIT):
+                self.assertIsInstance(
+                    self.serv.recv(timeout_s=30), Lwm2mNotify)
+            last_attempt = time.time()
+
+            transmit_span_lower_bound = self.ACK_TIMEOUT * \
+                ((2 ** self.MAX_RETRANSMIT) - 1)
+            transmit_span_upper_bound = transmit_span_lower_bound * self.ACK_RANDOM_FACTOR
+
+            self.assertGreater(last_attempt - first_attempt,
+                               transmit_span_lower_bound - 1)
+            self.assertLess(last_attempt - first_attempt,
+                            transmit_span_upper_bound + 1)
 
             time.sleep(self.last_retransmission_timeout() + 1)
 
             # check that the observation is really cancelled
-            self.execute_resource(self.serv, oid=OID.Test, iid=1, rid=RID.Test.IncrementCounter)
+            self.execute_resource(self.serv, oid=OID.Test,
+                                  iid=1, rid=RID.Test.IncrementCounter)
             with self.assertRaises(socket.timeout):
-                print(self.serv.recv(timeout_s=self.last_retransmission_timeout() + 5))
+                print(self.serv.recv(
+                    timeout_s=self.last_retransmission_timeout() + 5))
+
+
+class NotificationDtlsTimeoutIsIgnoredTest(NotificationTimeoutIsIgnored.TestMixin,
+                                           test_suite.Lwm2mDtlsSingleServerTest):
+    pass
+
+
+class NotificationTimeoutIsIgnoredTest(NotificationTimeoutIsIgnored.TestMixin,
+                                       test_suite.Lwm2mSingleServerTest):
+    pass
 
 
 class NotificationDtlsTimeoutCancelsObservationTest(NotificationTimeoutCancelsObservation.TestMixin,
@@ -648,8 +764,8 @@ class NotificationTimeoutCancelsObservationTest(NotificationTimeoutCancelsObserv
 class ReplacedBootstrapServerReconnectTest(RetransmissionTest.TestMixin,
                                            test_suite.Lwm2mDtlsSingleServerTest,
                                            test_suite.Lwm2mDmOperations):
-    MAX_RETRANSMIT=1
-    ACK_TIMEOUT=1
+    MAX_RETRANSMIT = 1
+    ACK_TIMEOUT = 1
 
     def setUp(self):
         super().setUp(bootstrap_server=Lwm2mServer(coap.DtlsServer(psk_identity=self.PSK_IDENTITY, psk_key=self.PSK_KEY)),
@@ -672,33 +788,38 @@ class ReplacedBootstrapServerReconnectTest(RetransmissionTest.TestMixin,
 
         # replace the existing instance
         self.write_instance(self.bootstrap_server, oid=OID.Security, iid=1,
-                            content=TLV.make_resource(RID.Security.ServerURI, 'coaps://127.0.0.1:%d' % self.bootstrap_server.get_listen_port()).serialize()
-                                     + TLV.make_resource(RID.Security.Bootstrap, 1).serialize()
-                                     + TLV.make_resource(RID.Security.Mode, coap.server.SecurityMode.PreSharedKey.value).serialize()
-                                     + TLV.make_resource(RID.Security.PKOrIdentity, self.PSK_IDENTITY).serialize()
-                                     + TLV.make_resource(RID.Security.SecretKey, self.PSK_KEY).serialize())
+                            content=TLV.make_resource(
+                                RID.Security.ServerURI, 'coaps://127.0.0.1:%d' % self.bootstrap_server.get_listen_port()).serialize()
+                            + TLV.make_resource(RID.Security.Bootstrap, 1).serialize()
+                            + TLV.make_resource(RID.Security.Mode, coap.server.SecurityMode.PreSharedKey.value).serialize()
+                            + TLV.make_resource(RID.Security.PKOrIdentity, self.PSK_IDENTITY).serialize()
+                            + TLV.make_resource(RID.Security.SecretKey, self.PSK_KEY).serialize())
 
         # provision the regular Server instance
         self.write_instance(self.bootstrap_server, oid=OID.Security, iid=2,
-                            content=TLV.make_resource(RID.Security.ServerURI, 'coaps://127.0.0.1:%d' % self.serv.get_listen_port()).serialize()
-                                     + TLV.make_resource(RID.Security.Bootstrap, 0).serialize()
-                                     + TLV.make_resource(RID.Security.Mode, coap.server.SecurityMode.PreSharedKey.value).serialize()
-                                     + TLV.make_resource(RID.Security.ShortServerID, 2).serialize()
-                                     + TLV.make_resource(RID.Security.PKOrIdentity, self.PSK_IDENTITY).serialize()
-                                     + TLV.make_resource(RID.Security.SecretKey, self.PSK_KEY).serialize())
+                            content=TLV.make_resource(
+                                RID.Security.ServerURI, 'coaps://127.0.0.1:%d' % self.serv.get_listen_port()).serialize()
+                            + TLV.make_resource(RID.Security.Bootstrap, 0).serialize()
+                            + TLV.make_resource(RID.Security.Mode, coap.server.SecurityMode.PreSharedKey.value).serialize()
+                            + TLV.make_resource(RID.Security.ShortServerID, 2).serialize()
+                            + TLV.make_resource(RID.Security.PKOrIdentity, self.PSK_IDENTITY).serialize()
+                            + TLV.make_resource(RID.Security.SecretKey, self.PSK_KEY).serialize())
         self.write_instance(self.bootstrap_server, oid=OID.Server, iid=2,
-                            content=TLV.make_resource(RID.Server.Lifetime, int(lifetime)).serialize()
-                                    + TLV.make_resource(RID.Server.ShortServerID, 2).serialize()
-                                    + TLV.make_resource(RID.Server.NotificationStoring, True).serialize()
-                                    + TLV.make_resource(RID.Server.Binding, "U").serialize()
-                                    + TLV.make_resource(RID.Server.ServerCommunicationRetryCount, 1).serialize()
-                                    + TLV.make_resource(RID.Server.ServerCommunicationSequenceRetryCount, 1).serialize()
-                                    )
+                            content=TLV.make_resource(
+                                RID.Server.Lifetime, int(lifetime)).serialize()
+                            + TLV.make_resource(RID.Server.ShortServerID, 2).serialize()
+                            + TLV.make_resource(RID.Server.NotificationStoring, True).serialize()
+                            + TLV.make_resource(RID.Server.Binding,
+                                                "U").serialize()
+                            + TLV.make_resource(RID.Server.ServerCommunicationRetryCount, 1).serialize()
+                            + TLV.make_resource(RID.Server.ServerCommunicationSequenceRetryCount, 1).serialize()
+                            )
 
         # Bootstrap Finish
         pkt = Lwm2mBootstrapFinish()
         self.bootstrap_server.send(pkt)
-        self.assertMsgEqual(Lwm2mChanged.matching(pkt)(), self.bootstrap_server.recv())
+        self.assertMsgEqual(Lwm2mChanged.matching(pkt)(),
+                            self.bootstrap_server.recv())
 
         # demo will refresh Bootstrap connection...
         self.assertDtlsReconnect(self.bootstrap_server)
@@ -708,20 +829,26 @@ class ReplacedBootstrapServerReconnectTest(RetransmissionTest.TestMixin,
 
         # let the Update fail
         self.assertIsInstance(self.serv.recv(timeout_s=lifetime), Lwm2mUpdate)
-        self.assertIsInstance(self.serv.recv(timeout_s=self.ACK_TIMEOUT + 1), Lwm2mUpdate)
+        self.assertIsInstance(self.serv.recv(
+            timeout_s=self.ACK_TIMEOUT + 1), Lwm2mUpdate)
 
         # client falls back to Register
         pkt = self.serv.recv(timeout_s=lifetime)
         self.assertIsInstance(pkt, Lwm2mRegister)
-        self.serv.send(Lwm2mErrorResponse.matching(pkt)(coap.Code.RES_FORBIDDEN))
+        self.serv.send(Lwm2mErrorResponse.matching(pkt)
+                       (coap.Code.RES_FORBIDDEN))
 
         # now the client falls back to Bootstrap, and doesn't get response
-        self.assertIsInstance(self.bootstrap_server.recv(), Lwm2mRequestBootstrap)
-        self.assertIsInstance(self.bootstrap_server.recv(timeout_s=self.ACK_TIMEOUT + 1), Lwm2mRequestBootstrap)
+        self.assertIsInstance(
+            self.bootstrap_server.recv(), Lwm2mRequestBootstrap)
+        self.assertIsInstance(self.bootstrap_server.recv(
+            timeout_s=self.ACK_TIMEOUT + 1), Lwm2mRequestBootstrap)
 
         # rehandshake should appear here
-        self.assertDtlsReconnect(self.bootstrap_server, timeout_s=2*self.ACK_TIMEOUT + 1)
-        self.assertIsInstance(self.bootstrap_server.recv(), Lwm2mRequestBootstrap)
+        self.assertDtlsReconnect(
+            self.bootstrap_server, timeout_s=2*self.ACK_TIMEOUT + 1)
+        self.assertIsInstance(
+            self.bootstrap_server.recv(), Lwm2mRequestBootstrap)
 
 
 class ModifyingTxParams(RetransmissionTest.TestMixin, bootstrap_client.BootstrapTest.Test):
@@ -745,8 +872,10 @@ class ModifyingTxParams(RetransmissionTest.TestMixin, bootstrap_client.Bootstrap
         self.assertMsgEqual(pkt2, pkt3)
 
         # check that it used the initial transmission params
-        self.assertAlmostEqual(pkt2_time - pkt1_time, self.ACK_TIMEOUT, delta=0.5)
-        self.assertAlmostEqual(pkt3_time - pkt2_time, 2.0 * self.ACK_TIMEOUT, delta=0.5)
+        self.assertAlmostEqual(pkt2_time - pkt1_time,
+                               self.ACK_TIMEOUT, delta=0.5)
+        self.assertAlmostEqual(pkt3_time - pkt2_time,
+                               2.0 * self.ACK_TIMEOUT, delta=0.5)
 
         # Now let's change the transmission params
         # ACK_TIMEOUT=5, ACK_RANDOM_FACTOR=1, MAX_RETRANSMIT=1, NSTART=1
@@ -760,13 +889,15 @@ class ModifyingTxParams(RetransmissionTest.TestMixin, bootstrap_client.Bootstrap
         # so check that the new ACK_TIMEOUT is in effect for the 1.0 attempt
         pkt1 = self.bootstrap_server.recv(timeout_s=self.max_transmit_wait())
         pkt1_time = time.time()
-        self.assertMsgEqual(Lwm2mRequestBootstrap(endpoint_name=DEMO_ENDPOINT_NAME), pkt1)
+        self.assertMsgEqual(Lwm2mRequestBootstrap(
+            endpoint_name=DEMO_ENDPOINT_NAME), pkt1)
 
         pkt2 = self.bootstrap_server.recv(timeout_s=self.max_transmit_wait())
         pkt2_time = time.time()
         self.assertMsgEqual(pkt1, pkt2)
 
-        self.assertAlmostEqual(pkt2_time - pkt1_time, self.ACK_TIMEOUT, delta=0.5)
+        self.assertAlmostEqual(pkt2_time - pkt1_time,
+                               self.ACK_TIMEOUT, delta=0.5)
 
         # Respond to Request Bootstrap
         self.bootstrap_server.send(Lwm2mChanged.matching(pkt2)())
@@ -784,9 +915,11 @@ class ModifyingTxParams(RetransmissionTest.TestMixin, bootstrap_client.Bootstrap
         pkt2_time = time.time()
         self.assertMsgEqual(pkt1, pkt2)
 
-        self.assertAlmostEqual(pkt2_time - pkt1_time, self.ACK_TIMEOUT, delta=0.5)
+        self.assertAlmostEqual(pkt2_time - pkt1_time,
+                               self.ACK_TIMEOUT, delta=0.5)
 
-        self.serv.send(Lwm2mCreated.matching(pkt2)(location=self.DEFAULT_REGISTER_ENDPOINT))
+        self.serv.send(Lwm2mCreated.matching(pkt2)(
+            location=self.DEFAULT_REGISTER_ENDPOINT))
 
         # check that downloads also use the new transmission params
         dl_server = coap.Server()
@@ -802,7 +935,8 @@ class ModifyingTxParams(RetransmissionTest.TestMixin, bootstrap_client.Bootstrap
                 pkt2_time = time.time()
                 self.assertMsgEqual(pkt1, pkt2)
 
-                self.assertAlmostEqual(pkt2_time - pkt1_time, self.ACK_TIMEOUT, delta=0.5)
+                self.assertAlmostEqual(
+                    pkt2_time - pkt1_time, self.ACK_TIMEOUT, delta=0.5)
 
                 dl_server.send(Lwm2mErrorResponse.matching(pkt2)(
                     code=coap.Code.RES_NOT_FOUND).fill_placeholders())
@@ -817,14 +951,18 @@ class ModifyingExchangeTimeout(RetransmissionTest.TestMixin, bootstrap_client.Bo
         self.assertDemoRequestsBootstrap()
 
         # change exchange lifetime to 2 seconds
-        self.communicate('set-coap-exchange-timeout udp %s' % (self.EXCHANGE_LIFETIME,))
+        self.communicate('set-coap-exchange-timeout udp %s' %
+                         (self.EXCHANGE_LIFETIME,))
 
         # Create typical Server Object instance
         server_entries_no_ssid = [TLV.make_resource(RID.Server.Lifetime, 86400),
-                                  TLV.make_resource(RID.Server.NotificationStoring, True),
+                                  TLV.make_resource(
+                                      RID.Server.NotificationStoring, True),
                                   TLV.make_resource(RID.Server.Binding, "U"),
-                                  TLV.make_resource(RID.Server.ServerCommunicationRetryCount, 1),
-                                  TLV.make_resource(RID.Server.ServerCommunicationRetryTimer, 0),
+                                  TLV.make_resource(
+                                      RID.Server.ServerCommunicationRetryCount, 1),
+                                  TLV.make_resource(
+                                      RID.Server.ServerCommunicationRetryTimer, 0),
                                   TLV.make_resource(
                                       RID.Server.ServerCommunicationSequenceRetryCount, 1),
                                   TLV.make_resource(
@@ -849,7 +987,8 @@ class ModifyingExchangeTimeout(RetransmissionTest.TestMixin, bootstrap_client.Bo
 
         req = packets[0]
         self.bootstrap_server.send(req)
-        self.assertMsgEqual(Lwm2mContinue.matching(req)(), self.bootstrap_server.recv())
+        self.assertMsgEqual(Lwm2mContinue.matching(req)(),
+                            self.bootstrap_server.recv())
 
         # Wait for the exchange to time out
         time.sleep(self.EXCHANGE_LIFETIME + 0.5)
@@ -858,12 +997,15 @@ class ModifyingExchangeTimeout(RetransmissionTest.TestMixin, bootstrap_client.Bo
         req = packets[1]
         self.bootstrap_server.send(req)
         self.assertMsgEqual(
-            Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_REQUEST_ENTITY_INCOMPLETE),
+            Lwm2mErrorResponse.matching(req)(
+                code=coap.Code.RES_REQUEST_ENTITY_INCOMPLETE),
             self.bootstrap_server.recv())
 
         # That's tested, now bootstrap normally
-        self.write_instance(self.bootstrap_server, oid=OID.Server, iid=1, content=server_tlv)
-        self.write_instance(self.bootstrap_server, oid=OID.Security, iid=1, content=security_tlv)
+        self.write_instance(self.bootstrap_server,
+                            oid=OID.Server, iid=1, content=server_tlv)
+        self.write_instance(self.bootstrap_server,
+                            oid=OID.Security, iid=1, content=security_tlv)
         self.perform_bootstrap_finish()
 
         self.assertDemoRegisters()
@@ -886,7 +1028,8 @@ class ModifyingExchangeTimeout(RetransmissionTest.TestMixin, bootstrap_client.Bo
         req = packets[1]
         self.serv.send(req)
         self.assertMsgEqual(
-            Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_REQUEST_ENTITY_INCOMPLETE),
+            Lwm2mErrorResponse.matching(req)(
+                code=coap.Code.RES_REQUEST_ENTITY_INCOMPLETE),
             self.serv.recv())
 
 
@@ -917,7 +1060,8 @@ class ModifyingDtlsHsTimers(RetransmissionTest.TestMixin, bootstrap_client.DtlsB
         self.assertPktIsDtlsClientHello(self.serv._raw_udp_socket.recv(65536))
         mgmt_hello_time = time.time()
 
-        self.assertPktIsDtlsClientHello(self.bootstrap_server._raw_udp_socket.recv(65536))
+        self.assertPktIsDtlsClientHello(
+            self.bootstrap_server._raw_udp_socket.recv(65536))
         bootstrap_hello_time = time.time()
 
         self.wait_until_socket_count(0, timeout_s=self.HANDSHAKE_TIMEOUT + 1)

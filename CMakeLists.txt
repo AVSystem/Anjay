@@ -8,7 +8,7 @@
 cmake_minimum_required(VERSION 3.6.0)
 
 project(anjay C)
-set(ANJAY_VERSION "3.7.0" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "3.8.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -210,6 +210,7 @@ else()
 endif()
 
 option(WITH_AVS_COAP_TCP "Enable CoAP over TCP support" "${WITH_LWM2M11}")
+option(WITH_CONN_STATUS_API "Enable support for the experimental anjay_get_server_connection_status() API and related callback." ON)
 
 
 
@@ -557,6 +558,7 @@ set(ANJAY_WITH_SECURITY_STRUCTURED "${WITH_SECURITY_STRUCTURED}")
 set(ANJAY_WITH_SEND "${WITH_SEND}")
 set(ANJAY_WITH_SENML_JSON "${WITH_SENML_JSON}")
 set(ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE "${WITHOUT_QUEUE_MODE_AUTOCLOSE}")
+set(ANJAY_WITH_CONN_STATUS_API "${WITH_CONN_STATUS_API}")
 
 configure_file(include_public/anjay/anjay_config.h.in
                include_public/anjay/anjay_config.h)

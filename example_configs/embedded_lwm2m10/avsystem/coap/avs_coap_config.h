@@ -69,10 +69,22 @@
 #define WITH_AVS_COAP_OBSERVE
 
 /**
+ * Turn on cancelling observation on a timeout.
+ *
+ * Only meaningful if <c>WITH_AVS_COAP_OBSERVE</c> is enabled.
+ *
+ * NOTE: LwM2M specification requires LwM2M server to send Cancel Observation
+ * request. Meanwhile CoAP RFC 7641 states that timeout on notification should
+ * cancel it. This setting is to enable both of these behaviors with default
+ * focused on keeping observations in case of bad connectivity.
+ */
+/* #undef WITH_AVS_COAP_OBSERVE_CANCEL_ON_TIMEOUT */
+
+/**
  * Enable support for observation persistence (<c>avs_coap_observe_persist()</c>
  * and <c>avs_coap_observe_restore()</c> calls).
  *
- * Only meaningful <c>WITH_AVS_COAP_OBSERVE</c> is enabled.
+ * Only meaningful if <c>WITH_AVS_COAP_OBSERVE</c> is enabled.
  */
 /* #undef WITH_AVS_COAP_OBSERVE_PERSISTENCE */
 

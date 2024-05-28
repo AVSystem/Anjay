@@ -1430,6 +1430,24 @@ static void cmd_last_communication_time(anjay_demo_t *demo,
 }
 #endif // ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
 
+#ifdef ANJAY_WITH_CONN_STATUS_API
+static void cmd_get_server_connection_status(anjay_demo_t *demo,
+                                             const char *args_string) {
+    anjay_ssid_t ssid = ANJAY_SSID_ANY;
+    anjay_server_conn_status_t result;
+
+    if (*args_string && parse_ssid(args_string, &ssid)) {
+        demo_log(ERROR, "invalid Short Server ID: %s", args_string);
+        return;
+    }
+
+    result = anjay_get_server_connection_status(demo->anjay, ssid);
+
+    demo_log(INFO, "Current server connection status: %s",
+             translate_server_connection_status_enum_to_str(result));
+}
+#endif // ANJAY_WITH_CONN_STATUS_API
+
 static void cmd_help(anjay_demo_t *demo, const char *args_string);
 
 struct cmd_handler_def {
@@ -1665,6 +1683,12 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 "no argument specified) or a given server (if numeric SSID "
                 "argument given)."),
 #endif // ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
+#ifdef ANJAY_WITH_CONN_STATUS_API
+    CMD_HANDLER("get-server-connection-status", "[SSID]",
+                cmd_get_server_connection_status,
+                "Displays current connection status for the server with SSID "
+                "specified by the argument."),
+#endif // ANJAY_WITH_CONN_STATUS_API
     CMD_HANDLER("help", "", cmd_help, "Prints this message")
     // clang-format on
 };

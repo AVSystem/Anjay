@@ -62,8 +62,7 @@ Changed flow of cancelling observations in case of errors
 ---------------------------------------------------------
 
 CoAP observations are implicitly cancelled if a notification bearing a 4.xx or
-5.xx error code is delivered, or if an attempt to deliver a notification times
-out.
+5.xx error code is delivered.
 
 In Anjay 3.4.x and earlier, this cancellation (which involves calling the
 ``avs_coap_observe_cancel_handler_t`` callback) was performed *before* calling

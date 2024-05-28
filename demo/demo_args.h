@@ -168,6 +168,7 @@ typedef struct cmdline_args {
     bool prefer_hierarchical_formats;
     bool update_immediately_on_dm_change;
     bool enable_self_notify;
+    bool connection_error_is_registration_failure;
     bool use_connection_id;
     bool start_offline;
 

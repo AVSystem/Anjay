@@ -37,6 +37,12 @@ VISIBILITY_SOURCE_BEGIN
  */
 static int deactivate_server(anjay_server_info_t *server) {
     assert(server);
+#ifdef ANJAY_WITH_CONN_STATUS_API
+    if (server->suspending) {
+        _anjay_set_server_connection_status(server,
+                                            ANJAY_SERV_CONN_STATUS_SUSPENDING);
+    }
+#endif // ANJAY_WITH_CONN_STATUS_API
 #ifndef ANJAY_WITHOUT_DEREGISTER
     if (server->ssid != ANJAY_SSID_BOOTSTRAP
             && !_anjay_bootstrap_in_progress(server->anjay)) {
@@ -47,6 +53,19 @@ static int deactivate_server(anjay_server_info_t *server) {
             // optional anyway. _anjay_serve_deregister logs the error cause.
             _anjay_server_deregister(server);
         }
+#    ifdef ANJAY_WITH_CONN_STATUS_API
+        else if (server->connection_status != ANJAY_SERV_CONN_STATUS_ERROR
+                 && server->connection_status != ANJAY_SERV_CONN_STATUS_INITIAL
+                 && server->connection_status
+                            != ANJAY_SERV_CONN_STATUS_REG_FAILURE
+                 && server->connection_status
+                            != ANJAY_SERV_CONN_STATUS_SUSPENDED
+                 && !avs_time_real_before(server->reactivate_time,
+                                          avs_time_real_now())) {
+            _anjay_set_server_connection_status(
+                    server, ANJAY_SERV_CONN_STATUS_DEREGISTERED);
+        }
+#    endif // ANJAY_WITH_CONN_STATUS_API
     }
 #endif // ANJAY_WITHOUT_DEREGISTER
     _anjay_server_clean_active_data(server);
@@ -60,6 +79,10 @@ static int deactivate_server(anjay_server_info_t *server) {
             && _anjay_server_sched_activate(server)) {
         // not much we can do other than removing the server altogether
         anjay_log(ERROR, _("could not reschedule server reactivation"));
+#ifdef ANJAY_WITH_CONN_STATUS_API
+        _anjay_check_server_connection_status(server);
+        _anjay_set_server_suspending_flag(server->anjay, server->ssid, false);
+#endif // ANJAY_WITH_CONN_STATUS_API
         AVS_LIST(anjay_server_info_t) *server_ptr =
                 _anjay_servers_find_ptr(&server->anjay->servers, server->ssid);
         assert(server_ptr);
@@ -67,6 +90,13 @@ static int deactivate_server(anjay_server_info_t *server) {
         AVS_LIST_DELETE(server_ptr);
         return -1;
     }
+#ifdef ANJAY_WITH_CONN_STATUS_API
+    if (server->suspending) {
+        _anjay_set_server_connection_status(server,
+                                            ANJAY_SERV_CONN_STATUS_SUSPENDED);
+        _anjay_set_server_suspending_flag(server->anjay, server->ssid, false);
+    }
+#endif // ANJAY_WITH_CONN_STATUS_API
     return 0;
 }
 
@@ -138,6 +168,10 @@ void _anjay_server_on_failure(anjay_server_info_t *server,
                   debug_msg);
         // Abort any further bootstrap retries.
         _anjay_bootstrap_cleanup(server->anjay);
+#ifdef ANJAY_WITH_CONN_STATUS_API
+        _anjay_set_server_connection_status(server,
+                                            ANJAY_SERV_CONN_STATUS_ERROR);
+#endif // ANJAY_WITH_CONN_STATUS_API
     } else {
 #ifdef ANJAY_WITH_LWM2M11
         if (server->registration_attempts > 0) {
@@ -196,6 +230,12 @@ void _anjay_server_on_failure(anjay_server_info_t *server,
         anjay_log(DEBUG,
                   _("Non-Bootstrap Server ") "%" PRIu16 _(": ") "%s" _("."),
                   server->ssid, debug_msg);
+#ifdef ANJAY_WITH_CONN_STATUS_API
+        if (server->connection_status != ANJAY_SERV_CONN_STATUS_REG_FAILURE) {
+            _anjay_set_server_connection_status(server,
+                                                ANJAY_SERV_CONN_STATUS_ERROR);
+        }
+#endif // ANJAY_WITH_CONN_STATUS_API
         (void) _anjay_perform_bootstrap_action_if_appropriate(
                 server->anjay,
                 _anjay_servers_find_active(server->anjay, ANJAY_SSID_BOOTSTRAP),
@@ -239,6 +279,12 @@ void _anjay_server_on_server_communication_timeout(
                        server->anjay, server->ssid, AVS_TIME_DURATION_ZERO)) {
         server->refresh_failed = true;
     } else {
+#ifdef ANJAY_WITH_CONN_STATUS_API
+        if (server->ssid != ANJAY_SSID_BOOTSTRAP) {
+            _anjay_set_server_connection_status(
+                    server, ANJAY_SERV_CONN_STATUS_REG_FAILURE);
+        }
+#endif // ANJAY_WITH_CONN_STATUS_API
         _anjay_server_on_server_communication_error(server,
                                                     avs_errno(AVS_EBADF));
     }
@@ -276,6 +322,30 @@ void _anjay_server_on_refreshed(anjay_server_info_t *server,
             anjay_log(TRACE,
                       _("could not initialize sockets for SSID ") "%" PRIu16,
                       server->ssid);
+            if (server->ssid != ANJAY_SSID_BOOTSTRAP) {
+                if (server->anjay->connection_error_is_registration_failure) {
+                    anjay_connection_type_t conn_type;
+                    ANJAY_CONNECTION_TYPE_FOREACH(conn_type) {
+                        _anjay_observe_invalidate((anjay_connection_ref_t) {
+                            .server = server,
+                            .conn_type = conn_type
+                        });
+                    }
+                    ++server->registration_attempts;
+                    server->registration_info.expire_time =
+                            AVS_TIME_REAL_INVALID;
+                    server->registration_info.update_forced = false;
+                    // defined(ANJAY_WITH_CORE_PERSISTENCE)
+#ifdef ANJAY_WITH_CONN_STATUS_API
+                    _anjay_set_server_connection_status(
+                            server, ANJAY_SERV_CONN_STATUS_REG_FAILURE);
+#endif // ANJAY_WITH_CONN_STATUS_API
+                } else {
+                    // Interrupt any registration flow that may be in progress
+                    server->registration_attempts = 0;
+                    server->registration_sequences_performed = 0;
+                }
+            }
             _anjay_server_on_server_communication_error(server, err);
         } else if (_anjay_socket_transport_supported(server->anjay,
                                                      primary_conn->transport)
@@ -310,6 +380,20 @@ void _anjay_server_on_refreshed(anjay_server_info_t *server,
         }
         // _anjay_bootstrap_request_if_appropriate() may fail only due to
         // failure to schedule a job. Not much that we can do about it then.
+#ifdef ANJAY_WITH_CONN_STATUS_API
+        if (server->connection_status == ANJAY_SERV_CONN_STATUS_CONNECTING) {
+            if (server->refresh_failed) {
+                _anjay_set_server_connection_status(
+                        server, ANJAY_SERV_CONN_STATUS_ERROR);
+            } else if (action == ANJAY_BOOTSTRAP_ACTION_NONE
+                       && !avs_coap_exchange_id_valid(
+                                  server->anjay->bootstrap
+                                          .outgoing_request_exchange_id)) {
+                _anjay_set_server_connection_status(
+                        server, ANJAY_SERV_CONN_STATUS_BOOTSTRAPPED);
+            }
+        }
+#endif // ANJAY_WITH_CONN_STATUS_API
     } else {
         assert(avs_is_ok(err));
         _anjay_server_ensure_valid_registration(server);
@@ -319,6 +403,17 @@ void _anjay_server_on_refreshed(anjay_server_info_t *server,
 void _anjay_server_on_updated_registration(anjay_server_info_t *server,
                                            anjay_registration_result_t result,
                                            avs_error_t err) {
+#ifdef ANJAY_WITH_CONN_STATUS_API
+    if ((result == ANJAY_REGISTRATION_ERROR_NETWORK
+         || result == ANJAY_REGISTRATION_ERROR_OTHER)
+            && server->connection_status
+                           != ANJAY_SERV_CONN_STATUS_REG_FAILURE) {
+        _anjay_set_server_connection_status(server,
+                                            ANJAY_SERV_CONN_STATUS_ERROR);
+    } else {
+        _anjay_check_server_connection_status(server);
+    }
+#endif // ANJAY_WITH_CONN_STATUS_API
     if (result == ANJAY_REGISTRATION_SUCCESS) {
         if (_anjay_server_reschedule_update_job(server)) {
             // Updates are retryable, we only need to reschedule after success
@@ -626,6 +721,12 @@ static int disable_server_impl(anjay_unlocked_t *anjay,
 int anjay_disable_server(anjay_t *anjay_locked, anjay_ssid_t ssid) {
     int result = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+#ifdef ANJAY_WITH_CONN_STATUS_API
+    anjay_server_info_t *server = _anjay_servers_find(anjay, ssid);
+    if (server) {
+        _anjay_set_server_suspending_flag(server->anjay, server->ssid, true);
+    }
+#endif // ANJAY_WITH_CONN_STATUS_API
     result = disable_server_impl(
             anjay, ssid, ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_TIMEOUT_FROM_DM,
             "ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_TIMEOUT_FROM_DM",
@@ -667,6 +768,12 @@ int anjay_disable_server_with_timeout(anjay_t *anjay_locked,
                                       avs_time_duration_t timeout) {
     int result = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+#ifdef ANJAY_WITH_CONN_STATUS_API
+    anjay_server_info_t *server = _anjay_servers_find(anjay, ssid);
+    if (server) {
+        _anjay_set_server_suspending_flag(server->anjay, server->ssid, true);
+    }
+#endif // ANJAY_WITH_CONN_STATUS_API
     result = _anjay_schedule_disable_server_with_explicit_timeout_unlocked(
             anjay, ssid, timeout);
     ANJAY_MUTEX_UNLOCK(anjay_locked);

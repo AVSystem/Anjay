@@ -314,17 +314,16 @@ send_result_handler(avs_coap_ctx_t *ctx,
                                      },
                                      code);
     }
-#ifdef WITH_AVS_COAP_OBSERVE
+#if defined(WITH_AVS_COAP_OBSERVE) \
+        && defined(WITH_AVS_COAP_OBSERVE_CANCEL_ON_TIMEOUT)
     else if (fail_err.category == AVS_COAP_ERR_CATEGORY
              && fail_err.code == AVS_COAP_ERR_TIMEOUT) {
-        // According to RFC 7641, when trying to send a Confirmable notification
-        // ends in a timeout, the client "is considered no longer interested in
-        // the resource and is removed by the server from the list of observers"
         avs_coap_observe_cancel(ctx, (avs_coap_observe_id_t) {
                                          .token = token
                                      });
     }
-#endif // WITH_AVS_COAP_OBSERVE
+#endif /* defined(WITH_AVS_COAP_OBSERVE) && \
+          defined(WITH_AVS_COAP_OBSERVE_CANCEL_ON_TIMEOUT) */
 
     // delivery status handler or observe cancel handler
     // might have canceled the exchange

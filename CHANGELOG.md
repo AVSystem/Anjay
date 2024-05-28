@@ -1,5 +1,33 @@
 # Changelog
 
+## 3.8.0 (May 28th, 2024)
+
+### BREAKING CHANGES
+
+- Timeout in case of sending a Confirmable Notification does not cancel the
+  observation anymore by default.
+
+### Features
+
+- Added a ``connection_error_is_registration_failure`` configuration option that
+  allows handling connection errors as Register failures, including the
+  automatic retry mechanism
+- Added experimental server connection status API.
+
+### Improvements
+
+- (commercial version only) Changed MSISDN matching method in SMS binding
+  feature to allow handling messages with Short Codes as originating number
+
+### Bugfixes
+
+- Fixed a corner case in which a connection error during a non-first Register
+  attempt could cause uncontrolled infinite retries
+- Fixed a bug in demo of Advanced Firmware Update module that prevented
+  proper handling of security config for targets other than APP
+- Fixed a bug that caused anjay_next_planned_notify_trigger family APIs to
+  return an invalid value after canceling observations
+
 ## 3.7.0 (February 16th, 2024)
 
 ### Features

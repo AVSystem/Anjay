@@ -189,9 +189,12 @@ struct anjay_server_info_struct {
 
     /**
      * Number of attempted (potentially) failed registrations. It is incremented
-     * in send_register(), then compared (if non-zero) against "Communication
-     * Retry Count" resource in _anjay_server_on_failure(). When the
-     * registration succeeds, it is reset to 0.
+     * in send_register() (and also _anjay_server_on_refreshed() in case of
+     * connection error if connection_error_is_registration_failure is enabled),
+     * then compared (if non-zero) against "Communication Retry Count" resource
+     * in _anjay_server_on_failure(). When the registration succeeds or in case
+     * of a connection error (when connection_error_is_registration_failure is
+     * disabled), it is reset to 0.
      */
     uint32_t registration_attempts;
 
@@ -208,6 +211,31 @@ struct anjay_server_info_struct {
      */
     avs_time_real_t last_communication_time;
 #endif // ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
+
+#ifdef ANJAY_WITH_CONN_STATUS_API
+    /**
+     * Stores current server connection status.
+     */
+    anjay_server_conn_status_t connection_status;
+
+    /**
+     * Indicates that the server is in the process of suspending. It is checked
+     * by the ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_EXPLICIT_TIMEOUT and the
+     * ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_TIMEOUT_FROM_DM actions to
+     * see if it was called due to /1/x/4 resource execution, function
+     * anjay_disable_server call or function anjay_disable_server_with_timeout
+     * call.
+     */
+    bool suspending;
+
+    /**
+     * Indicates that re-registration will be carried out due to an error
+     * (ANJAY_REGISTRATION_ERROR_TIMEOUT or ANJAY_REGISTRATION_ERROR_REJECTED)
+     * during update operation. If the reregistration process fails, this flag
+     * keeps its value.
+     */
+    bool reregistration;
+#endif // ANJAY_WITH_CONN_STATUS_API
 };
 
 #ifndef ANJAY_WITHOUT_DEREGISTER

@@ -33,6 +33,8 @@
 #include "anjay_server_connections.h"
 #include "anjay_servers_internal.h"
 
+// !defined(ANJAY_WITH_CONN_STATUS_API)
+
 VISIBILITY_SOURCE_BEGIN
 
 /** Update messages are sent to the server every
@@ -641,7 +643,13 @@ handle_register_response(anjay_server_info_t *server,
     if (result != ANJAY_REGISTRATION_SUCCESS) {
         anjay_log(WARNING, _("could not register to server ") "%u",
                   _anjay_server_ssid(server));
-        AVS_LIST_CLEAR(move_endpoint_path) {}
+        AVS_LIST_CLEAR(move_endpoint_path);
+#ifdef ANJAY_WITH_CONN_STATUS_API
+        if (result != ANJAY_REGISTRATION_ERROR_TIMEOUT) {
+            _anjay_set_server_connection_status(
+                    server, ANJAY_SERV_CONN_STATUS_REG_FAILURE);
+        }
+#endif // ANJAY_WITH_CONN_STATUS_API
     } else {
         _anjay_server_update_registration_info(
                 server, move_endpoint_path, attempted_version,
@@ -814,6 +822,9 @@ static void send_register(anjay_server_info_t *server,
         _anjay_server_set_last_communication_time(server);
 #endif // ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
     }
+#ifdef ANJAY_WITH_CONN_STATUS_API
+    _anjay_check_server_connection_status(server);
+#endif // ANJAY_WITH_CONN_STATUS_API
 cleanup:
     avs_coap_options_cleanup(&request.options);
 }
@@ -1033,6 +1044,12 @@ receive_update_response(avs_coap_ctx_t *coap,
         server->registration_info.update_forced = true;
         return;
     }
+#ifdef ANJAY_WITH_CONN_STATUS_API
+    if (result == ANJAY_REGISTRATION_ERROR_TIMEOUT
+            || result == ANJAY_REGISTRATION_ERROR_REJECTED) {
+        server->reregistration = true;
+    }
+#endif // ANJAY_WITH_CONN_STATUS_API
 
     on_registration_update_result(server, &state->new_params, result, err);
 }
@@ -1097,6 +1114,9 @@ static void send_update(anjay_server_info_t *server,
         _anjay_server_set_last_communication_time(server);
 #endif // ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
     }
+#ifdef ANJAY_WITH_CONN_STATUS_API
+    _anjay_check_server_connection_status(server);
+#endif // ANJAY_WITH_CONN_STATUS_API
 end:
     avs_coap_options_cleanup(&request.options);
 }
@@ -1232,6 +1252,11 @@ static avs_error_t deregister(anjay_server_info_t *server) {
     AVS_ASSERT(coap, "Register is not supposed to be called on a connection "
                      "that has no CoAP context");
 
+#    ifdef ANJAY_WITH_CONN_STATUS_API
+    _anjay_set_server_connection_status(server,
+                                        ANJAY_SERV_CONN_STATUS_DEREGISTERING);
+#    endif // ANJAY_WITH_CONN_STATUS_API
+
     avs_coap_request_header_t request = { 0 };
     avs_coap_response_header_t response = { 0 };
     avs_error_t err =
@@ -1255,6 +1280,10 @@ static avs_error_t deregister(anjay_server_info_t *server) {
         err = avs_errno(AVS_EPROTO);
         goto end;
     }
+#    ifdef ANJAY_WITH_CONN_STATUS_API
+    _anjay_set_server_connection_status(server,
+                                        ANJAY_SERV_CONN_STATUS_DEREGISTERED);
+#    endif // ANJAY_WITH_CONN_STATUS_API
 
     anjay_log(INFO, _("De-register sent"));
     err = AVS_OK;
@@ -1280,11 +1309,19 @@ avs_error_t _anjay_server_deregister(anjay_server_info_t *server) {
     };
     if (!_anjay_connection_get_online_socket(connection)) {
         anjay_log(ERROR, _("server connection is not online, skipping"));
+#    ifdef ANJAY_WITH_CONN_STATUS_API
+        _anjay_set_server_connection_status(
+                server, ANJAY_SERV_CONN_STATUS_DEREGISTERED);
+#    endif // ANJAY_WITH_CONN_STATUS_API
         return AVS_OK;
     }
 
     avs_error_t err = deregister(server);
     if (avs_is_err(err)) {
+#    ifdef ANJAY_WITH_CONN_STATUS_API
+        _anjay_set_server_connection_status(server,
+                                            ANJAY_SERV_CONN_STATUS_ERROR);
+#    endif // ANJAY_WITH_CONN_STATUS_API
         anjay_log(ERROR, _("could not send De-Register request: ") "%s",
                   AVS_COAP_STRERROR(err));
     }

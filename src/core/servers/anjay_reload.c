@@ -62,6 +62,10 @@ static int reload_server_by_ssid(anjay_unlocked_t *anjay,
         new_server->reactivate_time = avs_time_real_now();
         result = _anjay_server_sched_activate(new_server);
     }
+#ifdef ANJAY_WITH_CONN_STATUS_API
+    _anjay_set_server_connection_status(new_server,
+                                        ANJAY_SERV_CONN_STATUS_INITIAL);
+#endif // ANJAY_WITH_CONN_STATUS_API
     return result;
 }
 

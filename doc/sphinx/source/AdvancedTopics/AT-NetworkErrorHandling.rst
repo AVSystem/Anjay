@@ -23,12 +23,14 @@ conditions happen while performing each of the client-initiated operations.
 |                 | Request          | Register         | Update           | De-register | Notify            |
 |                 | Bootstrap        |                  |                  |             | (confirmable)     |
 +=================+==================+==================+==================+=============+===================+
-| **Timeout       | Retry DTLS       | Retry DTLS       | Fall back        | Ignored     | Cancel            |
-| (DTLS)** [#t]_  | handshake [#hs]_ | handshake [#hs]_ | to Register      |             | observation       |
-+-----------------+------------------+------------------+                  |             |                   |
-| **Timeout       | Abort all        | :ref:`Abort      |                  |             |                   |
-| (NoSec)** [#t]_ | communication    | registration     |                  |             |                   |
-+-----------------+ [#a]_            | <err-abort-reg>` +------------------+             +-------------------+
+| **Timeout       | Retry DTLS       | Retry DTLS       | Fall back        | Ignored     | Ignored by        |
+| (DTLS)** [#t]_  | handshake [#hs]_ | handshake [#hs]_ | to Register      |             | default;          |
++-----------------+------------------+------------------+                  |             | configurable;     |
+| **Timeout       | Abort all        | :ref:`Abort      |                  |             | will be retried   |
+| (NoSec)** [#t]_ | communication    | registration     |                  |             | whenever          |
+|                 | [#a]_            | <err-abort-reg>` |                  |             | next notification |
+|                 |                  |                  |                  |             | is scheduled      |
++-----------------+                  |                  +------------------+             +-------------------+
 | **Network       |                  |                  | Fall back to     |             | Fall back to      |
 | (e.g. ICMP)     |                  |                  | Client-Initiated |             | Client-Initiated  |
 | error**         |                  |                  | Bootstrap [#bs]_ |             | Bootstrap [#bs]_  |
@@ -73,20 +75,50 @@ condition is equivalent with the "fall back to Client-Initiated Bootstrap"
 Other error conditions
 ----------------------
 
-* **DTLS handshakes** are performed by the DTLS backend library used. This
-  includes handling non-fatal errors and retransmissions. In case of no response
-  from the server, DTLS handshake retransmissions are expected to follow
-  `RFC 6347, Section 4.2.4.  Timeout and Retransmission
-  <https://tools.ietf.org/html/rfc6347#section-4.2.4>`_.
-  The handshake timers can be customized during Anjay initialization, by setting
-  `anjay_configuration_t::udp_dtls_hs_tx_params
-  <../api/structanjay__configuration.html#ab8ca076537138e7d78bd1ee5d5e2031a>`_.
+* **Connect operation errors** can occur for several reasons, the most common
+  being:
 
-  In case of the ultimate timeout, network-layer error, or an internal error
-  during the handshake attempt, Anjay will fall back to Client-Initiated
-  Bootstrap [#bs]_ or, if the attempt was to connect to a Bootstrap Server,
-  cease any attempts to communicate with it (note that unless regular Server
-  accounts are available, this will mean abortion of all communication [#a]_).
+  * **(D)TLS handshake errors.** Handshakes are performed by the TLS backend
+    library used. This includes handling non-fatal errors and retransmissions.
+    In case of no response from the server, DTLS handshake retransmissions are
+    expected to follow `RFC 6347, Section 4.2.4.  Timeout and Retransmission
+    <https://tools.ietf.org/html/rfc6347#section-4.2.4>`_. The handshake timers
+    can be customized during Anjay initialization, by setting
+    `anjay_configuration_t::udp_dtls_hs_tx_params
+    <../api/structanjay__configuration.html#ab8ca076537138e7d78bd1ee5d5e2031a>`_.
+
+    Ultimate timeout, network-layer errors, and internal errors during the
+    handshake attempt will be treated as a failure of the "connect" operation.
+
+  * **Domain name resolution errors.** If the ``getaddrinfo()`` call (or
+    equivalent) fails to return any usable IP address, this is also treated as
+    a failure of the "connect" operation.
+
+  * **TCP handshake errors.** While the actual socket-level "connect" operation
+    does not involve any network communication for UDP and as such can almost
+    never fail, it performs actual handshake in case of TCP. Failure of this
+    handshake is also treated in the same way as the other cases mentioned here.
+
+  * In some cases, **inconsistent data model state** may be treated equivalently
+    to a connection error, e.g. when there is no Security object instance that
+    would match a given Server object instance.
+
+  Note that all of the operations mentioned above (domain name resolution and
+  both TCP and (D)TLS handshakes) are performed synchronously and will block all
+  other operations.
+
+  If any of the above conditions happen, Anjay will, by default, fall back to
+  Client-Initiated Bootstrap [#bs]_ or, if the attempt was to connect to
+  a Bootstrap Server, cease any attempts to communicate with it (note that
+  unless regular Server accounts are available, this will mean abortion of all
+  communication [#a]_).
+
+  This behavior can be changed by enabling the
+  `connection_error_is_registration_failure
+  <../api/structanjay__configuration.html#adcc95609ca645a5bd6a572f4c99a83fb>`_.
+  In that case, connection errors will trigger :ref:`err-abort-reg`, and thus
+  the automatic retry flow described in "Bootstrap and LwM2M Server Registration
+  Mechanisms" section mentioned above will be respected.
 
 * Errors while receiving an incoming request, or any unrecognized incoming
   packets, will be ignored
