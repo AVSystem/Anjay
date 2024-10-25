@@ -47,7 +47,8 @@ CertSecurity::CertSecurity(const char *ca_path,
                            const char *ca_file,
                            const char *crt_file,
                            const char *key_file)
-        : SecurityInfo({ MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 }),
+        : SecurityInfo({ MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8,
+                         ADDITIONAL_TLS1_3_CIPHERSUITES }),
           configure_ca_(ca_path || ca_file),
           configure_crt_(crt_file && key_file) {
     mbedtls_pk_init(&pk_ctx_);

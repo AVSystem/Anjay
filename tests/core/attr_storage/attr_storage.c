@@ -52,17 +52,17 @@ static const anjay_dm_object_def_t *const OBJ2 = &(
     DM_TEST_FINISH
 
 #ifdef ANJAY_WITH_THREAD_SAFETY
-#    define WRAP_OBJ_PTR(ObjPtr)                                    \
-        ({                                                          \
-            const anjay_dm_installed_object_t *installed_obj =      \
-                    _anjay_dm_find_object_by_oid(anjay_unlocked,    \
-                                                 (*(ObjPtr))->oid); \
-            AVS_UNIT_ASSERT_NOT_NULL(installed_obj);                \
-            AVS_UNIT_ASSERT_TRUE(installed_obj->type                \
-                                 == ANJAY_DM_OBJECT_USER_PROVIDED); \
-            AVS_UNIT_ASSERT_TRUE(installed_obj->impl.user_provided  \
-                                 == (ObjPtr));                      \
-            installed_obj;                                          \
+#    define WRAP_OBJ_PTR(ObjPtr)                                              \
+        ({                                                                    \
+            const anjay_dm_installed_object_t *installed_obj =                \
+                    _anjay_dm_find_object_by_oid(                             \
+                            _anjay_get_dm(anjay_unlocked), (*(ObjPtr))->oid); \
+            AVS_UNIT_ASSERT_NOT_NULL(installed_obj);                          \
+            AVS_UNIT_ASSERT_TRUE(installed_obj->type                          \
+                                 == ANJAY_DM_OBJECT_USER_PROVIDED);           \
+            AVS_UNIT_ASSERT_TRUE(installed_obj->impl.user_provided            \
+                                 == (ObjPtr));                                \
+            installed_obj;                                                    \
         })
 #else // ANJAY_WITH_THREAD_SAFETY
 #    define WRAP_OBJ_PTR(ObjPtr)               \

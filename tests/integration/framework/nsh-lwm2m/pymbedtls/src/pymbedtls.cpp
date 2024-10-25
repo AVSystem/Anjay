@@ -7,6 +7,8 @@
  * See the attached LICENSE file for details.
  */
 
+#include <exception>
+#include <iostream>
 #include <string>
 
 #include "context.hpp"
@@ -88,7 +90,6 @@ PYBIND11_MODULE(pymbedtls, m) {
                     .def("recv_into", &method_unimplemented<py::object>)
                     .def("recvfrom", &method_unimplemented<int>)
                     .def("recvfrom_into", &method_unimplemented<py::object>)
-                    .def("settimeout", &Socket::settimeout)
                     .def("peer_cert", &Socket::peer_cert)
                     .def("__getattr__", &Socket::__getattr__)
                     .def("__setattr__", &Socket::__setattr__);
@@ -99,4 +100,29 @@ PYBIND11_MODULE(pymbedtls, m) {
             .export_values();
     // most verbose logs available
     mbedtls_debug_set_threshold(4);
+
+    set_terminate([]() {
+        cerr << "Terminate called in pymbedtls. This almost certainly means "
+                "that an exception was thrown in a callback, that indirectly "
+                "was called by a callee not expecting an exception that would "
+                "require rethrowing. Consider analyzing the core dump in gdb "
+                "to determine the C++ stack trace leading to this point."
+             << endl;
+        exception_ptr eptr = current_exception();
+        if (eptr) {
+            try {
+                rethrow_exception(eptr);
+            } catch (const exception &e) {
+                cerr << "Uncaught exception with reason: " << e.what() << endl;
+            } catch (...) {
+                cerr << "Uncaught unknown throwable" << endl;
+            }
+        } else {
+            cerr << "Couldn't determine the throwable that caused the "
+                    "terminate call"
+                 << endl;
+        }
+        cerr << flush;
+        std::abort();
+    });
 }

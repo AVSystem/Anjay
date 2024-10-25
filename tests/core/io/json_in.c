@@ -24,14 +24,14 @@
 AVS_UNIT_TEST(json_in_resource, single_instance) {
     static const char RESOURCE[] = "[ { \"n\": \"/13/26/1\", \"v\": 42 } ]";
     TEST_ENV(RESOURCE, TEST_RESOURCE_PATH);
-    test_single_instance(in);
+    check_paths(in, &MAKE_RESOURCE_PATH(13, 26, 1), 1);
     TEST_TEARDOWN(OK);
 }
 
 AVS_UNIT_TEST(json_in_resource_permuted, single_instance) {
     static const char RESOURCE[] = "[ { \"v\": 42, \"n\": \"/13/26/1\" } ]";
     TEST_ENV(RESOURCE, TEST_RESOURCE_PATH);
-    test_single_instance(in);
+    check_paths(in, &MAKE_RESOURCE_PATH(13, 26, 1), 1);
     TEST_TEARDOWN(OK);
 }
 
@@ -61,7 +61,7 @@ AVS_UNIT_TEST(json_in_resource, single_instance_but_more_than_one) {
     static const char RESOURCES[] = "[ { \"n\": \"/13/26/1\", \"v\": 42 }, "
                                     "{ \"n\": \"/13/26/2\", \"v\": 43 } ]";
     TEST_ENV(RESOURCES, TEST_RESOURCE_PATH);
-    test_single_instance_but_more_than_one(in);
+    test_single_instance_but_more_than_one(in, &MAKE_RESOURCE_PATH(13, 26, 1));
     TEST_TEARDOWN(OK);
 }
 
@@ -70,15 +70,9 @@ AVS_UNIT_TEST(json_in_resource,
     static const char RESOURCES[] = "[ { \"n\": \"/13/26/1\", \"v\": 42 }, "
                                     "{ \"n\": \"/13/26/2\", \"v\": 43 } ]";
     TEST_ENV(RESOURCES, TEST_RESOURCE_PATH);
-    anjay_uri_path_t path;
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(&path, &TEST_RESOURCE_PATH));
+    check_path(in, &MAKE_RESOURCE_PATH(13, 26, 1), 42);
 
-    int64_t value;
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 42);
-
-    // Context is restirected to /13/26/1, but it has more data to obtain,
+    // Context is restricted to /13/26/1, but it has more data to obtain,
     // which means the request is broken.
     TEST_TEARDOWN(FAIL);
 }
@@ -100,8 +94,8 @@ AVS_UNIT_TEST(json_in_resource, single_instance_with_first_resource_unrelated) {
 AVS_UNIT_TEST(json_in_resource_permuted, single_instance_but_more_than_one) {
     static const char RESOURCES[] = "[ { \"v\": 42, \"n\": \"/13/26/1\" }, "
                                     "{ \"v\": 43, \"n\": \"/13/26/2\" } ]";
-    TEST_ENV(RESOURCES, MAKE_RESOURCE_PATH(13, 26, 1));
-    test_single_instance_but_more_than_one(in);
+    TEST_ENV(RESOURCES, TEST_RESOURCE_PATH);
+    test_single_instance_but_more_than_one(in, &MAKE_RESOURCE_PATH(13, 26, 1));
     TEST_TEARDOWN(OK);
 }
 
@@ -109,7 +103,11 @@ AVS_UNIT_TEST(json_in_resource, multiple_instance) {
     static const char RESOURCES[] = "[ { \"n\": \"/13/26/1/4\", \"v\": 42 }, "
                                     "{ \"n\": \"/13/26/1/5\", \"v\": 43 } ]";
     TEST_ENV(RESOURCES, TEST_RESOURCE_PATH);
-    test_multiple_instance(in);
+    check_paths(in,
+                (const anjay_uri_path_t[2]) {
+                        MAKE_RESOURCE_INSTANCE_PATH(13, 26, 1, 4),
+                        MAKE_RESOURCE_INSTANCE_PATH(13, 26, 1, 5) },
+                2);
     TEST_TEARDOWN(OK);
 }
 
@@ -117,37 +115,18 @@ AVS_UNIT_TEST(json_in_resource_permuted, multiple_instance) {
     static const char RESOURCES[] = "[ { \"v\": 42, \"n\": \"/13/26/1/4\" }, "
                                     "{ \"v\": 43, \"n\": \"/13/26/1/5\" } ]";
     TEST_ENV(RESOURCES, TEST_RESOURCE_PATH);
-    test_multiple_instance(in);
+    check_paths(in,
+                (const anjay_uri_path_t[2]) {
+                        MAKE_RESOURCE_INSTANCE_PATH(13, 26, 1, 4),
+                        MAKE_RESOURCE_INSTANCE_PATH(13, 26, 1, 5) },
+                2);
     TEST_TEARDOWN(OK);
 }
 
 AVS_UNIT_TEST(json_in_instance, with_simple_resource) {
     static const char RESOURCE[] = "[ { \"n\": \"/13/26/1\", \"v\": 42 } ]";
     TEST_ENV(RESOURCE, TEST_INSTANCE_PATH);
-
-    anjay_uri_path_t path;
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(
-            &path,
-            &MAKE_RESOURCE_PATH(TEST_INSTANCE_PATH.ids[ANJAY_ID_OID],
-                                TEST_INSTANCE_PATH.ids[ANJAY_ID_IID],
-                                1)));
-
-    // cached value
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(
-            &path,
-            &MAKE_RESOURCE_PATH(TEST_INSTANCE_PATH.ids[ANJAY_ID_OID],
-                                TEST_INSTANCE_PATH.ids[ANJAY_ID_IID],
-                                1)));
-
-    int64_t value;
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 42);
-
-    ASSERT_OK(_anjay_input_next_entry(in));
-    ASSERT_EQ(_anjay_input_get_path(in, NULL, NULL), ANJAY_GET_PATH_END);
-
+    check_paths(in, &MAKE_RESOURCE_PATH(13, 26, 1), 1);
     TEST_TEARDOWN(OK);
 }
 
@@ -155,33 +134,10 @@ AVS_UNIT_TEST(json_in_instance, with_more_than_one_resource) {
     static const char RESOURCES[] = "[ { \"n\": \"/13/26/1\", \"v\": 42 }, "
                                     "{ \"n\": \"/13/26/2\", \"v\": 43 } ]";
     TEST_ENV(RESOURCES, TEST_INSTANCE_PATH);
-
-    anjay_uri_path_t path;
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(
-            &path,
-            &MAKE_RESOURCE_PATH(TEST_INSTANCE_PATH.ids[ANJAY_ID_OID],
-                                TEST_INSTANCE_PATH.ids[ANJAY_ID_IID],
-                                1)));
-
-    int64_t value;
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 42);
-
-    ASSERT_OK(_anjay_input_next_entry(in));
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(
-            &path,
-            &MAKE_RESOURCE_PATH(TEST_INSTANCE_PATH.ids[ANJAY_ID_OID],
-                                TEST_INSTANCE_PATH.ids[ANJAY_ID_IID],
-                                2)));
-
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 43);
-
-    ASSERT_OK(_anjay_input_next_entry(in));
-    ASSERT_EQ(_anjay_input_get_path(in, NULL, NULL), ANJAY_GET_PATH_END);
-
+    check_paths(in,
+                (const anjay_uri_path_t[2]) { MAKE_RESOURCE_PATH(13, 26, 1),
+                                              MAKE_RESOURCE_PATH(13, 26, 2) },
+                2);
     TEST_TEARDOWN(OK);
 }
 
@@ -189,7 +145,10 @@ AVS_UNIT_TEST(json_in_instance, resource_skipping) {
     static const char RESOURCES[] = "[ { \"n\": \"/13/26/1\", \"v\": 42 }, "
                                     "{ \"n\": \"/13/26/2\", \"v\": 43 } ]";
     TEST_ENV(RESOURCES, TEST_INSTANCE_PATH);
-    test_resource_skipping(in);
+    test_skipping(in,
+                  (const anjay_uri_path_t[2]) { MAKE_RESOURCE_PATH(13, 26, 1),
+                                                MAKE_RESOURCE_PATH(13, 26, 2) },
+                  2);
     TEST_TEARDOWN(OK);
 }
 
@@ -225,7 +184,10 @@ AVS_UNIT_TEST(json_in_instance_permuted, resource_skipping) {
     static const char RESOURCES[] = "[ { \"v\": 42, \"n\": \"/13/26/1\" }, "
                                     "{ \"v\": 43, \"n\": \"/13/26/2\" } ]";
     TEST_ENV(RESOURCES, TEST_INSTANCE_PATH);
-    test_resource_skipping(in);
+    test_skipping(in,
+                  (const anjay_uri_path_t[2]) { MAKE_RESOURCE_PATH(13, 26, 1),
+                                                MAKE_RESOURCE_PATH(13, 26, 2) },
+                  2);
     TEST_TEARDOWN(OK);
 }
 
@@ -233,34 +195,11 @@ AVS_UNIT_TEST(json_in_instance, multiple_resource_skipping) {
     static const char RESOURCES[] = "[ { \"n\": \"/13/26/1/4\", \"v\": 42 }, "
                                     "{ \"n\": \"/13/26/2/5\", \"v\": 43 } ]";
     TEST_ENV(RESOURCES, TEST_INSTANCE_PATH);
-
-    anjay_uri_path_t path;
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(
-            &path,
-            &MAKE_RESOURCE_INSTANCE_PATH(TEST_INSTANCE_PATH.ids[ANJAY_ID_OID],
-                                         TEST_INSTANCE_PATH.ids[ANJAY_ID_IID],
-                                         1,
-                                         4)));
-
-    // we may not like this resource for some reason, let's skip its value
-    ASSERT_OK(_anjay_input_next_entry(in));
-
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(
-            &path,
-            &MAKE_RESOURCE_INSTANCE_PATH(TEST_INSTANCE_PATH.ids[ANJAY_ID_OID],
-                                         TEST_INSTANCE_PATH.ids[ANJAY_ID_IID],
-                                         2,
-                                         5)));
-
-    int64_t value;
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 43);
-
-    ASSERT_OK(_anjay_input_next_entry(in));
-    ASSERT_EQ(_anjay_input_get_path(in, NULL, NULL), ANJAY_GET_PATH_END);
-
+    test_skipping(in,
+                  (const anjay_uri_path_t[2]) {
+                          MAKE_RESOURCE_INSTANCE_PATH(13, 26, 1, 4),
+                          MAKE_RESOURCE_INSTANCE_PATH(13, 26, 2, 5) },
+                  2);
     TEST_TEARDOWN(OK);
 }
 
@@ -268,25 +207,10 @@ AVS_UNIT_TEST(json_in_object, with_single_instance_and_some_resources) {
     static const char RESOURCES[] = "[ { \"n\": \"/13/26/1\", \"v\": 42 }, "
                                     "{ \"n\": \"/13/26/2\", \"v\": 43 } ]";
     TEST_ENV(RESOURCES, MAKE_OBJECT_PATH(13));
-
-    anjay_uri_path_t path;
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(&path, &MAKE_RESOURCE_PATH(13, 26, 1)));
-
-    int64_t value;
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 42);
-
-    ASSERT_OK(_anjay_input_next_entry(in));
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(&path, &MAKE_RESOURCE_PATH(13, 26, 2)));
-
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 43);
-
-    ASSERT_OK(_anjay_input_next_entry(in));
-    ASSERT_EQ(_anjay_input_get_path(in, NULL, NULL), ANJAY_GET_PATH_END);
-
+    check_paths(in,
+                (const anjay_uri_path_t[2]) { MAKE_RESOURCE_PATH(13, 26, 1),
+                                              MAKE_RESOURCE_PATH(13, 26, 2) },
+                2);
     TEST_TEARDOWN(OK);
 }
 
@@ -306,39 +230,12 @@ AVS_UNIT_TEST(json_in_object, with_some_instances_and_some_resources) {
                                     "{ \"n\": \"/13/27/3\", \"v\": 44 }, "
                                     "{ \"n\": \"/13/27/4\", \"v\": 45 } ]";
     TEST_ENV(RESOURCES, MAKE_OBJECT_PATH(13));
-
-    anjay_uri_path_t path;
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(&path, &MAKE_RESOURCE_PATH(13, 26, 1)));
-
-    int64_t value;
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 42);
-
-    ASSERT_OK(_anjay_input_next_entry(in));
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(&path, &MAKE_RESOURCE_PATH(13, 26, 2)));
-
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 43);
-
-    ASSERT_OK(_anjay_input_next_entry(in));
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(&path, &MAKE_RESOURCE_PATH(13, 27, 3)));
-
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 44);
-
-    ASSERT_OK(_anjay_input_next_entry(in));
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(&path, &MAKE_RESOURCE_PATH(13, 27, 4)));
-
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 45);
-
-    ASSERT_OK(_anjay_input_next_entry(in));
-    ASSERT_EQ(_anjay_input_get_path(in, NULL, NULL), ANJAY_GET_PATH_END);
-
+    check_paths(in,
+                (const anjay_uri_path_t[4]) { MAKE_RESOURCE_PATH(13, 26, 1),
+                                              MAKE_RESOURCE_PATH(13, 26, 2),
+                                              MAKE_RESOURCE_PATH(13, 27, 3),
+                                              MAKE_RESOURCE_PATH(13, 27, 4) },
+                4);
     TEST_TEARDOWN(OK);
 }
 

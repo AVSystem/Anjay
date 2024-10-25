@@ -723,7 +723,7 @@ int _anjay_attr_storage_notify(anjay_unlocked_t *anjay,
             continue;
         }
         const anjay_dm_installed_object_t *def_ptr =
-                _anjay_dm_find_object_by_oid(anjay, object_entry->oid);
+                _anjay_dm_find_object_by_oid(&anjay->dm, object_entry->oid);
         if (!def_ptr && object_ptr) {
             remove_object_entry(&anjay->attr_storage, object_ptr);
             continue;
@@ -928,7 +928,7 @@ maybe_get_object_before_setting_attrs(anjay_unlocked_t *anjay,
         return NULL;
     }
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, oid);
+            _anjay_dm_find_object_by_oid(&anjay->dm, oid);
     if (!obj) {
         as_log(ERROR, "/%" PRIu16 _(" does not exist"), oid);
     }

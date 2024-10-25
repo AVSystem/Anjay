@@ -80,7 +80,7 @@ Examples of application aspects that need custom integration with a software pla
 During the development process, AVSystem can also include your custom hardware in
 CI/CD pipeline to ensure proper performance, configuration and interoperability.
 Such continuous integration testing is an extension of Custom Hardware Support
-included in `Anjay Support Packages <https://www.avsystem.com/anjay/features/#plans>`_.
+included in `Anjay Support Packages <https://avsystem.com/anjay-iot-sdk/features/>`_.
 
 We can also assist with making many **improvements and optimizations**, even if
 the basic functionality works out of the box. For example, Anjay-zephyr contains

@@ -25,4 +25,35 @@ public:
 
 } // namespace ssl
 
+namespace helpers {
+
+template <typename Callable>
+class defer_obj {
+private:
+    Callable deferred;
+
+public:
+    defer_obj(defer_obj &&other) noexcept
+            : deferred(std::move(other.deferred)) {}
+    defer_obj(const defer_obj &) = delete;
+    defer_obj &operator=(const defer_obj &) = delete;
+    defer_obj &operator=(defer_obj &&) = delete;
+
+    template <typename TempCallable>
+    defer_obj(TempCallable &&deferred)
+            : deferred(std::forward<TempCallable>(deferred)) {}
+    ~defer_obj() {
+        deferred();
+    }
+};
+
+// This helper ensures that some code will be called on destruction, i.e. exit
+// from the scope, no matter if it's a return, an exception or a normal exit.
+template <typename Callable>
+defer_obj<Callable> defer(Callable &&to_defer) {
+    return { std::forward<Callable>(to_defer) };
+}
+
+}; // namespace helpers
+
 #endif // PYMBEDTLS_COMMON_HPP

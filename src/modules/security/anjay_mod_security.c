@@ -738,7 +738,7 @@ int anjay_security_object_add_instance(
     int retval = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *obj_ptr =
-            _anjay_dm_find_object_by_oid(anjay, SECURITY.oid);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay), SECURITY.oid);
     sec_repr_t *repr = obj_ptr ? _anjay_sec_get(*obj_ptr) : NULL;
     if (!repr) {
         security_log(ERROR, _("Security object is not registered"));
@@ -783,7 +783,7 @@ void anjay_security_object_purge(anjay_t *anjay_locked) {
     assert(anjay_locked);
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *sec_obj =
-            _anjay_dm_find_object_by_oid(anjay, SECURITY.oid);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay), SECURITY.oid);
     sec_repr_t *repr = sec_obj ? _anjay_sec_get(*sec_obj) : NULL;
 
     if (!repr) {
@@ -806,7 +806,7 @@ bool anjay_security_object_is_modified(anjay_t *anjay_locked) {
     bool result = false;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *sec_obj =
-            _anjay_dm_find_object_by_oid(anjay, SECURITY.oid);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay), SECURITY.oid);
     if (!sec_obj) {
         security_log(ERROR, _("Security object is not registered"));
     } else {

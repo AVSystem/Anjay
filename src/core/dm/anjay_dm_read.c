@@ -29,10 +29,10 @@ read_resource_instance_internal(anjay_unlocked_t *anjay,
                                 anjay_riid_t riid,
                                 anjay_unlocked_output_ctx_t *out_ctx) {
     int result;
-    (void) ((result = _anjay_output_set_path(
-                     out_ctx, &MAKE_RESOURCE_INSTANCE_PATH(
-                                      _anjay_dm_installed_object_oid(obj), iid,
-                                      rid, riid)))
+    anjay_uri_path_t path =
+            MAKE_RESOURCE_INSTANCE_PATH(_anjay_dm_installed_object_oid(obj),
+                                        iid, rid, riid);
+    (void) ((result = _anjay_output_set_path(out_ctx, &path))
             || (result = _anjay_dm_call_resource_read(anjay, obj, iid, rid,
                                                       riid, out_ctx)));
     return result;
@@ -91,10 +91,9 @@ static int read_multiple_resource(anjay_unlocked_t *anjay,
                                   anjay_rid_t rid,
                                   anjay_unlocked_output_ctx_t *out_ctx) {
     int result;
-    (void) ((result = _anjay_output_set_path(
-                     out_ctx,
-                     &MAKE_RESOURCE_PATH(_anjay_dm_installed_object_oid(obj),
-                                         iid, rid)))
+    anjay_uri_path_t path =
+            MAKE_RESOURCE_PATH(_anjay_dm_installed_object_oid(obj), iid, rid);
+    (void) ((result = _anjay_output_set_path(out_ctx, &path))
             || (result = _anjay_output_start_aggregate(out_ctx))
             || (result = _anjay_dm_foreach_resource_instance(
                         anjay, obj, iid, rid, read_resource_instance_clb,
@@ -112,10 +111,10 @@ static int read_resource_internal(anjay_unlocked_t *anjay,
         return read_multiple_resource(anjay, obj, iid, rid, out_ctx);
     } else {
         int result;
-        (void) ((result = _anjay_output_set_path(
-                         out_ctx, &MAKE_RESOURCE_PATH(
-                                          _anjay_dm_installed_object_oid(obj),
-                                          iid, rid)))
+        anjay_uri_path_t path =
+                MAKE_RESOURCE_PATH(_anjay_dm_installed_object_oid(obj), iid,
+                                   rid);
+        (void) ((result = _anjay_output_set_path(out_ctx, &path))
                 || (result = _anjay_dm_call_resource_read(
                             anjay, obj, iid, rid, ANJAY_ID_INVALID, out_ctx)));
         return result;
@@ -185,10 +184,9 @@ static int read_instance(anjay_unlocked_t *anjay,
                          anjay_ssid_t requesting_ssid,
                          anjay_unlocked_output_ctx_t *out_ctx) {
     int result;
-    (void) ((result = _anjay_output_set_path(
-                     out_ctx,
-                     &MAKE_INSTANCE_PATH(_anjay_dm_installed_object_oid(obj),
-                                         iid)))
+    anjay_uri_path_t path =
+            MAKE_INSTANCE_PATH(_anjay_dm_installed_object_oid(obj), iid);
+    (void) ((result = _anjay_output_set_path(out_ctx, &path))
             || (result = _anjay_output_start_aggregate(out_ctx))
             || (result = _anjay_dm_foreach_resource(
                         anjay, obj, iid, read_instance_resource_clb,
@@ -256,7 +254,7 @@ static int read_object_clb(anjay_unlocked_t *anjay,
 static int read_root(anjay_unlocked_t *anjay,
                      anjay_ssid_t requesting_ssid,
                      anjay_unlocked_output_ctx_t *out_ctx) {
-    return _anjay_dm_foreach_object(anjay, read_object_clb,
+    return _anjay_dm_foreach_object(anjay, &anjay->dm, read_object_clb,
                                     &(read_object_clb_args_t) {
                                         .requesting_ssid = requesting_ssid,
                                         .out_ctx = out_ctx
@@ -398,7 +396,7 @@ int _anjay_dm_read_resource_into_ctx(anjay_unlocked_t *anjay,
                                      anjay_unlocked_output_ctx_t *ctx) {
     assert(_anjay_uri_path_leaf_is(path, ANJAY_ID_RID));
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, path->ids[ANJAY_ID_OID]);
+            _anjay_dm_find_object_by_oid(&anjay->dm, path->ids[ANJAY_ID_OID]);
     if (!obj) {
         dm_log(ERROR, _("unregistered Object ID: ") "%u",
                path->ids[ANJAY_ID_OID]);
@@ -473,7 +471,7 @@ int _anjay_dm_read_resource_u32_array(anjay_unlocked_t *anjay,
     assert(out_array_size_elements);
 
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, path->ids[ANJAY_ID_OID]);
+            _anjay_dm_find_object_by_oid(&anjay->dm, path->ids[ANJAY_ID_OID]);
     if (!obj) {
         return -1;
     }
@@ -614,7 +612,7 @@ int _anjay_dm_read_or_observe_composite(anjay_connection_ref_t connection,
 
             const anjay_dm_installed_object_t *obj = NULL;
             if (_anjay_uri_path_has(&path, ANJAY_ID_OID)) {
-                obj = _anjay_dm_find_object_by_oid(anjay,
+                obj = _anjay_dm_find_object_by_oid(&anjay->dm,
                                                    path.ids[ANJAY_ID_OID]);
 
                 if (!obj) {

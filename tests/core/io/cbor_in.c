@@ -15,12 +15,12 @@
 
 #include "senml_in_common.h"
 
-#define TEST_ENV(Data, Path)                                         \
-    avs_stream_inbuf_t stream = AVS_STREAM_INBUF_STATIC_INITIALIZER; \
-    avs_stream_inbuf_set_buffer(&stream, Data, sizeof(Data) - 1);    \
-    anjay_unlocked_input_ctx_t *in;                                  \
-    ASSERT_OK(_anjay_input_senml_cbor_create(                        \
-            &in, (avs_stream_t *) &stream, &(Path)));
+#define TEST_ENV(Data, Path)                                                \
+    avs_stream_inbuf_t stream = AVS_STREAM_INBUF_STATIC_INITIALIZER;        \
+    avs_stream_inbuf_set_buffer(&stream, Data, sizeof(Data) - 1);           \
+    anjay_unlocked_input_ctx_t *in;                                         \
+    ASSERT_OK(_anjay_input_senml_cbor_create(&in, (avs_stream_t *) &stream, \
+                                             &(Path)));
 
 AVS_UNIT_TEST(cbor_in_resource, single_instance) {
     static const char RESOURCE[] = {
@@ -32,7 +32,7 @@ AVS_UNIT_TEST(cbor_in_resource, single_instance) {
         "\x18\x2A"     // unsigned(42)
     };
     TEST_ENV(RESOURCE, TEST_RESOURCE_PATH);
-    test_single_instance(in);
+    check_paths(in, &MAKE_RESOURCE_PATH(13, 26, 1), 1);
     TEST_TEARDOWN(OK);
 }
 
@@ -46,7 +46,7 @@ AVS_UNIT_TEST(cbor_in_resource_permuted, single_instance) {
         "\x68/13/26/1" // text(8)
     };
     TEST_ENV(RESOURCE, TEST_RESOURCE_PATH);
-    test_single_instance(in);
+    check_paths(in, &MAKE_RESOURCE_PATH(13, 26, 1), 1);
     TEST_TEARDOWN(OK);
 }
 
@@ -66,7 +66,7 @@ AVS_UNIT_TEST(cbor_in_resource, single_instance_but_more_than_one) {
         "\x18\x2B"     // unsigned(43)
     };
     TEST_ENV(RESOURCES, TEST_RESOURCE_PATH);
-    test_single_instance_but_more_than_one(in);
+    test_single_instance_but_more_than_one(in, &MAKE_RESOURCE_PATH(13, 26, 1));
     TEST_TEARDOWN(OK);
 }
 
@@ -87,15 +87,9 @@ AVS_UNIT_TEST(cbor_in_resource,
         "\x18\x2B"     // unsigned(43)
     };
     TEST_ENV(RESOURCES, TEST_RESOURCE_PATH);
-    anjay_uri_path_t path;
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(&path, &TEST_RESOURCE_PATH));
+    check_path(in, &MAKE_RESOURCE_PATH(13, 26, 1), 42);
 
-    int64_t value;
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 42);
-
-    // Context is restirected to /13/26/1, but it has more data to obtain,
+    // Context is restricted to /13/26/1, but it has more data to obtain,
     // which means the request is broken.
     TEST_TEARDOWN(FAIL);
 }
@@ -142,7 +136,7 @@ AVS_UNIT_TEST(cbor_in_resource_permuted, single_instance_but_more_than_one) {
         "\x68/13/26/2" // text(8)
     };
     TEST_ENV(RESOURCES, MAKE_RESOURCE_PATH(13, 26, 1));
-    test_single_instance_but_more_than_one(in);
+    test_single_instance_but_more_than_one(in, &MAKE_RESOURCE_PATH(13, 26, 1));
     TEST_TEARDOWN(OK);
 }
 
@@ -162,7 +156,11 @@ AVS_UNIT_TEST(cbor_in_resource, multiple_instance) {
         "\x18\x2B"       // unsigned(43)
     };
     TEST_ENV(RESOURCES, TEST_RESOURCE_PATH);
-    test_multiple_instance(in);
+    check_paths(in,
+                (const anjay_uri_path_t[2]) {
+                        MAKE_RESOURCE_INSTANCE_PATH(13, 26, 1, 4),
+                        MAKE_RESOURCE_INSTANCE_PATH(13, 26, 1, 5) },
+                2);
     TEST_TEARDOWN(OK);
 }
 
@@ -182,7 +180,11 @@ AVS_UNIT_TEST(cbor_in_resource_permuted, multiple_instance) {
         "\x6A/13/26/1/5" // text(10)
     };
     TEST_ENV(RESOURCES, TEST_RESOURCE_PATH);
-    test_multiple_instance(in);
+    check_paths(in,
+                (const anjay_uri_path_t[2]) {
+                        MAKE_RESOURCE_INSTANCE_PATH(13, 26, 1, 4),
+                        MAKE_RESOURCE_INSTANCE_PATH(13, 26, 1, 5) },
+                2);
     TEST_TEARDOWN(OK);
 }
 
@@ -196,30 +198,7 @@ AVS_UNIT_TEST(cbor_in_instance, with_simple_resource) {
         "\x18\x2A"     // unsigned(42)
     };
     TEST_ENV(RESOURCE, TEST_INSTANCE_PATH);
-
-    anjay_uri_path_t path;
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(
-            &path,
-            &MAKE_RESOURCE_PATH(TEST_INSTANCE_PATH.ids[ANJAY_ID_OID],
-                                TEST_INSTANCE_PATH.ids[ANJAY_ID_IID],
-                                1)));
-
-    // cached value
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(
-            &path,
-            &MAKE_RESOURCE_PATH(TEST_INSTANCE_PATH.ids[ANJAY_ID_OID],
-                                TEST_INSTANCE_PATH.ids[ANJAY_ID_IID],
-                                1)));
-
-    int64_t value;
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 42);
-
-    ASSERT_OK(_anjay_input_next_entry(in));
-    ASSERT_EQ(_anjay_input_get_path(in, NULL, NULL), ANJAY_GET_PATH_END);
-
+    check_paths(in, &MAKE_RESOURCE_PATH(13, 26, 1), 1);
     TEST_TEARDOWN(OK);
 }
 
@@ -239,33 +218,10 @@ AVS_UNIT_TEST(cbor_in_instance, with_more_than_one_resource) {
         "\x18\x2B"     // unsigned(43)
     };
     TEST_ENV(RESOURCES, TEST_INSTANCE_PATH);
-
-    anjay_uri_path_t path;
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(
-            &path,
-            &MAKE_RESOURCE_PATH(TEST_INSTANCE_PATH.ids[ANJAY_ID_OID],
-                                TEST_INSTANCE_PATH.ids[ANJAY_ID_IID],
-                                1)));
-
-    int64_t value;
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 42);
-
-    ASSERT_OK(_anjay_input_next_entry(in));
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(
-            &path,
-            &MAKE_RESOURCE_PATH(TEST_INSTANCE_PATH.ids[ANJAY_ID_OID],
-                                TEST_INSTANCE_PATH.ids[ANJAY_ID_IID],
-                                2)));
-
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 43);
-
-    ASSERT_OK(_anjay_input_next_entry(in));
-    ASSERT_EQ(_anjay_input_get_path(in, NULL, NULL), ANJAY_GET_PATH_END);
-
+    check_paths(in,
+                (const anjay_uri_path_t[2]) { MAKE_RESOURCE_PATH(13, 26, 1),
+                                              MAKE_RESOURCE_PATH(13, 26, 2) },
+                2);
     TEST_TEARDOWN(OK);
 }
 
@@ -285,7 +241,10 @@ AVS_UNIT_TEST(cbor_in_instance, resource_skipping) {
         "\x18\x2B"     // unsigned(43)
     };
     TEST_ENV(RESOURCES, TEST_INSTANCE_PATH);
-    test_resource_skipping(in);
+    test_skipping(in,
+                  (const anjay_uri_path_t[2]) { MAKE_RESOURCE_PATH(13, 26, 1),
+                                                MAKE_RESOURCE_PATH(13, 26, 2) },
+                  2);
     TEST_TEARDOWN(OK);
 }
 
@@ -305,7 +264,10 @@ AVS_UNIT_TEST(cbor_in_instance_permuted, resource_skipping) {
         "\x68/13/26/2" // text(8)
     };
     TEST_ENV(RESOURCES, TEST_INSTANCE_PATH);
-    test_resource_skipping(in);
+    test_skipping(in,
+                  (const anjay_uri_path_t[2]) { MAKE_RESOURCE_PATH(13, 26, 1),
+                                                MAKE_RESOURCE_PATH(13, 26, 2) },
+                  2);
     TEST_TEARDOWN(OK);
 }
 
@@ -325,34 +287,11 @@ AVS_UNIT_TEST(cbor_in_instance, multiple_resource_skipping) {
         "\x18\x2B"       // unsigned(43)
     };
     TEST_ENV(RESOURCES, TEST_INSTANCE_PATH);
-
-    anjay_uri_path_t path;
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(
-            &path,
-            &MAKE_RESOURCE_INSTANCE_PATH(TEST_INSTANCE_PATH.ids[ANJAY_ID_OID],
-                                         TEST_INSTANCE_PATH.ids[ANJAY_ID_IID],
-                                         1,
-                                         4)));
-
-    // we may not like this resource for some reason, let's skip its value
-    ASSERT_OK(_anjay_input_next_entry(in));
-
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(
-            &path,
-            &MAKE_RESOURCE_INSTANCE_PATH(TEST_INSTANCE_PATH.ids[ANJAY_ID_OID],
-                                         TEST_INSTANCE_PATH.ids[ANJAY_ID_IID],
-                                         2,
-                                         5)));
-
-    int64_t value;
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 43);
-
-    ASSERT_OK(_anjay_input_next_entry(in));
-    ASSERT_EQ(_anjay_input_get_path(in, NULL, NULL), ANJAY_GET_PATH_END);
-
+    test_skipping(in,
+                  (const anjay_uri_path_t[2]) {
+                          MAKE_RESOURCE_INSTANCE_PATH(13, 26, 1, 4),
+                          MAKE_RESOURCE_INSTANCE_PATH(13, 26, 2, 5) },
+                  2);
     TEST_TEARDOWN(OK);
 }
 
@@ -372,25 +311,10 @@ AVS_UNIT_TEST(cbor_in_object, with_single_instance_and_some_resources) {
         "\x18\x2B"     // unsigned(43)
     };
     TEST_ENV(RESOURCES, MAKE_OBJECT_PATH(13));
-
-    anjay_uri_path_t path;
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(&path, &MAKE_RESOURCE_PATH(13, 26, 1)));
-
-    int64_t value;
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 42);
-
-    ASSERT_OK(_anjay_input_next_entry(in));
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(&path, &MAKE_RESOURCE_PATH(13, 26, 2)));
-
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 43);
-
-    ASSERT_OK(_anjay_input_next_entry(in));
-    ASSERT_EQ(_anjay_input_get_path(in, NULL, NULL), ANJAY_GET_PATH_END);
-
+    check_paths(in,
+                (const anjay_uri_path_t[2]) { MAKE_RESOURCE_PATH(13, 26, 1),
+                                              MAKE_RESOURCE_PATH(13, 26, 2) },
+                2);
     TEST_TEARDOWN(OK);
 }
 
@@ -420,57 +344,28 @@ AVS_UNIT_TEST(cbor_in_object, with_some_instances_and_some_resources) {
         "\x68/13/27/4" // text(8)
         "\x02"         // unsigned(2) => SenML Value
         "\x18\x2D"     // unsigned(45)
-
     };
     TEST_ENV(RESOURCES, MAKE_OBJECT_PATH(13));
-
-    anjay_uri_path_t path;
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(&path, &MAKE_RESOURCE_PATH(13, 26, 1)));
-
-    int64_t value;
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 42);
-
-    ASSERT_OK(_anjay_input_next_entry(in));
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(&path, &MAKE_RESOURCE_PATH(13, 26, 2)));
-
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 43);
-
-    ASSERT_OK(_anjay_input_next_entry(in));
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(&path, &MAKE_RESOURCE_PATH(13, 27, 3)));
-
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 44);
-
-    ASSERT_OK(_anjay_input_next_entry(in));
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(&path, &MAKE_RESOURCE_PATH(13, 27, 4)));
-
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 45);
-
-    ASSERT_OK(_anjay_input_next_entry(in));
-    ASSERT_EQ(_anjay_input_get_path(in, NULL, NULL), ANJAY_GET_PATH_END);
-
+    check_paths(in,
+                (const anjay_uri_path_t[4]) { MAKE_RESOURCE_PATH(13, 26, 1),
+                                              MAKE_RESOURCE_PATH(13, 26, 2),
+                                              MAKE_RESOURCE_PATH(13, 27, 3),
+                                              MAKE_RESOURCE_PATH(13, 27, 4) },
+                4);
     TEST_TEARDOWN(OK);
 }
 
-#define TEST_VALUE_ENV(TypeAndValue)                                           \
-    static const char RESOURCE[] = { "\x81" /* array(1) */                     \
-                                     "\xA2" /* map(2) */                       \
-                                     "\x00" /* unsigned(0) => SenML Name */    \
-                                     "\x68/13/26/1" /* text(8) */              \
-                                     TypeAndValue };                           \
-    TEST_ENV(RESOURCE, MAKE_RESOURCE_PATH(13, 26, 1));                         \
-    {                                                                          \
-        anjay_uri_path_t path;                                                 \
-        ASSERT_OK(_anjay_input_get_path(in, &path, NULL));                     \
-        ASSERT_TRUE(                                                           \
-                _anjay_uri_path_equal(&path, &MAKE_RESOURCE_PATH(13, 26, 1))); \
+#define TEST_VALUE_ENV(TypeAndValue)                                        \
+    static const char RESOURCE[] = { "\x81" /* array(1) */                  \
+                                     "\xA2" /* map(2) */                    \
+                                     "\x00" /* unsigned(0) => SenML Name */ \
+                                     "\x68/13/26/1" /* text(8) */           \
+                                     TypeAndValue };                        \
+    TEST_ENV(RESOURCE, MAKE_RESOURCE_PATH(13, 26, 1));                      \
+    {                                                                       \
+        anjay_uri_path_t path;                                              \
+        ASSERT_OK(_anjay_input_get_path(in, &path, NULL));                  \
+        URI_EQUAL(&path, &MAKE_RESOURCE_PATH(13, 26, 1));                   \
     }
 
 AVS_UNIT_TEST(cbor_in_value, string_with_zero_length_buffer) {
@@ -493,8 +388,8 @@ AVS_UNIT_TEST(cbor_in_value, bytes_with_too_short_buffer) {
     char buf[16] = "nothing";
     size_t bytes_read;
     bool message_finished;
-    ASSERT_OK(_anjay_get_bytes_unlocked(
-            in, &bytes_read, &message_finished, buf, 0));
+    ASSERT_OK(_anjay_get_bytes_unlocked(in, &bytes_read, &message_finished, buf,
+                                        0));
     ASSERT_EQ(bytes_read, 0);
     ASSERT_EQ(message_finished, false);
     ASSERT_EQ(buf[0], 'n');
@@ -680,6 +575,7 @@ AVS_UNIT_TEST(cbor_in, valid_paths) {
 AVS_UNIT_TEST(cbor_in, invalid_paths) {
     anjay_uri_path_t path;
     ASSERT_FAIL(parse_absolute_path(&path, ""));
+    ASSERT_FAIL(parse_absolute_path(&path, "1"));
     ASSERT_FAIL(parse_absolute_path(&path, "//"));
     ASSERT_FAIL(parse_absolute_path(&path, "/1/"));
     ASSERT_FAIL(parse_absolute_path(&path, "/1/2/"));
@@ -718,8 +614,8 @@ AVS_UNIT_TEST(cbor_in, get_bytes_before_get_id) {
     // unsigned(8) => SenML Data & bytes(foobar)
     TEST_VALUE_ENV("\x08\x46"
                    "foobar");
-    ASSERT_FAIL(_anjay_get_bytes_unlocked(
-            in, &(size_t) { 0 }, &(bool) { false }, (char[32]){}, 32));
+    ASSERT_FAIL(_anjay_get_bytes_unlocked(in, &(size_t) { 0 },
+                                          &(bool) { false }, (char[32]){}, 32));
     TEST_TEARDOWN(FAIL);
 }
 
@@ -744,8 +640,8 @@ AVS_UNIT_TEST(cbor_in, get_objlnk_before_get_id) {
                    "vlo"
                    "\x68"
                    "32:42532");
-    ASSERT_FAIL(_anjay_get_objlnk_unlocked(
-            in, &(anjay_oid_t) { 0 }, &(anjay_iid_t) { 0 }));
+    ASSERT_FAIL(_anjay_get_objlnk_unlocked(in, &(anjay_oid_t) { 0 },
+                                           &(anjay_iid_t) { 0 }));
     TEST_TEARDOWN(FAIL);
 }
 
@@ -759,8 +655,7 @@ AVS_UNIT_TEST(cbor_in, get_path_for_resource_instance_path) {
     TEST_ENV(RESOURCE_INSTANCE_PATH, MAKE_RESOURCE_INSTANCE_PATH(3, 0, 0, 1));
     anjay_uri_path_t path;
     ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(
-            &path, &MAKE_RESOURCE_INSTANCE_PATH(3, 0, 0, 1)));
+    URI_EQUAL(&path, &MAKE_RESOURCE_INSTANCE_PATH(3, 0, 0, 1));
     TEST_TEARDOWN(OK);
 }
 

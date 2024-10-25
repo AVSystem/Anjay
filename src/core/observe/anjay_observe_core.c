@@ -589,7 +589,7 @@ static int get_effective_attrs(anjay_unlocked_t *anjay,
                                anjay_ssid_t ssid) {
     anjay_dm_attrs_query_details_t details = {
         .obj = _anjay_uri_path_has(path, ANJAY_ID_OID)
-                       ? _anjay_dm_find_object_by_oid(anjay,
+                       ? _anjay_dm_find_object_by_oid(&anjay->dm,
                                                       path->ids[ANJAY_ID_OID])
                        : NULL,
         .iid = ANJAY_ID_INVALID,
@@ -1193,7 +1193,7 @@ static int read_observation_path(anjay_unlocked_t *anjay,
                                  anjay_batch_t **out_batch) {
     const anjay_dm_installed_object_t *obj = NULL;
     if (_anjay_uri_path_has(path, ANJAY_ID_OID)) {
-        obj = _anjay_dm_find_object_by_oid(anjay, path->ids[ANJAY_ID_OID]);
+        obj = _anjay_dm_find_object_by_oid(&anjay->dm, path->ids[ANJAY_ID_OID]);
     }
     int result;
     anjay_dm_path_info_t path_info;

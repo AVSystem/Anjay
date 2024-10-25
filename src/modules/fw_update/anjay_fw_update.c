@@ -135,7 +135,8 @@ static int perform_send(anjay_unlocked_t *anjay,
 static void send_batch_to_all_servers(anjay_unlocked_t *anjay,
                                       anjay_send_batch_t *batch) {
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SERVER);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_DM_OID_SERVER);
 
     if (_anjay_dm_foreach_instance(anjay, obj, perform_send, batch)) {
         fw_log(ERROR, _("failed to perform Send to all servers"));
@@ -1328,7 +1329,8 @@ int anjay_fw_update_set_result(anjay_t *anjay_locked,
     int retval = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_FIRMWARE_UPDATE);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_DM_OID_FIRMWARE_UPDATE);
     if (!obj) {
         fw_log(WARNING, _("Firmware Update object not installed"));
     } else {
@@ -1356,7 +1358,8 @@ void anjay_fw_update_pull_suspend(anjay_t *anjay_locked) {
     assert(anjay_locked);
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_FIRMWARE_UPDATE);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_DM_OID_FIRMWARE_UPDATE);
     if (!obj) {
         fw_log(WARNING, _("Firmware Update object not installed"));
     } else {
@@ -1375,7 +1378,8 @@ int anjay_fw_update_pull_reconnect(anjay_t *anjay_locked) {
     int result = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_FIRMWARE_UPDATE);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_DM_OID_FIRMWARE_UPDATE);
     if (!obj) {
         fw_log(WARNING, _("Firmware Update object not installed"));
     } else {

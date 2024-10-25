@@ -242,7 +242,7 @@ static int write_resource_raw(anjay_unlocked_t *anjay,
                               size_t value_size,
                               anjay_notify_queue_t *notify_queue) {
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, path.ids[ANJAY_ID_OID]);
+            _anjay_dm_find_object_by_oid(&anjay->dm, path.ids[ANJAY_ID_OID]);
     if (!obj) {
         return ANJAY_ERR_NOT_FOUND;
     }
@@ -428,7 +428,8 @@ int _anjay_dm_write_composite(anjay_unlocked_t *anjay,
             goto finish;
         }
         const anjay_dm_installed_object_t *obj =
-                _anjay_dm_find_object_by_oid(anjay, path.ids[ANJAY_ID_OID]);
+                _anjay_dm_find_object_by_oid(&anjay->dm,
+                                             path.ids[ANJAY_ID_OID]);
 
         if (!obj) {
             dm_log(DEBUG, _("Object not found: ") "%u", path.ids[ANJAY_ID_OID]);

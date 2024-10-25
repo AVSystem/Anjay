@@ -19,7 +19,8 @@ from framework.test_utils import *
 SupportedSecMode = [
     SecurityMode.PreSharedKey,
     SecurityMode.Certificate,
-    SecurityMode.NoSec
+    SecurityMode.NoSec,
+    SecurityMode.CertificateWithEst
 ]
 
 
@@ -204,7 +205,7 @@ class FactoryProvisioning:
     def provision_device(self):
         print(f'Security Mode set to "{SecurityMode(self.sec_mode)}"')
 
-        if self.sec_mode == SecurityMode.Certificate.value:
+        if self.sec_mode == SecurityMode.Certificate.value or self.sec_mode == SecurityMode.CertificateWithEst.value:
             list_of_sec_inst = list(self.cfg_dict[0].values())
             if len(list_of_sec_inst) != 1:
                 raise ValueError(

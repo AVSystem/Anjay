@@ -24,6 +24,7 @@
 #include <mbedtls/ssl_cookie.h>
 #include <mbedtls/timing.h>
 
+#include <exception>
 #include <memory>
 
 #include "pybind11_interop.hpp"
@@ -53,6 +54,16 @@ class Socket {
     py::object py_socket_;
     bool in_handshake_;
 
+    // Used to capture exceptions that may be thrown in callbacks that are
+    // implemented in C++, but called from C code. As it's generally wrong to
+    // throw exception through the stack which incorporates C code, we capture
+    // the exception in case we expect some callback to generate it, and then
+    // rethrow it in a safe place.
+    //
+    // As we want to capture exceptions only when explicicitly requested, we use
+    // a pointer to std::exception_ptr for additional level of indirection.
+    std::exception_ptr *exception_capturer_;
+
     // Used to match incoming packets with a client we initially are
     // connect()'ed to. It may change, if, for example connection_id extension
     // is used and we received a packet from a different endpoint but the
@@ -64,9 +75,12 @@ class Socket {
     // (if any) to see if the packet is indeed valid and should be handled.
     std::tuple<std::string, int> last_recv_host_and_port_;
 
-    static int _send(void *self, const unsigned char *buf, size_t len);
     static int
-    _recv(void *self, unsigned char *buf, size_t len, uint32_t timeout_ms);
+    bio_send(void *self, const unsigned char *buf, size_t len) noexcept;
+    static int bio_recv(void *self,
+                        unsigned char *buf,
+                        size_t len,
+                        uint32_t timeout_ms) noexcept;
 
     HandshakeResult do_handshake();
 
@@ -82,8 +96,12 @@ public:
                            bool py_connect);
     void send(const std::string &data);
     py::bytes recv(int);
-    void settimeout(py::object timeout_s_or_none);
     py::bytes peer_cert();
+
+    // __getattr__ (and __setattr__) is called when Python is unable to directly
+    // find the attribute of an object. By redirecting this to __get_attribute__
+    // of the py_socket_ field, we're essentially extending the class of
+    // py_socket_.
     py::object __getattr__(py::object name);
     void __setattr__(py::object name, py::object value);
 

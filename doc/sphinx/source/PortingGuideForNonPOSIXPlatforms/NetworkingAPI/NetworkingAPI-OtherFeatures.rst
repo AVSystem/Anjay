@@ -23,9 +23,7 @@ account for, if the shorter version already implements all features used by
 Anjay.
 
 This largely owes to the fact that the network layer in ``avs_commons`` has been
-designed not just for Anjay, but for generic use in multiple projects. For
-example, it is also used in `LibCWMP
-<https://www.avsystem.com/products/libcwmp/>`_, another AVSystem product; it can
+designed not just for Anjay, but for generic use in multiple projects, and can
 also be used to build third-party applications.
 
 Most of the additional functionality that is not used by Anjay has been

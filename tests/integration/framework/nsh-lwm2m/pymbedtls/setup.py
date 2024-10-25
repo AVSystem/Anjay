@@ -55,13 +55,16 @@ extensions = [
               library_dirs=library_dirs,
               libraries=['mbedtls', 'mbedcrypto', 'mbedx509'],
               include_dirs=include_dirs,
-              extra_compile_args=['-std=c++1y', '-isystem', '/usr/local/include'])
+              extra_compile_args=['-std=c++14',
+                                  '-isystem',
+                                  '/usr/local/include',
+                                  '-fvisibility=hidden'])
 ]
 
 setup(
     name='pymbedtls',
-    version='0.3.0',
-    description='''DTLS-PSK socket classes''',
+    version='0.4.0',
+    description='''MbedTLS wrapper for Python''',
     author='AVSystem',
     author_email='avsystem@avsystem.com',
     license='Commercial',

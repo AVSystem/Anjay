@@ -9,29 +9,39 @@
 
 set -e
 
+which gcc || die "gcc not found, exiting"
+which lcov || die "lcov not found, exiting"
+which genhtml || die "genhtml not found, exiting"
+
+GCC_VERSION=$(gcc --version 2>&1 | head -n 1 | awk 'END {print $NF}')
+GCC_MAJOR_VERSION=${GCC_VERSION%%.*}
+LCOV_VERSION=$(lcov --version 2>&1 | head -n 1 | awk 'END {print $NF}')
+LCOV_MAJOR_VERSION=${LCOV_VERSION%%.*}
+
+if [ "$LCOV_MAJOR_VERSION" -gt 1 ]; then
+    LCOV_ADDITIONAL_OPTS="--rc branch_coverage=1 --ignore-errors mismatch"
+else
+    LCOV_ADDITIONAL_OPTS="--rc lcov_branch_coverage=1"
+fi
+
 . "$(dirname "$0")/utils.sh"
-[[ "$PROJECT_ROOT" ]] || PROJECT_ROOT="$(dirname "$(dirname "$(canonicalize "$0")")")"
 
 function die() {
     echo -e "$@" >&2
     exit 1
 }
 
-which gcovr || die "gcovr not found, exiting"
+[[ "$PROJECT_ROOT" ]] || PROJECT_ROOT="$(dirname "$(dirname "$(canonicalize "$0")")")"
 
+rm -rf "$PROJECT_ROOT/build/coverage"
 mkdir -p "$PROJECT_ROOT/build/coverage"
 pushd "$PROJECT_ROOT/build/coverage"
-    mkdir -p "$PROJECT_ROOT/build/coverage"
-    "$PROJECT_ROOT/devconfig" -D CMAKE_C_FLAGS="-std=c99 -D_POSIX_C_SOURCE=200809L -g --coverage" -D CMAKE_EXE_LINKER_FLAGS="--coverage" "$@"
-    make -j$(num_processors)
-    make check
-
+    "$PROJECT_ROOT/devconfig" --without-analysis --without-memcheck --no-examples -DCMAKE_C_FLAGS="-std=c99 -D_POSIX_C_SOURCE=200809L -g -O0 --coverage" -DCMAKE_EXE_LINKER_FLAGS="--coverage" "$@"
+    make anjay_check -j$(num_processors)
     mkdir -p "$PROJECT_ROOT/coverage"
-    gcovr . --html --html-details -r "$PROJECT_ROOT" \
-            -f "$PROJECT_ROOT/src" -f "$PROJECT_ROOT/include_public" \
-            -f "$PROJECT_ROOT/deps/avs_coap/src" -f "$PROJECT_ROOT/deps/avs_coap/include_public" \
-            -f "$PROJECT_ROOT/deps/avs_commons/src" -f "$PROJECT_ROOT/deps/avs_commons/include_public" \
-            -o "$PROJECT_ROOT/coverage/coverage.html"
+    lcov $LCOV_ADDITIONAL_OPTS -c -d . -o coverage.info --gcov-tool /usr/bin/gcov-$GCC_MAJOR_VERSION
+    lcov $LCOV_ADDITIONAL_OPTS --remove coverage.info "$PROJECT_ROOT/tests/*" "$PROJECT_ROOT/deps/*" "/usr/*" "$PROJECT_ROOT/include_public/*" -o coverage.info
+    genhtml coverage.info --branch-coverage --function-coverage --output-directory "$PROJECT_ROOT/coverage"
 popd
 
 cat <<EOF

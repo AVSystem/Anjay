@@ -163,7 +163,8 @@ static int perform_send(anjay_unlocked_t *anjay,
 static void send_batch_to_all_servers(anjay_unlocked_t *anjay,
                                       anjay_send_batch_t *batch) {
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SERVER);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_DM_OID_SERVER);
 
     if (_anjay_dm_foreach_instance(anjay, obj, perform_send, batch)) {
         fw_log(ERROR, _("failed to perform Send to all servers"));
@@ -756,7 +757,8 @@ static avs_error_t download_write_block(anjay_t *anjay_locked,
     int result = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
         fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
@@ -859,7 +861,8 @@ static void download_finished(anjay_t *anjay_locked,
                               void *inst_) {
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
         fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
@@ -1839,7 +1842,8 @@ int anjay_advanced_fw_update_instance_add(
     int retval = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
         fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
@@ -1938,7 +1942,8 @@ int anjay_advanced_fw_update_set_state_and_result(
     int retval = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
         fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
@@ -1977,7 +1982,8 @@ int anjay_advanced_fw_update_get_state(
     int retval = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
         fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
@@ -2006,7 +2012,8 @@ int anjay_advanced_fw_update_get_result(
     int retval = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
         fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
@@ -2097,7 +2104,8 @@ int anjay_advanced_fw_update_set_linked_instances(
     int retval = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
         fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
@@ -2140,7 +2148,8 @@ int anjay_advanced_fw_update_get_linked_instances(
     int retval = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
         fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
@@ -2170,7 +2179,8 @@ int anjay_advanced_fw_update_set_conflicting_instances(
     int retval = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
         fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
@@ -2212,7 +2222,8 @@ int anjay_advanced_fw_update_get_conflicting_instances(
     int retval = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
         fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
@@ -2239,7 +2250,8 @@ avs_time_real_t anjay_advanced_fw_update_get_deadline(anjay_t *anjay_locked,
     avs_time_real_t result = AVS_TIME_REAL_INVALID;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
         fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
@@ -2265,7 +2277,8 @@ anjay_advanced_fw_update_get_severity(anjay_t *anjay_locked, anjay_iid_t iid) {
             ANJAY_ADVANCED_FW_UPDATE_SEVERITY_MANDATORY;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
         fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
@@ -2291,7 +2304,8 @@ anjay_advanced_fw_update_get_last_state_change_time(anjay_t *anjay_locked,
     avs_time_real_t result = AVS_TIME_REAL_INVALID;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
         fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
@@ -2315,7 +2329,8 @@ void anjay_advanced_fw_update_pull_suspend(anjay_t *anjay_locked) {
     assert(anjay_locked);
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
         fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {
@@ -2335,7 +2350,8 @@ int anjay_advanced_fw_update_pull_reconnect(anjay_t *anjay_locked) {
     int result = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_ADVANCED_FW_UPDATE_OID);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_ADVANCED_FW_UPDATE_OID);
     if (!obj) {
         fw_log(WARNING, _("Advanced Firmware Update object not installed"));
     } else {

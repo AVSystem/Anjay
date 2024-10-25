@@ -19,6 +19,8 @@
 
 #include <avsystem/coap/ctx.h>
 
+#include <anjay_modules/anjay_dm_utils.h>
+
 #include "src/core/anjay_servers_inactive.h"
 #include "src/core/anjay_servers_reload.h"
 #include "src/core/servers/anjay_server_connections.h"
@@ -323,7 +325,7 @@ AVS_UNIT_TEST(parse_headers, parse_attributes) {
 #undef ASSERT_ATTRIBUTES_EQUAL
 #undef ASSERT_ATTRIBUTE_VALUES_EQUAL
 
-AVS_UNIT_TEST(parse_headers, parse_uri) {
+static void parse_headers_parse_uri_standard() {
     bool is_bs;
     anjay_uri_path_t uri;
     header_with_opts_storage_t header_storage;
@@ -452,8 +454,22 @@ AVS_UNIT_TEST(parse_headers, parse_uri) {
             header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_PATH,
                                     "16", "17", "18", "65535", NULL),
             &is_bs, &uri));
+}
 
-    // BS and something more
+AVS_UNIT_TEST(parse_headers, parse_uri) {
+    parse_headers_parse_uri_standard();
+
+    bool is_bs;
+    anjay_uri_path_t uri;
+    header_with_opts_storage_t header_storage;
+
+    // normal, single prefix
+    ASSERT_FAIL(parse_request_uri(
+            header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_PATH,
+                                    "dev", "10", "11", "12", "13", NULL),
+            &is_bs, &uri));
+
+    // "bs" and something more
     ASSERT_FAIL(parse_request_uri(
             header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_PATH,
                                     "bs", "1", "2", NULL),

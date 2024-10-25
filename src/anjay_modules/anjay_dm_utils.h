@@ -20,6 +20,7 @@
 #include <limits.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
+#define MAX_PATH_STRING_SIZE sizeof("/65535/65535/65535/65535")
 
 // NOTE: A lot of code depends on numerical values of these constants.
 // Please be careful when refactoring.
@@ -50,6 +51,7 @@ typedef enum {
  */
 typedef struct {
     uint16_t ids[_ANJAY_URI_PATH_MAX_LENGTH];
+
 } anjay_uri_path_t;
 
 static inline size_t _anjay_uri_path_length(const anjay_uri_path_t *path) {
@@ -132,8 +134,9 @@ const char *_anjay_debug_make_path__(char *buffer,
                                      size_t buffer_size,
                                      const anjay_uri_path_t *uri);
 
-#define ANJAY_DEBUG_MAKE_PATH(path) \
-    (_anjay_debug_make_path__(&(char[32]){ 0 }[0], 32, (path)))
+#define ANJAY_DEBUG_MAKE_PATH(path)                                  \
+    (_anjay_debug_make_path__(&(char[MAX_PATH_STRING_SIZE]){ 0 }[0], \
+                              MAX_PATH_STRING_SIZE, (path)))
 
 #define URI_PATH_INITIALIZER(Oid, Iid, Rid, Riid) \
     {                                             \
@@ -373,6 +376,7 @@ anjay_dm_foreach_object_handler_t(anjay_unlocked_t *anjay,
                                   void *data);
 
 int _anjay_dm_foreach_object(anjay_unlocked_t *anjay,
+                             anjay_dm_t *dm,
                              anjay_dm_foreach_object_handler_t *handler,
                              void *data);
 
@@ -748,7 +752,7 @@ bool _anjay_dm_transaction_object_included(
         anjay_unlocked_t *anjay, const anjay_dm_installed_object_t *obj_ptr);
 
 const anjay_dm_installed_object_t *
-_anjay_dm_find_object_by_oid(anjay_unlocked_t *anjay, anjay_oid_t oid);
+_anjay_dm_find_object_by_oid(const anjay_dm_t *dm, anjay_oid_t oid);
 
 bool _anjay_dm_ssid_exists(anjay_unlocked_t *anjay, anjay_ssid_t ssid);
 
@@ -859,6 +863,22 @@ _anjay_dm_installed_object_version(const anjay_dm_installed_object_t *obj) {
 
 #endif // ANJAY_WITH_THREAD_SAFETY
 
+AVS_LIST(anjay_dm_installed_object_t) *
+_anjay_find_and_verify_object_to_unregister(
+        anjay_dm_t *dm, const anjay_dm_object_def_t *const *def_ptr);
+
+void _anjay_unregister_object_handle_transaction_state(
+        anjay_unlocked_t *anjay, const anjay_dm_installed_object_t *def_ptr);
+
+void _anjay_unregister_object_handle_notify_queue(
+        anjay_unlocked_t *anjay, const anjay_dm_installed_object_t *def_ptr);
+
+AVS_LIST(anjay_dm_installed_object_t) _anjay_prepare_user_provided_object(
+        const anjay_dm_object_def_t *const *def_ptr);
+
+int _anjay_dm_register_object(
+        anjay_dm_t *dm, AVS_LIST(anjay_dm_installed_object_t) *elem_ptr_move);
+
 int _anjay_register_object_unlocked(
         anjay_unlocked_t *anjay,
         AVS_LIST(anjay_dm_installed_object_t) *elem_ptr_move);
@@ -965,6 +985,8 @@ int _anjay_execute_get_arg_value_unlocked(anjay_unlocked_execute_ctx_t *ctx,
                                           size_t *out_bytes_read,
                                           char *out_buf,
                                           size_t buf_size);
+
+anjay_dm_t *_anjay_get_dm(anjay_unlocked_t *anjay);
 
 VISIBILITY_PRIVATE_HEADER_END
 

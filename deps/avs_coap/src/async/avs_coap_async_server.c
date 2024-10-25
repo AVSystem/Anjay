@@ -307,7 +307,19 @@ send_result_handler(avs_coap_ctx_t *ctx,
 
     server->delivery_handler(ctx, fail_err, server->delivery_handler_arg);
 
-    if (avs_is_ok(fail_err)) {
+    bool is_timeout = fail_err.category == AVS_COAP_ERR_CATEGORY
+                      && fail_err.code == AVS_COAP_ERR_TIMEOUT;
+    bool is_rst = fail_err.category == AVS_COAP_ERR_CATEGORY
+                  && fail_err.code == AVS_COAP_ERR_UDP_RESET_RECEIVED;
+    (void) is_timeout;
+    (void) is_rst;
+
+    bool do_cancel_on_error = avs_is_ok(fail_err);
+#ifdef WITH_AVS_COAP_OBSERVE_FORCE_CANCEL_ON_UNACKED_ERROR
+    do_cancel_on_error = do_cancel_on_error || is_timeout || is_rst;
+#endif // WITH_AVS_COAP_OBSERVE_FORCE_CANCEL_ON_UNACKED_ERROR
+
+    if (do_cancel_on_error) {
         cancel_notification_on_error(ctx,
                                      (avs_coap_observe_id_t) {
                                          .token = token
@@ -316,8 +328,7 @@ send_result_handler(avs_coap_ctx_t *ctx,
     }
 #if defined(WITH_AVS_COAP_OBSERVE) \
         && defined(WITH_AVS_COAP_OBSERVE_CANCEL_ON_TIMEOUT)
-    else if (fail_err.category == AVS_COAP_ERR_CATEGORY
-             && fail_err.code == AVS_COAP_ERR_TIMEOUT) {
+    else if (is_timeout) {
         avs_coap_observe_cancel(ctx, (avs_coap_observe_id_t) {
                                          .token = token
                                      });
@@ -1332,6 +1343,19 @@ avs_coap_notify_async(avs_coap_ctx_t *ctx,
         LOG(ERROR,
             _("delivery_handler is mandatory for reliable notifications"));
         avs_errno(AVS_EINVAL);
+    }
+
+    // FIXME: Unsolicited non-confirmable notifications with an error code are
+    // currently broken, because of lack of the Observe option for error values,
+    // the lower, UDP layer assumes the message to be an ACK, not a NON.
+    //
+    // For reference, see assumptions in choose_msg_type() in avs_coap_udp_ctx.c
+    if (reliability_hint == AVS_COAP_NOTIFY_PREFER_NON_CONFIRMABLE
+            && !avs_coap_code_is_success(response_header->code)) {
+        LOG(ERROR,
+            _("Unsolicited notifications with an error code are currently "
+              "broken"));
+        return avs_errno(AVS_EINVAL);
     }
 
     avs_coap_observe_notify_t notify;

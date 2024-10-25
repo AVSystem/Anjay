@@ -663,6 +663,7 @@
  * <c>anjay_server_connection_status_cb_t</c> callback.
  */
 /* #undef ANJAY_WITH_CONN_STATUS_API */
+
 /**@}*/
 
 #endif // ANJAY_CONFIG_H

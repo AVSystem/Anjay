@@ -47,7 +47,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "3.8.0"
+#    define ANJAY_VERSION "3.8.1"
 #endif // ANJAY_VERSION
 
 #ifdef ANJAY_WITH_LWM2M11
@@ -112,7 +112,7 @@ static int init_anjay(anjay_unlocked_t *anjay,
              && anjay->lwm2m_version_config.minimum_version
                         == ANJAY_LWM2M_VERSION_1_0);
 #    endif // ANJAY_WITH_LWM2M11
-    _anjay_bootstrap_init(&anjay->bootstrap, legacy_server_initiated_bootstrap);
+    _anjay_bootstrap_init(anjay, legacy_server_initiated_bootstrap);
 #endif // ANJAY_WITH_BOOTSTRAP
 
     anjay->dtls_version = config->dtls_version;
@@ -370,7 +370,7 @@ static void anjay_cleanup_impl(anjay_unlocked_t *anjay, bool deregister) {
 #ifdef ANJAY_WITH_ATTR_STORAGE
     _anjay_attr_storage_cleanup(&anjay->attr_storage);
 #endif // ANJAY_WITH_ATTR_STORAGE
-    _anjay_dm_cleanup(anjay);
+    _anjay_dm_cleanup(&anjay->dm);
     _anjay_notify_clear_queue(&anjay->scheduled_notify.queue);
 
 #ifdef ANJAY_WITH_SEND
@@ -781,8 +781,8 @@ static int parse_dm_uri(const avs_coap_request_header_t *hdr,
         } else if (expect_no_more_options || uri[0] == '\0') {
             anjay_log(WARNING, _("superfluous empty Uri-Path segment"));
             return -1;
-        } else if (segment_index >= AVS_ARRAY_SIZE(out_uri->ids)) {
-            // 4 or more segments...
+        } else if (segment_index >= _ANJAY_URI_PATH_MAX_LENGTH) {
+            // 5 or more segments...
             anjay_log(WARNING, _("prefixed Uri-Path are not supported"));
             return -1;
         } else if (parse_request_uri_segment(uri,

@@ -81,6 +81,18 @@
 /* #undef WITH_AVS_COAP_OBSERVE_CANCEL_ON_TIMEOUT */
 
 /**
+ * Force cancelling observation, even if a confirmable notification yielding
+ * an error response is not acknowledged or rejected with RST by the observer.
+ *
+ * This is a circumvention for some non-compliant servers that respond with an
+ * RST message to a confirmable notification yielding an error response. This
+ * setting makes the library cancel the observation in such cases, even though
+ * the notification is formally rejected. Additionally, it will also make the
+ * library cancel the observation if no response is received at all.
+ */
+#define WITH_AVS_COAP_OBSERVE_FORCE_CANCEL_ON_UNACKED_ERROR
+
+/**
  * Enable support for observation persistence (<c>avs_coap_observe_persist()</c>
  * and <c>avs_coap_observe_restore()</c> calls).
  *

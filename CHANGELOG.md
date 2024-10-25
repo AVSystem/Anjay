@@ -1,5 +1,28 @@
 # Changelog
 
+## 3.8.1 (October 25th, 2024)
+
+### Improvements
+- In case when the LwM2M server answers with an RST message to a notification
+  that is yielding an error value (e.g. failure to read), which effectively
+  cancels the notification, Anjay is not infinitely trying to transmit that
+  message with error value once again. New behavior is enabled by default, and
+  controlled with `WITH_AVS_COAP_OBSERVE_FORCE_CANCEL_ON_UNACKED_ERROR` option
+  of `avs_coap`. Existing projects have to opt-in explicitly.
+
+### Bugfixes
+
+- Actually fixed compatibility with Mbed TLS 3.6.
+- Fixed compatibility of integration test framework with Mbed TLS versions that
+  enabled TLS 1.3, but didn't use `MBEDTLS_USE_PSA_CRYPTO`.
+- The -Wformat warning appearing in some compilers has been fixed.
+- Fixed LwM2M CBOR parser incorrectly accepting inputs containing empty arrays
+  as keys
+- Prevent from generating non unique session tokens when the monotonic system
+  clock granulation is not fine enough.
+- Refactored how timeouts are handled in pymbedtls to be in line with use of
+  mbedTLS in avs_commons.
+
 ## 3.8.0 (May 28th, 2024)
 
 ### BREAKING CHANGES

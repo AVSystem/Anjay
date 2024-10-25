@@ -289,6 +289,14 @@ class RID:
         TotalPacketsSent = 23
         PDNType = 24
         APNRateControl = 25
+        ServingPLMNRateControl = 26
+        UplinkTimeUnit = 27
+        APNRateControlForExceptionData = 28
+        APNExceptionDataUplinkTimeUnit = 29
+        SupportedRATTypes = 30
+        RDSApplicationID = 31
+        RDSDestinationPort = 32
+        RDSSourcePort = 33
 
     class GeoPoints:
         Latitude = 0
