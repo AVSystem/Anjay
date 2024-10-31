@@ -844,8 +844,14 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             timeout = self.DEFAULT_COMM_TIMEOUT
 
         self.seek_demo_log_to_end()
-        self.demo_process.stdin.write((cmd.strip('\n') + '\n').encode())
-        self.demo_process.stdin.flush()
+        # For some reason, writing to a closed pipe seems to behave a little
+        # differently for macOS and Linux. On macOS, Python receives a SIGPIPE
+        # and therefore throws a BrokenPipeError. Let's silence it.
+        try:
+            self.demo_process.stdin.write((cmd.strip('\n') + '\n').encode())
+            self.demo_process.stdin.flush()
+        except BrokenPipeError:
+            pass
 
         if match_regex:
             result = self.read_log_until_match(match_regex.encode(), timeout_s=timeout)
