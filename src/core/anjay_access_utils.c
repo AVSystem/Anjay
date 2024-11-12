@@ -27,7 +27,8 @@ VISIBILITY_SOURCE_BEGIN
 
 static inline const anjay_dm_installed_object_t *
 get_access_control(anjay_unlocked_t *anjay) {
-    return _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_ACCESS_CONTROL);
+    return _anjay_dm_find_object_by_oid(&anjay->dm,
+                                        ANJAY_DM_OID_ACCESS_CONTROL);
 }
 
 static int read_u16(anjay_unlocked_t *anjay,
@@ -264,7 +265,8 @@ static anjay_access_mask_t access_control_mask(anjay_unlocked_t *anjay,
                                                anjay_iid_t iid,
                                                anjay_ssid_t ssid) {
     const anjay_dm_installed_object_t *ac_obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_ACCESS_CONTROL);
+            _anjay_dm_find_object_by_oid(&anjay->dm,
+                                         ANJAY_DM_OID_ACCESS_CONTROL);
     anjay_iid_t ac_iid;
     if (!ac_obj
             || find_ac_instance_by_target(anjay, ac_obj, &ac_iid, oid, iid)) {
@@ -682,7 +684,7 @@ static int remove_referred_instance(anjay_unlocked_t *anjay,
     // - the target Instance does not exist
     int result = 0;
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, it->target_oid);
+            _anjay_dm_find_object_by_oid(&anjay->dm, it->target_oid);
     if (obj
             && _anjay_dm_instance_present(anjay, obj,
                                           (anjay_iid_t) it->target_iid)
@@ -720,7 +722,7 @@ remove_orphaned_instances(anjay_unlocked_t *anjay,
     AVS_LIST(anjay_ssid_t) ssid_list = NULL;
     AVS_LIST(orphaned_instance_info_t) instances_to_remove = NULL;
     const anjay_dm_installed_object_t *security_obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
+            _anjay_dm_find_object_by_oid(&anjay->dm, ANJAY_DM_OID_SECURITY);
     if (security_obj) {
         result = _anjay_dm_foreach_instance(
                 anjay, security_obj, enumerate_valid_ssids_clb, &ssid_list);
@@ -810,7 +812,7 @@ int _anjay_acl_ref_validate_inst_ref(anjay_unlocked_t *anjay,
                                      anjay_oid_t target_oid,
                                      anjay_iid_t target_iid) {
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, target_oid);
+            _anjay_dm_find_object_by_oid(&anjay->dm, target_oid);
     if (!obj) {
         return -1;
     }

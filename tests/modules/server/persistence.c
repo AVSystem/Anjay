@@ -45,12 +45,12 @@ static server_persistence_test_env_t *server_persistence_test_env_create(void) {
     env->stream = avs_stream_membuf_create();
     AVS_UNIT_ASSERT_NOT_NULL(env->stream);
     ANJAY_MUTEX_LOCK(anjay_unlocked, env->anjay_stored);
-    env->stored =
-            *_anjay_dm_find_object_by_oid(anjay_unlocked, ANJAY_DM_OID_SERVER);
+    env->stored = *_anjay_dm_find_object_by_oid(_anjay_get_dm(anjay_unlocked),
+                                                ANJAY_DM_OID_SERVER);
     ANJAY_MUTEX_UNLOCK(env->anjay_stored);
     ANJAY_MUTEX_LOCK(anjay_unlocked, env->anjay_restored);
-    env->restored =
-            *_anjay_dm_find_object_by_oid(anjay_unlocked, ANJAY_DM_OID_SERVER);
+    env->restored = *_anjay_dm_find_object_by_oid(_anjay_get_dm(anjay_unlocked),
+                                                  ANJAY_DM_OID_SERVER);
     ANJAY_MUTEX_UNLOCK(env->anjay_restored);
     env->stored_repr = _anjay_serv_get(env->stored);
     env->restored_repr = _anjay_serv_get(env->restored);

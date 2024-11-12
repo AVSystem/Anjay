@@ -105,9 +105,8 @@ static int validate_version(const anjay_dm_installed_object_t *obj) {
     return 0;
 }
 
-int _anjay_register_object_unlocked(
-        anjay_unlocked_t *anjay,
-        AVS_LIST(anjay_dm_installed_object_t) *elem_ptr_move) {
+int _anjay_dm_register_object(
+        anjay_dm_t *dm, AVS_LIST(anjay_dm_installed_object_t) *elem_ptr_move) {
     assert(elem_ptr_move);
     assert(*elem_ptr_move);
     assert(_anjay_dm_installed_object_oid(*elem_ptr_move) != ANJAY_ID_INVALID);
@@ -119,7 +118,7 @@ int _anjay_register_object_unlocked(
 
     AVS_LIST(anjay_dm_installed_object_t) *obj_iter;
 
-    AVS_LIST_FOREACH_PTR(obj_iter, &anjay->dm.objects) {
+    AVS_LIST_FOREACH_PTR(obj_iter, &dm->objects) {
         assert(*obj_iter);
 
         if (_anjay_dm_installed_object_oid(*obj_iter)
@@ -131,12 +130,23 @@ int _anjay_register_object_unlocked(
     if (*obj_iter
             && _anjay_dm_installed_object_oid(*obj_iter)
                            == _anjay_dm_installed_object_oid(*elem_ptr_move)) {
-        dm_log(ERROR, _("data model object ") "/%u" _(" already registered"),
+        dm_log(ERROR,
+               _("data model object /") "%" PRIu16 _(" already registered"),
                _anjay_dm_installed_object_oid(*elem_ptr_move));
         return -1;
     }
 
     AVS_LIST_INSERT(obj_iter, *elem_ptr_move);
+
+    return 0;
+}
+
+int _anjay_register_object_unlocked(
+        anjay_unlocked_t *anjay,
+        AVS_LIST(anjay_dm_installed_object_t) *elem_ptr_move) {
+    if (_anjay_dm_register_object(&anjay->dm, elem_ptr_move)) {
+        return -1;
+    }
 
     dm_log(INFO, _("successfully registered object ") "/%u",
            _anjay_dm_installed_object_oid(*elem_ptr_move));
@@ -152,11 +162,11 @@ int _anjay_register_object_unlocked(
     return 0;
 }
 
-int anjay_register_object(anjay_t *anjay_locked,
-                          const anjay_dm_object_def_t *const *def_ptr) {
+AVS_LIST(anjay_dm_installed_object_t) _anjay_prepare_user_provided_object(
+        const anjay_dm_object_def_t *const *def_ptr) {
     if (!def_ptr || !*def_ptr) {
         dm_log(ERROR, _("invalid object pointer"));
-        return -1;
+        return NULL;
     }
 
     if ((*def_ptr)->oid == ANJAY_ID_INVALID) {
@@ -164,14 +174,14 @@ int anjay_register_object(anjay_t *anjay_locked,
                   _("Object ID ") "%u" _(
                           " is forbidden by the LwM2M 1.1 specification"),
                   ANJAY_ID_INVALID);
-        return -1;
+        return NULL;
     }
 
     AVS_LIST(anjay_dm_installed_object_t) new_elem =
             AVS_LIST_NEW_ELEMENT(anjay_dm_installed_object_t);
     if (!new_elem) {
         _anjay_log_oom();
-        return -1;
+        return NULL;
     }
 
 #ifdef ANJAY_WITH_THREAD_SAFETY
@@ -180,6 +190,16 @@ int anjay_register_object(anjay_t *anjay_locked,
 #else  // ANJAY_WITH_THREAD_SAFETY
     *new_elem = def_ptr;
 #endif // ANJAY_WITH_THREAD_SAFETY
+    return new_elem;
+}
+
+int anjay_register_object(anjay_t *anjay_locked,
+                          const anjay_dm_object_def_t *const *def_ptr) {
+    AVS_LIST(anjay_dm_installed_object_t) new_elem =
+            _anjay_prepare_user_provided_object(def_ptr);
+    if (!new_elem) {
+        return -1;
+    }
 
     int result = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
@@ -203,49 +223,59 @@ static void remove_oid_from_notify_queue(anjay_notify_queue_t *out_queue,
     }
 }
 
-static int
-unregister_object_unlocked(anjay_unlocked_t *anjay,
-                           AVS_LIST(anjay_dm_installed_object_t) *def_ptr) {
-    assert(def_ptr && *def_ptr);
-    assert(AVS_LIST_FIND_PTR(&anjay->dm.objects, *def_ptr));
-
-    AVS_LIST(anjay_dm_installed_object_t) detached = AVS_LIST_DETACH(def_ptr);
-
+void _anjay_unregister_object_handle_transaction_state(
+        anjay_unlocked_t *anjay, const anjay_dm_installed_object_t *def_ptr) {
     AVS_LIST(const anjay_dm_installed_object_t *) *obj_in_transaction_iter;
     AVS_LIST_FOREACH_PTR(obj_in_transaction_iter,
                          &anjay->transaction_state.objs_in_transaction) {
-        if (**obj_in_transaction_iter >= detached) {
-            if (**obj_in_transaction_iter == detached) {
+        if (**obj_in_transaction_iter >= def_ptr) {
+            if (**obj_in_transaction_iter == def_ptr) {
                 assert(anjay->transaction_state.depth);
                 if (_anjay_dm_call_transaction_rollback(
                             anjay, **obj_in_transaction_iter)) {
                     dm_log(ERROR,
                            _("cannot rollback transaction on ") "/%u" _(
                                    ", object may be left in undefined state"),
-                           _anjay_dm_installed_object_oid(detached));
+                           _anjay_dm_installed_object_oid(def_ptr));
                 }
                 AVS_LIST_DELETE(obj_in_transaction_iter);
             }
             break;
         }
     }
+}
 
+void _anjay_unregister_object_handle_notify_queue(
+        anjay_unlocked_t *anjay, const anjay_dm_installed_object_t *def_ptr) {
     anjay_notify_queue_t notify = NULL;
     if (_anjay_notify_queue_instance_set_unknown_change(
-                &notify, _anjay_dm_installed_object_oid(detached))
+                &notify, _anjay_dm_installed_object_oid(def_ptr))
             || _anjay_notify_flush(anjay, ANJAY_SSID_BOOTSTRAP, &notify)) {
         dm_log(WARNING,
                _("could not perform notifications about removed object ") "%" PRIu16,
-               _anjay_dm_installed_object_oid(detached));
+               _anjay_dm_installed_object_oid(def_ptr));
     }
 
     remove_oid_from_notify_queue(&anjay->scheduled_notify.queue,
-                                 _anjay_dm_installed_object_oid(detached));
+                                 _anjay_dm_installed_object_oid(def_ptr));
 #ifdef ANJAY_WITH_BOOTSTRAP
     remove_oid_from_notify_queue(&anjay->bootstrap.notification_queue,
-                                 _anjay_dm_installed_object_oid(detached));
+                                 _anjay_dm_installed_object_oid(def_ptr));
 #endif // ANJAY_WITH_BOOTSTRAP
-    dm_log(INFO, _("successfully unregistered object ") "/%u",
+}
+
+static int
+unregister_object_unlocked(anjay_unlocked_t *anjay,
+                           AVS_LIST(anjay_dm_installed_object_t) *def_ptr) {
+    assert(def_ptr && *def_ptr);
+
+    assert(AVS_LIST_FIND_PTR(&anjay->dm.objects, *def_ptr));
+    AVS_LIST(anjay_dm_installed_object_t) detached = AVS_LIST_DETACH(def_ptr);
+
+    _anjay_unregister_object_handle_transaction_state(anjay, detached);
+    _anjay_unregister_object_handle_notify_queue(anjay, detached);
+
+    dm_log(INFO, _("successfully unregistered object /") "%" PRIu16,
            _anjay_dm_installed_object_oid(detached));
     AVS_LIST_DELETE(&detached);
     if (_anjay_schedule_registration_update_unlocked(anjay, ANJAY_SSID_ANY)) {
@@ -254,61 +284,73 @@ unregister_object_unlocked(anjay_unlocked_t *anjay,
     return 0;
 }
 
+AVS_LIST(anjay_dm_installed_object_t) *
+_anjay_find_and_verify_object_to_unregister(
+        anjay_dm_t *dm, const anjay_dm_object_def_t *const *def_ptr) {
+    if (!def_ptr || !*def_ptr) {
+        dm_log(ERROR, _("invalid object pointer"));
+        return NULL;
+    }
+
+    AVS_LIST(anjay_dm_installed_object_t) *obj_iter;
+    AVS_LIST_FOREACH_PTR(obj_iter, &dm->objects) {
+        assert(*obj_iter);
+        if (_anjay_dm_installed_object_oid(*obj_iter) >= (*def_ptr)->oid) {
+            break;
+        }
+    }
+
+    if (!*obj_iter
+            || _anjay_dm_installed_object_oid(*obj_iter) != (*def_ptr)->oid) {
+        dm_log(ERROR,
+               _("object ") "%" PRIu16 _(" is not currently registered"),
+               (*def_ptr)->oid);
+        return NULL;
+    } else if (
+#ifdef ANJAY_WITH_THREAD_SAFETY
+            (*obj_iter)->type != ANJAY_DM_OBJECT_USER_PROVIDED
+            || (*obj_iter)->impl.user_provided != def_ptr
+#else  // ANJAY_WITH_THREAD_SAFETY
+            **obj_iter != def_ptr
+#endif // ANJAY_WITH_THREAD_SAFETY
+    ) {
+        dm_log(ERROR,
+               _("object ") "%" PRIu16 _(
+                       " that is registered is not the same as the object "
+                       "passed for unregister"),
+               (*def_ptr)->oid);
+        return NULL;
+    }
+
+    return obj_iter;
+}
+
 int anjay_unregister_object(anjay_t *anjay_locked,
                             const anjay_dm_object_def_t *const *def_ptr) {
     int result = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
-    if (!def_ptr || !*def_ptr) {
-        dm_log(ERROR, _("invalid object pointer"));
-    } else {
-        AVS_LIST(anjay_dm_installed_object_t) *obj_iter;
-        AVS_LIST_FOREACH_PTR(obj_iter, &anjay->dm.objects) {
-            assert(*obj_iter);
-            if (_anjay_dm_installed_object_oid(*obj_iter) >= (*def_ptr)->oid) {
-                break;
-            }
-        }
-
-        if (!*obj_iter
-                || _anjay_dm_installed_object_oid(*obj_iter)
-                               != (*def_ptr)->oid) {
-            dm_log(ERROR,
-                   _("object ") "%" PRIu16 _(" is not currently registered"),
-                   (*def_ptr)->oid);
-        } else if (
-#ifdef ANJAY_WITH_THREAD_SAFETY
-                (*obj_iter)->type != ANJAY_DM_OBJECT_USER_PROVIDED
-                || (*obj_iter)->impl.user_provided != def_ptr
-#else  // ANJAY_WITH_THREAD_SAFETY
-                **obj_iter != def_ptr
-#endif // ANJAY_WITH_THREAD_SAFETY
-        ) {
-            dm_log(ERROR,
-                   _("object ") "%" PRIu16 _(
-                           " that is registered is not the same as the object "
-                           "passed for unregister"),
-                   (*def_ptr)->oid);
-        } else {
-            result = unregister_object_unlocked(anjay, obj_iter);
-        }
+    AVS_LIST(anjay_dm_installed_object_t) *obj =
+            _anjay_find_and_verify_object_to_unregister(&anjay->dm, def_ptr);
+    if (obj) {
+        result = unregister_object_unlocked(anjay, obj);
     }
     ANJAY_MUTEX_UNLOCK(anjay_locked);
     return result;
 }
 
-void _anjay_dm_cleanup(anjay_unlocked_t *anjay) {
-    AVS_LIST_CLEAR(&anjay->dm.modules) {
-        assert(anjay->dm.modules->deleter);
-        anjay->dm.modules->deleter(anjay->dm.modules->arg);
+void _anjay_dm_cleanup(anjay_dm_t *dm) {
+    AVS_LIST_CLEAR(&dm->modules) {
+        assert(dm->modules->deleter);
+        dm->modules->deleter(dm->modules->arg);
     }
 
-    AVS_LIST_CLEAR(&anjay->dm.objects);
+    AVS_LIST_CLEAR(&dm->objects);
 }
 
 const anjay_dm_installed_object_t *
-_anjay_dm_find_object_by_oid(anjay_unlocked_t *anjay, anjay_oid_t oid) {
+_anjay_dm_find_object_by_oid(const anjay_dm_t *dm, anjay_oid_t oid) {
     AVS_LIST(anjay_dm_installed_object_t) obj;
-    AVS_LIST_FOREACH(obj, anjay->dm.objects) {
+    AVS_LIST_FOREACH(obj, dm->objects) {
         if (_anjay_dm_installed_object_oid(obj) == oid) {
             return obj;
         }
@@ -572,7 +614,11 @@ static int dm_execute(anjay_unlocked_t *anjay,
         if (!retval && request->uri.ids[ANJAY_ID_OID] == ANJAY_DM_OID_SERVER
                 && request->uri.ids[ANJAY_ID_RID]
                                == ANJAY_DM_RID_SERVER_DISABLE) {
-            _anjay_set_server_suspending_flag(anjay, ssid, true);
+            anjay_ssid_t target_ssid;
+            if (!_anjay_ssid_from_server_iid(
+                        anjay, request->uri.ids[ANJAY_ID_IID], &target_ssid)) {
+                _anjay_set_server_suspending_flag(anjay, target_ssid, true);
+            }
         }
 #endif // ANJAY_WITH_CONN_STATUS_API
         _anjay_execute_ctx_destroy(&execute_ctx);
@@ -702,10 +748,13 @@ static int invoke_action(anjay_connection_ref_t connection,
 int _anjay_dm_perform_action(anjay_connection_ref_t connection,
                              const anjay_request_t *request) {
     const anjay_dm_installed_object_t *obj = NULL;
+
     if (_anjay_uri_path_has(&request->uri, ANJAY_ID_OID)) {
+        const anjay_dm_t *dm;
+        { dm = &_anjay_from_server(connection.server)->dm; }
+
         if (!(obj = _anjay_dm_find_object_by_oid(
-                      _anjay_from_server(connection.server),
-                      request->uri.ids[ANJAY_ID_OID]))) {
+                      dm, request->uri.ids[ANJAY_ID_OID]))) {
             dm_log(DEBUG, _("Object not found: ") "%u",
                    request->uri.ids[ANJAY_ID_OID]);
             return ANJAY_ERR_NOT_FOUND;
@@ -729,6 +778,7 @@ int _anjay_dm_perform_action(anjay_connection_ref_t connection,
         .msg_code = _anjay_dm_make_success_response_code(request->action),
         .format = AVS_COAP_FORMAT_NONE
     };
+
     if (!_anjay_coap_setup_response_stream(request->ctx, &msg_details)) {
         return ANJAY_ERR_INTERNAL;
     }
@@ -755,7 +805,6 @@ int _anjay_dm_perform_action(anjay_connection_ref_t connection,
     if (result) {
         return result;
     }
-
     result = invoke_action(connection, obj, request, in_ctx);
 
     int destroy_result = _anjay_input_ctx_destroy(&in_ctx);
@@ -763,10 +812,11 @@ int _anjay_dm_perform_action(anjay_connection_ref_t connection,
 }
 
 int _anjay_dm_foreach_object(anjay_unlocked_t *anjay,
+                             anjay_dm_t *dm,
                              anjay_dm_foreach_object_handler_t *handler,
                              void *data) {
     AVS_LIST(anjay_dm_installed_object_t) obj;
-    AVS_LIST_FOREACH(obj, anjay->dm.objects) {
+    AVS_LIST_FOREACH(obj, dm->objects) {
         int result = handler(anjay, obj, data);
         if (result == ANJAY_FOREACH_BREAK) {
             dm_log(TRACE, _("foreach_object: break on ") "/%u",

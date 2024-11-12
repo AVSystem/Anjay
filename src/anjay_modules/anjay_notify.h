@@ -37,11 +37,7 @@ typedef AVS_LIST(anjay_notify_queue_object_entry_t) anjay_notify_queue_t;
 
 /**
  * Performs all the actions necessary due to all the changes in the data model
- * specified by the <c>queue</c>.
- *
- * Note that sending Observe notifications and updating the Access Control
- * Object require knowing which server (if any) performed the changes.
- * @ref _anjay_dm_current_ssid will be called to determine it.
+ * specified by the <c>queue_ptr</c> parameter.
  */
 int _anjay_notify_perform(anjay_unlocked_t *anjay,
                           anjay_ssid_t origin_ssid,

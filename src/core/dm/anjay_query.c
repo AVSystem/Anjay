@@ -53,7 +53,7 @@ int _anjay_find_server_iid(anjay_unlocked_t *anjay,
     };
 
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SERVER);
+            _anjay_dm_find_object_by_oid(&anjay->dm, ANJAY_DM_OID_SERVER);
     if (ssid == ANJAY_SSID_ANY || ssid == ANJAY_SSID_BOOTSTRAP
             || _anjay_dm_foreach_instance(anjay, obj, find_server_iid_handler,
                                           &args)
@@ -158,7 +158,7 @@ bootstrap_security_iid_find_helper(anjay_unlocked_t *anjay,
 anjay_iid_t _anjay_find_bootstrap_security_iid(anjay_unlocked_t *anjay) {
     anjay_iid_t result = ANJAY_ID_INVALID;
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
+            _anjay_dm_find_object_by_oid(&anjay->dm, ANJAY_DM_OID_SECURITY);
     if (_anjay_dm_foreach_instance(
                 anjay, obj, bootstrap_security_iid_find_helper, &result)) {
         return ANJAY_ID_INVALID;

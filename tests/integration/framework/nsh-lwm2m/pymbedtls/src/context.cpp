@@ -10,6 +10,12 @@
 #include <cstring>
 #include <stdexcept>
 
+#include <mbedtls/platform.h>
+
+#if defined(MBEDTLS_USE_PSA_CRYPTO) || defined(MBEDTLS_PSA_CRYPTO_C)
+#    include <psa/crypto.h>
+#endif // defined(MBEDTLS_USE_PSA_CRYPTO) || defined(MBEDTLS_PSA_CRYPTO_C)
+
 #include "context.hpp"
 
 using namespace std;
@@ -20,11 +26,11 @@ Context::Context(std::shared_ptr<SecurityInfo> security,
                  bool debug,
                  std::string connection_id)
         : security_(security), debug_(debug), connection_id_(connection_id) {
-#ifdef MBEDTLS_USE_PSA_CRYPTO
+#if defined(MBEDTLS_USE_PSA_CRYPTO) || defined(MBEDTLS_PSA_CRYPTO_C)
     if (psa_crypto_init() != PSA_SUCCESS) {
         throw runtime_error("psa_crypto_init() failed");
     }
-#endif // MBEDTLS_USE_PSA_CRYPTO
+#endif // defined(MBEDTLS_USE_PSA_CRYPTO) || defined(MBEDTLS_PSA_CRYPTO_C)
 
     memset(&session_cache_, 0, sizeof(session_cache_));
     mbedtls_ssl_cache_init(&session_cache_);

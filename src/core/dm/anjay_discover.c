@@ -595,7 +595,7 @@ int _anjay_bootstrap_discover(anjay_unlocked_t *anjay,
                               anjay_lwm2m_version_t lwm2m_version) {
     const anjay_dm_installed_object_t *obj = NULL;
     if (oid != ANJAY_ID_INVALID) {
-        obj = _anjay_dm_find_object_by_oid(anjay, oid);
+        obj = _anjay_dm_find_object_by_oid(&anjay->dm, oid);
         if (!obj) {
             return ANJAY_ERR_NOT_FOUND;
         }
@@ -611,8 +611,8 @@ int _anjay_bootstrap_discover(anjay_unlocked_t *anjay,
     if (obj) {
         return bootstrap_discover_object(anjay, obj, &args);
     } else {
-        return _anjay_dm_foreach_object(anjay, bootstrap_discover_object,
-                                        &args);
+        return _anjay_dm_foreach_object(anjay, &anjay->dm,
+                                        bootstrap_discover_object, &args);
     }
 }
 #    endif

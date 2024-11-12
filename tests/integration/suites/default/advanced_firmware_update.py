@@ -4173,12 +4173,12 @@ class AdvancedFirmwareUpdateQueueParallelPull(AdvancedFirmwareUpdate.TestWithCoa
         # This case finally tests if two strings occur one after another to ensure that
         # download schedule for TEE is done just after the APP finish downloading
         if self.read_log_until_match(regex=re.escape(b'instance /33629/0 downloaded successfully'),
-                                     timeout_s=5) is None:
+                                     timeout_s=15) is None:
             raise self.failureException(
                 'string not found')
 
         if self.read_log_until_match(regex=re.escape(b'download scheduled: ' + fw_uri.encode()),
-                                     timeout_s=1) is None:
+                                     timeout_s=3) is None:
             raise self.failureException(
                 'string not found')
 

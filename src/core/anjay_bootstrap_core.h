@@ -58,7 +58,7 @@ int _anjay_perform_bootstrap_action_if_appropriate(
         anjay_server_info_t *bootstrap_server,
         anjay_bootstrap_action_t action);
 
-void _anjay_bootstrap_init(anjay_bootstrap_t *bootstrap,
+void _anjay_bootstrap_init(anjay_unlocked_t *anjay,
                            bool allow_legacy_server_initiated_bootstrap);
 
 #else

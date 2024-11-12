@@ -293,7 +293,7 @@ static int parse_id(uint16_t *out_id, const char **id_begin) {
 }
 
 static int parse_absolute_path(anjay_uri_path_t *out_path, const char *input) {
-    if (!*input) {
+    if (!*input || *input != '/') {
         return -1;
     }
     *out_path = MAKE_ROOT_PATH();
@@ -301,8 +301,11 @@ static int parse_absolute_path(anjay_uri_path_t *out_path, const char *input) {
     if (!strcmp(input, "/")) {
         return 0;
     }
+
+    const char *ch;
+
     size_t curr_len = 0;
-    for (const char *ch = input; *ch;) {
+    for (ch = input; *ch;) {
         if (*ch++ != '/') {
             return -1;
         }
@@ -316,6 +319,11 @@ static int parse_absolute_path(anjay_uri_path_t *out_path, const char *input) {
         curr_len++;
     }
     return 0;
+}
+
+static bool uri_path_outside_base(const anjay_uri_path_t *path,
+                                  const anjay_uri_path_t *base) {
+    return _anjay_uri_path_outside_base(path, base);
 }
 
 static int parse_next_absolute_path(senml_in_t *in) {
@@ -332,7 +340,7 @@ static int parse_next_absolute_path(senml_in_t *in) {
     if (parse_absolute_path(&in->path, full_path)) {
         return ANJAY_ERR_BAD_REQUEST;
     }
-    if (_anjay_uri_path_outside_base(&in->path, &in->base)) {
+    if (uri_path_outside_base(&in->path, &in->base)) {
         LOG(LAZY_DEBUG,
             _("parsed path ") "%s" _(" would be outside of uri-path ") "%s",
             ANJAY_DEBUG_MAKE_PATH(&in->path), ANJAY_DEBUG_MAKE_PATH(&in->base));

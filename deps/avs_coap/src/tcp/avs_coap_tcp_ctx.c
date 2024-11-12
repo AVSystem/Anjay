@@ -7,6 +7,8 @@
  * See the attached LICENSE file for details.
  */
 
+#include <inttypes.h>
+
 #include <avs_coap_init.h>
 
 #ifdef WITH_AVS_COAP_TCP
@@ -59,7 +61,8 @@ static void log_tcp_msg_summary(const char *info,
 #    ifdef WITH_AVS_COAP_OBSERVE
     uint32_t observe;
     if (avs_coap_options_get_observe(&msg->options, &observe) == 0) {
-        snprintf(observe_str, sizeof(observe_str), ", Observe %u", observe);
+        snprintf(observe_str, sizeof(observe_str), ", Observe %" PRIu32,
+                 observe);
     }
 #    endif // WITH_AVS_COAP_OBSERVE
 

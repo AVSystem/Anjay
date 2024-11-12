@@ -109,7 +109,7 @@ static void reload_servers_sched_job(avs_sched_t *sched, const void *unused) {
     };
 
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SERVER);
+            _anjay_dm_find_object_by_oid(&anjay->dm, ANJAY_DM_OID_SERVER);
     if (obj
             && _anjay_dm_foreach_instance(
                        anjay, obj, reload_server_by_server_iid, &reload_state)

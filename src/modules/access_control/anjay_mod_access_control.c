@@ -169,7 +169,8 @@ static bool target_instance_reachable(anjay_unlocked_t *anjay,
             || !_anjay_access_control_target_iid_valid(iid)) {
         return false;
     }
-    obj_ptr_t *target_obj = _anjay_dm_find_object_by_oid(anjay, oid);
+    obj_ptr_t *target_obj =
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay), oid);
     if (!target_obj) {
         return false;
     }

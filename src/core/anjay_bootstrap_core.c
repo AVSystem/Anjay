@@ -112,7 +112,8 @@ static void abort_bootstrap(anjay_unlocked_t *anjay) {
         _anjay_dm_transaction_rollback(anjay);
         anjay->bootstrap.in_progress = false;
         _anjay_conn_session_token_reset(
-                &anjay->bootstrap.bootstrap_session_token);
+                &anjay->bootstrap.bootstrap_session_token,
+                &anjay->session_token_counter);
         _anjay_schedule_reload_servers(anjay);
     }
 }
@@ -299,7 +300,7 @@ static int security_object_valid_handler(anjay_unlocked_t *anjay,
 static bool has_multiple_bootstrap_security_instances(anjay_unlocked_t *anjay) {
     uintptr_t bootstrap_instances = 0;
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
+            _anjay_dm_find_object_by_oid(&anjay->dm, ANJAY_DM_OID_SECURITY);
     if (_anjay_dm_foreach_instance(anjay, obj, security_object_valid_handler,
                                    &bootstrap_instances)
             || bootstrap_instances > 1) {
@@ -316,7 +317,7 @@ static int update_last_bootstrapped_time(anjay_unlocked_t *anjay,
     uint16_t ssid;
     assert(obj);
     if (_anjay_dm_installed_object_oid(obj) == ANJAY_DM_OID_SECURITY) {
-        if (!_anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SERVER)
+        if (!_anjay_dm_find_object_by_oid(&anjay->dm, ANJAY_DM_OID_SERVER)
                 || _anjay_ssid_from_security_iid(anjay, iid, &ssid)
                 || _anjay_find_server_iid(anjay, ssid, &server_iid)) {
             // It isn't an error if Server Object instance doesn't exist, or if
@@ -362,7 +363,7 @@ static int bootstrap_write_impl(anjay_unlocked_t *anjay,
         return ANJAY_ERR_INTERNAL;
     }
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, uri->ids[ANJAY_ID_OID]);
+            _anjay_dm_find_object_by_oid(&anjay->dm, uri->ids[ANJAY_ID_OID]);
     if (!obj) {
         anjay_log(DEBUG, _("Object not found: ") "%u", uri->ids[ANJAY_ID_OID]);
         return ANJAY_ERR_NOT_FOUND;
@@ -421,7 +422,8 @@ int _anjay_bootstrap_write_composite(anjay_unlocked_t *anjay,
         }
 
         const anjay_dm_installed_object_t *obj =
-                _anjay_dm_find_object_by_oid(anjay, path.ids[ANJAY_ID_OID]);
+                _anjay_dm_find_object_by_oid(&anjay->dm,
+                                             path.ids[ANJAY_ID_OID]);
         if (!obj) {
             anjay_log(DEBUG, _("Object not found: ") "%u",
                       path.ids[ANJAY_ID_OID]);
@@ -553,7 +555,7 @@ static int bootstrap_delete(anjay_connection_ref_t bootstrap_connection,
     };
     if (_anjay_uri_path_has(&request->uri, ANJAY_ID_OID)) {
         const anjay_dm_installed_object_t *obj =
-                _anjay_dm_find_object_by_oid(anjay,
+                _anjay_dm_find_object_by_oid(&anjay->dm,
                                              request->uri.ids[ANJAY_ID_OID]);
         if (!obj) {
             anjay_log(WARNING, _("Object not found: ") "%u",
@@ -575,7 +577,8 @@ static int bootstrap_delete(anjay_connection_ref_t bootstrap_connection,
             retval = delete_object(anjay, obj, &delete_arg);
         }
     } else {
-        retval = _anjay_dm_foreach_object(anjay, delete_object, &delete_arg);
+        retval = _anjay_dm_foreach_object(anjay, &anjay->dm, delete_object,
+                                          &delete_arg);
     }
     if (delete_arg.retval) {
         return delete_arg.retval;
@@ -623,7 +626,7 @@ static void purge_bootstrap(avs_sched_t *sched, const void *dummy) {
     int retval = 0;
     anjay_notify_queue_t notification = NULL;
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
+            _anjay_dm_find_object_by_oid(&anjay->dm, ANJAY_DM_OID_SECURITY);
     if (!obj
             || (iid = _anjay_find_bootstrap_security_iid(anjay))
                            == ANJAY_ID_INVALID) {
@@ -652,7 +655,7 @@ static void purge_bootstrap(avs_sched_t *sched, const void *dummy) {
 static int schedule_bootstrap_timeout(anjay_unlocked_t *anjay) {
     anjay_iid_t iid;
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
+            _anjay_dm_find_object_by_oid(&anjay->dm, ANJAY_DM_OID_SECURITY);
     if (!obj
             || (iid = _anjay_find_bootstrap_security_iid(anjay))
                            == ANJAY_ID_INVALID) {
@@ -706,7 +709,8 @@ static int bootstrap_finish_impl(anjay_unlocked_t *anjay,
                                  int flags) {
     anjay_log(INFO, _("Bootstrap Sequence finished"));
     anjay->bootstrap.in_progress = false;
-    _anjay_conn_session_token_reset(&anjay->bootstrap.bootstrap_session_token);
+    _anjay_conn_session_token_reset(&anjay->bootstrap.bootstrap_session_token,
+                                    &anjay->session_token_counter);
     int retval = _anjay_dm_transaction_finish_without_validation(anjay, 0);
     if (retval) {
         anjay_log(
@@ -850,7 +854,7 @@ avs_error_t _anjay_bootstrap_delete_everything(anjay_unlocked_t *anjay) {
     if (avs_is_err(err)) {
         return err;
     }
-    if (_anjay_dm_foreach_object(anjay, delete_object, &delete_arg)
+    if (_anjay_dm_foreach_object(anjay, &anjay->dm, delete_object, &delete_arg)
             || delete_arg.retval) {
         return avs_errno(AVS_EPROTO);
     } else {
@@ -895,7 +899,8 @@ static int bootstrap_read(anjay_connection_ref_t bootstrap_connection,
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, request->uri.ids[ANJAY_ID_OID]);
+            _anjay_dm_find_object_by_oid(&anjay->dm,
+                                         request->uri.ids[ANJAY_ID_OID]);
     if (!obj) {
         anjay_log(DEBUG, _("Object not found: ") "%u",
                   request->uri.ids[ANJAY_ID_OID]);
@@ -1376,12 +1381,13 @@ int _anjay_perform_bootstrap_action_if_appropriate(
     return -1;
 }
 
-void _anjay_bootstrap_init(anjay_bootstrap_t *bootstrap,
+void _anjay_bootstrap_init(anjay_unlocked_t *anjay,
                            bool allow_legacy_server_initiated_bootstrap) {
-    bootstrap->allow_legacy_server_initiated_bootstrap =
+    anjay->bootstrap.allow_legacy_server_initiated_bootstrap =
             allow_legacy_server_initiated_bootstrap;
-    _anjay_conn_session_token_reset(&bootstrap->bootstrap_session_token);
-    reset_client_initiated_bootstrap_backoff(bootstrap);
+    _anjay_conn_session_token_reset(&anjay->bootstrap.bootstrap_session_token,
+                                    &anjay->session_token_counter);
+    reset_client_initiated_bootstrap_backoff(&anjay->bootstrap);
 }
 
 void _anjay_bootstrap_cleanup(anjay_unlocked_t *anjay) {

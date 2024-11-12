@@ -87,6 +87,7 @@ struct
     anjay_dm_t dm;
     anjay_security_config_cache_t security_config_from_dm_cache;
     uint16_t udp_listen_port;
+    uint64_t session_token_counter;
 
     /**
      * List of known LwM2M servers we may want to be connected to. This is

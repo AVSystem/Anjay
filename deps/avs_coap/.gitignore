@@ -36,6 +36,7 @@ _CPack_Packages/
 Testing/
 /cmake/avs_coap-config.cmake
 /build*
+/coverage/
 /examples/build
 /include_public/avsystem/coap/avs_coap_config.h
 /tools/__pycache__

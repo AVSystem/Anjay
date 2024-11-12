@@ -72,7 +72,7 @@ static avs_error_t persist_instance(avs_persistence_context_t *ctx,
 
 static bool is_object_registered(anjay_unlocked_t *anjay, anjay_oid_t oid) {
     return oid != ANJAY_DM_OID_SECURITY
-           && _anjay_dm_find_object_by_oid(anjay, oid) != NULL;
+           && _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay), oid) != NULL;
 }
 
 static avs_error_t restore_instance(access_control_instance_t *out_instance,

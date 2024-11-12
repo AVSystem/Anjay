@@ -415,7 +415,8 @@ avs_error_t anjay_server_object_persist(anjay_t *anjay_locked,
     avs_error_t err = avs_errno(AVS_EINVAL);
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *server_obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SERVER);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_DM_OID_SERVER);
     server_repr_t *repr = server_obj ? _anjay_serv_get(*server_obj) : NULL;
     if (!repr) {
         err = avs_errno(AVS_EBADF);
@@ -472,7 +473,8 @@ avs_error_t anjay_server_object_restore(anjay_t *anjay_locked,
     avs_error_t err = avs_errno(AVS_EINVAL);
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *server_obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SERVER);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_DM_OID_SERVER);
     server_repr_t *repr = server_obj ? _anjay_serv_get(*server_obj) : NULL;
     if (!repr || repr->in_transaction) {
         err = avs_errno(AVS_EBADF);

@@ -57,7 +57,9 @@ int get_socket_type(const py::object &py_socket) {
 
 namespace ssl {
 
-int Socket::_send(void *self, const unsigned char *buf, size_t len) try {
+int Socket::bio_send(void *self,
+                     const unsigned char *buf,
+                     size_t len) noexcept try {
     Socket *socket = reinterpret_cast<Socket *>(self);
 
     call_method<void>(
@@ -70,58 +72,54 @@ int Socket::_send(void *self, const unsigned char *buf, size_t len) try {
 }
 
 namespace {
-std::tuple<string, int> host_port_to_std_tuple(py::tuple host_port) {
-    return std::make_tuple(py::cast<std::string>(host_port[0]),
-                           py::cast<int>(host_port[1]));
+tuple<string, int> host_port_to_std_tuple(py::tuple host_port) {
+    return make_tuple(py::cast<string>(host_port[0]),
+                      py::cast<int>(host_port[1]));
 }
 } // namespace
 
-int Socket::_recv(void *self,
-                  unsigned char *buf,
-                  size_t len,
-                  uint32_t timeout_ms) {
+bool py_timeout_finite(py::object timeout) {
+    return !timeout.is(py::none());
+}
+
+uint32_t to_millis_timeout(py::object timeout) {
+    if (!py_timeout_finite(timeout)) {
+        return UINT32_MAX;
+    }
+    return (uint32_t) (py::cast<double>(timeout) * 1000.0);
+}
+
+int Socket::bio_recv(void *self,
+                     unsigned char *buf,
+                     size_t len,
+                     uint32_t mbedtls_timeout) noexcept {
     Socket *socket = reinterpret_cast<Socket *>(self);
 
     py::object py_buf = py::reinterpret_borrow<py::object>(
             PyMemoryView_FromMemory((char *) buf, len, PyBUF_WRITE));
 
-    class TimeoutRestorer {
-        Socket *socket_;
-        py::object orig_timeout_s_;
-        bool restored_;
+    py::object py_timeout =
+            call_method<py::object>(socket->py_socket_, "gettimeout");
 
-    public:
-        TimeoutRestorer(Socket *socket)
-                : socket_(socket),
-                  orig_timeout_s_(call_method<py::object>(socket_->py_socket_,
-                                                          "gettimeout")),
-                  restored_(false) {}
+    // Since this method will possibly do multiple recv() calls, we'll be
+    // adjusting the underlying timeout in the runtime. When we're done,
+    // restore the original timeout.
+    const auto restore_timeout = helpers::defer([&] {
+        call_method<void>(socket->py_socket_, "settimeout", py_timeout);
+    });
 
-        void restore() {
-            if (!restored_) {
-                call_method<void>(socket_->py_socket_, "settimeout",
-                                  orig_timeout_s_);
-                restored_ = true;
-            }
-        }
-
-        ~TimeoutRestorer() {
-            restore();
-        }
-    } timeout_restorer{ socket };
-
-    if (timeout_ms == 0) {
-        timeout_ms = UINT32_MAX;
-    } else if (timeout_ms == UINT32_MAX) {
-        --timeout_ms;
-    }
-
+    // If the timeout set by mbedTLS is 0 (infinite), assume the timeout we set
+    // to the underlying socket (as we do in avs_commons). Otherwise, timeout
+    // from mbedTLS gets precedence (this happens e.g. during handshake).
+    uint32_t timeout_ms = mbedtls_timeout > 0 ? mbedtls_timeout
+                                              : to_millis_timeout(py_timeout);
+    bool timeout_finite = mbedtls_timeout > 0 || py_timeout_finite(py_timeout);
     int socket_type = get_socket_type(socket->py_socket_);
 
     int bytes_received = 0;
     do {
         try {
-            if (timeout_ms != UINT32_MAX) {
+            if (timeout_finite) {
                 call_method<void>(socket->py_socket_, "settimeout",
                                   timeout_ms / 1000.0);
             }
@@ -138,7 +136,7 @@ int Socket::_recv(void *self,
                                                   "recv_into", py_buf);
             }
 
-            if (timeout_ms != UINT32_MAX) {
+            if (timeout_finite) {
                 auto elapsed_ms = duration_cast<milliseconds>(
                                           steady_clock::now() - before_recv)
                                           .count();
@@ -182,12 +180,13 @@ int Socket::_recv(void *self,
             bytes_received =
                     process_python_socket_error(err,
                                                 MBEDTLS_ERR_NET_RECV_FAILED);
+
+            // when in handshake, Python exceptions are not rethrown
             if (!socket->in_handshake_) {
-                // HACK: it's there, explicitly called, because for some reason
-                // you can't call settimeout() when the "error is restored", and
-                // very weird things happen if you try to do it.
-                timeout_restorer.restore();
-                err.restore();
+                if (!socket->exception_capturer_) {
+                    terminate();
+                }
+                *socket->exception_capturer_ = current_exception();
             }
             break;
         }
@@ -197,18 +196,9 @@ int Socket::_recv(void *self,
 }
 
 Socket::HandshakeResult Socket::do_handshake() {
-    class HandshakeRaii {
-        Socket &self_;
-
-    public:
-        HandshakeRaii(Socket &self) : self_(self) {
-            self_.in_handshake_ = true;
-        }
-
-        ~HandshakeRaii() {
-            self_.in_handshake_ = false;
-        }
-    } handshake_raii_(*this);
+    in_handshake_ = true;
+    const auto clear_in_handshake =
+            helpers::defer([&] { in_handshake_ = false; });
 
     for (;;) {
         int result = mbedtls_ssl_handshake(&mbedtls_context_);
@@ -233,19 +223,20 @@ void debug_mbedtls(void * /*ctx*/,
                    int /*level*/,
                    const char *file,
                    int line,
-                   const char *str) {
+                   const char *str) noexcept {
     fprintf(stderr, "%s:%04d: %s", file, line, str);
 }
 
 } // namespace
 
-Socket::Socket(std::shared_ptr<Context> context,
+Socket::Socket(shared_ptr<Context> context,
                py::object py_socket,
                SocketType type)
         : context_(context),
           type_(type),
           py_socket_(py_socket),
           in_handshake_(false),
+          exception_capturer_(nullptr),
           client_host_and_port_(),
           last_recv_host_and_port_() {
     mbedtls_ssl_init(&mbedtls_context_);
@@ -279,7 +270,7 @@ Socket::Socket(std::shared_ptr<Context> context,
         mbedtls_ssl_conf_dbg(&config_, debug_mbedtls, NULL);
     }
 
-    // TODO
+    // Force (D)TLS 1.2 or higher
     mbedtls_ssl_conf_min_version(&config_, MBEDTLS_SSL_MAJOR_VERSION_3,
                                  MBEDTLS_SSL_MINOR_VERSION_3);
     mbedtls_ssl_conf_rng(&config_, mbedtls_ctr_drbg_random, &rng_);
@@ -308,8 +299,8 @@ Socket::Socket(std::shared_ptr<Context> context,
     mbedtls_ssl_conf_session_cache(&config_, context_->session_cache(),
                                    mbedtls_ssl_cache_get,
                                    mbedtls_ssl_cache_set);
-    mbedtls_ssl_set_bio(&mbedtls_context_, this, &Socket::_send, NULL,
-                        &Socket::_recv);
+    mbedtls_ssl_set_bio(&mbedtls_context_, this, &Socket::bio_send, NULL,
+                        &Socket::bio_recv);
     mbedtls_ssl_set_timer_cb(&mbedtls_context_, &timer_,
                              mbedtls_timing_set_delay,
                              mbedtls_timing_get_delay);
@@ -362,7 +353,7 @@ void Socket::perform_handshake(py::tuple host_port,
         if (result) {
             throw mbedtls_error("mbedtls_ssl_sssion_reset failed", result);
         }
-        string address = std::get<0>(client_host_and_port_);
+        string address = get<0>(client_host_and_port_);
         if (type_ == SocketType::Client) {
             result = mbedtls_ssl_set_hostname(&mbedtls_context_,
                                               address.c_str());
@@ -406,8 +397,13 @@ void Socket::send(const string &data) {
 
 py::bytes Socket::recv(int) {
     unsigned char buffer[65536];
-
     int result = 0;
+
+    exception_ptr captured_exception;
+    exception_capturer_ = &captured_exception;
+    const auto clear_capturer =
+            helpers::defer([&] { exception_capturer_ = nullptr; });
+
     do {
         result = mbedtls_ssl_read(&mbedtls_context_, buffer, sizeof(buffer));
     } while (result == MBEDTLS_ERR_SSL_WANT_READ
@@ -416,7 +412,10 @@ py::bytes Socket::recv(int) {
     if (result < 0) {
         if (result == MBEDTLS_ERR_SSL_TIMEOUT
                 || result == MBEDTLS_ERR_NET_RECV_FAILED) {
-            throw py::error_already_set();
+            if (captured_exception) {
+                rethrow_exception(captured_exception);
+            }
+            throw runtime_error("Expected a Python exception to rethrow");
         } else if (result == MBEDTLS_ERR_SSL_CLIENT_RECONNECT) {
             try {
                 do_handshake();
@@ -426,6 +425,9 @@ py::bytes Socket::recv(int) {
             }
         }
         throw mbedtls_error("mbedtls_ssl_read failed", result);
+    }
+    if (captured_exception) {
+        throw runtime_error("Expected no Python exception to rethrow");
     }
 
     if (last_recv_host_and_port_ != client_host_and_port_) {
@@ -437,17 +439,6 @@ py::bytes Socket::recv(int) {
     }
 
     return py::bytes(reinterpret_cast<const char *>(buffer), result);
-}
-
-void Socket::settimeout(py::object timeout_s_or_none) {
-    uint32_t timeout_ms = 0; // no timeout
-
-    if (!timeout_s_or_none.is(py::none())) {
-        timeout_ms = (uint32_t) (py::cast<double>(timeout_s_or_none) * 1000.0);
-    }
-
-    call_method<void>(py_socket_, "settimeout", timeout_s_or_none);
-    mbedtls_ssl_conf_read_timeout(&config_, timeout_ms);
 }
 
 py::bytes Socket::peer_cert() {
@@ -513,8 +504,7 @@ void enable_reuse(const py::object &socket) {
 
 } // namespace
 
-ServerSocket::ServerSocket(std::shared_ptr<Context> context,
-                           py::object py_socket)
+ServerSocket::ServerSocket(shared_ptr<Context> context, py::object py_socket)
         : context_(context), py_socket_(py_socket) {
     enable_reuse(py_socket_);
 }
@@ -556,10 +546,9 @@ unique_ptr<Socket> ServerSocket::accept(py::object handshake_timeouts_s) {
         enable_reuse(client_py_sock);
     }
 
-    // Unfortunately C++11 is retarded and does not implement make_unique.
     unique_ptr<Socket> client_sock =
-            unique_ptr<Socket>(new Socket(context_, std::move(client_py_sock),
-                                          SocketType::Server));
+            make_unique<Socket>(context_, move(client_py_sock),
+                                SocketType::Server);
     client_sock->perform_handshake(remote_addr, handshake_timeouts_s, false);
     return client_sock;
 }

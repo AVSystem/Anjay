@@ -226,7 +226,7 @@ static const anjay_unlocked_dm_object_def_t OBJECT_DEF = {
 
 static anjay_ipso_button_t *obj_from_anjay(anjay_unlocked_t *anjay) {
     const anjay_dm_installed_object_t *installed_obj_ptr =
-            _anjay_dm_find_object_by_oid(anjay, PUSH_BUTTON_OID);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay), PUSH_BUTTON_OID);
     if (!_anjay_dm_installed_object_is_valid_unlocked(installed_obj_ptr)) {
         return NULL;
     }

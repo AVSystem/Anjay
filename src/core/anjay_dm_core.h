@@ -35,7 +35,7 @@ struct anjay_dm {
     AVS_LIST(anjay_dm_installed_module_t) modules;
 };
 
-void _anjay_dm_cleanup(anjay_unlocked_t *anjay);
+void _anjay_dm_cleanup(anjay_dm_t *dm);
 
 typedef struct {
     bool has_min_period;

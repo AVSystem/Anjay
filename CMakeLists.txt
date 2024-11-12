@@ -8,7 +8,7 @@
 cmake_minimum_required(VERSION 3.6.0)
 
 project(anjay C)
-set(ANJAY_VERSION "3.8.0" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "3.8.1" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -433,6 +433,8 @@ add_library(anjay
             src/core/io/anjay_cbor_out.c
             src/core/io/anjay_common.c
             src/core/io/anjay_common.h
+            src/core/io/anjay_corelnk.c
+            src/core/io/anjay_corelnk.h
             src/core/io/anjay_dynamic.c
             src/core/io/anjay_input_buf.c
             src/core/io/anjay_json_encoder.c
@@ -617,7 +619,7 @@ if(WITH_TEST)
     add_custom_target(check)
     add_custom_target(anjay_unit_check)
     add_dependencies(check anjay_unit_check)
-
+    
     # anjay_test
     add_executable(anjay_test EXCLUDE_FROM_ALL
                    $<TARGET_PROPERTY:anjay,SOURCES>

@@ -90,7 +90,7 @@ bool _anjay_instance_action_allowed_by_acl(anjay_unlocked_t *anjay,
  *    E.1.3 Unbootstrapping).
  * 3. Creates new Access Control object instances that refer to all newly
  *    created Object Instances. These will have the owner and the default ACL
- *    referring to SSID == _anjay_dm_current_ssid(anjay).
+ *    referring to SSID == <c>origin_ssid</c> parameter.
  *
  * Please refer to comments inside the implementation for details.
  */

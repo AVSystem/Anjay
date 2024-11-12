@@ -343,7 +343,7 @@ static avs_error_t clear_nonexistent_entries(anjay_unlocked_t *anjay,
     AVS_LIST(as_object_entry_t) object_helper;
     AVS_LIST_DELETABLE_FOREACH_PTR(object_ptr, object_helper, &as->objects) {
         const anjay_dm_installed_object_t *def_ptr =
-                _anjay_dm_find_object_by_oid(anjay, (*object_ptr)->oid);
+                _anjay_dm_find_object_by_oid(&anjay->dm, (*object_ptr)->oid);
         if (!def_ptr) {
             remove_object_entry(as, object_ptr);
         } else {
