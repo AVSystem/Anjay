@@ -121,7 +121,7 @@ jobs:
       - uses: actions/checkout@v1
         with:
           submodules: recursive
-      - run: dnf update -y
+      - run: dnf update -y --nobest
       - run: dnf install -y $CC
       # Solve issues with EPERM when running dumpcap
       - run: setcap '' $(which dumpcap)
