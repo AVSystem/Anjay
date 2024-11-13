@@ -89,6 +89,6 @@ be8a4c22a41c2ab79bf3a68f1f74f301  include_public/anjay/attr_storage.h
 56b500ecbd5ffc8d468327c650883cbd  include_public/anjay/fw_update.h
 b49ca67d9f4f04bf20261c261ad41822  include_public/anjay/io.h
 e7c2357db51f9896d2b82245699e0a42  include_public/anjay/security.h
-b95279360cd728e0b137ae6318b2c4a7  tests/integration/framework/test_utils.py
-d867c4d479f49fc39254f70bdda67fb5  tools/provisioning-tool/factory_prov/factory_prov.py
-82ad6e92a83128ffac51b9c369d5275d  tools/provisioning-tool/ptool.py
+f76d50fd887c4ada8500f67bccffdd74  tests/integration/framework/test_utils.py
+88058893fb17ae75099f6b998233a693  tools/provisioning-tool/factory_prov/factory_prov.py
+70d3ff815fb42ff052a7a05d47f9aee9  tools/provisioning-tool/ptool.py

@@ -38,7 +38,8 @@ VISIBILITY_SOURCE_BEGIN
 static int deactivate_server(anjay_server_info_t *server) {
     assert(server);
 #ifdef ANJAY_WITH_CONN_STATUS_API
-    if (server->suspending) {
+    if (server->suspending
+            && server->connection_status != ANJAY_SERV_CONN_STATUS_SUSPENDED) {
         _anjay_set_server_connection_status(server,
                                             ANJAY_SERV_CONN_STATUS_SUSPENDING);
     }
@@ -181,7 +182,7 @@ void _anjay_server_on_failure(anjay_server_info_t *server,
             const communication_retry_params_t params =
                     query_server_communication_retry_params(server);
             if (server->registration_attempts < params.retry_count) {
-                anjay_log(INFO, _("Registration Retry ") "%u/%u",
+                anjay_log(INFO, _("Registration Retry ") "%" PRIu32 "/%" PRIu32,
                           server->registration_attempts,
                           params.retry_count - 1);
 
@@ -199,7 +200,7 @@ void _anjay_server_on_failure(anjay_server_info_t *server,
                 return;
             } else if (server->registration_sequences_performed + 1
                        < params.sequence_retry_count) {
-                anjay_log(INFO, _("Sequence Retry ") "%u/%u",
+                anjay_log(INFO, _("Sequence Retry ") "%" PRIu32 "/%" PRIu32,
                           server->registration_sequences_performed + 1,
                           params.sequence_retry_count - 1);
 

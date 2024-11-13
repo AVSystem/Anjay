@@ -38,6 +38,7 @@ option(WITH_AVS_COAP_TCP "Enable CoAP over TCP support" ON)
 option(WITH_AVS_COAP_STREAMING_API "Enable streaming API" ON)
 option(WITH_AVS_COAP_OBSERVE "Enable support for observations" ON)
 option(WITH_AVS_COAP_OBSERVE_CANCEL_ON_TIMEOUT "Turn on cancelling observation on a timeout " OFF)
+option(WITH_AVS_COAP_OBSERVE_FORCE_CANCEL_ON_UNACKED_ERROR "Force cancelling observation on unacked error" ON)
 cmake_dependent_option(WITH_AVS_COAP_OBSERVE_PERSISTENCE "Enable observations persistence" ON "WITH_AVS_COAP_OBSERVE" OFF)
 option(WITH_AVS_COAP_BLOCK "Enable support for BLOCK/BERT transfers" ON)
 

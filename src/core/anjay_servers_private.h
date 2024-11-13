@@ -63,22 +63,26 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
  * Token that changes to a new unique value every time the CoAP endpoint
  * association (i.e., DTLS session or raw UDP socket) has been established anew.
  *
- * It is currently implemented as a monotonic timestamp because it's trivial to
- * generate such unique value that way as long as it is never persisted.
+ * It is currently implemented as a consecutive counter values associated with
+ * the Anjay instance because it's trivial to generate such unique value that
+ * way as long as it is never persisted.
  */
 typedef struct {
-    avs_time_monotonic_t value;
+    uint64_t value;
 } anjay_conn_session_token_t;
 
 static inline void
-_anjay_conn_session_token_reset(anjay_conn_session_token_t *out) {
-    out->value = avs_time_monotonic_now();
+_anjay_conn_session_token_reset(anjay_conn_session_token_t *out,
+                                uint64_t *counter) {
+    // pre-incrementation is needed to avoid the assignment of 0, since such a
+    // token may already by assigned during the initialization
+    out->value = ++(*counter);
 }
 
 static inline bool
 _anjay_conn_session_tokens_equal(anjay_conn_session_token_t left,
                                  anjay_conn_session_token_t right) {
-    return avs_time_monotonic_equal(left.value, right.value);
+    return left.value == right.value;
 }
 
 // 6.2.2 Object Version format:

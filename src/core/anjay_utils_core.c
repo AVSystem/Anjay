@@ -673,7 +673,7 @@ static void try_get_info_from_dm(anjay_unlocked_t *anjay,
     assert(anjay);
 
     const anjay_dm_installed_object_t *security_obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
+            _anjay_dm_find_object_by_oid(&anjay->dm, ANJAY_DM_OID_SECURITY);
     if (!security_obj) {
         anjay_log(ERROR, _("Security object not installed"));
         return;
@@ -825,6 +825,10 @@ int _anjay_safe_strtod(const char *in, double *value) {
 
 void _anjay_log_oom(void) {
     anjay_log(ERROR, _("out of memory"));
+}
+
+anjay_dm_t *_anjay_get_dm(anjay_unlocked_t *anjay) {
+    return &anjay->dm;
 }
 
 #ifdef ANJAY_TEST

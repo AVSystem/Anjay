@@ -40,6 +40,7 @@ if (${ANJAY_WITH_MODULE_FW_UPDATE})
     set(SOURCES ${SOURCES} firmware_update.c)
 endif()
 
+
 if (${ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE})
     set(SOURCES ${SOURCES}
                 advanced_firmware_update.c
@@ -51,6 +52,7 @@ endif()
 if (${ANJAY_WITH_MODULE_SW_MGMT})
     set(SOURCES ${SOURCES} software_mgmt.c)
 endif()
+
 
 if(NOT WIN32)
     set(SOURCES ${SOURCES} objects/ip_ping.c)

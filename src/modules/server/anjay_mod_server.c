@@ -643,7 +643,7 @@ int anjay_server_object_add_instance(anjay_t *anjay_locked,
     int retval = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *obj_ptr =
-            _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay), SERVER.oid);
     server_repr_t *repr = obj_ptr ? _anjay_serv_get(*obj_ptr) : NULL;
     if (!repr) {
         server_log(ERROR, _("Server object is not registered"));
@@ -686,7 +686,7 @@ void anjay_server_object_purge(anjay_t *anjay_locked) {
     assert(anjay_locked);
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *server_obj =
-            _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay), SERVER.oid);
     server_repr_t *repr = server_obj ? _anjay_serv_get(*server_obj) : NULL;
 
     if (!repr) {
@@ -705,7 +705,7 @@ AVS_LIST(const anjay_ssid_t) anjay_server_get_ssids(anjay_t *anjay_locked) {
     AVS_LIST(server_instance_t) source = NULL;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *server_obj =
-            _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay), SERVER.oid);
     server_repr_t *repr = _anjay_serv_get(*server_obj);
     if (_anjay_dm_transaction_object_included(anjay, server_obj)) {
         source = repr->saved_instances;
@@ -727,7 +727,7 @@ bool anjay_server_object_is_modified(anjay_t *anjay_locked) {
     bool result = false;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *server_obj =
-            _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay), SERVER.oid);
     if (!server_obj) {
         server_log(ERROR, _("Server object is not registered"));
     } else {
@@ -783,7 +783,7 @@ int anjay_server_object_set_lifetime(anjay_t *anjay_locked,
     int result = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *server_obj =
-            _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay), SERVER.oid);
     server_repr_t *repr = _anjay_serv_get(*server_obj);
     if (repr->saved_instances) {
         server_log(ERROR, _("cannot set Lifetime while some transaction is "

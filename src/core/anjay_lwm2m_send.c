@@ -620,7 +620,7 @@ batch_data_add_current_impl(anjay_send_batch_builder_t *builder,
     }
 
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, oid);
+            _anjay_dm_find_object_by_oid(&anjay->dm, oid);
     if (!obj) {
         send_log(ERROR, _("unregistered Object ID: ") "%u", oid);
         return ANJAY_ERR_NOT_FOUND;

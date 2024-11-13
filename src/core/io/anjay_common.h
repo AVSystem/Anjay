@@ -20,9 +20,7 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-#define MAX_PATH_STRING_SIZE sizeof("/65535/65535/65535/65535")
 #define MAX_OBJLNK_STRING_SIZE sizeof("65535:65535")
-
 /**
  * Enumeration for supported SenML labels. Their numeric values correspond to
  * their CBOR representation wherever possible.

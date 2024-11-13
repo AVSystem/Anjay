@@ -198,7 +198,7 @@ static int select_security_instance(anjay_unlocked_t *anjay,
                                     anjay_iid_t *out_security_iid,
                                     avs_url_t **out_uri) {
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
+            _anjay_dm_find_object_by_oid(&anjay->dm, ANJAY_DM_OID_SECURITY);
     select_security_instance_state_t state = {
         .ssid = ssid,
         .binding_mode = binding_mode,

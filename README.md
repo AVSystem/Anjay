@@ -179,7 +179,7 @@ pip3 install -U -r requirements.txt
 
 ### Running the demo client
 
-For initial development and testing of LwM2M clients, we recommend using the [Coiote IoT Device Management](https://www.avsystem.com/products/coiote-iot-device-management-platform/) where you can use the basic LwM2M server functionality for free.
+For initial development and testing of LwM2M clients, we recommend using the [Coiote IoT Device Management](https://avsystem.com/coiote-iot-device-management-platform/) where you can use the basic LwM2M server functionality for free.
 
 After setting up an account and adding the device entry, you can compile Anjay demo client and connect it to the platform by running:
 
@@ -322,11 +322,11 @@ See [LICENSE](LICENSE) file.
 
 ### Commercial support
 
-Anjay LwM2M library comes with the option of [full commercial support, provided by AVSystem](https://www.avsystem.com/products/anjay/).
+Anjay LwM2M library comes with the option of [full commercial support, provided by AVSystem](https://avsystem.com/anjay-iot-sdk/).
 
 The list of features available commercially is [available here](https://AVSystem.github.io/Anjay-doc/CommercialFeatures.html).
 
-If you're interested in LwM2M Server, be sure to check out the [Coiote IoT Device Management](https://www.avsystem.com/products/coiote-iot-dm/) platform by AVSystem. It also includes the [interoperability test module](https://www.avsystem.com/lwm2m-interoperability-test/) that you can use to test your LwM2M client implementation. Our automated tests and testing scenarios enable you to quickly check how interoperable your device is with LwM2M.
+If you're interested in LwM2M Server, be sure to check out the [Coiote IoT Device Management](https://www.avsystem.com/products/coiote-iot-dm/) platform by AVSystem. It also includes the [interoperability test module](https://avsystem.com/coiote-iot-device-management-platform/lwm2m-interoperability-test/) that you can use to test your LwM2M client implementation. Our automated tests and testing scenarios enable you to quickly check how interoperable your device is with LwM2M.
 
 ## Contributing
 

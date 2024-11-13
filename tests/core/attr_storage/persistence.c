@@ -65,7 +65,7 @@ static void write_inst_attrs(anjay_unlocked_t *anjay,
                              anjay_ssid_t ssid,
                              const anjay_dm_oi_attributes_t *attrs) {
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, oid);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay), oid);
     AVS_UNIT_ASSERT_NOT_NULL(obj);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_write_default_attrs(
             anjay, obj, iid, ssid, attrs));
@@ -78,7 +78,7 @@ static void write_obj_attrs(anjay_unlocked_t *anjay,
                             anjay_ssid_t ssid,
                             const anjay_dm_oi_attributes_t *attrs) {
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, oid);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay), oid);
     AVS_UNIT_ASSERT_NOT_NULL(obj);
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_dm_call_object_write_default_attrs(anjay, obj, ssid, attrs));
@@ -91,7 +91,7 @@ static void write_res_attrs(anjay_unlocked_t *anjay,
                             anjay_ssid_t ssid,
                             const anjay_dm_r_attributes_t *attrs) {
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, oid);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay), oid);
     AVS_UNIT_ASSERT_NOT_NULL(obj);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_write_attrs(
             anjay, obj, iid, rid, ssid, attrs));
@@ -106,7 +106,7 @@ static void write_res_instance_attrs(anjay_unlocked_t *anjay,
                                      anjay_ssid_t ssid,
                                      const anjay_dm_r_attributes_t *attrs) {
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(anjay, oid);
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay), oid);
     AVS_UNIT_ASSERT_NOT_NULL(obj);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_instance_write_attrs(
             anjay, obj, iid, rid, riid, ssid, attrs));

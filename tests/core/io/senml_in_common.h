@@ -20,22 +20,38 @@
         AVS_CONCAT(ASSERT_, ExpectedResult)(_anjay_input_ctx_destroy(&in)); \
     } while (0)
 
+#define URI_EQUAL(path, expected_path) \
+    ASSERT_TRUE(_anjay_uri_path_equal(path, expected_path));
+
 static const anjay_uri_path_t TEST_RESOURCE_PATH =
         RESOURCE_PATH_INITIALIZER(13, 26, 1);
 
-static void test_single_instance(anjay_unlocked_input_ctx_t *in) {
+static const anjay_uri_path_t TEST_INSTANCE_PATH =
+        INSTANCE_PATH_INITIALIZER(13, 26);
+
+static void check_path(anjay_unlocked_input_ctx_t *in,
+                       const anjay_uri_path_t *expected_path,
+                       int64_t expected_value) {
     anjay_uri_path_t path;
+    int64_t value;
     ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(&path, &TEST_RESOURCE_PATH));
+    URI_EQUAL(&path, expected_path);
 
     // cached value
     ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(&path, &TEST_RESOURCE_PATH));
+    URI_EQUAL(&path, expected_path);
 
-    int64_t value;
     ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 42);
+    ASSERT_EQ(value, expected_value);
+}
 
+static void check_paths(anjay_unlocked_input_ctx_t *in,
+                        const anjay_uri_path_t *expected_paths,
+                        const size_t paths_count) {
+    for (size_t i = 0; i < paths_count; i++) {
+        check_path(in, &expected_paths[i], 42 + (int) i);
+        ASSERT_OK(_anjay_input_next_entry(in));
+    }
     ASSERT_OK(_anjay_input_next_entry(in));
     ASSERT_EQ(_anjay_input_get_path(in, NULL, NULL), ANJAY_GET_PATH_END);
     ASSERT_EQ(_anjay_json_like_decoder_state(((senml_in_t *) in)->ctx),
@@ -43,78 +59,31 @@ static void test_single_instance(anjay_unlocked_input_ctx_t *in) {
 }
 
 static void
-test_single_instance_but_more_than_one(anjay_unlocked_input_ctx_t *in) {
-    anjay_uri_path_t path;
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(&path, &TEST_RESOURCE_PATH));
-
-    int64_t value;
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 42);
-
+test_single_instance_but_more_than_one(anjay_unlocked_input_ctx_t *in,
+                                       const anjay_uri_path_t *expected_path) {
+    check_path(in, expected_path, 42);
     ASSERT_OK(_anjay_input_next_entry(in));
-    // The resource is there, but the context doesn't return it because it is
-    // not related to the request resource path /13/26/1. In order to actually
-    // get it, we would have to do a request on an instance. Because the context
-    // top-level path is restricted, obtaining next id results in error.
+    // The resource is there, but the context doesn't return it because it
+    // is not related to the request resource path /13/26/1. In order to
+    // actually get it, we would have to do a request on an instance.
+    // Because the context top-level path is restricted, obtaining next id
+    // results in error.
     ASSERT_EQ(_anjay_input_get_path(in, NULL, NULL), ANJAY_ERR_BAD_REQUEST);
 }
 
-static void test_multiple_instance(anjay_unlocked_input_ctx_t *in) {
+static void test_skipping(anjay_unlocked_input_ctx_t *in,
+                          const anjay_uri_path_t *expected_paths,
+                          size_t paths_count) {
+    ASSERT_EQ(paths_count, 2);
+
     anjay_uri_path_t path;
     ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(
-            &path,
-            &MAKE_RESOURCE_INSTANCE_PATH(TEST_RESOURCE_PATH.ids[ANJAY_ID_OID],
-                                         TEST_RESOURCE_PATH.ids[ANJAY_ID_IID],
-                                         TEST_RESOURCE_PATH.ids[ANJAY_ID_RID],
-                                         4)));
-
-    int64_t value;
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 42);
-
-    ASSERT_OK(_anjay_input_next_entry(in));
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(
-            &path,
-            &MAKE_RESOURCE_INSTANCE_PATH(TEST_RESOURCE_PATH.ids[ANJAY_ID_OID],
-                                         TEST_RESOURCE_PATH.ids[ANJAY_ID_IID],
-                                         TEST_RESOURCE_PATH.ids[ANJAY_ID_RID],
-                                         5)));
-
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 43);
-
-    ASSERT_OK(_anjay_input_next_entry(in));
-    ASSERT_EQ(_anjay_input_get_path(in, NULL, NULL), ANJAY_GET_PATH_END);
-}
-
-static const anjay_uri_path_t TEST_INSTANCE_PATH =
-        INSTANCE_PATH_INITIALIZER(13, 26);
-
-static void test_resource_skipping(anjay_unlocked_input_ctx_t *in) {
-    anjay_uri_path_t path;
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(
-            &path,
-            &MAKE_RESOURCE_PATH(TEST_INSTANCE_PATH.ids[ANJAY_ID_OID],
-                                TEST_INSTANCE_PATH.ids[ANJAY_ID_IID],
-                                1)));
+    URI_EQUAL(&path, &expected_paths[0]);
 
     // we may not like this resource for some reason, let's skip its value
     ASSERT_OK(_anjay_input_next_entry(in));
 
-    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
-    ASSERT_TRUE(_anjay_uri_path_equal(
-            &path,
-            &MAKE_RESOURCE_PATH(TEST_INSTANCE_PATH.ids[ANJAY_ID_OID],
-                                TEST_INSTANCE_PATH.ids[ANJAY_ID_IID],
-                                2)));
-
-    int64_t value;
-    ASSERT_OK(_anjay_get_i64_unlocked(in, &value));
-    ASSERT_EQ(value, 43);
+    check_path(in, &expected_paths[1], 43);
 
     ASSERT_OK(_anjay_input_next_entry(in));
     ASSERT_EQ(_anjay_input_get_path(in, NULL, NULL), ANJAY_GET_PATH_END);

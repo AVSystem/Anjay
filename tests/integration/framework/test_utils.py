@@ -92,6 +92,7 @@ class OID:
     Portfolio = 16
     BinaryAppDataContainer = 19
     EventLog = 20
+    Lwm2mGateway = 25
     Temperature = 3303
     Accelerometer = 3313
     PushButton = 3347
@@ -289,6 +290,14 @@ class RID:
         TotalPacketsSent = 23
         PDNType = 24
         APNRateControl = 25
+        ServingPLMNRateControl = 26
+        UplinkTimeUnit = 27
+        APNRateControlForExceptionData = 28
+        APNExceptionDataUplinkTimeUnit = 29
+        SupportedRATTypes = 30
+        RDSApplicationID = 31
+        RDSDestinationPort = 32
+        RDSSourcePort = 33
 
     class GeoPoints:
         Latitude = 0
@@ -429,7 +438,7 @@ class RID:
         LogDataFormat = 4015
 
 
-class _Lwm2mResourcePathHelper:
+class Lwm2mResourcePathHelper:
     @classmethod
     def from_rid_object(cls, rid_obj, oid, multi_instance=False, version=None):
         return cls(resources={k: v for k, v in rid_obj.__dict__.items() if isinstance(v, int)},
@@ -463,59 +472,59 @@ class _Lwm2mResourcePathHelper:
 
 
 class ResPath:
-    Security = _Lwm2mResourcePathHelper.from_rid_object(
+    Security = Lwm2mResourcePathHelper.from_rid_object(
         RID.Security, oid=OID.Security, multi_instance=True)
-    Server = _Lwm2mResourcePathHelper.from_rid_object(
+    Server = Lwm2mResourcePathHelper.from_rid_object(
         RID.Server, oid=OID.Server, multi_instance=True)
-    AccessControl = _Lwm2mResourcePathHelper.from_rid_object(RID.AccessControl,
+    AccessControl = Lwm2mResourcePathHelper.from_rid_object(RID.AccessControl,
                                                              oid=OID.AccessControl,
                                                              multi_instance=True)
-    Device = _Lwm2mResourcePathHelper.from_rid_object(
+    Device = Lwm2mResourcePathHelper.from_rid_object(
         RID.Device, oid=OID.Device)
-    ConnectivityMonitoring = _Lwm2mResourcePathHelper.from_rid_object(RID.ConnectivityMonitoring,
+    ConnectivityMonitoring = Lwm2mResourcePathHelper.from_rid_object(RID.ConnectivityMonitoring,
                                                                       oid=OID.ConnectivityMonitoring)
-    FirmwareUpdate = _Lwm2mResourcePathHelper.from_rid_object(
+    FirmwareUpdate = Lwm2mResourcePathHelper.from_rid_object(
         RID.FirmwareUpdate, oid=OID.FirmwareUpdate)
-    Location = _Lwm2mResourcePathHelper.from_rid_object(
+    Location = Lwm2mResourcePathHelper.from_rid_object(
         RID.Location, oid=OID.Location)
-    ConnectivityStatistics = _Lwm2mResourcePathHelper.from_rid_object(RID.ConnectivityStatistics,
+    ConnectivityStatistics = Lwm2mResourcePathHelper.from_rid_object(RID.ConnectivityStatistics,
                                                                       oid=OID.ConnectivityStatistics)
-    SoftwareManagement = _Lwm2mResourcePathHelper.from_rid_object(RID.SoftwareManagement, oid=OID.SoftwareManagement,  multi_instance=True)
-    CellularConnectivity = _Lwm2mResourcePathHelper.from_rid_object(RID.CellularConnectivity,
+    SoftwareManagement = Lwm2mResourcePathHelper.from_rid_object(RID.SoftwareManagement, oid=OID.SoftwareManagement,  multi_instance=True)
+    CellularConnectivity = Lwm2mResourcePathHelper.from_rid_object(RID.CellularConnectivity,
                                                                     oid=OID.CellularConnectivity,
                                                                     version='1.1')
-    ApnConnectionProfile = _Lwm2mResourcePathHelper.from_rid_object(RID.ApnConnectionProfile,
+    ApnConnectionProfile = Lwm2mResourcePathHelper.from_rid_object(RID.ApnConnectionProfile,
                                                                     oid=OID.ApnConnectionProfile,
                                                                     multi_instance=True)
-    Temperature = _Lwm2mResourcePathHelper.from_rid_object(
+    Temperature = Lwm2mResourcePathHelper.from_rid_object(
         RID.Temperature, oid=OID.Temperature)
-    Accelerometer = _Lwm2mResourcePathHelper.from_rid_object(
+    Accelerometer = Lwm2mResourcePathHelper.from_rid_object(
         RID.Accelerometer, oid=OID.Accelerometer)
-    PushButton = _Lwm2mResourcePathHelper.from_rid_object(
+    PushButton = Lwm2mResourcePathHelper.from_rid_object(
         RID.PushButton, oid=OID.PushButton)
-    Test = _Lwm2mResourcePathHelper.from_rid_object(
+    Test = Lwm2mResourcePathHelper.from_rid_object(
         RID.Test, oid=OID.Test, multi_instance=True)
-    Portfolio = _Lwm2mResourcePathHelper.from_rid_object(
+    Portfolio = Lwm2mResourcePathHelper.from_rid_object(
         RID.Portfolio, oid=OID.Portfolio, multi_instance=True)
-    ExtDevInfo = _Lwm2mResourcePathHelper.from_rid_object(
+    ExtDevInfo = Lwm2mResourcePathHelper.from_rid_object(
         RID.ExtDevInfo, oid=OID.ExtDevInfo)
-    IpPing = _Lwm2mResourcePathHelper.from_rid_object(
+    IpPing = Lwm2mResourcePathHelper.from_rid_object(
         RID.IpPing, oid=OID.IpPing)
-    GeoPoints = _Lwm2mResourcePathHelper.from_rid_object(
+    GeoPoints = Lwm2mResourcePathHelper.from_rid_object(
         RID.GeoPoints, oid=OID.GeoPoints, multi_instance=True)
-    DownloadDiagnostics = _Lwm2mResourcePathHelper.from_rid_object(RID.DownloadDiagnostics,
+    DownloadDiagnostics = Lwm2mResourcePathHelper.from_rid_object(RID.DownloadDiagnostics,
                                                                    oid=OID.DownloadDiagnostics)
-    AdvancedFirmwareUpdate = _Lwm2mResourcePathHelper.from_rid_object(
+    AdvancedFirmwareUpdate = Lwm2mResourcePathHelper.from_rid_object(
         RID.AdvancedFirmwareUpdate, oid=OID.AdvancedFirmwareUpdate, multi_instance=True)
-    BinaryAppDataContainer = _Lwm2mResourcePathHelper.from_rid_object(
+    BinaryAppDataContainer = Lwm2mResourcePathHelper.from_rid_object(
         RID.BinaryAppDataContainer, oid=OID.BinaryAppDataContainer, multi_instance=True)
-    EventLog = _Lwm2mResourcePathHelper.from_rid_object(RID.EventLog, oid=OID.EventLog)
+    EventLog = Lwm2mResourcePathHelper.from_rid_object(RID.EventLog, oid=OID.EventLog)
 
     @classmethod
     def objects(cls):
         results = []
         for _, field in cls.__dict__.items():
-            if isinstance(field, _Lwm2mResourcePathHelper):
+            if isinstance(field, Lwm2mResourcePathHelper):
                 results.append(field)
         return sorted(results, key=lambda field: field.oid)
 

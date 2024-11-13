@@ -45,7 +45,7 @@ example applications for many popular SDKs and prototyping kits:
        <https://github.com/AVSystem/Anjay-freertos-client>`_
    * - `STM32Cube
        <https://www.st.com/content/st_com/en/products/ecosystems/stm32-open-development-environment/stm32cube.html>`_
-       w/ `Azure RTOS <https://azure.microsoft.com/en-us/products/rtos/>`_ and `X-CUBE-CELLULAR
+       w/ `Azure RTOS <https://threadx.io/>`_ and `X-CUBE-CELLULAR
        <https://www.st.com/en/embedded-software/x-cube-cellular.html>`_
      - *contained in the app*
      - `Anjay-stm32-azurertos-client
@@ -80,7 +80,7 @@ Examples of application aspects that need custom integration with a software pla
 During the development process, AVSystem can also include your custom hardware in
 CI/CD pipeline to ensure proper performance, configuration and interoperability.
 Such continuous integration testing is an extension of Custom Hardware Support
-included in `Anjay Support Packages <https://www.avsystem.com/anjay/features/#plans>`_.
+included in `Anjay Support Packages <https://avsystem.com/anjay-iot-sdk/features/>`_.
 
 We can also assist with making many **improvements and optimizations**, even if
 the basic functionality works out of the box. For example, Anjay-zephyr contains

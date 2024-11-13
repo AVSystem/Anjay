@@ -20,7 +20,7 @@ a waste if that data was to be downloaded for the second time.
 This is where the download resumption mechanism comes into play. If
 this is a **PULL** mode download, the Server supports and uses `ETags
 <https://en.wikipedia.org/wiki/HTTP_ETag>`_ and the firmware resource did
-not expire (i.e. has the same ETag) there is a good chance the Client will
+not expire (i.e. has the same ETag), there is a good chance the Client will
 be able to resume a partially finished download.
 
 Anjay and Firmware Update initial state
@@ -105,25 +105,25 @@ Let's have a look at the ``anjay_fw_update_initial_state_t``:
 
 The highlighted fields can be used to arrange a download resumption. Recall
 that we already passed this structure to ``anjay_fw_update_install`` in
-previous chapters, but we've always made it zero-initialized before doing so.
+previous chapters, but we've always zero-initialized before doing so.
 
 .. note::
 
     **Quick reminder:** download resumption is supported for **PULL**
     mode downloads only.
 
-Anyway, as you can see from the structure above, we're going to need three
+As you can see from the structure above, we're going to need three
 pieces of information:
 
-    - ``persisted_uri`` - that is, the URI from which the download was
-      originally started,
-    - ``resume_offset`` - which is just the number of bytes successfully
-      stored before the device crashed / unexpectedly rebooted / whatever,
-    - ``resume_tag`` - tag, allowing to validate that the Server still has
-      the same firmware file available under given URI.
+    - ``persisted_uri`` - the URI from which the download was originally
+      started,
+    - ``resume_offset`` - the number of bytes successfully stored before 
+      the device crashed or unexpectedly rebooted,
+    - ``resume_etag`` - ETag that allows to validate whether the Server
+      still has the same firmware file available under given URI.
 
-Implementation-wise, we'll start with introducing a structure that'd hold
-the download state as well as utility functions that'd store and restore
+In terms of implementation, we will start with introducing a structure that will
+hold the download state as well as utility functions that will store and restore
 the state from persistent storage:
 
 .. highlight:: c
@@ -275,7 +275,7 @@ at that time.
     and ``package_etag`` are non-`NULL`. ``package_uri`` indicates it is
     a **PULL** mode transfer (the only mode supporting resumption), while
     ``package_etag`` allows the Client to verify that the downloaded file
-    is the exactly the same as before the resumption happened -- without it
+    is the exactly the same as before the resumption happened; without it,
     there will be no resumption.
 
 This time, however, we will save both of them in ``FW_STATE``. The only
@@ -297,11 +297,11 @@ ideas can be summarized as follows:
     The implementation of ``fw_stream_write`` as described above will be
     awkward on a UNIX-like systems. Complicated operating systems tend to
     have multiple layers of IO buffering, and it may take some time before
-    the actual writes are made to the physical storage device. What it
-    means for us is that we can't just call ``fwrite()`` and blindly update
-    ``resume_offset`` with the number of bytes we ordered it to write even
-    if it returned a success (because the data may still reside in some cache,
-    maintained e.g. by the kernel).
+    the actual writes are made to the physical storage device. This means
+    that we can't just call ``fwrite()`` and blindly update ``resume_offset``
+    with the number of bytes we ordered it to write, even if it returned
+    success (because the data may still reside in some cache, maintained e.g.
+    by the kernel).
 
     Because of that, rather than updating the download state file on
     each call to ``fw_stream_write``, it would be wiser to do it once in
@@ -433,7 +433,7 @@ The next step is to make sure that ``fw_reset`` resets the download state as wel
         reset_download_state(&FW_STATE.download_state);
     }
 
-And the last piece of the implementation would be to read the download state (if any)
+And the last piece of the implementation will be to read the download state (if any)
 at initialization stage, and before installing the firmware update module in Anjay:
 
 .. highlight:: c

@@ -389,11 +389,22 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                        afu_original_img_file_path=None,
                        sw_mgmt_persistence_file=None,
                        tls_version='TLSv1.2',
-                       ciphersuites=(0xC030, 0xC0A8, 0xC0AE)):
+                       ciphersuites=(0x1305, 0x1301, 0xC030, 0xC0A8, 0xC0AE)):
         """
         Helper method for easy generation of demo executable arguments.
         """
-        # 0xC030 = TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 - used by TLS (over TCP, including HTTPS) in tests
+        # LwM2M 1.2 doesn't specify any TLS 1.3 ciphersuites, but
+        # draft-ietf-uta-tls13-iot-profile-09, section 17 suggests:
+        # 0x1305 = TLS_AES_128_CCM_8_SHA256 - although compatible with CoAP,
+        #          prone to other issues - see the referenced document
+
+        # Additionally, to support ssl Python library (used in tests that use
+        # ssl.SSLContext API):
+        # 0x1301 = TLS_AES_128_GCM_SHA256 - supported by default if TLS 1.3 is
+        #          available
+        # 0xC030 = TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 - compatible with
+        #          shortened list of default TLS 1.2 ciphersuites (Python 3.10)
+
         # Default ciphersuites mandated by LwM2M:
         # 0xC0A8 = TLS_PSK_WITH_AES_128_CCM_8
         # 0xC0AE = TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8
@@ -443,8 +454,12 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         ensure_dir(os.path.dirname(log_path))
         return log_path
 
-    def read_log_until_match(self, regex, timeout_s):
+    def read_log_until_match(self, regex, timeout_s, alt_offset=None):
         orig_offset = self.demo_process.log_file.tell()
+
+        if alt_offset is not None:
+            self.demo_process.log_file.seek(alt_offset, io.SEEK_SET)
+
         deadline = time.time() + timeout_s
         out = bytearray()
         while True:
@@ -466,14 +481,20 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             if match:
                 # Move the file pointer to just after the match, in case we've read more
                 move_offset = match.end() - len(out)
+
                 if move_offset != 0:
                     assert move_offset < 0
                     self.demo_process.log_file.seek(move_offset, io.SEEK_CUR)
 
+                if alt_offset is not None:
+                    new_alt_offset = self.demo_process.log_file.tell()
+                    self.demo_process.log_file.seek(orig_offset, io.SEEK_SET)
+                    return new_alt_offset, match
+
                 return match
             elif partial_timeout <= 0.0:
                 self.demo_process.log_file.seek(orig_offset, io.SEEK_SET)
-                return None
+                return (alt_offset, None) if alt_offset is not None else None
 
     def _get_valgrind_args(self):
         import shlex
@@ -823,8 +844,14 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             timeout = self.DEFAULT_COMM_TIMEOUT
 
         self.seek_demo_log_to_end()
-        self.demo_process.stdin.write((cmd.strip('\n') + '\n').encode())
-        self.demo_process.stdin.flush()
+        # For some reason, writing to a closed pipe seems to behave a little
+        # differently for macOS and Linux. On macOS, Python receives a SIGPIPE
+        # and therefore throws a BrokenPipeError. Let's silence it.
+        try:
+            self.demo_process.stdin.write((cmd.strip('\n') + '\n').encode())
+            self.demo_process.stdin.flush()
+        except BrokenPipeError:
+            pass
 
         if match_regex:
             result = self.read_log_until_match(match_regex.encode(), timeout_s=timeout)
@@ -989,27 +1016,6 @@ class SingleServerAccessor:
     @serv.deleter
     def serv(self):
         del self.servers[0]
-
-
-class Lwm2mSingleTcpServerTest(Lwm2mTest, SingleServerAccessor):
-    def runTest(self):
-        pass
-
-    def setUp(self, extra_cmdline_args=None, *args, **kwargs):
-        extra_args = ['-q', 'T']
-        coap_server = coap.Server(transport=Transport.TCP)
-        if extra_cmdline_args is not None:
-            extra_args += extra_cmdline_args
-
-        if 'servers' not in kwargs:
-            kwargs['servers'] = [Lwm2mServer(coap_server)]
-
-        self.setup_demo_with_servers(extra_cmdline_args=extra_args,
-                                     *args,
-                                     **kwargs)
-
-    def tearDown(self, *args, **kwargs):
-        self.teardown_demo_with_servers(*args, **kwargs)
 
 
 class Lwm2mSingleServerTest(Lwm2mTest, SingleServerAccessor):

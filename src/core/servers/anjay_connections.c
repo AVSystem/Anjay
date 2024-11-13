@@ -391,7 +391,8 @@ avs_error_t _anjay_server_connection_internal_bring_online(
 
     if (!(session_resumed =
                   _anjay_was_session_resumed(connection->conn_socket_))) {
-        _anjay_conn_session_token_reset(&connection->session_token);
+        _anjay_conn_session_token_reset(&connection->session_token,
+                                        &server->anjay->session_token_counter);
         // Clean up and recreate the CoAP context to discard observations
         // NOTE: In old versions of avs_coap, this was sending the Release
         // message. This may need to be revised if it's ever reintroduced.

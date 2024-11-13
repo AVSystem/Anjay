@@ -48,7 +48,7 @@ if __name__ == '__main__':
     try:
         fcty = fp.FactoryProvisioning(args.endpoint_cfg, args.URN, args.server,
                                       args.token, args.cert)
-        if fcty.get_sec_mode() == 'cert':
+        if fcty.get_sec_mode() == 'cert' or fcty.get_sec_mode() == 'est':
             if args.scert is not None:
                 fcty.set_server_cert(args.scert)
 

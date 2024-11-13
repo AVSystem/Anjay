@@ -298,8 +298,47 @@ class RegisterWithCertificatesAndServerPublicKey(CertificatesTest.Test):
                       client_crt_file=None, client_key_file=None, server_crt_file='server.crt.der')
 
 
+class RegisterMixin:
+    extra_objects = []
+    def expected_content(self, version='1.0'):
+        result = []
+        for obj in sorted(ResPath.objects() + self.extra_objects, key=lambda field: field.oid):
+            if obj.oid == OID.Security:
+                # Security (/0) instances MUST not be a part of the list
+                # see LwM2M spec, Register/Update operations description
+                continue
+
+            if obj.oid == OID.Server:
+                result.append('</%d/1>' % (obj.oid,))
+            elif obj.oid == OID.SoftwareManagement:
+                result.append('</%d/0>' % (obj.oid,))
+                result.append('</%d/1>' % (obj.oid,))
+            elif obj.oid == OID.Lwm2mGateway:
+                entry = '</%d>' % (obj.oid,)
+                if obj.version is not None:
+                    if version == '1.0':
+                        entry += ';ver="%s"' % (obj.version,)
+                    else:
+                        entry += ';ver=%s' % (obj.version,)
+                result.append(entry)
+                result.append('</%d/0>' % (obj.oid,))
+                result.append('</%d/1>' % (obj.oid,))
+            elif obj.is_multi_instance or obj.version is not None:
+                entry = '</%d>' % (obj.oid,)
+                if obj.version is not None:
+                    if version == '1.0':
+                        entry += ';ver="%s"' % (obj.version,)
+                    else:
+                        entry += ';ver=%s' % (obj.version,)
+                result.append(entry)
+            if not obj.is_multi_instance:
+                result.append('</%d/0>' % (obj.oid,))
+
+        return ','.join(result).encode()
+
+
 class BlockRegister:
-    class Test(unittest.TestCase):
+    class Test(RegisterMixin, unittest.TestCase):
         def __call__(self, server, timeout_s=None, verify=True, version='1.0'):
             register_content = b''
             while True:
@@ -316,16 +355,19 @@ class BlockRegister:
                 server.send(Lwm2mContinue.matching(pkt)(options=block1))
 
             if verify:
-                self.assertEqual(expected_content(version), register_content)
+                self.assertEqual(self.expected_content(version), register_content)
 
             server.send(Lwm2mCreated.matching(pkt)(location='/rd/demo', options=block1))
 
 
+
 class Register:
-    class TestCase(test_suite.Lwm2mDmOperations):
-        def setUp(self):
+    class TestCase(RegisterMixin, test_suite.Lwm2mDmOperations):
+        def setUp(self, *args, **kwargs):
+            self.extra_objects = []
             # skip initial registration
-            super().setUp(auto_register=False)
+            super().setUp(auto_register=False, *args, **kwargs)
+
 
 
 class RegisterUdp:
@@ -367,39 +409,13 @@ class RegisterTcpWithAbort(
         super().tearDown(auto_deregister=False)
 
 
-def expected_content(version='1.0'):
-    result = []
-    for obj in ResPath.objects():
-        if obj.oid == OID.Security:
-            # Security (/0) instances MUST not be a part of the list
-            # see LwM2M spec, Register/Update operations description
-            continue
-
-        if obj.oid == OID.Server:
-            result.append('</%d/1>' % (obj.oid,))
-        elif obj.oid == OID.SoftwareManagement:
-            result.append('</%d/0>' % (obj.oid,))
-            result.append('</%d/1>' % (obj.oid,))
-        elif obj.is_multi_instance or obj.version is not None:
-            entry = '</%d>' % (obj.oid,)
-            if obj.version is not None:
-                if version == '1.0':
-                    entry += ';ver="%s"' % (obj.version,)
-                else:
-                    entry += ';ver=%s' % (obj.version,)
-            result.append(entry)
-        if not obj.is_multi_instance:
-            result.append('</%d/0>' % (obj.oid,))
-    return ','.join(result).encode()
-
-
 class RegisterTest(RegisterUdp.TestCase):
     def runTest(self):
         # should send Register request at start
         pkt = self.serv.recv()
         self.assertMsgEqual(
             Lwm2mRegister('/rd?lwm2m=1.0&ep=%s&lt=86400' % (DEMO_ENDPOINT_NAME,),
-                          content=expected_content()),
+                          content=self.expected_content()),
             pkt)
 
         # should retry when no response is sent
@@ -407,7 +423,7 @@ class RegisterTest(RegisterUdp.TestCase):
 
         self.assertMsgEqual(
             Lwm2mRegister('/rd?lwm2m=1.0&ep=%s&lt=86400' % (DEMO_ENDPOINT_NAME,),
-                          content=expected_content()),
+                          content=self.expected_content()),
             pkt)
 
         # should ignore this message as Message ID does not match
@@ -420,7 +436,7 @@ class RegisterTest(RegisterUdp.TestCase):
 
         self.assertMsgEqual(
             Lwm2mRegister('/rd?lwm2m=1.0&ep=%s&lt=86400' % (DEMO_ENDPOINT_NAME,),
-                          content=expected_content()),
+                          content=self.expected_content()),
             pkt)
 
         # should not retry after receiving valid response
@@ -428,7 +444,7 @@ class RegisterTest(RegisterUdp.TestCase):
 
         with self.assertRaises(socket.timeout, msg='unexpected message'):
             print(self.serv.recv(timeout_s=6))
-
+            
 
 class RegisterCheckOngoingRegistrations(RegisterUdp.TestCase):
     def runTest(self):
@@ -437,7 +453,7 @@ class RegisterCheckOngoingRegistrations(RegisterUdp.TestCase):
         pkt = self.serv.recv()
         self.assertMsgEqual(
             Lwm2mRegister('/rd?lwm2m=1.0&ep=%s&lt=86400' % (DEMO_ENDPOINT_NAME,),
-                          content=expected_content()), pkt)
+                          content=self.expected_content()), pkt)
 
         self.assertTrue(self.ongoing_registration_exists())
 
@@ -452,7 +468,7 @@ class RegisterWithLostSeparateAck(RegisterUdp.TestCase):
         pkt = self.serv.recv()
         self.assertMsgEqual(
             Lwm2mRegister('/rd?lwm2m=1.0&ep=%s&lt=86400' % (DEMO_ENDPOINT_NAME,),
-                          content=expected_content()),
+                          content=self.expected_content()),
             pkt)
 
         # Separate Response: Confirmable; msg_id does not match, but token does
@@ -489,7 +505,7 @@ class ConcurrentRequestWhileWaitingForResponse:
                 path += '&b=T'
                 self.assertTcpCsm()
             pkt = self.serv.recv()
-            self.assertMsgEqual(Lwm2mRegister(path, content=expected_content()), pkt)
+            self.assertMsgEqual(Lwm2mRegister(path, content=self.expected_content()), pkt)
             self.read_path(self.serv, ResPath.Device.Manufacturer)
             self.serv.send(Lwm2mCreated.matching(pkt)(location='/rd/demo'))
 
@@ -519,7 +535,7 @@ class RegisterUri:
                 path += '&b=T'
                 self.assertTcpCsm()
             pkt = self.serv.recv()
-            self.assertMsgEqual(Lwm2mRegister(path, content=expected_content()), pkt)
+            self.assertMsgEqual(Lwm2mRegister(path, content=self.expected_content()), pkt)
             self.serv.send(Lwm2mCreated.matching(pkt)(location='/some/weird/rd/point'))
 
             # Update shall not contain the path and query from Server URI

@@ -121,7 +121,7 @@ jobs:
       - uses: actions/checkout@v1
         with:
           submodules: recursive
-      - run: dnf update -y
+      - run: dnf update -y --nobest
       - run: dnf install -y $CC
       # Solve issues with EPERM when running dumpcap
       - run: setcap '' $(which dumpcap)
@@ -149,9 +149,13 @@ jobs:
         with:
           submodules: recursive
       - run: brew update
-      # NOTE: latest known compatible versions are openssl@3--3.1.1 and mbedtls--3.4.0
       # NOTE: try the brew install command twice to work around "brew link" errors
-      - run: INSTALL_CMD="brew install openssl mbedtls $COMPILER_VERSION"; $INSTALL_CMD || $INSTALL_CMD
+      - run: INSTALL_CMD="brew install openssl $COMPILER_VERSION"; $INSTALL_CMD || $INSTALL_CMD
+      # NOTE: Some tests don't pass on mbedTLS 3.6.2 now, so we need to install an older version
+      #       Homebrew only specifiers major version of mbedTLS, so let's pin the version to 3.6.0 manually
+      - run: curl -f https://raw.githubusercontent.com/Homebrew/homebrew-core/219dabf6cab172fb8b62b4d8598e016e190c3c20/Formula/m/mbedtls.rb > /tmp/mbedtls.rb
+      - run: brew install --formula /tmp/mbedtls.rb
+      - run: brew pin mbedtls
       # NOTE: The above command may have installed a new version of Python, that's why we launch it weirdly
       - run: /usr/bin/env python3 -m pip install -r requirements.txt
       - run: env JAVA_HOME="$JAVA_HOME_17_X64" ./devconfig --with-asan --without-analysis --no-examples -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF -DWITH_IPV6=OFF

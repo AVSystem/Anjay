@@ -12,7 +12,6 @@
 #include <inttypes.h>
 
 #include <avsystem/commons/avs_errno.h>
-#include <avsystem/commons/avs_stream_membuf.h>
 
 #include <avsystem/coap/async_client.h>
 #include <avsystem/coap/code.h>
@@ -27,6 +26,7 @@
 #include "../anjay_servers_reload.h"
 #include "../anjay_servers_utils.h"
 #include "../dm/anjay_query.h"
+#include "../io/anjay_corelnk.h"
 
 #include "anjay_activate.h"
 #include "anjay_register.h"
@@ -55,7 +55,8 @@ static int schedule_register_for_server(anjay_server_info_t *server) {
         anjay_server_connection_t *connection =
                 _anjay_connection_get(&server->connections,
                                       ANJAY_CONNECTION_PRIMARY);
-        _anjay_conn_session_token_reset(&connection->session_token);
+        _anjay_conn_session_token_reset(&connection->session_token,
+                                        &server->anjay->session_token_counter);
     }
     return result;
 }
@@ -257,116 +258,13 @@ static int get_server_lifetime(anjay_unlocked_t *anjay,
         return -1;
     } else if (lifetime < 0) {
         anjay_log(ERROR,
-                  _("lifetime returned by LwM2M server ") "%u" _(" is <= 0"),
+                  _("lifetime returned by LwM2M server ") "%u" _(" is < 0"),
                   ssid);
         return -1;
     }
     *out_lifetime = lifetime;
 
     return 0;
-}
-
-typedef struct {
-    bool first;
-    avs_stream_t *stream;
-    anjay_lwm2m_version_t version;
-} query_dm_args_t;
-
-static int query_dm_instance(anjay_unlocked_t *anjay,
-                             const anjay_dm_installed_object_t *obj,
-                             anjay_iid_t iid,
-                             void *args_) {
-    (void) anjay;
-    query_dm_args_t *args = (query_dm_args_t *) args_;
-    avs_error_t err =
-            avs_stream_write_f(args->stream, "%s</%u/%u>",
-                               args->first ? "" : ",",
-                               _anjay_dm_installed_object_oid(obj), iid);
-    args->first = false;
-    return avs_is_ok(err) ? 0 : -1;
-}
-
-static int query_dm_object(anjay_unlocked_t *anjay,
-                           const anjay_dm_installed_object_t *obj,
-                           void *args_) {
-    anjay_oid_t oid = _anjay_dm_installed_object_oid(obj);
-    if (oid == ANJAY_DM_OID_SECURITY) {
-        /* LwM2M TS 1.1, 6.2.1. Register says that "The Security Object ID:0,
-         * and OSCORE Object ID:21, if present, MUST NOT be part of the
-         * Registration Objects and Object Instances list." */
-        return 0;
-    }
-
-    query_dm_args_t *args = (query_dm_args_t *) args_;
-    if (args->first) {
-        args->first = false;
-    } else if (avs_is_err(avs_stream_write(args->stream, ",", 1))) {
-        return -1;
-    }
-    bool obj_written = false;
-    const char *version = _anjay_dm_installed_object_version(obj);
-    if (version) {
-        const char *format = "</%u>;ver=\"%s\"";
-#ifdef ANJAY_WITH_LWM2M11
-        if (args->version > ANJAY_LWM2M_VERSION_1_0) {
-            format = "</%u>;ver=%s";
-        }
-#endif // ANJAY_WITH_LWM2M11
-
-        if (avs_is_err(
-                    avs_stream_write_f(args->stream, format, oid, version))) {
-            return -1;
-        }
-        obj_written = true;
-    }
-    query_dm_args_t instance_args = {
-        .first = !obj_written,
-        .stream = args->stream,
-        .version = args->version
-    };
-    int result = _anjay_dm_foreach_instance(anjay, obj, query_dm_instance,
-                                            &instance_args);
-    if (result) {
-        return result;
-    }
-    if (!instance_args.first) {
-        obj_written = true;
-    }
-    if (!obj_written
-            && avs_is_err(avs_stream_write_f(args->stream, "</%u>", oid))) {
-        return -1;
-    }
-    return 0;
-}
-
-static int
-query_dm(anjay_unlocked_t *anjay, anjay_lwm2m_version_t version, char **out) {
-    assert(out);
-    assert(!*out);
-    avs_stream_t *stream = avs_stream_membuf_create();
-    if (!stream) {
-        _anjay_log_oom();
-        return -1;
-    }
-    int retval;
-    void *data = NULL;
-    if ((retval = _anjay_dm_foreach_object(anjay, query_dm_object,
-                                           &(query_dm_args_t) {
-                                               .first = true,
-                                               .stream = stream,
-                                               .version = version
-                                           }))
-            || (retval =
-                        (avs_is_ok(avs_stream_write(stream, "\0", 1)) ? 0 : -1))
-            || (retval = (avs_is_ok(avs_stream_membuf_take_ownership(
-                                  stream, &data, NULL))
-                                  ? 0
-                                  : -1))) {
-        anjay_log(ERROR, _("could not enumerate objects"));
-    }
-    avs_stream_cleanup(&stream);
-    *out = (char *) data;
-    return retval;
 }
 
 static void update_parameters_cleanup(anjay_update_parameters_t *params) {
@@ -413,7 +311,8 @@ update_parameters_init(anjay_server_info_t *server,
         err = avs_errno(AVS_EBADF);
         goto error;
     }
-    if (query_dm(server->anjay, lwm2m_version, &out_params->dm)) {
+    if (_anjay_corelnk_query_dm(server->anjay, &server->anjay->dm,
+                                lwm2m_version, &out_params->dm)) {
         goto error;
     }
     if (get_server_lifetime(server->anjay, _anjay_server_ssid(server),
@@ -1384,7 +1283,7 @@ server_object_instances_count_clb(anjay_unlocked_t *anjay,
 
 static size_t server_object_instances_count(anjay_unlocked_t *anjay) {
     const anjay_dm_installed_object_t *server_obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SERVER);
+            _anjay_dm_find_object_by_oid(&anjay->dm, ANJAY_DM_OID_SERVER);
     if (!server_obj) {
         return 0;
     }

@@ -7,6 +7,7 @@
 # Licensed under the AVSystem-5-clause License.
 # See the attached LICENSE file for details.
 from framework.lwm2m_test import *
+from framework.lwm2m.coap.transport import Transport
 
 
 class CancellingConfirmableNotifications(test_suite.Lwm2mSingleServerTest,
@@ -60,6 +61,93 @@ class CancellingConfirmableNotifications(test_suite.Lwm2mSingleServerTest,
         self.assertEqual(bytes(notify2.token), bytes(observe2.token))
         self.assertNotEqual(notify1.content, notify2.content)
         self.serv.send(Lwm2mReset.matching(notify2)())
+
+
+class ClientInitiatedNotificationCancellation:
+    class Test(test_suite.Lwm2mDmOperations):
+        def make_cancellation_response(self, notify):
+            return None
+
+        def assertConIfUdp(self, msg):
+            if self.serv.transport == Transport.UDP:
+                self.assertEqual(msg.type, coap.Type.CONFIRMABLE)
+
+        def assertNonIfUdp(self, msg):
+            if self.serv.transport == Transport.UDP:
+                self.assertEqual(msg.type, coap.Type.NON_CONFIRMABLE)
+
+        def setUp(self, *args, **kwargs):
+            super().setUp(*args, **kwargs)
+
+        def runTest(self):
+            observe = self.observe(self.serv, oid=OID.Location, iid=0, rid=RID.Location.Latitude)
+
+            notify = self.serv.recv(timeout_s=2)
+            self.assertIsInstance(notify, Lwm2mNotify)
+            self.assertNonIfUdp(notify)
+            self.assertEqual(bytes(notify.token), bytes(observe.token))
+            self.assertEqual(len(notify.get_options(coap.Option.OBSERVE)), 1)
+
+            # Unregister the Location object, this should make a read on the
+            # resource to fail, which should make the client cancel the
+            # observation on its initiative
+            self.communicate('unregister-object %d' % OID.Location)
+            self.assertDemoUpdatesRegistration(content=ANY)
+
+            notify = self.serv.recv(timeout_s=2)
+            self.assertEqual(notify.code, coap.Code.RES_NOT_FOUND)
+            self.assertConIfUdp(notify)
+            self.assertEqual(bytes(notify.token), bytes(observe.token))
+            self.assertEqual(len(notify.get_options(coap.Option.OBSERVE)), 0)
+
+            res = self.make_cancellation_response(notify)
+            if res is not None:
+                self.serv.send(res)
+
+            # We should not receive any more notifications
+            with self.assertRaises(socket.timeout):
+                self.serv.recv(timeout_s=5)
+
+    class TestWithAck(Test):
+        def make_cancellation_response(self, notify):
+            return Lwm2mEmpty.matching(notify)()
+
+    # Some servers answer such a notification with a RST, not an ACK.
+    class TestWithRst(Test):
+        def make_cancellation_response(self, notify):
+            return Lwm2mReset.matching(notify)()
+
+
+class ClientInitiatedNotificationCancellationUdpAck(ClientInitiatedNotificationCancellation.TestWithAck,
+                                                    test_suite.Lwm2mSingleServerTest):
+    pass
+
+
+class ClientInitiatedNotificationCancellationDtlsAck(ClientInitiatedNotificationCancellation.TestWithAck,
+                                                    test_suite.Lwm2mDtlsSingleServerTest):
+    pass
+
+
+class ClientInitiatedNotificationCancellationUdpRst(ClientInitiatedNotificationCancellation.TestWithRst,
+                                                    test_suite.Lwm2mSingleServerTest):
+    pass
+
+
+class ClientInitiatedNotificationCancellationDtlsRst(ClientInitiatedNotificationCancellation.TestWithRst,
+                                                    test_suite.Lwm2mDtlsSingleServerTest):
+    pass
+
+
+class ClientInitiatedNotificationCancellationTcp(ClientInitiatedNotificationCancellation.Test,
+                                                    test_suite.Lwm2mSingleTcpServerTest):
+    def setUp(self, *args, **kwargs):
+        super().setUp(binding='T', *args, **kwargs)
+
+
+class ClientInitiatedNotificationCancellationTls(ClientInitiatedNotificationCancellation.Test,
+                                                    test_suite.Lwm2mTlsSingleServerTest):
+    def setUp(self, *args, **kwargs):
+        super().setUp(binding='T', *args, **kwargs)
 
 
 class SelfNotifyDisabled(test_suite.Lwm2mSingleServerTest, test_suite.Lwm2mDmOperations):

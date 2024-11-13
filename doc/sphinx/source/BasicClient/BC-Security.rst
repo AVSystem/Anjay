@@ -237,9 +237,9 @@ with the LwM2M Server are performed automatically by Anjay.
 .. note::
 
     For many LwM2M Servers, including the `Coiote IoT Device Management platform
-    <https://www.avsystem.com/products/coiote-iot-device-management-platform/>`_,
-    you will need to change server-side configuration if you previously used
-    NoSec connectivity for the same endpoint name.
+    <https://avsystem.com/coiote-iot-device-management-platform/>`_, you will
+    need to change server-side configuration if you previously used NoSec
+    connectivity for the same endpoint name.
 
     The simplest solution might often be to remove the device entry completely
     and create it from scratch.

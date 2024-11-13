@@ -114,7 +114,6 @@ static int element_begin(senml_out_t *ctx) {
 
     char basename_buf[MAX_PATH_STRING_SIZE];
     char name_buf[MAX_PATH_STRING_SIZE];
-
     char *name = maybe_get_name(ctx, name_buf, sizeof(name_buf));
     char *basename =
             maybe_get_basename(ctx, basename_buf, sizeof(basename_buf));
@@ -225,10 +224,15 @@ static int senml_ret_start_aggregate(anjay_unlocked_output_ctx_t *ctx_) {
     }
 }
 
+static bool uri_path_outside_base(const anjay_uri_path_t *path,
+                                  const anjay_uri_path_t *base) {
+    return _anjay_uri_path_outside_base(path, base);
+}
+
 static int senml_set_path(anjay_unlocked_output_ctx_t *ctx_,
                           const anjay_uri_path_t *uri) {
     senml_out_t *ctx = (senml_out_t *) ctx_;
-    AVS_ASSERT(!_anjay_uri_path_outside_base(uri, &ctx->base_path),
+    AVS_ASSERT(!uri_path_outside_base(uri, &ctx->base_path),
                "Attempted to set path outside the context's base path. "
                "This is a bug in resource reading logic.");
     if (_anjay_uri_path_length(&ctx->path) > 0) {
@@ -263,6 +267,7 @@ static int senml_output_close(anjay_unlocked_output_ctx_t *ctx_) {
     }
     _anjay_update_ret(&result,
                       _anjay_senml_like_encoder_cleanup(&ctx->encoder));
+
     if (_anjay_uri_path_length(&ctx->path) > 0) {
         _anjay_update_ret(&result, ANJAY_OUTCTXERR_ANJAY_RET_NOT_CALLED);
     }
@@ -342,6 +347,10 @@ error:
     avs_free(ctx);
     return NULL;
 }
+
+#    if defined(ANJAY_TEST) && defined(ANJAY_WITH_CBOR)
+#        include "tests/core/io/senml_cbor_out.c"
+#    endif // defined(ANJAY_TEST) && defined(ANJAY_WITH_CBOR)
 
 #endif // defined(ANJAY_WITH_LWM2M_JSON) || defined(ANJAY_WITH_SENML_JSON) ||
        // defined(ANJAY_WITH_CBOR)
