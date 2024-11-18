@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -110,6 +110,15 @@ typedef void anjay_send_finished_handler_t(anjay_t *anjay,
  * 3. Convert the builder into the final, immutable batch by @ref
  * anjay_send_batch_builder_compile function call.
  * 4. Pass the resulting batch to @ref anjay_send .
+ *
+ * IMPORTANT NOTE:
+ * LwM2M SEND API can be also used with LwM2M Gateway End Device objects \ref
+ * lwm2m_gateway.h . In such case, use anjay_lwm2m_gateway_send_batch_add_*
+ * functions to add values from Gateway End Device objects to the batch. In one
+ * batch builder you can mix data from different End Devices and Gateway
+ * objects. Do not use @ref anjay_lwm2m_gateway_deregister_device or @ref
+ * anjay_lwm2m_gateway_register_device when building data batch because the
+ * records in batch may refer to the wrong End Device.
  *
  * Example use (error checking omitted for brevity):
  * @code

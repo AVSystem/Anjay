@@ -4,7 +4,7 @@
 	ignore = untracked
 [submodule "tests/integration/framework/nsh-lwm2m/powercmd"]
 	path = tests/integration/framework/nsh-lwm2m/powercmd
-	url = https://github.com/dextero/powercmd
+	url = https://github.com/dextero/powercmd.git
 [submodule "deps/avs_commons"]
 	path = deps/avs_commons
 	url = https://github.com/AVSystem/avs_commons.git

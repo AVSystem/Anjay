@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -2283,3 +2283,60 @@ AVS_UNIT_TEST(notify, send_error) {
 
     DM_TEST_FINISH;
 }
+
+#ifdef ANJAY_WITH_OBSERVATION_STATUS
+AVS_UNIT_TEST(observe_status, no_observations) {
+    SUCCESS_TEST(14);
+    const anjay_uri_path_t path = MAKE_RESOURCE_PATH(1, 0, 1);
+    anjay_resource_observation_status_t result;
+
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    result = _anjay_observe_status(anjay_unlocked, &path);
+    ANJAY_MUTEX_UNLOCK(anjay);
+
+    AVS_UNIT_ASSERT_FALSE(result.is_observed);
+    AVS_UNIT_ASSERT_EQUAL(result.min_period, 0);
+    AVS_UNIT_ASSERT_EQUAL(result.max_eval_period, ANJAY_ATTRIB_INTEGER_NONE);
+
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(observe_status, observed_path) {
+    static const anjay_dm_r_attributes_t ATTRS = {
+        .common = {
+            .min_period = 10,
+            .max_period = 365 * 24 * 60 * 60 /* a year */,
+            .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
+            .max_eval_period = 360
+        },
+        .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
+        .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
+        .step = ANJAY_ATTRIB_DOUBLE_NONE
+    };
+
+    ////// INITIALIZATION //////
+    DM_TEST_INIT_WITH_SSIDS(14);
+    DM_TEST_REQUEST(mocksocks[0], CON, GET, ID_TOKEN(0x69ED, "Res4"),
+                    OBSERVE(0), PATH("42", "69", "4"));
+    expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_FLOAT(0, 514.0));
+    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
+                            ID_TOKEN(0x69ED, "Res4"), CONTENT_FORMAT(PLAINTEXT),
+                            OBSERVE(0), PAYLOAD("514"));
+    expect_has_buffered_data_check(mocksocks[0], false);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+
+    anjay_sched_run(anjay);
+    assert_observe_consistency(anjay);
+    assert_observe_size(anjay, 1);
+
+    anjay_resource_observation_status_t result;
+    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
+    result = anjay_resource_observation_status(anjay, 42, 69, 4);
+    AVS_UNIT_ASSERT_TRUE(result.is_observed);
+    AVS_UNIT_ASSERT_EQUAL(result.min_period, 10);
+    AVS_UNIT_ASSERT_EQUAL(result.max_eval_period, 360);
+
+    DM_TEST_FINISH;
+}
+#endif // ANJAY_WITH_OBSERVATION_STATUS

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -11,24 +11,49 @@ set -e
 SCRIPT_DIR="$(dirname "$(readlink -f "$BASH_SOURCE")")"
 ANJAY_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 
-if [[ $# -ne 2 || $1 != "--version" ]]; then
+print_help() {
     cat <<EOF >&2
-Builds Docker images for use in CI.
+NAME
+    $(basename "$0") - Builds internal Docker image for use in Gitlab CI.
 
-Intended usage:
+SYNOPSIS
+    $(basename "$0") [-h|--help]
+    $(basename "$0") --version <version>
 
-    # build docker images locally
-    $0 --version <image_version>
-    # push built images to docker.io
-    docker login docker.io
-    docker push avsystemembedded/anjay-travis:IMAGE_TO_PUSH
-    docker logout
+OPTIONS
+    -v, --version <version>
+            - image version.
+    -h, --help
+            - print help message and exit.
 
+USAGE
+    First step is to build docker image locally e.g.:
+      $(basename "$0") --version 0.1
+
+    Second step is to push built image to docker.io
+      docker login docker.io
+      docker push avsystemembedded/anjay-travis:<image_version>
+      docker logout
 EOF
-    exit 1
-fi
+}
 
-IMAGE_VERSION=$2
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -v|--version)                IMAGE_VERSION="$2"; shift ;;
+        -h|--help)
+            print_help
+            exit 0
+            ;;
+        *)
+            echo "unrecognized option: $1; use -h or --help for help"
+            die
+            ;;
+    esac
+
+    shift
+done
+
+ [[ "$IMAGE_VERSION" ]] || (echo "ERROR: Missing image version" && exit 1)
 
 build-docker-image() {
     local NAME="$1"

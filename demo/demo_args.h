@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -51,6 +51,10 @@ typedef struct cmdline_args {
     int32_t msg_cache_size;
     bool confirmable_notifications;
     bool disable_stdin;
+#ifdef ANJAY_WITH_DOWNLOADER
+    size_t coap_downloader_retry_count;
+    avs_time_duration_t coap_downloader_retry_delay;
+#endif // ANJAY_WITH_DOWNLOADER
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
     const char *fw_updated_marker_path;
     avs_net_security_info_t fw_security_info;
@@ -187,6 +191,9 @@ typedef struct cmdline_args {
 #endif // defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
 
     AVS_LIST(anjay_demo_allocated_buffer_t) allocated_buffers;
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+    bool lwm2m_gateway_enabled;
+#endif // ANJAY_WITH_LWM2M_GAYEWAY
 } cmdline_args_t;
 
 int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char **argv);

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -111,15 +111,15 @@ class RequestsUrlChecker(UrlChecker):
 
 class Wget2UrlChecker(UrlChecker):
     def __init__(self, *args, **kwargs):
-        # wget2 is currently the only known script-friendly way of performing HTTP/2 requests
-        # in a way that actually works with real life servers...
         subprocess.run(['wget2', '--version'], stdout=subprocess.DEVNULL, check=True)
         super().__init__(*args, **kwargs)
 
     def perform_request(self, url):
-        result = subprocess.run(['wget2', '-q', '-t', '1', '-U', USER_AGENT, '-T', '10',
-                                 '--prefer-family=IPv4', '-O', '/dev/null', '--stats-site=csv:-',
-                                 '--', url],
+        # Despite the wget2 can handle HTTP/2, there are few servers that use specific implementation
+        # of HTTP/2, which is not handled properly by this tool. That's why the --no-http2 option is used.
+        result = subprocess.run(['wget2', '--no-http2', '--wait=1', '--random-wait', '-q', '-t', '1', '-U',
+                                 USER_AGENT,'-T', '10', '--prefer-family=IPv4', '-O', '/dev/null',
+                                 '--stats-site=csv:-', '--', url],
                                 stdout=subprocess.PIPE, check=True)
         csv_lines = result.stdout.strip().split(b'\n')
         header_line = csv_lines[0].split(b',')
@@ -165,8 +165,7 @@ def report(path):
             for item in details:
                 print('\t%s:%s' % item)
         if not isinstance(checker, Wget2UrlChecker):
-            logging.warning("You may try installing 'wget2' to enable alternate URL checking logic "
-                            + "that supports HTTP/2 which may be required for some sites.")
+            logging.warning("You may try installing 'wget2' to enable alternate URL checking logic.")
         sys.exit(-1)
     else:
         logging.info('All urls are valid.')

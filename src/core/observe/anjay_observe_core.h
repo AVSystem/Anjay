@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -90,10 +90,7 @@ int _anjay_observe_notify(anjay_unlocked_t *anjay,
 
 #    ifdef ANJAY_WITH_OBSERVATION_STATUS
 anjay_resource_observation_status_t
-_anjay_observe_status(anjay_unlocked_t *anjay,
-                      anjay_oid_t oid,
-                      anjay_iid_t iid,
-                      anjay_rid_t rid);
+_anjay_observe_status(anjay_unlocked_t *anjay, const anjay_uri_path_t *path);
 #    endif // ANJAY_WITH_OBSERVATION_STATUS
 
 #else // ANJAY_WITH_OBSERVE

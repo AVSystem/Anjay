@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -22,6 +22,9 @@
 #include <avsystem/commons/avs_utils.h>
 
 #include <anjay_modules/anjay_notify.h>
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+#    include <anjay_modules/anjay_lwm2m_gateway.h>
+#endif // ANJAY_WITH_LWM2M_GATEWAY
 
 #include <avsystem/coap/code.h>
 
@@ -148,6 +151,10 @@ int _anjay_register_object_unlocked(
         return -1;
     }
 
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+    (*elem_ptr_move)->prefix = NULL;
+#endif // ANJAY_WITH_LWM2M_GATEWAY
+
     dm_log(INFO, _("successfully registered object ") "/%u",
            _anjay_dm_installed_object_oid(*elem_ptr_move));
     if (_anjay_notify_instances_changed_unlocked(
@@ -248,19 +255,23 @@ void _anjay_unregister_object_handle_transaction_state(
 void _anjay_unregister_object_handle_notify_queue(
         anjay_unlocked_t *anjay, const anjay_dm_installed_object_t *def_ptr) {
     anjay_notify_queue_t notify = NULL;
-    if (_anjay_notify_queue_instance_set_unknown_change(
-                &notify, _anjay_dm_installed_object_oid(def_ptr))
+    anjay_oid_t oid = _anjay_dm_installed_object_oid(def_ptr);
+    anjay_uri_path_t path = MAKE_OBJECT_PATH(oid);
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+    if (def_ptr->prefix != NULL) {
+        strcpy(path.prefix, def_ptr->prefix);
+    }
+#endif // ANJAY_WITH_LWM2M_GATEWAY
+    if (_anjay_notify_queue_instance_set_unknown_change(&notify, &path)
             || _anjay_notify_flush(anjay, ANJAY_SSID_BOOTSTRAP, &notify)) {
         dm_log(WARNING,
                _("could not perform notifications about removed object ") "%" PRIu16,
-               _anjay_dm_installed_object_oid(def_ptr));
+               oid);
     }
 
-    remove_oid_from_notify_queue(&anjay->scheduled_notify.queue,
-                                 _anjay_dm_installed_object_oid(def_ptr));
+    remove_oid_from_notify_queue(&anjay->scheduled_notify.queue, oid);
 #ifdef ANJAY_WITH_BOOTSTRAP
-    remove_oid_from_notify_queue(&anjay->bootstrap.notification_queue,
-                                 _anjay_dm_installed_object_oid(def_ptr));
+    remove_oid_from_notify_queue(&anjay->bootstrap.notification_queue, oid);
 #endif // ANJAY_WITH_BOOTSTRAP
 }
 
@@ -410,13 +421,23 @@ void _anjay_uri_path_update_common_prefix(const anjay_uri_path_t **prefix_ptr,
         assert(*prefix_ptr == prefix_buf);
         size_t index = 0;
         anjay_uri_path_t new_prefix = MAKE_ROOT_PATH();
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+        if (strcmp(prefix_buf->prefix, path->prefix)) {
+            *prefix_buf = new_prefix;
+            return;
+        }
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
         while (index < AVS_ARRAY_SIZE(prefix_buf->ids)
                && prefix_buf->ids[index] != ANJAY_ID_INVALID
                && prefix_buf->ids[index] == path->ids[index]) {
             new_prefix.ids[index] = prefix_buf->ids[index];
             index++;
         }
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+        memcpy(prefix_buf->ids, new_prefix.ids, sizeof(new_prefix.ids));
+#    else
         *prefix_buf = new_prefix;
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
     }
 }
 #endif // ANJAY_WITH_LWM2M11
@@ -429,13 +450,22 @@ const char *_anjay_debug_make_path__(char *buffer,
     char *ptr = buffer;
     char *buffer_end = buffer + buffer_size;
     size_t length = _anjay_uri_path_length(uri);
-    if (!length) {
-        result = avs_simple_snprintf(buffer, buffer_size, "/");
-    } else {
-        for (size_t i = 0; result >= 0 && i < length; ++i) {
-            result = avs_simple_snprintf(ptr, (size_t) (buffer_end - ptr),
-                                         "/%u", (unsigned) uri->ids[i]);
-            ptr += result;
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+    if (_anjay_uri_path_has_prefix(uri)) {
+        result = avs_simple_snprintf(buffer, buffer_size, "/%s", uri->prefix);
+        ptr += result;
+    }
+    if (result >= 0)
+#endif // ANJAY_WITH_LWM2M_GATEWAY
+    {
+        if (!length) {
+            result = avs_simple_snprintf(ptr, (size_t) (buffer_end - ptr), "/");
+        } else {
+            for (size_t i = 0; result >= 0 && i < length; ++i) {
+                result = avs_simple_snprintf(ptr, (size_t) (buffer_end - ptr),
+                                             "/%u", (unsigned) uri->ids[i]);
+                ptr += result;
+            }
         }
     }
     if (result < 0) {
@@ -645,9 +675,8 @@ static int dm_delete_object_instance(anjay_unlocked_t *anjay,
     anjay_notify_queue_t notify_queue = NULL;
     (void) ((retval = _anjay_dm_call_instance_remove(
                      anjay, obj, request->uri.ids[ANJAY_ID_IID]))
-            || (retval = _anjay_notify_queue_instance_removed(
-                        &notify_queue, request->uri.ids[ANJAY_ID_OID],
-                        request->uri.ids[ANJAY_ID_IID]))
+            || (retval = _anjay_notify_queue_instance_removed(&notify_queue,
+                                                              &request->uri))
             || (retval = _anjay_notify_flush(anjay, ssid, &notify_queue)));
     return retval;
 }
@@ -751,12 +780,25 @@ int _anjay_dm_perform_action(anjay_connection_ref_t connection,
 
     if (_anjay_uri_path_has(&request->uri, ANJAY_ID_OID)) {
         const anjay_dm_t *dm;
-        { dm = &_anjay_from_server(connection.server)->dm; }
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+        if (strlen(request->uri.prefix) != 0) {
+            if (_anjay_lwm2m_gateway_prefix_to_dm(_anjay_from_server(
+                                                          connection.server),
+                                                  request->uri.prefix, &dm)) {
+                dm_log(ERROR, _("No End Device with specified prefix found"));
+                return ANJAY_ERR_NOT_FOUND;
+            }
+        } else
+#endif // ANJAY_WITH_LWM2M_GATEWAY
+        {
+            dm = &_anjay_from_server(connection.server)->dm;
+        }
 
         if (!(obj = _anjay_dm_find_object_by_oid(
                       dm, request->uri.ids[ANJAY_ID_OID]))) {
-            dm_log(DEBUG, _("Object not found: ") "%u",
-                   request->uri.ids[ANJAY_ID_OID]);
+            dm_log(DEBUG, _("Object not found: ") DM_LOG_PREFIX "/%u",
+                   DM_LOG_PREFIX_ARG(request->uri.prefix)
+                           request->uri.ids[ANJAY_ID_OID]);
             return ANJAY_ERR_NOT_FOUND;
         }
     } else
@@ -819,14 +861,17 @@ int _anjay_dm_foreach_object(anjay_unlocked_t *anjay,
     AVS_LIST_FOREACH(obj, dm->objects) {
         int result = handler(anjay, obj, data);
         if (result == ANJAY_FOREACH_BREAK) {
-            dm_log(TRACE, _("foreach_object: break on ") "/%u",
-                   _anjay_dm_installed_object_oid(obj));
+            dm_log(TRACE, _("foreach_object: break on ") DM_LOG_PREFIX "/%u",
+                   DM_LOG_PREFIX_OBJ_ARG(obj)
+                           _anjay_dm_installed_object_oid(obj));
             return 0;
         } else if (result) {
             dm_log(DEBUG,
-                   _("foreach_object_handler failed for ") "/%u" _(" (") "%d" _(
-                           ")"),
-                   _anjay_dm_installed_object_oid(obj), result);
+                   _("foreach_object_handler failed for ") DM_LOG_PREFIX
+                   "/%u" _(" (") "%d" _(")"),
+                   DM_LOG_PREFIX_OBJ_ARG(obj)
+                           _anjay_dm_installed_object_oid(obj),
+                   result);
             return result;
         }
     }
@@ -867,13 +912,18 @@ static void foreach_instance_emit(anjay_unlocked_dm_list_ctx_t *ctx_,
         ctx->result =
                 ctx->handler(ctx->anjay, ctx->obj, iid, ctx->handler_data);
         if (ctx->result == ANJAY_FOREACH_BREAK) {
-            dm_log(TRACE, _("foreach_instance: break on ") "/%u/%u",
-                   _anjay_dm_installed_object_oid(ctx->obj), iid);
+            dm_log(TRACE,
+                   _("foreach_instance: break on ") DM_LOG_PREFIX "/%u/%u",
+                   DM_LOG_PREFIX_OBJ_ARG(ctx->obj)
+                           _anjay_dm_installed_object_oid(ctx->obj),
+                   iid);
         } else if (ctx->result) {
             dm_log(DEBUG,
-                   _("foreach_instance_handler failed for ") "/%u/%u" _(
-                           " (") "%d" _(")"),
-                   _anjay_dm_installed_object_oid(ctx->obj), iid, ctx->result);
+                   _("foreach_instance_handler failed for ") DM_LOG_PREFIX
+                   "/%u/%u" _(" (") "%d" _(")"),
+                   DM_LOG_PREFIX_OBJ_ARG(ctx->obj)
+                           _anjay_dm_installed_object_oid(ctx->obj),
+                   iid, ctx->result);
         }
     }
 }
@@ -903,9 +953,10 @@ int _anjay_dm_foreach_instance(anjay_unlocked_t *anjay,
             anjay, obj, (anjay_unlocked_dm_list_ctx_t *) &ctx);
     if (result < 0) {
         dm_log(WARNING,
-               _("list_instances handler for ") "/%u" _(" failed (") "%d" _(
-                       ")"),
-               _anjay_dm_installed_object_oid(obj), result);
+               _("list_instances handler for ") DM_LOG_PREFIX
+               "/%u" _(" failed (") "%d" _(")"),
+               DM_LOG_PREFIX_OBJ_ARG(obj) _anjay_dm_installed_object_oid(obj),
+               result);
         return result;
     }
     return ctx.result == ANJAY_FOREACH_BREAK ? 0 : ctx.result;
@@ -1028,14 +1079,18 @@ void _anjay_dm_emit_res_unlocked(anjay_unlocked_dm_resource_list_ctx_t *ctx,
         ctx->result = ctx->handler(ctx->anjay, ctx->obj, ctx->iid, rid, kind,
                                    presence, ctx->handler_data);
         if (ctx->result == ANJAY_FOREACH_BREAK) {
-            dm_log(TRACE, _("foreach_resource: break on ") "/%u/%u/%u",
-                   _anjay_dm_installed_object_oid(ctx->obj), ctx->iid, rid);
+            dm_log(TRACE,
+                   _("foreach_resource: break on ") DM_LOG_PREFIX "/%u/%u/%u",
+                   DM_LOG_PREFIX_OBJ_ARG(ctx->obj)
+                           _anjay_dm_installed_object_oid(ctx->obj),
+                   ctx->iid, rid);
         } else if (ctx->result) {
             dm_log(DEBUG,
-                   _("foreach_resource_handler failed for ") "/%u/%u/%u" _(
-                           " (") "%d" _(")"),
-                   _anjay_dm_installed_object_oid(ctx->obj), ctx->iid, rid,
-                   ctx->result);
+                   _("foreach_resource_handler failed for ") DM_LOG_PREFIX
+                   "/%u/%u/%u" _(" (") "%d" _(")"),
+                   DM_LOG_PREFIX_OBJ_ARG(ctx->obj)
+                           _anjay_dm_installed_object_oid(ctx->obj),
+                   ctx->iid, rid, ctx->result);
         }
     }
 }
@@ -1079,9 +1134,10 @@ int _anjay_dm_foreach_resource(anjay_unlocked_t *anjay,
     int result = _anjay_dm_call_list_resources(anjay, obj, iid, &ctx);
     if (result < 0) {
         dm_log(ERROR,
-               _("list_resources handler for ") "/%u/%u" _(" failed (") "%d" _(
-                       ")"),
-               _anjay_dm_installed_object_oid(obj), iid, result);
+               _("list_resources handler for ") DM_LOG_PREFIX
+               "/%u/%u" _(" failed (") "%d" _(")"),
+               DM_LOG_PREFIX_OBJ_ARG(obj) _anjay_dm_installed_object_oid(obj),
+               iid, result);
         return result;
     }
     return ctx.result == ANJAY_FOREACH_BREAK ? 0 : ctx.result;
@@ -1238,15 +1294,18 @@ static void foreach_resource_instance_emit(anjay_unlocked_dm_list_ctx_t *ctx_,
                                    riid, ctx->handler_data);
         if (ctx->result == ANJAY_FOREACH_BREAK) {
             dm_log(TRACE,
-                   _("foreach_resource_instance: break on ") "/%u/%u/%u/%u",
-                   _anjay_dm_installed_object_oid(ctx->obj), ctx->iid, ctx->rid,
-                   riid);
+                   _("foreach_resource_instance: break on ") DM_LOG_PREFIX
+                   "/%u/%u/%u/%u",
+                   DM_LOG_PREFIX_OBJ_ARG(ctx->obj)
+                           _anjay_dm_installed_object_oid(ctx->obj),
+                   ctx->iid, ctx->rid, riid);
         } else if (ctx->result) {
             dm_log(DEBUG,
-                   _("foreach_resource_handler failed for ") "/%u/%u/%u/%u" _(
-                           " (") "%d" _(")"),
-                   _anjay_dm_installed_object_oid(ctx->obj), ctx->iid, ctx->rid,
-                   riid, ctx->result);
+                   _("foreach_resource_handler failed for ") DM_LOG_PREFIX
+                   "/%u/%u/%u/%u" _(" (") "%d" _(")"),
+                   DM_LOG_PREFIX_OBJ_ARG(ctx->obj)
+                           _anjay_dm_installed_object_oid(ctx->obj),
+                   ctx->iid, ctx->rid, riid, ctx->result);
         }
     }
 }
@@ -1281,9 +1340,10 @@ int _anjay_dm_foreach_resource_instance(
             anjay, obj, iid, rid, (anjay_unlocked_dm_list_ctx_t *) &ctx);
     if (result < 0) {
         dm_log(ERROR,
-               _("list_resource_instances handler for ") "/%u/%u/%u" _(
-                       " failed (") "%d" _(")"),
-               _anjay_dm_installed_object_oid(obj), iid, rid, result);
+               _("list_resource_instances handler for ") DM_LOG_PREFIX
+               "/%u/%u/%u" _(" failed (") "%d" _(")"),
+               DM_LOG_PREFIX_OBJ_ARG(obj) _anjay_dm_installed_object_oid(obj),
+               iid, rid, result);
         return result;
     }
     return ctx.result == ANJAY_FOREACH_BREAK ? 0 : ctx.result;

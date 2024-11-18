@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -14,8 +14,11 @@ rm -rf avs_commons/install
 rm -rf deps/avs_commons/CMakeFiles
 rm -f deps/avs_commons/CMakeCache.txt
 
+ANJAY_VERSION="unknown"
+
 if [[ -d '.git' ]]; then
     echo "Updating submodules" && git submodule update --init --recursive || exit 1
+    ANJAY_VERSION = $(git rev-parse --short HEAD)
 fi
 
 C_FLAGS='-g -std=c99 -Werror=implicit-function-declaration'
@@ -25,7 +28,6 @@ EXTRA_FLAGS=()
 
 MODULE_DYNAMIC_LIBS='ON'
 MODULE_STATIC_LIBS='ON'
-ANJAY_VERSION=$(git rev-parse --short HEAD)
 DTLS_BACKEND="mbedtls"
 WITH_STATIC_ANALYSIS='ON'
 WITH_EXAMPLES='ON'
@@ -36,10 +38,6 @@ if valgrind --version >/dev/null 2>/dev/null; then
 else
     WITH_VALGRIND=OFF
     WITH_ASAN=ON
-fi
-
-if [[ "$ANJAY_VERSION" == "" ]]; then
-    ANJAY_VERSION="unknown"
 fi
 
 if ! which afl-gcc &>/dev/null; then

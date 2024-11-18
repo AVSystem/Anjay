@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -776,12 +776,16 @@ int _anjay_batch_data_output_entry(
     }
     while (it
            && !_anjay_instance_action_allowed(
-                      anjay, &(const anjay_action_info_t) {
-                                 .oid = it->path.ids[ANJAY_ID_OID],
-                                 .iid = it->path.ids[ANJAY_ID_IID],
-                                 .ssid = target_ssid,
-                                 .action = ANJAY_ACTION_READ
-                             })) {
+                      anjay,
+                      &(const anjay_action_info_t) {
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+                          .end_device = _anjay_uri_path_has_prefix(&it->path),
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
+                          .oid = it->path.ids[ANJAY_ID_OID],
+                          .iid = it->path.ids[ANJAY_ID_IID],
+                          .ssid = target_ssid,
+                          .action = ANJAY_ACTION_READ
+                      })) {
         AVS_LIST_ADVANCE((AVS_LIST(anjay_batch_entry_t) *) (intptr_t) &it);
     }
     int result = 0;
@@ -866,12 +870,17 @@ int _anjay_batch_outputable_item_count(anjay_unlocked_t *anjay,
         AVS_LIST_FOREACH(it, batch->list) {
             anjay_instance_action_allowed_stateless_result_t result =
                     _anjay_instance_action_allowed_stateless(
-                            anjay, &(const anjay_action_info_t) {
-                                       .oid = it->path.ids[ANJAY_ID_OID],
-                                       .iid = it->path.ids[ANJAY_ID_IID],
-                                       .ssid = target_ssid,
-                                       .action = ANJAY_ACTION_READ
-                                   });
+                            anjay,
+                            &(const anjay_action_info_t) {
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+                                .end_device =
+                                        _anjay_uri_path_has_prefix(&it->path),
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
+                                .oid = it->path.ids[ANJAY_ID_OID],
+                                .iid = it->path.ids[ANJAY_ID_IID],
+                                .ssid = target_ssid,
+                                .action = ANJAY_ACTION_READ
+                            });
 #    ifdef ANJAY_WITH_ACCESS_CONTROL
             if (result == ANJAY_INSTANCE_ACTION_NEEDS_ACL_CHECK) {
                 return -1;

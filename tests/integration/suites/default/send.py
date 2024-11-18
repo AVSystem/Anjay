@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -295,14 +295,8 @@ class QueueModeSend(retransmissions.RetransmissionTest.TestMixin, Send.Test):
     PSK_KEY = b'test-key'
 
     def setUp(self):
-        import subprocess
-        import unittest
-        output = subprocess.run([self._get_demo_executable(), '-e', 'dummy', '-u', 'invalid'],
-                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout.decode(
-            'utf-8')
-
-        if 'ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE = ON' in output:
-            raise unittest.SkipTest('Queue mode autoclose disabled')
+        self.skipIfFeatureStatus('ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE = ON',
+                                 'Queue mode autoclose disabled')
 
         super().setUp(psk_identity=self.PSK_IDENTITY, psk_key=self.PSK_KEY,
                       extra_cmdline_args=['--binding=UQ'], auto_register=False)

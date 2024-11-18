@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -224,6 +224,7 @@ static int with_instance_on_demand(anjay_unlocked_t *anjay,
                                    with_instance_on_demand_cb_t callback) {
     int result = 0;
     int ipresent = _anjay_dm_instance_present(anjay, obj, iid);
+    anjay_oid_t oid = _anjay_dm_installed_object_oid(obj);
     if (ipresent < 0) {
         return ipresent;
     } else if (ipresent == 0
@@ -231,7 +232,7 @@ static int with_instance_on_demand(anjay_unlocked_t *anjay,
         anjay_log(DEBUG,
                   _("Instance Create handler for object ") "%" PRIu16 _(
                           " failed"),
-                  _anjay_dm_installed_object_oid(obj));
+                  oid);
         return result;
     }
 
@@ -241,7 +242,7 @@ static int with_instance_on_demand(anjay_unlocked_t *anjay,
     if (ipresent == 0 && !result) {
         result = _anjay_notify_queue_instance_created(
                 &anjay->bootstrap.notification_queue,
-                _anjay_dm_installed_object_oid(obj), iid);
+                &MAKE_INSTANCE_PATH(oid, iid));
     }
     return result;
 }
@@ -447,10 +448,7 @@ int _anjay_bootstrap_write_composite(anjay_unlocked_t *anjay,
         }
 
         if ((retval = _anjay_notify_queue_resource_change(
-                     &anjay->bootstrap.notification_queue,
-                     path.ids[ANJAY_ID_OID],
-                     path.ids[ANJAY_ID_IID],
-                     path.ids[ANJAY_ID_RID]))) {
+                     &anjay->bootstrap.notification_queue, &path))) {
             return retval;
         }
 
@@ -474,17 +472,17 @@ int _anjay_bootstrap_write_composite(anjay_unlocked_t *anjay,
 static int delete_instance(anjay_unlocked_t *anjay,
                            const anjay_dm_installed_object_t *obj,
                            anjay_iid_t iid) {
+    anjay_oid_t oid = _anjay_dm_installed_object_oid(obj);
     int retval = _anjay_dm_call_instance_remove(anjay, obj, iid);
     if (retval) {
         anjay_log(WARNING,
                   _("delete_instance: cannot delete ") "/%d/%d" _(": ") "%d",
-                  _anjay_dm_installed_object_oid(obj), iid, retval);
+                  oid, iid, retval);
     } else {
-        bootstrap_remove_notify_changed(
-                &anjay->bootstrap, _anjay_dm_installed_object_oid(obj), iid);
+        bootstrap_remove_notify_changed(&anjay->bootstrap, oid, iid);
         retval = _anjay_notify_queue_instance_removed(
                 &anjay->bootstrap.notification_queue,
-                _anjay_dm_installed_object_oid(obj), iid);
+                &MAKE_INSTANCE_PATH(oid, iid));
     }
     return retval;
 }
@@ -638,8 +636,9 @@ static void purge_bootstrap(avs_sched_t *sched, const void *dummy) {
         (void) (retval
                 || (retval = _anjay_dm_call_instance_remove(anjay, obj, iid))
                 || (retval = _anjay_notify_queue_instance_removed(
-                            &notification, _anjay_dm_installed_object_oid(obj),
-                            iid))
+                            &notification,
+                            &MAKE_INSTANCE_PATH(
+                                    _anjay_dm_installed_object_oid(obj), iid)))
                 || (retval = _anjay_notify_flush(anjay, ANJAY_SSID_BOOTSTRAP,
                                                  &notification)));
         retval = _anjay_dm_transaction_finish(anjay, retval);
@@ -1042,6 +1041,14 @@ int _anjay_bootstrap_perform_action(anjay_connection_ref_t bootstrap_connection,
         .msg_code = make_success_response_code(request->action),
         .format = AVS_COAP_FORMAT_NONE
     };
+
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+    if (_anjay_uri_path_has_prefix(&request->uri)) {
+        anjay_log(DEBUG, _("Bootstrap Interface can't operate on LwM2M Gateway "
+                           "End Devices"));
+        return ANJAY_ERR_METHOD_NOT_ALLOWED;
+    }
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
 
     if (!_anjay_coap_setup_response_stream(request->ctx, &msg_details)) {
         return -1;

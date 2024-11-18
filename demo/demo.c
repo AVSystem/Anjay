@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -62,6 +62,10 @@
 #ifdef ANJAY_WITH_MODULE_FACTORY_PROVISIONING
 #    include <anjay/factory_provisioning.h>
 #endif // ANJAY_WITH_MODULE_FACTORY_PROVISIONING
+
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+#    include "lwm2m_gateway.h"
+#endif // ANJAY_WITH_LWM2M_GATEWAY
 
 static int security_object_reload(anjay_demo_t *demo) {
 #ifdef WITH_DEMO_USE_STANDALONE_OBJECTS
@@ -279,6 +283,9 @@ static void demo_delete(anjay_demo_t *demo) {
         }
     }
 
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+    lwm2m_gateway_cleanup(demo->anjay);
+#endif // ANJAY_WITH_LWM2M_GATEWAY
     if (demo->anjay) {
         anjay_delete(demo->anjay);
     }
@@ -576,6 +583,11 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         .server_connection_status_cb = server_connection_status_change_callback,
         .server_connection_status_cb_arg = demo,
 #endif // ANJAY_WITH_CONN_STATUS_API
+#ifdef ANJAY_WITH_DOWNLOADER
+        .coap_downloader_retry_count =
+                cmdline_args->coap_downloader_retry_count,
+        .coap_downloader_retry_delay = cmdline_args->coap_downloader_retry_delay
+#endif // ANJAY_WITH_DOWNLOADER
     };
 
 #ifdef ANJAY_WITH_LWM2M11
@@ -702,6 +714,13 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
                                       NULL, event_log_object_release)) {
         return -1;
     }
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+    if (cmdline_args->lwm2m_gateway_enabled) {
+        if (lwm2m_gateway_setup(demo->anjay)) {
+            return -1;
+        }
+    }
+#endif // ANJAY_WITH_LWM2M_GATEWAY
 
     if (cmdline_args->location_csv
             && location_open_csv(demo_find_object(demo, DEMO_OID_LOCATION),

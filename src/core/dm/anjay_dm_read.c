@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -12,6 +12,10 @@
 #include <avsystem/coap/code.h>
 
 #include <avsystem/commons/avs_stream_membuf.h>
+
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+#    include <anjay_modules/anjay_lwm2m_gateway.h>
+#endif // ANJAY_WITH_LWM2M_GATEWAY
 
 #include "anjay_dm_read.h"
 
@@ -32,6 +36,11 @@ read_resource_instance_internal(anjay_unlocked_t *anjay,
     anjay_uri_path_t path =
             MAKE_RESOURCE_INSTANCE_PATH(_anjay_dm_installed_object_oid(obj),
                                         iid, rid, riid);
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+    if (obj->prefix) {
+        strcpy(path.prefix, obj->prefix);
+    }
+#endif // ANJAY_WITH_LWM2M_GATEWAY
     (void) ((result = _anjay_output_set_path(out_ctx, &path))
             || (result = _anjay_dm_call_resource_read(anjay, obj, iid, rid,
                                                       riid, out_ctx)));
@@ -77,9 +86,10 @@ static int read_resource_instance_clb(anjay_unlocked_t *anjay,
          || result == ANJAY_ERR_NOT_FOUND)
             && !(result = _anjay_output_clear_path(out_ctx))) {
         dm_log(DEBUG,
-               "%s" _(" when attempted to read ") "/%u/%u/%u/%u" _(
-                       ", skipping"),
-               AVS_COAP_CODE_STRING((uint8_t) -result),
+               "%s" _(" when attempted to read ") DM_LOG_PREFIX
+               "/%u/%u/%u/%u" _(", skipping"),
+               DM_LOG_PREFIX_OBJ_ARG(obj)
+                       AVS_COAP_CODE_STRING((uint8_t) -result),
                _anjay_dm_installed_object_oid(obj), iid, rid, riid);
     }
     return result;
@@ -93,6 +103,11 @@ static int read_multiple_resource(anjay_unlocked_t *anjay,
     int result;
     anjay_uri_path_t path =
             MAKE_RESOURCE_PATH(_anjay_dm_installed_object_oid(obj), iid, rid);
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+    if (obj->prefix) {
+        strcpy(path.prefix, obj->prefix);
+    }
+#endif // ANJAY_WITH_LWM2M_GATEWAY
     (void) ((result = _anjay_output_set_path(out_ctx, &path))
             || (result = _anjay_output_start_aggregate(out_ctx))
             || (result = _anjay_dm_foreach_resource_instance(
@@ -114,6 +129,11 @@ static int read_resource_internal(anjay_unlocked_t *anjay,
         anjay_uri_path_t path =
                 MAKE_RESOURCE_PATH(_anjay_dm_installed_object_oid(obj), iid,
                                    rid);
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+        if (obj->prefix) {
+            strcpy(path.prefix, obj->prefix);
+        }
+#endif // ANJAY_WITH_LWM2M_GATEWAY
         (void) ((result = _anjay_output_set_path(out_ctx, &path))
                 || (result = _anjay_dm_call_resource_read(
                             anjay, obj, iid, rid, ANJAY_ID_INVALID, out_ctx)));
@@ -128,8 +148,9 @@ static int read_resource(anjay_unlocked_t *anjay,
                          anjay_dm_resource_kind_t kind,
                          anjay_unlocked_output_ctx_t *out_ctx) {
     if (!_anjay_dm_res_kind_readable(kind)) {
-        dm_log(DEBUG, "/%u/%u/%u" _(" is not readable"),
-               _anjay_dm_installed_object_oid(obj), iid, rid);
+        dm_log(DEBUG, DM_LOG_PREFIX "/%u/%u/%u" _(" is not readable"),
+               DM_LOG_PREFIX_OBJ_ARG(obj) _anjay_dm_installed_object_oid(obj),
+               iid, rid);
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
     return read_resource_internal(anjay, obj, iid, rid, kind, out_ctx);
@@ -150,8 +171,9 @@ static int read_instance_resource_clb(anjay_unlocked_t *anjay,
     read_instance_resource_clb_args_t *args =
             (read_instance_resource_clb_args_t *) args_;
     if (presence == ANJAY_DM_RES_ABSENT) {
-        dm_log(DEBUG, "/%u/%u/%u" _(" is not present, skipping"),
-               _anjay_dm_installed_object_oid(obj), iid, rid);
+        dm_log(DEBUG, DM_LOG_PREFIX "/%u/%u/%u" _(" is not present, skipping"),
+               DM_LOG_PREFIX_OBJ_ARG(obj) _anjay_dm_installed_object_oid(obj),
+               iid, rid);
         return 0;
     }
     bool read_allowed = _anjay_dm_res_kind_readable(kind);
@@ -160,8 +182,9 @@ static int read_instance_resource_clb(anjay_unlocked_t *anjay,
                        || _anjay_dm_res_kind_writable(kind);
     }
     if (!read_allowed) {
-        dm_log(DEBUG, "/%u/%u/%u" _(" is not readable, skipping"),
-               _anjay_dm_installed_object_oid(obj), iid, rid);
+        dm_log(DEBUG, DM_LOG_PREFIX "/%u/%u/%u" _(" is not readable, skipping"),
+               DM_LOG_PREFIX_OBJ_ARG(obj) _anjay_dm_installed_object_oid(obj),
+               iid, rid);
         return 0;
     }
 
@@ -171,9 +194,11 @@ static int read_instance_resource_clb(anjay_unlocked_t *anjay,
          || result == ANJAY_ERR_NOT_FOUND)
             && !(result = _anjay_output_clear_path(args->out_ctx))) {
         dm_log(DEBUG,
-               "%s" _(" when attempted to read ") "/%u/%u/%u" _(", skipping"),
+               "%s" _(" when attempted to read ") DM_LOG_PREFIX
+               "/%u/%u/%u" _(", skipping"),
                AVS_COAP_CODE_STRING((uint8_t) -result),
-               _anjay_dm_installed_object_oid(obj), iid, rid);
+               DM_LOG_PREFIX_OBJ_ARG(obj) _anjay_dm_installed_object_oid(obj),
+               iid, rid);
     }
     return result;
 }
@@ -186,6 +211,11 @@ static int read_instance(anjay_unlocked_t *anjay,
     int result;
     anjay_uri_path_t path =
             MAKE_INSTANCE_PATH(_anjay_dm_installed_object_oid(obj), iid);
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+    if (obj->prefix) {
+        strcpy(path.prefix, obj->prefix);
+    }
+#endif // ANJAY_WITH_LWM2M_GATEWAY
     (void) ((result = _anjay_output_set_path(out_ctx, &path))
             || (result = _anjay_output_start_aggregate(out_ctx))
             || (result = _anjay_dm_foreach_resource(
@@ -209,6 +239,9 @@ static int read_instance_clb(anjay_unlocked_t *anjay,
                              void *args_) {
     read_instance_clb_args_t *args = (read_instance_clb_args_t *) args_;
     anjay_action_info_t info = {
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+        .end_device = _anjay_uri_path_has_prefix(&args->uri),
+#endif // ANJAY_WITH_LWM2M_GATEWAY
         .oid = args->uri.ids[ANJAY_ID_OID],
         .iid = iid,
         .ssid = args->requesting_ssid,
@@ -271,6 +304,9 @@ int _anjay_dm_read(anjay_unlocked_t *anjay,
     }
     if (_anjay_uri_path_has(&path_info->uri, ANJAY_ID_IID)) {
         const anjay_action_info_t action_info = {
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+            .end_device = _anjay_uri_path_has_prefix(&path_info->uri),
+#endif // ANJAY_WITH_LWM2M_GATEWAY
             .iid = path_info->uri.ids[ANJAY_ID_IID],
             .oid = path_info->uri.ids[ANJAY_ID_OID],
             .ssid = requesting_ssid,
@@ -395,8 +431,19 @@ int _anjay_dm_read_resource_into_ctx(anjay_unlocked_t *anjay,
                                      const anjay_uri_path_t *path,
                                      anjay_unlocked_output_ctx_t *ctx) {
     assert(_anjay_uri_path_leaf_is(path, ANJAY_ID_RID));
+    const anjay_dm_t *dm;
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+    if (_anjay_uri_path_has_prefix(path)) {
+        if (_anjay_lwm2m_gateway_prefix_to_dm(anjay, path->prefix, &dm)) {
+            return -1;
+        }
+    } else
+#endif // ANJAY_WITH_LWM2M_GATEWAY
+    {
+        dm = &anjay->dm;
+    }
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(&anjay->dm, path->ids[ANJAY_ID_OID]);
+            _anjay_dm_find_object_by_oid(dm, path->ids[ANJAY_ID_OID]);
     if (!obj) {
         dm_log(ERROR, _("unregistered Object ID: ") "%u",
                path->ids[ANJAY_ID_OID]);
@@ -469,9 +516,19 @@ int _anjay_dm_read_resource_u32_array(anjay_unlocked_t *anjay,
     assert(_anjay_uri_path_leaf_is(path, ANJAY_ID_RID));
     assert(out_array);
     assert(out_array_size_elements);
-
+    const anjay_dm_t *dm;
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+    if (_anjay_uri_path_has_prefix(path)) {
+        if (_anjay_lwm2m_gateway_prefix_to_dm(anjay, path->prefix, &dm)) {
+            return -1;
+        }
+    } else
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
+    {
+        dm = &anjay->dm;
+    }
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(&anjay->dm, path->ids[ANJAY_ID_OID]);
+            _anjay_dm_find_object_by_oid(dm, path->ids[ANJAY_ID_OID]);
     if (!obj) {
         return -1;
     }
@@ -610,6 +667,15 @@ int _anjay_dm_read_or_observe_composite(anjay_connection_ref_t connection,
             dm_log(DEBUG, _("Read Composite ") "%s",
                    ANJAY_DEBUG_MAKE_PATH(&path));
 
+#        ifdef ANJAY_WITH_LWM2M_GATEWAY
+            if (_anjay_uri_path_has_prefix(&path)) {
+                dm_log(ERROR,
+                       _("Read Composite on End Devices DMs is not supported"));
+                result = ANJAY_ERR_METHOD_NOT_ALLOWED;
+                break;
+            }
+#        endif // ANJAY_WITH_LWM2M_GATEWAY
+
             const anjay_dm_installed_object_t *obj = NULL;
             if (_anjay_uri_path_has(&path, ANJAY_ID_OID)) {
                 obj = _anjay_dm_find_object_by_oid(&anjay->dm,
@@ -617,8 +683,10 @@ int _anjay_dm_read_or_observe_composite(anjay_connection_ref_t connection,
 
                 if (!obj) {
                     dm_log(DEBUG,
-                           _("Object not found: ") "%u" _(", ignoring it"),
-                           path.ids[ANJAY_ID_OID]);
+                           _("Object not found: ") DM_LOG_PREFIX
+                           "/%u" _(", ignoring it"),
+                           DM_LOG_PREFIX_ARG(path.prefix)
+                                   path.ids[ANJAY_ID_OID]);
                     continue;
                 }
             }

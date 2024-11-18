@@ -1,4 +1,4 @@
-# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -8,7 +8,7 @@
 cmake_minimum_required(VERSION 3.6.0)
 
 project(anjay C)
-set(ANJAY_VERSION "3.8.1" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "3.9.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -272,6 +272,7 @@ option(WITHOUT_IP_STICKINESS "Disable support for IP stickiness" OFF)
 option(WITHOUT_COMPOSITE_OPERATIONS "Disable composite operations" OFF)
 cmake_dependent_option(WITH_SENML_JSON "Enable support for SenML JSON content format" ON WITH_LWM2M11 OFF)
 cmake_dependent_option(WITH_CBOR "Enable support for CBOR and SenML CBOR content formats" ON WITH_LWM2M11 OFF)
+cmake_dependent_option(WITH_LWM2M_GATEWAY "Enable support /25 LwM2M Gateway Object" OFF "WITH_LWM2M11;NOT WITH_CORE_PERSISTENCE" OFF)
 cmake_dependent_option(WITH_SEND "Enable support for LwM2M 1.1 Send operation" ON "WITH_CBOR OR WITH_SENML_JSON" OFF)
 option(WITHOUT_QUEUE_MODE_AUTOCLOSE "Disable automatic closing of server connection sockets after MAX_TRANSMIT_WAIT of inactivity" OFF)
 
@@ -352,6 +353,7 @@ add_library(anjay
             include_public/anjay/io.h
             include_public/anjay/ipso_objects.h
             include_public/anjay/ipso_objects_v2.h
+            include_public/anjay/lwm2m_gateway.h
             include_public/anjay/lwm2m_send.h
             include_public/anjay/security.h
             include_public/anjay/server.h
@@ -492,6 +494,7 @@ add_library(anjay
             src/modules/ipso/anjay_ipso_button.c
             src/modules/ipso_v2/anjay_ipso_v2_3d_sensor.c
             src/modules/ipso_v2/anjay_ipso_v2_basic_sensor.c
+            src/modules/lwm2m_gateway/anjay_lwm2m_gateway.c
             src/modules/security/anjay_mod_security.c
             src/modules/security/anjay_mod_security.h
             src/modules/security/anjay_security_persistence.c
@@ -561,6 +564,7 @@ set(ANJAY_WITH_SEND "${WITH_SEND}")
 set(ANJAY_WITH_SENML_JSON "${WITH_SENML_JSON}")
 set(ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE "${WITHOUT_QUEUE_MODE_AUTOCLOSE}")
 set(ANJAY_WITH_CONN_STATUS_API "${WITH_CONN_STATUS_API}")
+set(ANJAY_WITH_LWM2M_GATEWAY "${WITH_LWM2M_GATEWAY}")
 
 configure_file(include_public/anjay/anjay_config.h.in
                include_public/anjay/anjay_config.h)
@@ -868,6 +872,10 @@ if(WITH_ATTR_STORAGE)
 endif()
 if(WITH_SEND)
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/lwm2m_send.h"
+            DESTINATION include/anjay)
+endif()
+if(WITH_LWM2M_GATEWAY)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/lwm2m_gateway.h"
             DESTINATION include/anjay)
 endif()
 if(WITH_MODULE_access_control)

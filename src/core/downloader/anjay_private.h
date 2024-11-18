@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -30,6 +30,8 @@ typedef struct {
     avs_error_t (*reconnect)(AVS_LIST(anjay_download_ctx_t) *ctx_ptr);
     avs_error_t (*set_next_block_offset)(anjay_download_ctx_t *ctx,
                                          size_t next_block_offset);
+    bool (*is_socket_online_or_retry_in_progress)(
+            anjay_download_ctx_t *ctx_ptr);
 } anjay_download_ctx_vtable_t;
 
 typedef struct {
@@ -58,6 +60,8 @@ _anjay_downloader_find_ctx_ptr_by_id(anjay_downloader_t *dl, uintptr_t id);
 
 void _anjay_downloader_abort_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr,
                                       anjay_download_status_t status);
+
+void _anjay_downloader_reconnect_job(avs_sched_t *sched, const void *id_ptr);
 
 int _anjay_downloader_sched_reconnect_ctx(anjay_download_ctx_t *ctx);
 

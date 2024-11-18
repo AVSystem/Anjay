@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -56,6 +56,42 @@
 #endif // ANJAY_WITH_DOWNLOADER
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
+
+// NOTE: A lot of code depends on numerical values of these constants.
+// Please be careful when refactoring.
+typedef enum {
+    ANJAY_ID_OID,
+    ANJAY_ID_IID,
+    ANJAY_ID_RID,
+    ANJAY_ID_RIID,
+    _ANJAY_URI_PATH_MAX_LENGTH
+} anjay_id_type_t;
+
+/**
+ * A data type that represents a data model path.
+ *
+ * It may represent a root path, an Object path, an Object Instance path, a
+ * Resource path, or a Resource Instance path.
+ *
+ * The path is terminated either by an @ref ANJAY_ID_INVALID value, or
+ * end-of-array (in case of Resource Instance paths). In case of root, Object
+ * and Object Instance paths, the array elements past the terminating invalid ID
+ * value are undefined and shall not be used. They are NOT required to be set to
+ * @ref ANJAY_ID_INVALID. Paths object that numerically differ only in values
+ * past the terminating invalid ID shall be treated as equal (and this is how
+ * @ref _anjay_uri_path_equal is implemented).
+ *
+ * The <c>ids</c> array is designed to be safely and meaningfully indexed by
+ * @ref anjay_id_type_t values.
+ */
+typedef struct {
+    uint16_t ids[_ANJAY_URI_PATH_MAX_LENGTH];
+
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+    // NULL-terminated string
+    char prefix[ANJAY_GATEWAY_MAX_PREFIX_LEN];
+#endif // ANJAY_WITH_LWM2M_GATEWAY
+} anjay_uri_path_t;
 
 #ifdef ANJAY_WITH_EVENT_LOOP
 typedef enum {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -20,6 +20,9 @@
 
 #    include <anjay_modules/anjay_dm_utils.h>
 #    include <anjay_modules/anjay_raw_buffer.h>
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+#        include <anjay_modules/anjay_lwm2m_gateway.h>
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
 
 #    include "../anjay_core.h"
 
@@ -31,12 +34,12 @@ VISIBILITY_SOURCE_BEGIN
 
 //// LIFETIME AND OBJECT HANDLING //////////////////////////////////////////////
 
-int _anjay_attr_storage_init(anjay_unlocked_t *anjay) {
-    assert(anjay);
-    if (!(anjay->attr_storage.saved_state.persist_data =
-                  avs_stream_membuf_create())) {
+int _anjay_attr_storage_init(anjay_attr_storage_t *as, anjay_dm_t *dm) {
+    assert(as);
+    if (!(as->saved_state.persist_data = avs_stream_membuf_create())) {
         return -1;
     }
+    as->dm = dm;
     return 0;
 }
 
@@ -74,6 +77,27 @@ AVS_STATIC_ASSERT(offsetof(as_instance_entry_t, iid) == 0, instance_id_offset);
 AVS_STATIC_ASSERT(offsetof(as_resource_entry_t, rid) == 0, resource_id_offset);
 AVS_STATIC_ASSERT(offsetof(as_resource_instance_entry_t, riid) == 0,
                   resource_instance_id_offset);
+
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+static anjay_attr_storage_t *
+get_attr_storage(anjay_unlocked_t *anjay,
+                 const anjay_dm_installed_object_t *def_ptr) {
+    if (def_ptr->prefix) {
+        anjay_attr_storage_t *as = NULL;
+        _anjay_lwm2m_gateway_prefix_to_as(anjay, def_ptr->prefix, &as);
+        assert(as);
+        return as;
+    }
+    return &anjay->attr_storage;
+}
+#    else
+static inline anjay_attr_storage_t *
+get_attr_storage(anjay_unlocked_t *anjay,
+                 const anjay_dm_installed_object_t *def_ptr) {
+    (void) def_ptr;
+    return &anjay->attr_storage;
+}
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
 
 static AVS_LIST(void) *
 find_or_create_entry_impl(AVS_LIST(void) *children_list_ptr,
@@ -291,11 +315,12 @@ int _anjay_attr_storage_remove_absent_instances_clb(
         anjay_iid_t iid,
         void *instance_ptr_ptr_) {
     (void) def_ptr;
+    anjay_attr_storage_t *as = get_attr_storage(anjay, def_ptr);
     AVS_LIST(as_instance_entry_t) **instance_ptr_ptr =
             (AVS_LIST(as_instance_entry_t) **) instance_ptr_ptr_;
     if (**instance_ptr_ptr && (**instance_ptr_ptr)->iid < iid) {
         while (**instance_ptr_ptr && (**instance_ptr_ptr)->iid < iid) {
-            remove_instance_entry(&anjay->attr_storage, *instance_ptr_ptr);
+            remove_instance_entry(as, *instance_ptr_ptr);
         }
     }
     if (**instance_ptr_ptr && (**instance_ptr_ptr)->iid == iid) {
@@ -316,14 +341,15 @@ remove_absent_resources_clb(anjay_unlocked_t *anjay,
     (void) def_ptr;
     (void) iid;
     (void) kind;
+    anjay_attr_storage_t *as = get_attr_storage(anjay, def_ptr);
     AVS_LIST(as_resource_entry_t) **resource_ptr_ptr =
             (AVS_LIST(as_resource_entry_t) **) resource_ptr_ptr_;
     while (**resource_ptr_ptr && (**resource_ptr_ptr)->rid < rid) {
-        remove_resource_entry(&anjay->attr_storage, *resource_ptr_ptr);
+        remove_resource_entry(as, *resource_ptr_ptr);
     }
     if (**resource_ptr_ptr && (**resource_ptr_ptr)->rid == rid) {
         if (presence == ANJAY_DM_RES_ABSENT) {
-            remove_resource_entry(&anjay->attr_storage, *resource_ptr_ptr);
+            remove_resource_entry(as, *resource_ptr_ptr);
         } else {
             AVS_LIST_ADVANCE_PTR(resource_ptr_ptr);
         }
@@ -335,6 +361,7 @@ int _anjay_attr_storage_remove_absent_resources(
         anjay_unlocked_t *anjay,
         AVS_LIST(as_instance_entry_t) *instance_ptr,
         const anjay_dm_installed_object_t *def_ptr) {
+    anjay_attr_storage_t *as = get_attr_storage(anjay, def_ptr);
     AVS_LIST(as_resource_entry_t) *resource_ptr = &(*instance_ptr)->resources;
     int result = 0;
     if (def_ptr) {
@@ -345,7 +372,7 @@ int _anjay_attr_storage_remove_absent_resources(
     }
     if (!result) {
         while (*resource_ptr) {
-            remove_resource_entry(&anjay->attr_storage, resource_ptr);
+            remove_resource_entry(as, resource_ptr);
         }
     }
     remove_instance_if_empty(instance_ptr);
@@ -364,13 +391,13 @@ remove_absent_resource_instances_clb(anjay_unlocked_t *anjay,
     (void) def_ptr;
     (void) iid;
     (void) rid;
+    anjay_attr_storage_t *as = get_attr_storage(anjay, def_ptr);
     AVS_LIST(as_resource_instance_entry_t) **resource_instance_ptr_ptr =
             (AVS_LIST(as_resource_instance_entry_t) **)
                     resource_instance_ptr_ptr_;
     while (**resource_instance_ptr_ptr
            && (**resource_instance_ptr_ptr)->riid < riid) {
-        remove_resource_instance_entry(&anjay->attr_storage,
-                                       *resource_instance_ptr_ptr);
+        remove_resource_instance_entry(as, *resource_instance_ptr_ptr);
     }
     if (**resource_instance_ptr_ptr
             && (**resource_instance_ptr_ptr)->riid == riid) {
@@ -384,6 +411,7 @@ int _anjay_attr_storage_remove_absent_resource_instances(
         const anjay_dm_installed_object_t *def_ptr,
         anjay_iid_t iid,
         AVS_LIST(as_resource_entry_t) *resource_ptr) {
+    anjay_attr_storage_t *as = get_attr_storage(anjay, def_ptr);
     AVS_LIST(as_resource_instance_entry_t) *resource_instance_ptr =
             &(*resource_ptr)->resource_instances;
     int result = 0;
@@ -400,8 +428,7 @@ int _anjay_attr_storage_remove_absent_resource_instances(
     }
     if (!result) {
         while (*resource_instance_ptr) {
-            remove_resource_instance_entry(&anjay->attr_storage,
-                                           resource_instance_ptr);
+            remove_resource_instance_entry(as, resource_instance_ptr);
         }
     }
     remove_resource_if_empty(resource_ptr);
@@ -487,15 +514,14 @@ static int write_object_attrs(anjay_unlocked_t *anjay,
                               anjay_ssid_t ssid,
                               const anjay_dm_installed_object_t *obj_ptr,
                               const anjay_dm_oi_attributes_t *attrs) {
+    anjay_attr_storage_t *as = get_attr_storage(anjay, obj_ptr);
     AVS_LIST(as_object_entry_t) *object_ptr =
-            find_or_create_object(&anjay->attr_storage,
-                                  _anjay_dm_installed_object_oid(obj_ptr));
+            find_or_create_object(as, _anjay_dm_installed_object_oid(obj_ptr));
     if (!object_ptr) {
         return -1;
     }
-    int result =
-            WRITE_ATTRS(&anjay->attr_storage, &(*object_ptr)->default_attrs,
-                        default_attrs_empty, ssid, attrs);
+    int result = WRITE_ATTRS(as, &(*object_ptr)->default_attrs,
+                             default_attrs_empty, ssid, attrs);
     remove_object_if_empty(object_ptr);
     return result;
 }
@@ -509,11 +535,11 @@ static int write_instance_attrs(anjay_unlocked_t *anjay,
     int result = -1;
     AVS_LIST(as_object_entry_t) *object_ptr = NULL;
     AVS_LIST(as_instance_entry_t) *instance_ptr = NULL;
-    if ((object_ptr = find_or_create_object(
-                 &anjay->attr_storage, _anjay_dm_installed_object_oid(obj_ptr)))
+    anjay_attr_storage_t *as = get_attr_storage(anjay, obj_ptr);
+    if ((object_ptr = find_or_create_object(as, _anjay_dm_installed_object_oid(
+                                                        obj_ptr)))
             && (instance_ptr = find_or_create_instance(*object_ptr, iid))) {
-        result = WRITE_ATTRS(&anjay->attr_storage,
-                             &(*instance_ptr)->default_attrs,
+        result = WRITE_ATTRS(as, &(*instance_ptr)->default_attrs,
                              default_attrs_empty, ssid, attrs);
     }
 
@@ -537,12 +563,13 @@ static int write_resource_attrs(anjay_unlocked_t *anjay,
     AVS_LIST(as_object_entry_t) *object_ptr = NULL;
     AVS_LIST(as_instance_entry_t) *instance_ptr = NULL;
     AVS_LIST(as_resource_entry_t) *resource_ptr = NULL;
-    if ((object_ptr = find_or_create_object(
-                 &anjay->attr_storage, _anjay_dm_installed_object_oid(obj_ptr)))
+    anjay_attr_storage_t *as = get_attr_storage(anjay, obj_ptr);
+    if ((object_ptr = find_or_create_object(as, _anjay_dm_installed_object_oid(
+                                                        obj_ptr)))
             && (instance_ptr = find_or_create_instance(*object_ptr, iid))
             && (resource_ptr = find_or_create_resource(*instance_ptr, rid))) {
-        result = WRITE_ATTRS(&anjay->attr_storage, &(*resource_ptr)->attrs,
-                             resource_attrs_empty, ssid, attrs);
+        result = WRITE_ATTRS(as, &(*resource_ptr)->attrs, resource_attrs_empty,
+                             ssid, attrs);
     }
 
     if (resource_ptr) {
@@ -573,14 +600,14 @@ write_resource_instance_attrs(anjay_unlocked_t *anjay,
     AVS_LIST(as_instance_entry_t) *instance_ptr = NULL;
     AVS_LIST(as_resource_entry_t) *resource_ptr = NULL;
     AVS_LIST(as_resource_instance_entry_t) *resource_instance_ptr = NULL;
-    if ((object_ptr = find_or_create_object(
-                 &anjay->attr_storage, _anjay_dm_installed_object_oid(obj_ptr)))
+    anjay_attr_storage_t *as = get_attr_storage(anjay, obj_ptr);
+    if ((object_ptr = find_or_create_object(as, _anjay_dm_installed_object_oid(
+                                                        obj_ptr)))
             && (instance_ptr = find_or_create_instance(*object_ptr, iid))
             && (resource_ptr = find_or_create_resource(*instance_ptr, rid))
             && (resource_instance_ptr = find_or_create_resource_instance(
                         *resource_ptr, riid))) {
-        result = WRITE_ATTRS(&anjay->attr_storage,
-                             &(*resource_instance_ptr)->attrs,
+        result = WRITE_ATTRS(as, &(*resource_instance_ptr)->attrs,
                              resource_attrs_empty, ssid, attrs);
     }
 
@@ -654,8 +681,9 @@ static int remove_absent_instances_and_enumerate_ssids(
     if (result) {
         return result;
     }
+    anjay_attr_storage_t *as = get_attr_storage(anjay, def_ptr);
     while (args.instance_ptr && *args.instance_ptr) {
-        remove_instance_entry(&anjay->attr_storage, args.instance_ptr);
+        remove_instance_entry(as, args.instance_ptr);
     }
     return 0;
 }
@@ -690,9 +718,9 @@ static int remove_absent_resources_in_all_instances(
         const anjay_dm_installed_object_t *def_ptr,
         AVS_LIST(anjay_notify_queue_resource_entry_t) resources_changed) {
     int result = 0;
+    anjay_attr_storage_t *as = get_attr_storage(anjay, def_ptr);
     AVS_LIST(as_object_entry_t) *object_ptr =
-            find_object(&anjay->attr_storage,
-                        _anjay_dm_installed_object_oid(def_ptr));
+            find_object(as, _anjay_dm_installed_object_oid(def_ptr));
     if (object_ptr) {
         anjay_iid_t last_iid = ANJAY_ID_INVALID;
         AVS_LIST(anjay_notify_queue_resource_entry_t) resource_entry;
@@ -760,9 +788,9 @@ static int object_read_default_attrs(anjay_unlocked_t *anjay,
                                      const anjay_dm_installed_object_t obj_ptr,
                                      anjay_ssid_t ssid,
                                      anjay_dm_oi_attributes_t *out) {
+    anjay_attr_storage_t *as = get_attr_storage(anjay, &obj_ptr);
     AVS_LIST(as_object_entry_t) *object_ptr =
-            find_object(&anjay->attr_storage,
-                        _anjay_dm_installed_object_oid(&obj_ptr));
+            find_object(as, _anjay_dm_installed_object_oid(&obj_ptr));
     read_default_attrs(object_ptr ? (*object_ptr)->default_attrs : NULL, ssid,
                        out);
     return 0;
@@ -782,9 +810,9 @@ instance_read_default_attrs(anjay_unlocked_t *anjay,
                             anjay_iid_t iid,
                             anjay_ssid_t ssid,
                             anjay_dm_oi_attributes_t *out) {
+    anjay_attr_storage_t *as = get_attr_storage(anjay, &obj_ptr);
     AVS_LIST(as_object_entry_t) *object_ptr =
-            find_object(&anjay->attr_storage,
-                        _anjay_dm_installed_object_oid(&obj_ptr));
+            find_object(as, _anjay_dm_installed_object_oid(&obj_ptr));
     AVS_LIST(as_instance_entry_t) *instance_ptr =
             object_ptr ? find_instance(*object_ptr, iid) : NULL;
     read_default_attrs(instance_ptr ? (*instance_ptr)->default_attrs : NULL,
@@ -809,9 +837,9 @@ static int resource_read_attrs(anjay_unlocked_t *anjay,
                                anjay_rid_t rid,
                                anjay_ssid_t ssid,
                                anjay_dm_r_attributes_t *out) {
+    anjay_attr_storage_t *as = get_attr_storage(anjay, &obj_ptr);
     AVS_LIST(as_object_entry_t) *object_ptr =
-            find_object(&anjay->attr_storage,
-                        _anjay_dm_installed_object_oid(&obj_ptr));
+            find_object(as, _anjay_dm_installed_object_oid(&obj_ptr));
     AVS_LIST(as_instance_entry_t) *instance_ptr =
             object_ptr ? find_instance(*object_ptr, iid) : NULL;
     AVS_LIST(as_resource_entry_t) *res_ptr =
@@ -840,9 +868,9 @@ resource_instance_read_attrs(anjay_unlocked_t *anjay,
                              anjay_riid_t riid,
                              anjay_ssid_t ssid,
                              anjay_dm_r_attributes_t *out) {
+    anjay_attr_storage_t *as = get_attr_storage(anjay, &obj_ptr);
     AVS_LIST(as_object_entry_t) *object_ptr =
-            find_object(&anjay->attr_storage,
-                        _anjay_dm_installed_object_oid(&obj_ptr));
+            find_object(as, _anjay_dm_installed_object_oid(&obj_ptr));
     AVS_LIST(as_instance_entry_t) *instance_ptr =
             object_ptr ? find_instance(*object_ptr, iid) : NULL;
     AVS_LIST(as_resource_entry_t) *res_ptr =
@@ -889,28 +917,25 @@ static void saved_state_reset(anjay_attr_storage_t *as) {
     avs_stream_membuf_fit(as->saved_state.persist_data);
 }
 
-avs_error_t _anjay_attr_storage_transaction_begin(anjay_unlocked_t *anjay) {
-    anjay->attr_storage.saved_state.modified_since_persist =
-            anjay->attr_storage.modified_since_persist;
-    return _anjay_attr_storage_persist_inner(
-            &anjay->attr_storage, anjay->attr_storage.saved_state.persist_data);
+avs_error_t _anjay_attr_storage_transaction_begin(anjay_attr_storage_t *as) {
+    as->saved_state.modified_since_persist = as->modified_since_persist;
+    return _anjay_attr_storage_persist_inner(as, as->saved_state.persist_data);
 }
 
-void _anjay_attr_storage_transaction_commit(anjay_unlocked_t *anjay) {
-    saved_state_reset(&anjay->attr_storage);
+void _anjay_attr_storage_transaction_commit(anjay_attr_storage_t *as) {
+    saved_state_reset(as);
 }
 
-avs_error_t _anjay_attr_storage_transaction_rollback(anjay_unlocked_t *anjay) {
+avs_error_t _anjay_attr_storage_transaction_rollback(anjay_unlocked_t *anjay,
+                                                     anjay_attr_storage_t *as) {
     avs_error_t err;
     if (avs_is_err((err = _anjay_attr_storage_restore_inner(
-                            anjay,
-                            anjay->attr_storage.saved_state.persist_data)))) {
-        anjay->attr_storage.modified_since_persist = true;
+                            anjay, as, as->saved_state.persist_data)))) {
+        as->modified_since_persist = true;
     } else {
-        anjay->attr_storage.modified_since_persist =
-                anjay->attr_storage.saved_state.modified_since_persist;
+        as->modified_since_persist = as->saved_state.modified_since_persist;
     }
-    saved_state_reset(&anjay->attr_storage);
+    saved_state_reset(as);
     return err;
 }
 
@@ -942,18 +967,21 @@ maybe_get_object_before_setting_attrs(anjay_unlocked_t *anjay,
 
 #    define ERR_INSTANCE_PRESENCE_CHECK                              \
         _("instance ")                                               \
+        DM_LOG_PREFIX                                                \
         "/%" PRIu16                                                  \
         "/%" PRIu16 _(" does not exist or an error occurred during " \
                       "querying its presence")
 
 #    define ERR_RESOURCE_PRESENCE_CHECK                                    \
         _("resource ")                                                     \
+        DM_LOG_PREFIX                                                      \
         "/%" PRIu16 "/%" PRIu16 "/%" PRIu16 _(                             \
                 "does not exist or an error occurred during querying its " \
                 "presence")
 
 #    define ERR_RESOURCE_INSTANCE_PRESENCE_CHECK                           \
         _("resource instance ")                                            \
+        DM_LOG_PREFIX                                                      \
         "/%" PRIu16 "/%" PRIu16 "/%" PRIu16 "/%" PRIu16 _(                 \
                 "does not exist or an error occurred during querying its " \
                 "presence")
@@ -994,7 +1022,8 @@ int anjay_attr_storage_set_instance_attrs(
                    "instance_read_default_attrs",
                    "instance_write_default_attrs");
         } else if (_anjay_dm_verify_instance_present(anjay, obj, iid)) {
-            as_log(DEBUG, ERR_INSTANCE_PRESENCE_CHECK, oid, iid);
+            as_log(DEBUG, ERR_INSTANCE_PRESENCE_CHECK,
+                   DM_LOG_PREFIX_OBJ_ARG(obj) oid, iid);
         } else if (!(result = write_instance_attrs(anjay, ssid, obj, iid,
                                                    attrs))) {
             (void) _anjay_notify_instances_changed_unlocked(anjay, oid);
@@ -1020,10 +1049,12 @@ int anjay_attr_storage_set_resource_attrs(
             as_log(DEBUG, ERR_HANDLERS_IMPLEMENTED_BY_BACKEND, "resource",
                    "resource_read_attrs", "resource_write_attrs");
         } else if (_anjay_dm_verify_instance_present(anjay, obj, iid)) {
-            as_log(DEBUG, ERR_INSTANCE_PRESENCE_CHECK, oid, iid);
+            as_log(DEBUG, ERR_INSTANCE_PRESENCE_CHECK,
+                   DM_LOG_PREFIX_OBJ_ARG(obj) oid, iid);
         } else if (_anjay_dm_verify_resource_present(anjay, obj, iid, rid,
                                                      NULL)) {
-            as_log(DEBUG, ERR_RESOURCE_PRESENCE_CHECK, oid, iid, rid);
+            as_log(DEBUG, ERR_RESOURCE_PRESENCE_CHECK,
+                   DM_LOG_PREFIX_OBJ_ARG(obj) oid, iid, rid);
         } else if (!(result = write_resource_attrs(anjay, ssid, obj, iid, rid,
                                                    attrs))) {
             (void) _anjay_notify_instances_changed_unlocked(anjay, oid);
@@ -1053,15 +1084,17 @@ int anjay_attr_storage_set_resource_instance_attrs(
                    "resource instance", "resource_instance_read_attrs",
                    "resource_instance_write_attrs");
         } else if (_anjay_dm_verify_instance_present(anjay, obj, iid)) {
-            as_log(DEBUG, ERR_INSTANCE_PRESENCE_CHECK, oid, iid);
+            as_log(DEBUG, ERR_INSTANCE_PRESENCE_CHECK,
+                   DM_LOG_PREFIX_OBJ_ARG(obj) oid, iid);
         } else if (_anjay_dm_verify_resource_present(anjay, obj, iid, rid,
                                                      &kind)
                    || !_anjay_dm_res_kind_multiple(kind)) {
-            as_log(DEBUG, ERR_RESOURCE_PRESENCE_CHECK, oid, iid, rid);
+            as_log(DEBUG, ERR_RESOURCE_PRESENCE_CHECK,
+                   DM_LOG_PREFIX_OBJ_ARG(obj) oid, iid, rid);
         } else if (_anjay_dm_verify_resource_instance_present(anjay, obj, iid,
                                                               rid, riid)) {
-            as_log(DEBUG, ERR_RESOURCE_INSTANCE_PRESENCE_CHECK, oid, iid, rid,
-                   riid);
+            as_log(DEBUG, ERR_RESOURCE_INSTANCE_PRESENCE_CHECK,
+                   DM_LOG_PREFIX_OBJ_ARG(obj) oid, iid, rid, riid);
         } else if (!(result = write_resource_instance_attrs(
                              anjay, ssid, obj, iid, rid, riid, attrs))) {
             (void) _anjay_notify_instances_changed_unlocked(anjay, oid);

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -112,10 +112,8 @@ class RegisterWithCertificates(CertificatesTest.Test):
 
 
 class RegisterWithCertificateChainExternal(CertificatesTest.PcapEnabledTest):
-    def setUp(self, extra_cmdline_args=None, **kwargs):
-        if extra_cmdline_args is None:
-            extra_cmdline_args = []
-        extra_cmdline_args.append('--use-external-security-info')
+    def setUp(self, extra_cmdline_args=[], **kwargs):
+        extra_cmdline_args += ['--use-external-security-info']
         super().setUp(client_ca_file='root.crt', server_crt='server.crt', server_key='server.key',
                       client_crt_file='client2-full-path.crt', client_key_file='client2.key.der',
                       extra_cmdline_args=extra_cmdline_args, **kwargs)
@@ -558,10 +556,8 @@ class RegisterUriTcp(RegisterUri.TestMixin, RegisterTcp.TestCase):
 
 
 class RegisterWithPskExternal(test_suite.Lwm2mDtlsSingleServerTest):
-    def setUp(self, extra_cmdline_args=None, **kwargs):
-        if extra_cmdline_args is None:
-            extra_cmdline_args = []
-        extra_cmdline_args.append('--use-external-security-info')
+    def setUp(self, extra_cmdline_args=[], **kwargs):
+        extra_cmdline_args += ['--use-external-security-info']
         super().setUp(extra_cmdline_args=extra_cmdline_args, **kwargs)
 
 

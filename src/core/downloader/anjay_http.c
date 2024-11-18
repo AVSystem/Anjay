@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -529,6 +529,10 @@ static avs_error_t http_ssl_pre_connect_cb(avs_http_t *http,
             });
 }
 
+static bool is_socket_online_or_retry_in_progress(anjay_download_ctx_t *ctx_) {
+    return _anjay_socket_is_online(get_http_socket(ctx_));
+}
+
 avs_error_t
 _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
                                AVS_LIST(anjay_download_ctx_t) *out_dl_ctx,
@@ -559,7 +563,9 @@ _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
         .cleanup = cleanup_http_transfer,
         .suspend = suspend_http_transfer,
         .reconnect = reconnect_http_transfer,
-        .set_next_block_offset = set_next_http_block_offset
+        .set_next_block_offset = set_next_http_block_offset,
+        .is_socket_online_or_retry_in_progress =
+                is_socket_online_or_retry_in_progress
     };
     ctx->common.vtable = &VTABLE;
 

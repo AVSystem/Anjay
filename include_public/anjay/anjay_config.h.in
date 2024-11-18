@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -663,6 +663,15 @@
  * <c>anjay_server_connection_status_cb_t</c> callback.
  */
 #cmakedefine ANJAY_WITH_CONN_STATUS_API
+
+/**
+ * Enable support for /25 LwM2M Gateway Object.
+ *
+ * Requires <c>ANJAY_WITH_LWM2M11</c> to be enabled.
+ * Requires <c>ANJAY_WITH_CORE_PERSISTENCE</c> (commercial feature) to be
+ * disabled.
+ */
+#cmakedefine ANJAY_WITH_LWM2M_GATEWAY
 
 /**@}*/
 

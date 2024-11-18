@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -20,6 +20,12 @@
 #    include <avsystem/coap/code.h>
 
 #    include <anjay/lwm2m_send.h>
+
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+#        include <anjay/lwm2m_gateway.h>
+
+#        include "../anjay_modules/anjay_lwm2m_gateway.h"
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
 
 #    include "anjay_access_utils_private.h"
 #    include "anjay_core.h"
@@ -605,13 +611,130 @@ int anjay_send_batch_add_objlnk(anjay_send_batch_builder_t *builder,
                                    timestamp, objlnk_oid, objlnk_iid);
 }
 
+#        ifdef ANJAY_WITH_LWM2M_GATEWAY
+int anjay_lwm2m_gateway_send_batch_add_int(anjay_send_batch_builder_t *builder,
+                                           anjay_iid_t gateway_iid,
+                                           anjay_oid_t oid,
+                                           anjay_iid_t iid,
+                                           anjay_rid_t rid,
+                                           anjay_riid_t riid,
+                                           avs_time_real_t timestamp,
+                                           int64_t value) {
+    anjay_uri_path_t path;
+    _anjay_uri_path_with_prefix_from_end_device_iid(&path, gateway_iid, oid,
+                                                    iid, rid, riid);
+    return _anjay_batch_add_int(cast_to_builder(builder), &path, timestamp,
+                                value);
+}
+
+int anjay_lwm2m_gateway_send_batch_add_uint(anjay_send_batch_builder_t *builder,
+                                            anjay_iid_t gateway_iid,
+                                            anjay_oid_t oid,
+                                            anjay_iid_t iid,
+                                            anjay_rid_t rid,
+                                            anjay_riid_t riid,
+                                            avs_time_real_t timestamp,
+                                            uint64_t value) {
+    anjay_uri_path_t path;
+    _anjay_uri_path_with_prefix_from_end_device_iid(&path, gateway_iid, oid,
+                                                    iid, rid, riid);
+    return _anjay_batch_add_uint(cast_to_builder(builder), &path, timestamp,
+                                 value);
+}
+
+int anjay_lwm2m_gateway_send_batch_add_double(
+        anjay_send_batch_builder_t *builder,
+        anjay_iid_t gateway_iid,
+        anjay_oid_t oid,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid,
+        avs_time_real_t timestamp,
+        double value) {
+    anjay_uri_path_t path;
+    _anjay_uri_path_with_prefix_from_end_device_iid(&path, gateway_iid, oid,
+                                                    iid, rid, riid);
+    return _anjay_batch_add_double(cast_to_builder(builder), &path, timestamp,
+                                   value);
+}
+
+int anjay_lwm2m_gateway_send_batch_add_bool(anjay_send_batch_builder_t *builder,
+                                            anjay_iid_t gateway_iid,
+                                            anjay_oid_t oid,
+                                            anjay_iid_t iid,
+                                            anjay_rid_t rid,
+                                            anjay_riid_t riid,
+                                            avs_time_real_t timestamp,
+                                            bool value) {
+    anjay_uri_path_t path;
+    _anjay_uri_path_with_prefix_from_end_device_iid(&path, gateway_iid, oid,
+                                                    iid, rid, riid);
+    return _anjay_batch_add_bool(cast_to_builder(builder), &path, timestamp,
+                                 value);
+}
+
+int anjay_lwm2m_gateway_send_batch_add_string(
+        anjay_send_batch_builder_t *builder,
+        anjay_iid_t gateway_iid,
+        anjay_oid_t oid,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid,
+        avs_time_real_t timestamp,
+        const char *str) {
+    anjay_uri_path_t path;
+    _anjay_uri_path_with_prefix_from_end_device_iid(&path, gateway_iid, oid,
+                                                    iid, rid, riid);
+    return _anjay_batch_add_string(cast_to_builder(builder), &path, timestamp,
+                                   str);
+}
+
+int anjay_lwm2m_gateway_send_batch_add_bytes(
+        anjay_send_batch_builder_t *builder,
+        anjay_iid_t gateway_iid,
+        anjay_oid_t oid,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid,
+        avs_time_real_t timestamp,
+        const void *data,
+        size_t length) {
+    anjay_uri_path_t path;
+    _anjay_uri_path_with_prefix_from_end_device_iid(&path, gateway_iid, oid,
+                                                    iid, rid, riid);
+    return _anjay_batch_add_bytes(cast_to_builder(builder), &path, timestamp,
+                                  data, length);
+}
+
+int anjay_lwm2m_gateway_send_batch_add_objlnk(
+        anjay_send_batch_builder_t *builder,
+        anjay_iid_t gateway_iid,
+        anjay_oid_t oid,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid,
+        avs_time_real_t timestamp,
+        anjay_oid_t objlnk_oid,
+        anjay_iid_t objlnk_iid) {
+    anjay_uri_path_t path;
+    _anjay_uri_path_with_prefix_from_end_device_iid(&path, gateway_iid, oid,
+                                                    iid, rid, riid);
+    return _anjay_batch_add_objlnk(cast_to_builder(builder), &path, timestamp,
+                                   objlnk_oid, objlnk_iid);
+}
+
+#        endif // ANJAY_WITH_LWM2M_GATEWAY
+
 static int
 batch_data_add_current_impl(anjay_send_batch_builder_t *builder,
                             anjay_unlocked_t *anjay,
+                            const anjay_dm_t *dm,
+                            anjay_iid_t gateway_iid,
                             anjay_oid_t oid,
                             anjay_iid_t iid,
                             anjay_rid_t rid,
                             const avs_time_real_t *forced_timestamp) {
+    (void) gateway_iid;
     assert(builder);
     assert(anjay);
 
@@ -620,15 +743,28 @@ batch_data_add_current_impl(anjay_send_batch_builder_t *builder,
     }
 
     const anjay_dm_installed_object_t *obj =
-            _anjay_dm_find_object_by_oid(&anjay->dm, oid);
+            _anjay_dm_find_object_by_oid(dm, oid);
     if (!obj) {
+#        ifdef ANJAY_WITH_LWM2M_GATEWAY
+        send_log(ERROR, _("unregistered Object ID: ") "%s/%u",
+                 obj->prefix ? obj->prefix : "", oid);
+#        else  // ANJAY_WITH_LWM2M_GATEWAY
         send_log(ERROR, _("unregistered Object ID: ") "%u", oid);
+#        endif // ANJAY_WITH_LWM2M_GATEWAY
         return ANJAY_ERR_NOT_FOUND;
     }
     anjay_dm_path_info_t path_info;
-    int result =
-            _anjay_dm_path_info(anjay, obj, &MAKE_RESOURCE_PATH(oid, iid, rid),
-                                &path_info);
+    anjay_uri_path_t path;
+#        ifdef ANJAY_WITH_LWM2M_GATEWAY
+    if (gateway_iid != ANJAY_ID_INVALID) {
+        _anjay_uri_path_with_prefix_from_end_device_iid(
+                &path, gateway_iid, oid, iid, rid, ANJAY_ID_INVALID);
+    } else
+#        endif // ANJAY_WITH_LWM2M_GATEWAY
+    {
+        path = MAKE_RESOURCE_PATH(oid, iid, rid);
+    }
+    int result = _anjay_dm_path_info(anjay, obj, &path, &path_info);
     if (result) {
         return result;
     }
@@ -637,13 +773,29 @@ batch_data_add_current_impl(anjay_send_batch_builder_t *builder,
                                      forced_timestamp);
 }
 
-int _anjay_send_batch_data_add_current_unlocked(
-        anjay_send_batch_builder_t *builder,
-        anjay_unlocked_t *anjay,
-        anjay_oid_t oid,
-        anjay_iid_t iid,
-        anjay_rid_t rid) {
-    return batch_data_add_current_impl(builder, anjay, oid, iid, rid, NULL);
+static int
+_anjay_send_batch_data_add_current_unlocked(anjay_send_batch_builder_t *builder,
+                                            anjay_unlocked_t *anjay,
+                                            anjay_iid_t gateway_iid,
+                                            anjay_oid_t oid,
+                                            anjay_iid_t iid,
+                                            anjay_rid_t rid) {
+    const anjay_dm_t *dm;
+#        ifdef ANJAY_WITH_LWM2M_GATEWAY
+    if (gateway_iid != ANJAY_ID_INVALID) {
+        _anjay_lwm2m_gateway_iid_to_dm(anjay, gateway_iid, &dm);
+        if (!dm) {
+            dm_log(ERROR, _("No End Device with specified iid found"));
+            return ANJAY_ERR_NOT_FOUND;
+        }
+    } else
+#        endif // ANJAY_WITH_LWM2M_GATEWAY
+    {
+        dm = &anjay->dm;
+    }
+
+    return batch_data_add_current_impl(builder, anjay, dm, gateway_iid, oid,
+                                       iid, rid, NULL);
 }
 
 int anjay_send_batch_data_add_current(anjay_send_batch_builder_t *builder,
@@ -653,8 +805,8 @@ int anjay_send_batch_data_add_current(anjay_send_batch_builder_t *builder,
                                       anjay_rid_t rid) {
     int result = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
-    result = _anjay_send_batch_data_add_current_unlocked(builder, anjay, oid,
-                                                         iid, rid);
+    result = _anjay_send_batch_data_add_current_unlocked(
+            builder, anjay, ANJAY_ID_INVALID, oid, iid, rid);
     ANJAY_MUTEX_UNLOCK(anjay_locked);
     return result;
 }
@@ -662,6 +814,7 @@ int anjay_send_batch_data_add_current(anjay_send_batch_builder_t *builder,
 int _anjay_send_batch_data_add_current_multiple_unlocked(
         anjay_send_batch_builder_t *builder,
         anjay_unlocked_t *anjay,
+        anjay_iid_t gateway_iid,
         const anjay_send_resource_path_t *paths,
         size_t paths_length,
         bool ignore_not_found) {
@@ -672,21 +825,49 @@ int _anjay_send_batch_data_add_current_multiple_unlocked(
     AVS_LIST(anjay_batch_entry_t) *append_ptr = batch_builder->append_ptr;
     avs_time_real_t timestamp = avs_time_real_now();
 
+    const anjay_dm_t *dm;
+    int result;
+#        ifdef ANJAY_WITH_LWM2M_GATEWAY
+    if (gateway_iid != ANJAY_ID_INVALID) {
+        _anjay_lwm2m_gateway_iid_to_dm(anjay, gateway_iid, &dm);
+        if (!dm) {
+            dm_log(ERROR, _("No End Device with specified iid found"));
+            result = ANJAY_ERR_NOT_FOUND;
+            goto cleanup;
+        }
+    } else
+#        endif // ANJAY_WITH_LWM2M_GATEWAY
+    {
+        dm = &anjay->dm;
+    }
+
     for (size_t i = 0; i < paths_length; i++) {
-        int result = batch_data_add_current_impl(builder, anjay, paths[i].oid,
-                                                 paths[i].iid, paths[i].rid,
-                                                 &timestamp);
+        result = batch_data_add_current_impl(builder, anjay, dm, gateway_iid,
+                                             paths[i].oid, paths[i].iid,
+                                             paths[i].rid, &timestamp);
         if (result == ANJAY_ERR_NOT_FOUND && ignore_not_found) {
-            send_log(WARNING,
-                     _("resource ") "/%u/%u/%u" _(" not found, ignoring"),
-                     paths[i].oid, paths[i].iid, paths[i].rid);
+            anjay_uri_path_t uri_path = {
+                .ids = { paths[i].oid, paths[i].iid, paths[i].rid,
+                         ANJAY_ID_INVALID }
+            };
+#        ifdef ANJAY_WITH_LWM2M_GATEWAY
+            if (gateway_iid != ANJAY_ID_INVALID) {
+                avs_simple_snprintf(uri_path.prefix, sizeof(uri_path.prefix),
+                                    "dev%" PRIu16, gateway_iid);
+            }
+#        endif // ANJAY_WITH_LWM2M_GATEWAY
+            send_log(WARNING, _("resource ") "/%s" _(" not found, ignoring"),
+                     ANJAY_DEBUG_MAKE_PATH(&uri_path));
         } else if (result) {
-            batch_builder->append_ptr = append_ptr;
-            _anjay_batch_entry_list_cleanup(batch_builder->append_ptr);
-            return result;
+            goto cleanup;
         }
     }
     return 0;
+
+cleanup:
+    batch_builder->append_ptr = append_ptr;
+    _anjay_batch_entry_list_cleanup(batch_builder->append_ptr);
+    return result;
 }
 
 int anjay_send_batch_data_add_current_multiple(
@@ -697,7 +878,7 @@ int anjay_send_batch_data_add_current_multiple(
     int result = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     result = _anjay_send_batch_data_add_current_multiple_unlocked(
-            builder, anjay, paths, paths_length, false);
+            builder, anjay, ANJAY_ID_INVALID, paths, paths_length, false);
     ANJAY_MUTEX_UNLOCK(anjay_locked);
     return result;
 }
@@ -710,10 +891,57 @@ int anjay_send_batch_data_add_current_multiple_ignore_not_found(
     int result = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     result = _anjay_send_batch_data_add_current_multiple_unlocked(
-            builder, anjay, paths, paths_length, true);
+            builder, anjay, ANJAY_ID_INVALID, paths, paths_length, true);
     ANJAY_MUTEX_UNLOCK(anjay_locked);
     return result;
 }
+
+#        ifdef ANJAY_WITH_LWM2M_GATEWAY
+
+int anjay_lwm2m_gateway_send_batch_data_add_current(
+        anjay_send_batch_builder_t *builder,
+        anjay_t *anjay_locked,
+        anjay_iid_t gateway_iid,
+        anjay_oid_t oid,
+        anjay_iid_t iid,
+        anjay_rid_t rid) {
+    int result = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    result = _anjay_send_batch_data_add_current_unlocked(
+            builder, anjay, gateway_iid, oid, iid, rid);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
+}
+
+int anjay_lwm2m_gateway_send_batch_data_add_current_multiple(
+        anjay_send_batch_builder_t *builder,
+        anjay_t *anjay_locked,
+        anjay_iid_t gateway_iid,
+        const anjay_send_resource_path_t *paths,
+        size_t paths_length) {
+    int result = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    result = _anjay_send_batch_data_add_current_multiple_unlocked(
+            builder, anjay, gateway_iid, paths, paths_length, false);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
+}
+
+int anjay_lwm2m_gateway_send_batch_data_add_current_multiple_ignore_not_found(
+        anjay_send_batch_builder_t *builder,
+        anjay_t *anjay_locked,
+        anjay_iid_t gateway_iid,
+        const anjay_send_resource_path_t *paths,
+        size_t paths_length) {
+    int result = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    result = _anjay_send_batch_data_add_current_multiple_unlocked(
+            builder, anjay, gateway_iid, paths, paths_length, true);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
+}
+
+#        endif // ANJAY_WITH_LWM2M_GATEWAY
 
 anjay_send_batch_t *
 anjay_send_batch_builder_compile(anjay_send_batch_builder_t **builder_ptr) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -363,14 +363,17 @@ coap_msg__(aligned_buffer_t *buf,
  *                                       BLOCK2(0, 16, "full_payload"));
  * @endcode
  */
-#define COAP_MSG(Type, Code, Id, ... /* Payload, Opts... */)         \
-    coap_msg__(ensure_aligned_buffer(&(uint8_t[65536]){ 0 }), 65536, \
-               &(struct coap_msg_args) {                             \
-                   .type = (Type),                                   \
-                   .code = CODE__(Code),                             \
-                   Id,                                               \
-                   __VA_ARGS__                                       \
-               })
+#define COAP_MSG(Type, Code, Id, ... /* Payload, Opts... */)                 \
+    coap_msg__(                                                              \
+            ensure_aligned_buffer((uint8_t *) &(                             \
+                    avs_max_align_t[65536 / sizeof(avs_max_align_t)]){ 0 }), \
+            65536,                                                           \
+            &(struct coap_msg_args) {                                        \
+                .type = (Type),                                              \
+                .code = CODE__(Code),                                        \
+                Id,                                                          \
+                __VA_ARGS__                                                  \
+            })
 
 /* Used in COAP_MSG() to define message identity. */
 #define ID_TOKEN(MsgId, Token)                                                 \

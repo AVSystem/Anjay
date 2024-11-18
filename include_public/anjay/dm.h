@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -24,6 +24,9 @@ extern "C" {
 #define ANJAY_DM_OID_ACCESS_CONTROL 2
 #define ANJAY_DM_OID_DEVICE 3
 #define ANJAY_DM_OID_FIRMWARE_UPDATE 5
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+#    define ANJAY_DM_OID_LWM2M_GATEWAY 25
+#endif // ANJAY_WITH_LWM2M_GATEWAY
 
 typedef struct anjay_dm_object_def_struct anjay_dm_object_def_t;
 
@@ -1112,6 +1115,7 @@ typedef struct {
  */
 anjay_resource_observation_status_t anjay_resource_observation_status(
         anjay_t *anjay, anjay_oid_t oid, anjay_iid_t iid, anjay_rid_t rid);
+
 #endif // ANJAY_WITH_OBSERVATION_STATUS
 
 /**

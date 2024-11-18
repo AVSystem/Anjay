@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -41,13 +41,16 @@
 #include "anjay_io_core.h"
 #include "anjay_servers_utils.h"
 #include "anjay_utils_private.h"
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+#    include <string.h>
+#endif // ANJAY_WITH_LWM2M_GATEWAY
 
 #include "dm/anjay_dm_write_attrs.h"
 
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "3.8.1"
+#    define ANJAY_VERSION "3.9.0"
 #endif // ANJAY_VERSION
 
 #ifdef ANJAY_WITH_LWM2M11
@@ -247,6 +250,11 @@ static int init_anjay(anjay_unlocked_t *anjay,
     anjay->use_connection_id = config->use_connection_id;
     anjay->additional_tls_config_clb = config->additional_tls_config_clb;
 
+#ifdef ANJAY_WITH_COAP_DOWNLOAD
+    anjay->coap_downloader_retry_count = config->coap_downloader_retry_count;
+    anjay->coap_downloader_retry_delay = config->coap_downloader_retry_delay;
+#endif // ANJAY_WITH_COAP_DOWNLOAD
+
     if (config->prng_ctx) {
         anjay->prng_ctx.allocated_by_user = true;
         anjay->prng_ctx.ctx = config->prng_ctx;
@@ -259,7 +267,7 @@ static int init_anjay(anjay_unlocked_t *anjay,
     }
 
 #ifdef ANJAY_WITH_ATTR_STORAGE
-    if (_anjay_attr_storage_init(anjay)) {
+    if (_anjay_attr_storage_init(&anjay->attr_storage, &anjay->dm)) {
         return -1;
     }
 #endif // ANJAY_WITH_ATTR_STORAGE
@@ -770,6 +778,9 @@ static int parse_dm_uri(const avs_coap_request_header_t *hdr,
     size_t segment_index = 0;
     bool expect_no_more_options = false;
     int result = 0;
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+    bool prefix_found = false;
+#endif // ANJAY_WITH_LWM2M_GATEWAY
 
     while (!(result = avs_coap_options_get_string_it(
                      &hdr->options, AVS_COAP_OPTION_URI_PATH, &it, &uri_size,
@@ -781,6 +792,28 @@ static int parse_dm_uri(const avs_coap_request_header_t *hdr,
         } else if (expect_no_more_options || uri[0] == '\0') {
             anjay_log(WARNING, _("superfluous empty Uri-Path segment"));
             return -1;
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+        } else if (segment_index
+                   >= _ANJAY_URI_PATH_MAX_LENGTH + (prefix_found ? 1 : 0)) {
+            // too many segments
+            anjay_log(WARNING, _("too many Uri-Path options"));
+            return -1;
+        } else if (segment_index == 0 && isalpha(uri[0])) {
+            // first segment starts with a letter
+            if (uri_size > ANJAY_GATEWAY_MAX_PREFIX_LEN) {
+                anjay_log(WARNING, _("prefix too long"));
+                return -1;
+            }
+            strcpy(out_uri->prefix, uri);
+            prefix_found = true;
+        } else {
+            size_t path_depth =
+                    prefix_found ? segment_index - 1 : segment_index;
+            if (parse_request_uri_segment(uri, &out_uri->ids[path_depth])) {
+                return -1;
+            }
+        }
+#else  // ANJAY_WITH_LWM2M_GATEWAY
         } else if (segment_index >= _ANJAY_URI_PATH_MAX_LENGTH) {
             // 5 or more segments...
             anjay_log(WARNING, _("prefixed Uri-Path are not supported"));
@@ -789,6 +822,7 @@ static int parse_dm_uri(const avs_coap_request_header_t *hdr,
                                              &out_uri->ids[segment_index])) {
             return -1;
         }
+#endif // ANJAY_WITH_LWM2M_GATEWAY
         ++segment_index;
     }
 

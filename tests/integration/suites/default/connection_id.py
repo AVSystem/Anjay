@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -101,13 +101,22 @@ class CoapServerWithProxy(coap.DtlsServer):
             proxy.join()
 
 
-def _disconnect_socket(sock):
+def disconnect_socket(sock):
+    timeout = sock.gettimeout()
     try:
+        # get rid of any data that might be in the socket buffer
+        try:
+            sock.settimeout(0)
+            sock.recv(65535)
+        except BlockingIOError:
+            pass
         sock.connect(('', 0))
     except OSError as e:
         # On macOS, the call above returns failure, but actually works anyway...
         if e.errno not in {errno.EAFNOSUPPORT, errno.EADDRNOTAVAIL}:
             raise
+    finally:
+        sock.settimeout(timeout)
 
 
 # At the beginning of the test, things look like this:
@@ -168,9 +177,7 @@ class DtlsConnectionIdTest(test_suite.Lwm2mDtlsSingleServerTest,
                            test_suite.Lwm2mDmOperations):
     CONNECTION_ID_VALUE = 'something'
 
-    def setUp(self, extra_cmdline_args=None, **kwargs):
-        if extra_cmdline_args is None:
-            extra_cmdline_args = []
+    def setUp(self, extra_cmdline_args=[], **kwargs):
         if '--use-connection-id' not in extra_cmdline_args:
             extra_cmdline_args.insert(0, '--use-connection-id')
         server = Lwm2mServer(CoapServerWithProxy(psk_identity=self.PSK_IDENTITY,
@@ -186,7 +193,7 @@ class DtlsConnectionIdTest(test_suite.Lwm2mDtlsSingleServerTest,
 
         # Unconnect the socket at the pymbedtls site (this unconnects the link between "server proxy"
         # and "Lwm2m Server" in the diagram above), to allow accepting packets from unknown endpoints.
-        _disconnect_socket(self.serv.socket.py_socket)
+        disconnect_socket(self.serv.socket.py_socket)
 
         with self.serv.server_proxy():
             self.communicate('send-update')
@@ -216,7 +223,7 @@ class DtlsWithoutConnectionIdTest(test_suite.Lwm2mDtlsSingleServerTest,
 
         # Unconnect the socket at the pymbedtls site (this unconnects the link between "server proxy"
         # and "Lwm2m Server" in the diagram above), to allow accepting packets from unknown endpoints.
-        _disconnect_socket(self.serv.socket.py_socket)
+        disconnect_socket(self.serv.socket.py_socket)
 
         # Nonetheless, connection_id was not used, so we should expect that the server
         # ignores Update messages messages.

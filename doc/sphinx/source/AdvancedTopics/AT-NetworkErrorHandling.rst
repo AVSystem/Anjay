@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
@@ -128,6 +128,8 @@ Other error conditions
   will be passed to the appropriate callback handler, see the `documentation to
   anjay_download_finished_handler_t
   <../api/download_8h.html#a44f0d37ec9ef8123bf88aa9ea9ee7291>`_ for details.
+  CoAP downloads support automatic resumption of downloads after network errors,
+  see the :ref:`how-can-we-ensure-higher-success-rate` for details.
 
 .. rubric:: Footnotes
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -75,4 +75,8 @@ nav a {
 
 .highlight .hll {
     background: #f3f6f6;
+}
+
+code.small-literal {
+    font-size: 65%;
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -226,6 +226,10 @@ typedef void *anjay_download_handle_t;
  * first request packet, will be sent during subsequent calls to
  * @ref anjay_sched_run. This also means that you can create a postponed
  * download by calling @ref anjay_download_suspend immediately afterwards.
+ *
+ * The behavior of the CoAP downloader can be also affected by the
+ * @ref anjay_configuration_t::coap_downloader_retry_count and
+ * @ref anjay_configuration_t::coap_downloader_retry_delay.
  *
  * @param anjay      Anjay object that will manage the download process.
  * @param config     Download configuration.

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -92,10 +92,7 @@ static int write_resource_instance(anjay_unlocked_t *anjay,
                                            path->ids[ANJAY_ID_RIID], in_ctx);
 
     if (!result && notify_queue) {
-        result = _anjay_notify_queue_resource_change(notify_queue,
-                                                     path->ids[ANJAY_ID_OID],
-                                                     path->ids[ANJAY_ID_IID],
-                                                     path->ids[ANJAY_ID_RID]);
+        result = _anjay_notify_queue_resource_change(notify_queue, path);
     }
     return result;
 }
@@ -201,10 +198,7 @@ write_resource_and_move_to_next_entry(anjay_unlocked_t *anjay,
                                                               is_array, in_ctx);
     }
     if (!result && notify_queue) {
-        result = _anjay_notify_queue_resource_change(notify_queue,
-                                                     path->ids[ANJAY_ID_OID],
-                                                     path->ids[ANJAY_ID_IID],
-                                                     path->ids[ANJAY_ID_RID]);
+        result = _anjay_notify_queue_resource_change(notify_queue, path);
     }
     return result;
 }
@@ -260,9 +254,8 @@ static int write_resource_raw(anjay_unlocked_t *anjay,
         result = _anjay_dm_transaction_finish(anjay, result);
     }
     if (result) {
-        anjay_log(DEBUG, _("writing to ") "/%u/%u/%u" _(" failed: ") "%d",
-                  path.ids[ANJAY_ID_OID], path.ids[ANJAY_ID_IID],
-                  path.ids[ANJAY_ID_RID], result);
+        anjay_log(DEBUG, _("writing to ") "%s" _(" failed: ") "%d",
+                  ANJAY_DEBUG_MAKE_PATH(&path), result);
     }
     return result;
 }
@@ -427,12 +420,23 @@ int _anjay_dm_write_composite(anjay_unlocked_t *anjay,
             result = ANJAY_ERR_BAD_REQUEST;
             goto finish;
         }
+
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+        if (_anjay_uri_path_has_prefix(&path)) {
+            dm_log(ERROR,
+                   _("Write Composite on End Devices DMs is not supported"));
+            result = ANJAY_ERR_METHOD_NOT_ALLOWED;
+            goto finish;
+        }
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
+
         const anjay_dm_installed_object_t *obj =
                 _anjay_dm_find_object_by_oid(&anjay->dm,
                                              path.ids[ANJAY_ID_OID]);
 
         if (!obj) {
-            dm_log(DEBUG, _("Object not found: ") "%u", path.ids[ANJAY_ID_OID]);
+            dm_log(DEBUG, _("Object not found: ") DM_LOG_PREFIX "/%u",
+                   DM_LOG_PREFIX_ARG(path.prefix) path.ids[ANJAY_ID_OID]);
             result = ANJAY_ERR_NOT_FOUND;
             goto finish;
         }

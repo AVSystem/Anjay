@@ -1,5 +1,29 @@
 # Changelog
 
+## 3.9.0 (February 28th, 2025)
+
+### Features
+
+- LwM2M Gateway functionality was added. To see the feature description, API
+  documentation and tutorial on its usage, see Anjay docs
+- Added a ``coap_downloader_retry_count`` and ``coap_downloader_retry_delay``
+  configuration options that allow to resume the CoAP download process in case
+  of network errors.
+
+### Improvements
+
+- Extended the functionality of the flag enabling Connection ID to also include
+  connections to the file download CoAP server, in addition to the LwM2M server
+- Migrated GitHub Actions tests on macOS to the macos-14 runner.
+- Refactored test_ghactions.py.
+- Added Github Actions test on macOS for the AppleClang.
+
+### Bugfixes
+
+- Ensured that Github Actions tests on macOS actually runs on LLVM installed
+  from Homebrew instead of AppleClang.
+- Minor fix in the devconfig.
+
 ## 3.8.1 (November 13th, 2024)
 
 ### Improvements

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -27,6 +27,7 @@
 #include <inttypes.h>
 #include <string.h>
 
+#include <anjay/anjay.h>
 #include <anjay/attr_storage.h>
 #include <anjay/ipso_objects.h>
 
@@ -40,9 +41,32 @@
 #    include <anjay/lwm2m_send.h>
 #endif // ANJAY_WITH_SEND
 
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+#    include "lwm2m_gateway.h"
+#    include <anjay/lwm2m_gateway.h>
+#endif // ANJAY_WITH_LWM2M_GATEWAY
+
 #include <avsystem/commons/avs_memory.h>
 
 #define MAX_SEND_RESOURCES 32
+
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+#    define LWM2M_GATEWAY_PATH_LOG_PART " | dev_id /OID/IID/RID"
+#    define LWM2M_GATEWAY_DEVID_LOG_PART \
+        " dev_id must be in range "      \
+        "[0," AVS_QUOTE_MACRO(LWM2M_GATEWAY_END_DEVICE_RANGE) "]."
+
+static inline int verify_device_count(anjay_iid_t end_dev_iid) {
+    if (end_dev_iid >= LWM2M_GATEWAY_END_DEVICE_COUNT) {
+        demo_log(ERROR, LWM2M_GATEWAY_DEVID_LOG_PART);
+        return -1;
+    }
+    return 0;
+}
+#else // ANJAY_WITH_LWM2M_GATEWAY
+#    define LWM2M_GATEWAY_PATH_LOG_PART ""
+#    define LWM2M_GATEWAY_DEVID_LOG_PART ""
+#endif // ANJAY_WITH_LWM2M_GATEWAY
 
 static int parse_ssid(const char *text, anjay_ssid_t *out_ssid) {
     unsigned id;
@@ -477,9 +501,24 @@ anjay_send_func_t(anjay_t *anjay,
                   void *finished_handler_data);
 
 static void print_send_usage(const char *command) {
-    demo_log(WARNING, "%s usage: %s SSID [/OID/IID/RID [...]]", command,
-             command);
+    demo_log(WARNING,
+             "%s usage: %s SSID (/OID/IID/RID" LWM2M_GATEWAY_PATH_LOG_PART
+             ") [...]",
+             command, command);
 }
+
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+static bool all_paths_have_same_iid(const anjay_iid_t *iids,
+                                    size_t paths_count) {
+    anjay_iid_t iid = iids[0];
+    for (size_t i = 1; i < paths_count; i++) {
+        if (iids[i] != iid) {
+            return false;
+        }
+    }
+    return true;
+}
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
 
 static void cmd_send_impl(anjay_demo_t *demo,
                           const char *command,
@@ -499,6 +538,10 @@ static void cmd_send_impl(anjay_demo_t *demo,
     }
 
     anjay_send_resource_path_t paths[MAX_SEND_RESOURCES];
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+    anjay_iid_t gateway_iids[MAX_SEND_RESOURCES];
+    memset(gateway_iids, ANJAY_ID_INVALID, sizeof(gateway_iids));
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
     size_t paths_count = 0;
 
     while ((args_string = strchr(args_string, ' '))) {
@@ -512,18 +555,59 @@ static void cmd_send_impl(anjay_demo_t *demo,
         anjay_oid_t oid;
         anjay_iid_t iid;
         anjay_rid_t rid;
-        if (sscanf(args_string, "/%" SCNu16 "/%" SCNu16 "/%" SCNu16, &oid, &iid,
-                   &rid)
-                != 3) {
+        int consumed;
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+        anjay_iid_t gateway_iid;
+        if (sscanf(args_string,
+                   "%" SCNu16 " /%" SCNu16 "/%" SCNu16 "/%" SCNu16 "%n",
+                   &gateway_iid, &oid, &iid, &rid, &consumed)
+                == 4) {
+            gateway_iids[paths_count] = gateway_iid;
+        } else
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
+                if (sscanf(args_string,
+                           "/%" SCNu16 "/%" SCNu16 "/%" SCNu16 "%n", &oid, &iid,
+                           &rid, &consumed)
+                    != 3) {
             print_send_usage(command);
             anjay_send_batch_builder_cleanup(&builder);
             return;
         }
+        args_string += consumed;
 
         paths[paths_count++] = (anjay_send_resource_path_t) { oid, iid, rid };
     }
 
     int result = 0;
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+    if (paths_count > 1 && all_paths_have_same_iid(gateway_iids, paths_count)) {
+        // For this function timestamp value is encoded only once - this is
+        // required by Integration Tests
+        if (gateway_iids[0] == ANJAY_ID_INVALID) {
+            result = anjay_send_batch_data_add_current_multiple(
+                    builder, demo->anjay, paths, paths_count);
+        } else {
+            result = anjay_lwm2m_gateway_send_batch_data_add_current_multiple(
+                    builder, demo->anjay, gateway_iids[0], paths, paths_count);
+        }
+    } else {
+        for (size_t i = 0; i < paths_count; i++) {
+            if (gateway_iids[i] == ANJAY_ID_INVALID) {
+                result = anjay_send_batch_data_add_current(builder, demo->anjay,
+                                                           paths[i].oid,
+                                                           paths[i].iid,
+                                                           paths[i].rid);
+            } else {
+                result = anjay_lwm2m_gateway_send_batch_data_add_current(
+                        builder, demo->anjay, gateway_iids[i], paths[i].oid,
+                        paths[i].iid, paths[i].rid);
+            }
+            if (result) {
+                break;
+            }
+        }
+    }
+#    else  // ANJAY_WITH_LWM2M_GATEWAY
     if (paths_count == 1) {
         result = anjay_send_batch_data_add_current(
                 builder, demo->anjay, paths[0].oid, paths[0].iid, paths[0].rid);
@@ -532,7 +616,7 @@ static void cmd_send_impl(anjay_demo_t *demo,
                 anjay_send_batch_data_add_current_multiple(builder, demo->anjay,
                                                            paths, paths_count);
     }
-
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
     if (result) {
         demo_log(ERROR, "Error during reading values from data model");
         anjay_send_batch_builder_cleanup(&builder);
@@ -999,35 +1083,24 @@ static void cmd_set_queue_mode_preference(anjay_demo_t *demo,
 #endif // ANJAY_WITH_LWM2M11
 
 #ifdef ANJAY_WITH_OBSERVATION_STATUS
-static void cmd_observation_status(anjay_demo_t *demo,
-                                   const char *args_string) {
-    anjay_oid_t oid;
-    anjay_iid_t iid;
-    anjay_rid_t rid;
-    if (sscanf(args_string, " /%" SCNu16 "/%" SCNu16 "/%" SCNu16, &oid, &iid,
-               &rid)
-            != 3) {
-        demo_log(WARNING,
-                 "observation-status usage: observation_status /OID/IID/RID");
-        return;
-    }
-    anjay_resource_observation_status_t status =
-            anjay_resource_observation_status(demo->anjay, oid, iid, rid);
+static void
+log_observation_status(const anjay_resource_observation_status_t *status) {
     demo_log(INFO,
              "anjay_resource_observation_status, is_observed == %s, "
              "min_period == %" PRId32 ", max_eval_period == %" PRId32,
-             status.is_observed ? "true" : "false", status.min_period,
-             status.max_eval_period);
+             status->is_observed ? "true" : "false", status->min_period,
+             status->max_eval_period);
+
 #    if (ANJAY_MAX_OBSERVATION_SERVERS_REPORTED_NUMBER > 0)
-    if (status.servers_number > 0) {
+    if (status->servers_number > 0) {
         char *ssid_list =
                 (char *) avs_calloc((AVS_UINT_STR_BUF_SIZE(anjay_ssid_t) + 2)
-                                            * status.servers_number,
+                                            * status->servers_number,
                                     1);
         if (ssid_list) {
-            for (uint16_t i = 0; i < status.servers_number; i++) {
+            for (uint16_t i = 0; i < status->servers_number; i++) {
                 char ssid_string[AVS_UINT_STR_BUF_SIZE(anjay_ssid_t) + 2];
-                sprintf(ssid_string, " %" PRIu16 ",", status.servers[i]);
+                sprintf(ssid_string, " %" PRIu16 ",", status->servers[i]);
                 strcat(ssid_list, ssid_string);
             }
             ssid_list[strlen(ssid_list) - 1] = '\0'; // remove trailing comma
@@ -1036,7 +1109,41 @@ static void cmd_observation_status(anjay_demo_t *demo,
             avs_free(ssid_list);
         }
     }
-#    endif //(ANJAY_MAX_OBSERVATION_SERVERS_REPORTED_NUMBER > 0)
+#    endif // (ANJAY_MAX_OBSERVATION_SERVERS_REPORTED_NUMBER > 0)
+}
+
+static void cmd_observation_status(anjay_demo_t *demo,
+                                   const char *args_string) {
+    anjay_oid_t oid;
+    anjay_iid_t iid;
+    anjay_rid_t rid;
+
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+    anjay_iid_t end_dev_iid = ANJAY_ID_INVALID;
+    if (sscanf(args_string, " %" SCNu16 " /%" SCNu16 "/%" SCNu16 "/%" SCNu16,
+               &end_dev_iid, &oid, &iid, &rid)
+            == 4) {
+        if (verify_device_count(end_dev_iid)) {
+            return;
+        }
+        // even if there is no end-device with given dev id, we still want to
+        // print that such resource is not observed due to tests
+        anjay_resource_observation_status_t status =
+                anjay_lwm2m_gateway_resource_observation_status(
+                        demo->anjay, end_dev_iid, oid, iid, rid);
+        log_observation_status(&status);
+    } else
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
+            if (sscanf(args_string, " /%" SCNu16 "/%" SCNu16 "/%" SCNu16, &oid,
+                       &iid, &rid)
+                == 3) {
+        anjay_resource_observation_status_t status =
+                anjay_resource_observation_status(demo->anjay, oid, iid, rid);
+        log_observation_status(&status);
+    } else {
+        demo_log(WARNING, "observation-status usage: "
+                          "(/OID/IID/RID" LWM2M_GATEWAY_PATH_LOG_PART ")");
+    }
 }
 #endif // ANJAY_WITH_OBSERVATION_STATUS
 
@@ -1448,6 +1555,87 @@ static void cmd_get_server_connection_status(anjay_demo_t *demo,
 }
 #endif // ANJAY_WITH_CONN_STATUS_API
 
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+static void cmd_setup_end_device(anjay_demo_t *demo, const char *args_string) {
+    anjay_iid_t end_dev_iid;
+    if (sscanf(args_string, " %" SCNu16, &end_dev_iid) != 1) {
+        demo_log(ERROR, "invalid format");
+        return;
+    }
+    if (verify_device_count(end_dev_iid)) {
+        return;
+    }
+    if (lwm2m_gateway_setup_end_device(demo->anjay, end_dev_iid)) {
+        demo_log(ERROR, "Failed to set up Gateway End Device id = %" PRIu16,
+                 end_dev_iid);
+    } else {
+        demo_log(INFO, "Successfully set up Gateway End Device id = %" PRIu16,
+                 end_dev_iid);
+    }
+}
+
+static void cmd_cleanup_end_device(anjay_demo_t *demo,
+                                   const char *args_string) {
+    anjay_iid_t end_dev_iid;
+    if (sscanf(args_string, " %" SCNu16, &end_dev_iid) < 1) {
+        demo_log(ERROR, "invalid format");
+        return;
+    }
+    if (verify_device_count(end_dev_iid)) {
+        return;
+    }
+    lwm2m_gateway_cleanup_end_device(demo->anjay, end_dev_iid);
+}
+
+static void cmd_press_button_end_device(anjay_demo_t *demo,
+                                        const char *args_string) {
+    (void) demo;
+    anjay_iid_t end_dev_iid;
+    if (sscanf(args_string, " %" SCNu16, &end_dev_iid) < 1) {
+        demo_log(ERROR, "invalid format");
+        return;
+    }
+    if (verify_device_count(end_dev_iid)) {
+        return;
+    }
+    lwm2m_gateway_press_button_end_device(demo->anjay, end_dev_iid);
+}
+
+static void cmd_release_button_end_device(anjay_demo_t *demo,
+                                          const char *args_string) {
+    (void) demo;
+    anjay_iid_t end_dev_iid;
+    if (sscanf(args_string, " %" SCNu16, &end_dev_iid) < 1) {
+        demo_log(ERROR, "invalid format");
+        return;
+    }
+    if (verify_device_count(end_dev_iid)) {
+        return;
+    }
+    lwm2m_gateway_release_button_end_device(demo->anjay, end_dev_iid);
+}
+
+static void cmd_badc_write_end_device(anjay_demo_t *demo,
+                                      const char *args_string) {
+    anjay_iid_t iid;
+    anjay_riid_t riid;
+    int length;
+    anjay_riid_t end_dev_iid;
+    if (sscanf(args_string, " %" SCNu16 " %" SCNu16 " %" SCNu16 " %n",
+               &end_dev_iid, &iid, &riid, &length)
+            < 3) {
+        demo_log(ERROR, "invalid format");
+        return;
+    }
+
+    if (verify_device_count(end_dev_iid)) {
+        return;
+    }
+    lwm2m_gateway_binary_app_data_container_write(demo->anjay, end_dev_iid, iid,
+                                                  riid, &args_string[length]);
+}
+#endif // ANJAY_WITH_LWM2M_GATEWAY
+
 static void cmd_help(anjay_demo_t *demo, const char *args_string);
 
 struct cmd_handler_def {
@@ -1535,11 +1723,13 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
     CMD_HANDLER("notify", "", cmd_notify,
                 "Executes anjay_notify_* on a specified path"),
 #ifdef ANJAY_WITH_SEND
-    CMD_HANDLER("send_deferrable", "SSID [/OID/IID/RID [...]]",
+    CMD_HANDLER("send_deferrable", "SSID (/OID/IID/RID" LWM2M_GATEWAY_PATH_LOG_PART ") [...]",
                 cmd_send_deferrable,
-                "Executes anjay_send_deferrable on a specified path"),
-    CMD_HANDLER("send", "SSID [/OID/IID/RID [...]]", cmd_send,
-                "Executes anjay_send on a specified path"),
+                "Executes anjay_send_deferrable on a specified path." LWM2M_GATEWAY_DEVID_LOG_PART
+                "\ne.g. send_deferrable 1 /3/0/0"),
+    CMD_HANDLER("send", "SSID (/OID/IID/RID" LWM2M_GATEWAY_PATH_LOG_PART ") [...]", cmd_send,
+                "Executes anjay_send on a specified path." LWM2M_GATEWAY_DEVID_LOG_PART
+                "\ne.g. send 1 /3/0/0"),
 #endif // ANJAY_WITH_SEND
     CMD_HANDLER("unregister-object", "oid", cmd_unregister_object,
                 "Unregister an LwM2M Object"),
@@ -1580,8 +1770,10 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 "Advances real and monotonic clock readings by specified "
                 "number of seconds"),
 #ifdef ANJAY_WITH_OBSERVATION_STATUS
-    CMD_HANDLER("observation-status", "/OID/IID/RID", cmd_observation_status,
-                "Queries the observation status of a given Resource"),
+    CMD_HANDLER("observation-status", "(/OID/IID/RID" LWM2M_GATEWAY_PATH_LOG_PART ")",
+                cmd_observation_status,
+                "Queries the observation status of a given Resource."
+                LWM2M_GATEWAY_DEVID_LOG_PART),
 #endif // ANJAY_WITH_OBSERVATION_STATUS
     CMD_HANDLER("badc-write", "IID RIID value", cmd_badc_write,
                 "Writes new value to Binary App Data Container object"),
@@ -1689,6 +1881,23 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 "Displays current connection status for the server with SSID "
                 "specified by the argument."),
 #endif // ANJAY_WITH_CONN_STATUS_API
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+    CMD_HANDLER("gw_register", "dev_id",
+                cmd_setup_end_device,
+                "Registers End Device in LwM2M gateway context." LWM2M_GATEWAY_DEVID_LOG_PART),
+    CMD_HANDLER("gw_deregister", "dev_id",
+                cmd_cleanup_end_device,
+                "Deregisters End Device in LwM2M gateway context. " LWM2M_GATEWAY_DEVID_LOG_PART),
+    CMD_HANDLER("gw_press_button", "dev_id",
+                cmd_press_button_end_device,
+                "Simulates pressing the button on End Device. " LWM2M_GATEWAY_DEVID_LOG_PART),
+    CMD_HANDLER("gw_release_button", "dev_id",
+                cmd_release_button_end_device,
+                "Simulates releasing the button on End Device. " LWM2M_GATEWAY_DEVID_LOG_PART),
+    CMD_HANDLER("gw-badc-write", "dev_id IID RIID value",
+                cmd_badc_write_end_device,
+                "Writes new value to Binary App Data Container object on End Device. " LWM2M_GATEWAY_DEVID_LOG_PART),
+#endif // ANJAY_WITH_LWM2M_GATEWAY
     CMD_HANDLER("help", "", cmd_help, "Prints this message")
     // clang-format on
 };

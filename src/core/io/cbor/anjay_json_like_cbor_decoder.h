@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -27,6 +27,27 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
  */
 #define MAX_SENML_CBOR_NEST_STACK_SIZE 3
 
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+/**
+ * Compared to variant without support for LwM2M gateway:
+ * - the paths can be up to 5 components long, as they might contain a prefix
+ *   which selects an end device,
+ * - the prefix is a string; it can be a key directly, or an initial element of
+ *   an array key,
+ * - the prefix, if any, is the first component of a path, therefore only the
+ *   root map can contain such keys.
+ *
+ * This means that:
+ * - the root map can be 5 levels deep now (so that's 1 more),
+ * - CBOR decoder's stack when parsing a key can grow by 2 levels now (array key
+ *   with prefix as indefinite text string), but that is valid only for the root
+ *   map, of which the maximum stack growth determined by inner maps will be
+ *   larger anyway.
+ *
+ * Therefore, the maximum stack size is 1+1+1+1+2 = 6;
+ */
+#    define MAX_LWM2M_CBOR_NEST_STACK_SIZE 6
+#else // ANJAY_WITH_LWM2M_GATEWAY
 /**
  * LwM2M CBOR is a tree of nested maps. Root map is up to 4 levels deep. This
  * happens in case there's a value of multi-instance resource, and key for each
@@ -51,7 +72,8 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
  *
  * Therefore, the maximum stack size is 1+1+1+2 = 5;
  */
-#define MAX_LWM2M_CBOR_NEST_STACK_SIZE 5
+#    define MAX_LWM2M_CBOR_NEST_STACK_SIZE 5
+#endif // ANJAY_WITH_LWM2M_GATEWAY
 
 anjay_json_like_decoder_t *_anjay_cbor_decoder_new(avs_stream_t *stream,
                                                    size_t max_nesting_depth);

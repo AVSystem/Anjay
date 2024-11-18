@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -147,15 +147,8 @@ class OfflineWithRegistrationUpdateSchedule(test_suite.Lwm2mDtlsSingleServerTest
 class OfflineWithQueueMode:
     class Test(retransmissions.RetransmissionTest.TestMixin, test_suite.Lwm2mDtlsSingleServerTest):
         def setUp(self, extra_cmdline_args=None, binding='UQ', *args, **kwargs):
-            import subprocess
-            import unittest
-            output = subprocess.run([self._get_demo_executable(), '-e', 'dummy', '-u', 'invalid'],
-                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout.decode(
-                'utf-8')
-
-            if 'ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE = ON' in output:
-                raise unittest.SkipTest('Queue mode autoclose disabled')
-
+            self.skipIfFeatureStatus('ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE = ON',
+                                     'Queue mode autoclose disabled')
             super().setUp(*args, extra_cmdline_args=(extra_cmdline_args or []) + ['--binding=UQ'],
                           binding=binding, **kwargs)
 

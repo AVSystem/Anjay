@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -81,8 +81,9 @@ static int add_instances_without_iids(
         if (!*insert_ptr || proposed_iid < (*insert_ptr)->iid) {
             if (out_dm_changes) {
                 int result = _anjay_notify_queue_instance_created(
-                        out_dm_changes, ANJAY_DM_OID_ACCESS_CONTROL,
-                        proposed_iid);
+                        out_dm_changes,
+                        &MAKE_INSTANCE_PATH(ANJAY_DM_OID_ACCESS_CONTROL,
+                                            proposed_iid));
                 if (result) {
                     return result;
                 }
@@ -127,7 +128,8 @@ int _anjay_access_control_add_instance(
     int result = 0;
     if (out_dm_changes) {
         result = _anjay_notify_queue_instance_created(
-                out_dm_changes, ANJAY_DM_OID_ACCESS_CONTROL, instance->iid);
+                out_dm_changes, &MAKE_INSTANCE_PATH(ANJAY_DM_OID_ACCESS_CONTROL,
+                                                    instance->iid));
     }
     if (!result) {
         AVS_LIST_INSERT(ptr, instance);

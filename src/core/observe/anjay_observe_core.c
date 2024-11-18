@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -19,6 +19,12 @@
 #    include <avsystem/commons/avs_stream_v_table.h>
 
 #    include <anjay_modules/anjay_time_defs.h>
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+#        include <string.h>
+
+#        include <anjay_modules/anjay_dm_utils.h>
+#        include <anjay_modules/anjay_lwm2m_gateway.h>
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
 
 #    include "../anjay_core.h"
 #    include "../anjay_io_core.h"
@@ -587,9 +593,20 @@ static int get_effective_attrs(anjay_unlocked_t *anjay,
                                anjay_dm_r_attributes_t *out_attrs,
                                const anjay_uri_path_t *path,
                                anjay_ssid_t ssid) {
+    const anjay_dm_t *dm;
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+    if (_anjay_uri_path_has_prefix(path)) {
+        if (_anjay_lwm2m_gateway_prefix_to_dm(anjay, path->prefix, &dm)) {
+            return ANJAY_ERR_NOT_FOUND;
+        }
+    } else
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
+    {
+        dm = &anjay->dm;
+    }
     anjay_dm_attrs_query_details_t details = {
         .obj = _anjay_uri_path_has(path, ANJAY_ID_OID)
-                       ? _anjay_dm_find_object_by_oid(&anjay->dm,
+                       ? _anjay_dm_find_object_by_oid(dm,
                                                       path->ids[ANJAY_ID_OID])
                        : NULL,
         .iid = ANJAY_ID_INVALID,
@@ -1193,7 +1210,18 @@ static int read_observation_path(anjay_unlocked_t *anjay,
                                  anjay_batch_t **out_batch) {
     const anjay_dm_installed_object_t *obj = NULL;
     if (_anjay_uri_path_has(path, ANJAY_ID_OID)) {
-        obj = _anjay_dm_find_object_by_oid(&anjay->dm, path->ids[ANJAY_ID_OID]);
+        const anjay_dm_t *dm;
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+        if (_anjay_uri_path_has_prefix(path)) {
+            if (_anjay_lwm2m_gateway_prefix_to_dm(anjay, path->prefix, &dm)) {
+                return ANJAY_ERR_NOT_FOUND;
+            }
+        } else
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
+        {
+            dm = &anjay->dm;
+        }
+        obj = _anjay_dm_find_object_by_oid(dm, path->ids[ANJAY_ID_OID]);
     }
     int result;
     anjay_dm_path_info_t path_info;
@@ -1226,6 +1254,15 @@ static int read_observation_values(anjay_unlocked_t *anjay,
         size_t index = 0;
         AVS_LIST(const anjay_uri_path_t) path;
         AVS_LIST_FOREACH(path, paths->paths) {
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+            if (action == ANJAY_ACTION_READ_COMPOSITE
+                    && _anjay_uri_path_has_prefix(path)) {
+                dm_log(ERROR, _("Observe Composite on End Devices DMs is not "
+                                "supported"));
+                result = ANJAY_ERR_METHOD_NOT_ALLOWED;
+                break;
+            }
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
             if ((result = read_observation_path(anjay, path, action,
                                                 connection_ssid, timestamp,
                                                 &(*out_batches)[index]))) {
@@ -1237,6 +1274,15 @@ static int read_observation_values(anjay_unlocked_t *anjay,
     }
     case PATHS_POINTER_ARRAY:
         for (size_t index = 0; index < paths->count; ++index) {
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+            if (action == ANJAY_ACTION_READ_COMPOSITE
+                    && _anjay_uri_path_has_prefix(&paths->paths[index])) {
+                dm_log(ERROR, _("Observe Composite on End Devices DMs is not "
+                                "supported"));
+                result = ANJAY_ERR_METHOD_NOT_ALLOWED;
+                break;
+            }
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
             if ((result = read_observation_path(
                          anjay, &paths->paths[index], action, connection_ssid,
                          timestamp, &(*out_batches)[index]))) {
@@ -1960,7 +2006,6 @@ observe_for_each_in_wildcard(anjay_observe_connection_entry_t *connection,
     anjay_uri_path_t path = *specimen_path;
     for (int i = wildcard_level; i < _ANJAY_URI_PATH_MAX_LENGTH; ++i) {
         path.ids[i] = ANJAY_ID_INVALID;
-        path.ids[i] = ANJAY_ID_INVALID;
     }
     return observe_for_each_in_bounds(connection, &path, &path, clb, clb_arg);
 }
@@ -1985,7 +2030,7 @@ observe_for_each_in_wildcard(anjay_observe_connection_entry_t *connection,
  * -----------------------
  * A wildcard for any type of ID is represented as the number 65535. The
  * registered observation entries for any given connection are stored in a
- * sorted tree, with the sort key being (OID, IID, RID, RIID) - in
+ * sorted tree, with the sort key being ((prefix), OID, IID, RID, RIID) - in
  * lexicographical order over all elements of that tuple - much like C++11's
  * <c>std::tuple</c> comparison operators.
  *
@@ -2095,32 +2140,31 @@ static int get_observe_status(anjay_observe_connection_entry_t *connection,
 }
 
 anjay_resource_observation_status_t
-_anjay_observe_status(anjay_unlocked_t *anjay,
-                      anjay_oid_t oid,
-                      anjay_iid_t iid,
-                      anjay_rid_t rid) {
-    assert(oid != ANJAY_ID_INVALID);
-    assert(iid != ANJAY_ID_INVALID);
-    assert(rid != ANJAY_ID_INVALID);
+_anjay_observe_status(anjay_unlocked_t *anjay, const anjay_uri_path_t *path) {
+    assert(path);
+    assert(path->ids[0] != ANJAY_ID_INVALID);
+    assert(path->ids[1] != ANJAY_ID_INVALID);
+    assert(path->ids[2] != ANJAY_ID_INVALID);
 
     anjay_resource_observation_status_t result = {
         .is_observed = false,
         .min_period = ANJAY_ATTRIB_INTEGER_NONE,
         .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
     };
+
     AVS_LIST(anjay_observe_connection_entry_t) connection;
     AVS_LIST_FOREACH(connection, anjay->observe.connection_entries) {
-        int retval =
-                observe_for_each_matching(connection,
-                                          &MAKE_RESOURCE_PATH(oid, iid, rid),
-                                          get_observe_status, &result);
+        int retval = observe_for_each_matching(connection, path,
+                                               get_observe_status, &result);
         assert(!retval);
         (void) retval;
     }
+
     result.min_period = AVS_MAX(result.min_period, 0);
 
     return result;
 }
+
 #    endif // ANJAY_WITH_OBSERVATION_STATUS
 
 #    ifdef ANJAY_TEST

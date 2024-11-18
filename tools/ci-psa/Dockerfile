@@ -1,4 +1,4 @@
-# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -6,14 +6,18 @@
 # See the attached LICENSE file for details.
 
 
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
     apt-get install -yq git build-essential cmake zlib1g-dev doxygen python3 \
         libpython3-dev libssl-dev python3-pip clang-tools valgrind opensc \
-        libengine-pkcs11-openssl docker.io nodejs curl jq automake
-COPY requirements.txt requirements.txt
-RUN pip3 install -r requirements.txt
+        libengine-pkcs11-openssl docker.io nodejs curl jq automake python3-venv
+COPY requirements.txt .
+RUN python3 -m venv /venv
+RUN . /venv/bin/activate && \
+    pip install --upgrade pip && \
+    pip install -r requirements.txt
+ENTRYPOINT ["/bin/bash", "-c", ". /venv/bin/activate && exec \"$@\"", "--"]
 
 RUN $(which echo) -e "                                                      \n\
                                                                             \n\

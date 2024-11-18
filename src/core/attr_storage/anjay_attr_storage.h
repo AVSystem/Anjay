@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -13,6 +13,7 @@
 #include <anjay/attr_storage.h>
 #include <anjay/core.h>
 
+#include <anjay_modules/anjay_attr_storage_utils.h>
 #include <anjay_modules/anjay_utils_core.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
@@ -24,11 +25,12 @@ typedef struct {
     bool modified_since_persist;
 } as_saved_state_t;
 
-typedef struct {
+struct anjay_attr_storage_struct {
     AVS_LIST(as_object_entry_t) objects;
     bool modified_since_persist;
     as_saved_state_t saved_state;
-} anjay_attr_storage_t;
+    anjay_dm_t *dm;
+};
 
 static inline bool _anjay_dm_implements_any_object_default_attrs_handlers(
         const anjay_dm_installed_object_t *obj_ptr) {
@@ -64,12 +66,13 @@ static inline bool _anjay_dm_implements_any_resource_instance_attrs_handlers(
 }
 #endif // ANJAY_WITH_LWM2M11
 
-int _anjay_attr_storage_init(anjay_unlocked_t *anjay);
+int _anjay_attr_storage_init(anjay_attr_storage_t *as, anjay_dm_t *dm);
 void _anjay_attr_storage_cleanup(anjay_attr_storage_t *as);
 
-avs_error_t _anjay_attr_storage_transaction_begin(anjay_unlocked_t *anjay);
-void _anjay_attr_storage_transaction_commit(anjay_unlocked_t *anjay);
-avs_error_t _anjay_attr_storage_transaction_rollback(anjay_unlocked_t *anjay);
+avs_error_t _anjay_attr_storage_transaction_begin(anjay_attr_storage_t *as);
+void _anjay_attr_storage_transaction_commit(anjay_attr_storage_t *as);
+avs_error_t _anjay_attr_storage_transaction_rollback(anjay_unlocked_t *anjay,
+                                                     anjay_attr_storage_t *as);
 
 int _anjay_attr_storage_notify(anjay_unlocked_t *anjay,
                                anjay_notify_queue_t queue);
