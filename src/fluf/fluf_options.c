@@ -81,13 +81,13 @@ static int get_option_from_buff(const uint8_t **buff_pointer,
         return res;
     }
     opt->option_number += last_opt_number;
-    size_t temp_payload_len = opt->payload_len;
-    res = update_extended_option((uint16_t *) &temp_payload_len, buff_pointer,
+    uint16_t temp_payload_len = (uint16_t)opt->payload_len;
+    res = update_extended_option(&temp_payload_len, buff_pointer,
                                  buff_end);
     if (res) {
         return res;
     }
-    opt->payload_len = temp_payload_len;
+    opt->payload_len = (size_t)temp_payload_len;
 
     // move to payload position
     (*buff_pointer)++;
