@@ -152,7 +152,7 @@ jobs:
       - run: brew update
       # NOTE: try the brew install command twice to work around "brew link" errors
       - run: INSTALL_CMD="brew install python3 openssl $COMPILER_VERSION"; $INSTALL_CMD || $INSTALL_CMD
-      - run: export PATH="$(brew --prefix $COMPILER_VERSION)/bin:$PATH"
+      - run: echo 'export PATH="$(brew --prefix $COMPILER_VERSION)/bin:$PATH"' >> ~/.bashrc
       # NOTE: Some tests don't pass on mbedTLS 3.6.2 now, so we need to install an older version
       #       Homebrew only specifiers major version of mbedTLS, so let's pin the version to 3.6.0 manually
       - run: curl -f https://raw.githubusercontent.com/Homebrew/homebrew-core/219dabf6cab172fb8b62b4d8598e016e190c3c20/Formula/m/mbedtls.rb > /tmp/mbedtls.rb
