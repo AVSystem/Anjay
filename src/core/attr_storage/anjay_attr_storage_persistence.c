@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -343,7 +343,7 @@ static avs_error_t clear_nonexistent_entries(anjay_unlocked_t *anjay,
     AVS_LIST(as_object_entry_t) object_helper;
     AVS_LIST_DELETABLE_FOREACH_PTR(object_ptr, object_helper, &as->objects) {
         const anjay_dm_installed_object_t *def_ptr =
-                _anjay_dm_find_object_by_oid(&anjay->dm, (*object_ptr)->oid);
+                _anjay_dm_find_object_by_oid(as->dm, (*object_ptr)->oid);
         if (!def_ptr) {
             remove_object_entry(as, object_ptr);
         } else {
@@ -385,8 +385,9 @@ _anjay_attr_storage_persist_inner(anjay_attr_storage_t *attr_storage,
 }
 
 avs_error_t _anjay_attr_storage_restore_inner(anjay_unlocked_t *anjay,
+                                              anjay_attr_storage_t *as,
                                               avs_stream_t *in) {
-    _anjay_attr_storage_clear(&anjay->attr_storage);
+    _anjay_attr_storage_clear(as);
 
     avs_persistence_context_t ctx = avs_persistence_restore_context_create(in);
     as_persistence_version_t version = (as_persistence_version_t) 0;
@@ -397,15 +398,13 @@ avs_error_t _anjay_attr_storage_restore_inner(anjay_unlocked_t *anjay,
                                    &ctx, (uint8_t *) &version,
                                    SUPPORTED_VERSIONS_ARRAY,
                                    sizeof(SUPPORTED_VERSIONS_ARRAY))))
-            || avs_is_err((err = HANDLE_LIST(object, &ctx,
-                                             &anjay->attr_storage.objects,
+            || avs_is_err((err = HANDLE_LIST(object, &ctx, &as->objects,
                                              (void *) version)))
-            || avs_is_err((err = (is_attr_storage_sane(&anjay->attr_storage)
+            || avs_is_err((err = (is_attr_storage_sane(as)
                                           ? AVS_OK
                                           : avs_errno(AVS_EBADMSG))))
-            || avs_is_err((err = clear_nonexistent_entries(
-                                   anjay, &anjay->attr_storage)))) {
-        _anjay_attr_storage_clear(&anjay->attr_storage);
+            || avs_is_err((err = clear_nonexistent_entries(anjay, as)))) {
+        _anjay_attr_storage_clear(as);
     }
     return err;
 }
@@ -427,15 +426,17 @@ avs_error_t anjay_attr_storage_restore(anjay_t *anjay_locked,
                                        avs_stream_t *in) {
     avs_error_t err = avs_errno(AVS_EINVAL);
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
-    if (avs_is_ok((err = _anjay_attr_storage_transaction_begin(anjay)))) {
-        if (avs_is_ok((err = _anjay_attr_storage_restore_inner(anjay, in)))) {
-            _anjay_attr_storage_transaction_commit(anjay);
+    if (avs_is_ok((err = _anjay_attr_storage_transaction_begin(
+                           &anjay->attr_storage)))) {
+        if (avs_is_ok((err = _anjay_attr_storage_restore_inner(
+                               anjay, &anjay->attr_storage, in)))) {
+            _anjay_attr_storage_transaction_commit(&anjay->attr_storage);
             anjay->attr_storage.modified_since_persist = false;
 
             as_log(INFO, _("Attribute Storage state restored"));
         } else {
-            avs_error_t rollback_err =
-                    _anjay_attr_storage_transaction_rollback(anjay);
+            avs_error_t rollback_err = _anjay_attr_storage_transaction_rollback(
+                    anjay, &anjay->attr_storage);
             if (avs_is_err(rollback_err)) {
                 err = rollback_err;
             }

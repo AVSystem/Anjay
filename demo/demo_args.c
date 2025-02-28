@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -598,6 +598,16 @@ static void print_help(const struct option *options) {
         { 348, NULL, NULL,
           "Treat failures of the \"connect\" socket operation (e.g. (D)TLS "
           "handshake failures) as a failed LwM2M Register operation." },
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+        { 'g', NULL, NULL,
+          "Enable LwM2M Gateway funcitonality and register example End Devices "
+          "with their objects" },
+#endif // ANJAY_WITH_LWM2M_GATEWAY
+#ifdef ANJAY_WITH_DOWNLOADER
+        { 349, "RETRY COUNT", NULL, "Number of CoAP downloader retry" },
+        { 350, "RETRY DELAY", NULL,
+          "Delay (in seconds) between CoAP downloader retry" }
+#endif // ANJAY_WITH_DOWNLOADER
     };
 
     const size_t screen_width = get_screen_width();
@@ -999,6 +1009,13 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
 #    endif // ANJAY_WITH_DOWNLOADER
 #endif // ANJAY_WITH_MODULE_SW_MGMT
         { "connection-error-is-registration-failure", no_argument, 0, 348 },
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+        { "lwm2m_gateway",                 no_argument,       0, 'g' },
+#endif // ANJAY_WITH_LWM2M_GATEWAY
+#ifdef ANJAY_WITH_DOWNLOADER
+        {"coap-downloader-retry-count", required_argument, 0, 349},
+        {"coap-downloader-retry-delay", required_argument, 0, 350},
+#endif // ANJAY_WITH_DOWNLOADER
         { 0, 0, 0, 0 }
         // clang-format on
     };
@@ -2009,6 +2026,32 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         case 348:
             parsed_args->connection_error_is_registration_failure = true;
             break;
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+        case 'g': {
+            parsed_args->lwm2m_gateway_enabled = true;
+            break;
+        }
+#endif // ANJAY_WITH_LWM2M_GATEWAY
+#ifdef ANJAY_WITH_DOWNLOADER
+        case 349:
+            if (parse_size(optarg, &parsed_args->coap_downloader_retry_count)) {
+                demo_log(ERROR, "Invalid retry count value: %s", optarg);
+                goto finish;
+            }
+            break;
+        case 350: {
+            double delay_s;
+            if (parse_double(optarg, &delay_s) || !isfinite(delay_s)
+                    || delay_s <= 0.0) {
+                demo_log(ERROR, "Expected retry delay to be a positive "
+                                "floating point number");
+                goto finish;
+            }
+            parsed_args->coap_downloader_retry_delay =
+                    avs_time_duration_from_fscalar(delay_s, AVS_TIME_S);
+            break;
+        }
+#endif // ANJAY_WITH_DOWNLOADER
         case 0:
             goto process;
         }

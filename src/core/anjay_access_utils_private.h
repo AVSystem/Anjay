@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -20,6 +20,9 @@ typedef struct {
     anjay_iid_t iid;
     anjay_ssid_t ssid;
     anjay_request_action_t action;
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+    bool end_device;
+#endif // ANJAY_WITH_LWM2M_GATEWAY
 } anjay_action_info_t;
 
 typedef enum {

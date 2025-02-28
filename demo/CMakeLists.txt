@@ -1,4 +1,4 @@
-# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -53,6 +53,13 @@ if (${ANJAY_WITH_MODULE_SW_MGMT})
     set(SOURCES ${SOURCES} software_mgmt.c)
 endif()
 
+if (${ANJAY_WITH_LWM2M_GATEWAY})
+    set(SOURCES ${SOURCES} lwm2m_gateway.c
+                           objects/gateway_end_devices/temperature_object.c
+                           objects/gateway_end_devices/push_button_object.c
+                           objects/gateway_end_devices/binary_app_data_container.c
+                           )
+endif()
 
 if(NOT WIN32)
     set(SOURCES ${SOURCES} objects/ip_ping.c)

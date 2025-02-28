@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -68,12 +68,19 @@ typedef struct {
     avs_sched_handle_t job_start;
     bool aborting;
     bool reconnecting;
+    bool retry_in_progress;
+    size_t coap_downloader_retry_count;
+    size_t retry_count;
+    avs_time_duration_t coap_downloader_retry_delay;
 } anjay_coap_download_ctx_t;
 
 typedef struct {
     avs_coap_ctx_t *coap_ctx;
     avs_net_socket_t *socket;
 } cleanup_coap_context_args_t;
+
+static void suspend_coap_transfer(anjay_download_ctx_t *ctx_);
+static avs_error_t sched_reconnect(anjay_coap_download_ctx_t *ctx);
 
 static void cleanup_coap_context_unlocked(anjay_unlocked_t *anjay,
                                           cleanup_coap_context_args_t args) {
@@ -94,6 +101,7 @@ static void cleanup_coap_context(avs_sched_t *sched, const void *args) {
 static void cleanup_coap_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
     anjay_coap_download_ctx_t *ctx = (anjay_coap_download_ctx_t *) *ctx_ptr;
     avs_sched_del(&ctx->job_start);
+    avs_sched_del(&ctx->common.reconnect_job_handle);
     _anjay_url_cleanup(&ctx->uri);
 
     if (ctx->common.same_socket_download) {
@@ -131,6 +139,15 @@ static void cleanup_coap_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
                                  &args, sizeof(args))) {
             cleanup_coap_context_unlocked(NULL, args);
         }
+    } else {
+#    ifndef ANJAY_TEST
+        /**
+         * HACK: if download is aborted between sched_reconnect() call and
+         * reconnect_job() execution coap context may not exist, in this case we
+         * need to cleanup socket here.
+         */
+        _anjay_socket_cleanup(anjay, &ctx->socket);
+#    endif // ANJAY_TEST
     }
     AVS_LIST_DELETE(ctx_ptr);
 }
@@ -252,6 +269,7 @@ handle_coap_response(avs_coap_ctx_t *ctx,
                    _("transfer id = ") "%" PRIuPTR _(": ") "%lu" _(
                            " B downloaded"),
                    dl_ctx->common.id, (unsigned long) dl_ctx->bytes_downloaded);
+            dl_ctx->retry_count = 0;
         }
         break;
     }
@@ -260,6 +278,25 @@ handle_coap_response(avs_coap_ctx_t *ctx,
         if (err.category == AVS_COAP_ERR_CATEGORY
                 && err.code == AVS_COAP_ERR_ETAG_MISMATCH) {
             abort_download_transfer(dl_ctx, _anjay_download_status_expired());
+        } else if (((err.category == AVS_COAP_ERR_CATEGORY
+                     && err.code == AVS_COAP_ERR_TIMEOUT)
+                    || err.category == AVS_ERRNO_CATEGORY)
+                   && dl_ctx->retry_count
+                              < dl_ctx->coap_downloader_retry_count) {
+            dl_ctx->retry_count++;
+            // shutdown the socket and cancel the exchange before reconnecting
+            suspend_coap_transfer((anjay_download_ctx_t *) dl_ctx);
+            if (dl_ctx->aborting) {
+                // suspend_coap_transfer() may abort the download
+                err = avs_errno(AVS_UNKNOWN_ERROR);
+            } else {
+                err = sched_reconnect(dl_ctx);
+            }
+            if (avs_is_err(err)) {
+                dl_log(ERROR, _("could not schedule download connect job"));
+                abort_download_transfer(dl_ctx,
+                                        _anjay_download_status_failed(err));
+            }
         } else {
             abort_download_transfer(dl_ctx, _anjay_download_status_failed(err));
         }
@@ -267,7 +304,7 @@ handle_coap_response(avs_coap_ctx_t *ctx,
     }
     case AVS_COAP_CLIENT_REQUEST_CANCEL:
         dl_log(DEBUG, _("download request canceled"));
-        if (!dl_ctx->reconnecting) {
+        if (!dl_ctx->reconnecting && !dl_ctx->retry_in_progress) {
             abort_download_transfer(dl_ctx, _anjay_download_status_aborted());
         }
         break;
@@ -306,6 +343,7 @@ static void start_download_job(avs_sched_t *sched, const void *id_ptr) {
         anjay_coap_download_ctx_t *ctx =
                 (anjay_coap_download_ctx_t *) *dl_ctx_ptr;
         ctx->reconnecting = false;
+        ctx->retry_in_progress = false;
 
         avs_error_t err;
         avs_coap_options_t options;
@@ -420,7 +458,9 @@ static void suspend_coap_transfer(anjay_download_ctx_t *ctx_) {
     anjay_coap_download_ctx_t *ctx = (anjay_coap_download_ctx_t *) ctx_;
     dl_log(INFO, _("suspending download ") "%" PRIuPTR, ctx->common.id);
     ctx->reconnecting = true;
+    ctx->retry_in_progress = false;
     avs_sched_del(&ctx->job_start);
+    avs_sched_del(&ctx->common.reconnect_job_handle);
     if (avs_coap_exchange_id_valid(ctx->exchange_id)) {
         assert(ctx->coap);
         avs_coap_exchange_cancel(ctx->coap, ctx->exchange_id);
@@ -457,7 +497,6 @@ static avs_error_t sched_start_download(anjay_coap_download_ctx_t *ctx) {
 
 static avs_error_t
 reconnect_coap_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
-    (void) ctx_ptr;
     anjay_coap_download_ctx_t *ctx = (anjay_coap_download_ctx_t *) *ctx_ptr;
     ctx->reconnecting = true;
 
@@ -477,7 +516,12 @@ reconnect_coap_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
         dl_log(WARNING,
                _("could not connect socket for download id = ") "%" PRIuPTR,
                ctx->common.id);
-        return err;
+        if (ctx->retry_count < ctx->coap_downloader_retry_count) {
+            // Retry the download, err is reset to AVS_OK if sched_reconnect
+            // succeeds
+            ctx->retry_count++;
+            err = sched_reconnect(ctx);
+        }
     } else {
         // A new DTLS session requires resetting the CoAP context.
         // If we manage to resume the session, we can simply continue sending
@@ -487,9 +531,37 @@ reconnect_coap_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
             return err;
         }
         if (!avs_coap_exchange_id_valid(ctx->exchange_id)) {
-            return sched_start_download(ctx);
+            err = sched_start_download(ctx);
         }
     }
+    return err;
+}
+
+static avs_error_t sched_reconnect(anjay_coap_download_ctx_t *ctx) {
+    anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(ctx->common.dl);
+    ctx->retry_in_progress = true;
+
+    dl_log(INFO,
+           _("retrying download ") "%" PRIuPTR _(
+                   ", attempt number ") "%" PRIu64 _(", with delay ") "%s",
+           ctx->common.id, (uint64_t) ctx->retry_count,
+           AVS_TIME_DURATION_AS_STRING(ctx->coap_downloader_retry_delay));
+
+    if (ctx->common.reconnect_job_handle) {
+        return AVS_OK;
+    }
+
+    if (AVS_SCHED_DELAYED(anjay->sched, &ctx->common.reconnect_job_handle,
+                          ctx->coap_downloader_retry_delay,
+                          _anjay_downloader_reconnect_job, &ctx->common.id,
+                          sizeof(ctx->common.id))) {
+        dl_log(WARNING,
+               _("could not schedule reconnect job for id = ") "%" PRIuPTR,
+               ctx->common.id);
+        return avs_errno(AVS_ENOMEM);
+    }
+
+    dl_log(DEBUG, _("scheduling reconnect ") "%" PRIuPTR, ctx->common.id);
     return AVS_OK;
 }
 
@@ -505,6 +577,15 @@ static avs_error_t set_next_coap_block_offset(anjay_download_ctx_t *ctx_,
         ctx->bytes_downloaded = next_block_offset;
     }
     return err;
+}
+
+static bool is_socket_online_or_retry_in_progress(anjay_download_ctx_t *ctx_) {
+    anjay_coap_download_ctx_t *ctx = (anjay_coap_download_ctx_t *) ctx_;
+    if (ctx->retry_in_progress) {
+        return true;
+    } else {
+        return _anjay_socket_is_online(ctx->socket);
+    }
 }
 
 avs_error_t
@@ -537,9 +618,13 @@ _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
         .cleanup = cleanup_coap_transfer,
         .suspend = suspend_coap_transfer,
         .reconnect = reconnect_coap_transfer,
-        .set_next_block_offset = set_next_coap_block_offset
+        .set_next_block_offset = set_next_coap_block_offset,
+        .is_socket_online_or_retry_in_progress =
+                is_socket_online_or_retry_in_progress
     };
     ctx->common.vtable = &VTABLE;
+    ctx->coap_downloader_retry_count = anjay->coap_downloader_retry_count;
+    ctx->coap_downloader_retry_delay = anjay->coap_downloader_retry_delay;
 
     const anjay_transport_info_t *transport_info =
             _anjay_transport_info_by_uri_scheme(cfg->url);
@@ -573,6 +658,7 @@ _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
                                     : anjay->default_tls_ciphersuites,
             .backend_configuration = anjay->socket_config,
             .prng_ctx = anjay->prng_ctx.ctx,
+            .use_connection_id = anjay->use_connection_id,
 #    ifdef ANJAY_WITH_LWM2M11
             .server_name_indication =
                     cfg->security_config.server_name_indication,

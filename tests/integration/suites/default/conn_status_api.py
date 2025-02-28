@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -397,9 +397,8 @@ class ShutdownDuringQueueModeChangesStateDirectlyToDeregistered(ConnStatusAPI.Au
                                                                 QueueMode.Test,
                                                                 test_suite.Lwm2mSingleServerTest):
     def setUp(self):
-        if QueueMode.autoclose_disabled(self):
-            self.skipTest(
-                'If socket autoclose is disabled, the client deregisters as usual')
+        self.skipIfFeatureStatus('ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE = ON',
+                                 'If socket autoclose is disabled, the client deregisters as usual')
         super().setUp()
 
     def runTest(self):

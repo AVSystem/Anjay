@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -174,6 +174,14 @@ class Lwm2mDmOperations(Lwm2mAsserts):
             req, Lwm2mCreated, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
 
+    def create_instance_path(self, server, path, iid=None, expect_error_code=None, **kwargs):
+        instance_tlv = None if iid is None else TLV.make_instance(
+            instance_id=iid).serialize()
+        req = Lwm2mCreate(path, instance_tlv)
+        expected_res = self._make_expected_res(
+            req, Lwm2mCreated, expect_error_code)
+        return self._perform_action(server, req, expected_res, **kwargs)
+
     def create(self, server, path, expect_error_code=None, **kwargs):
         req = Lwm2mCreate(Lwm2mPath(path), None)
         expected_res = self._make_expected_res(
@@ -182,6 +190,12 @@ class Lwm2mDmOperations(Lwm2mAsserts):
 
     def delete_instance(self, server, oid, iid, expect_error_code=None, **kwargs):
         req = Lwm2mDelete('/%d/%d' % (oid, iid))
+        expected_res = self._make_expected_res(
+            req, Lwm2mDeleted, expect_error_code)
+        return self._perform_action(server, req, expected_res, **kwargs)
+
+    def delete(self, server, path, expect_error_code=None, **kwargs):
+        req = Lwm2mDelete(Lwm2mPath(path))
         expected_res = self._make_expected_res(
             req, Lwm2mDeleted, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
@@ -262,9 +276,25 @@ class Lwm2mDmOperations(Lwm2mAsserts):
             req, Lwm2mChanged, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
 
+    def write_path(self, server, path, content=b'', partial=False,
+                                format=coap.ContentFormat.TEXT_PLAIN,
+                                expect_error_code=None, **kwargs):
+        req = Lwm2mWrite(path, content, format=format,
+                         update=partial)
+        expected_res = self._make_expected_res(
+            req, Lwm2mChanged, expect_error_code)
+        return self._perform_action(server, req, expected_res, **kwargs)
+
     def execute_resource(self, server, oid, iid, rid, content=b'', expect_error_code=None,
                          **kwargs):
         req = Lwm2mExecute('/%d/%d/%d' % (oid, iid, rid), content=content)
+        expected_res = self._make_expected_res(
+            req, Lwm2mChanged, expect_error_code)
+        return self._perform_action(server, req, expected_res, **kwargs)
+    
+    def execute_resource_path(self, server, path, content=b'', expect_error_code=None,
+                         **kwargs):
+        req = Lwm2mExecute(path, content=content)
         expected_res = self._make_expected_res(
             req, Lwm2mChanged, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
@@ -287,6 +317,13 @@ class Lwm2mDmOperations(Lwm2mAsserts):
         expected_res = self._make_expected_res(
             req, Lwm2mContent, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
+    
+    def discover_path(self, server, path=None, depth=None, expect_error_code=None,
+                 **kwargs):
+        req = Lwm2mDiscover(path, depth)
+        expected_res = self._make_expected_res(
+            req, Lwm2mContent, expect_error_code)
+        return self._perform_action(server, req, expected_res, **kwargs)
 
     def observe(self, server, oid=None, iid=None, rid=None, riid=None, expect_error_code=None,
                 **kwargs):
@@ -296,10 +333,24 @@ class Lwm2mDmOperations(Lwm2mAsserts):
             req, Lwm2mContent, expect_error_code)
         return self._perform_action(server, req, expected_res)
 
+    def observe_path(self, server, path, expect_error_code=None,
+                **kwargs):
+        req = Lwm2mObserve(path, **kwargs)
+        expected_res = self._make_expected_res(
+            req, Lwm2mContent, expect_error_code)
+        return self._perform_action(server, req, expected_res)
+
     def write_attributes(self, server, oid=None, iid=None, rid=None, query=[],
                          expect_error_code=None, **kwargs):
         req = Lwm2mWriteAttributes(
             Lwm2mDmOperations.make_path(oid, iid, rid), query=query)
+        expected_res = self._make_expected_res(
+            req, Lwm2mChanged, expect_error_code)
+        return self._perform_action(server, req, expected_res, **kwargs)
+    
+    def write_attributes_path(self, server, path=None, query=[],
+                         expect_error_code=None, **kwargs):
+        req = Lwm2mWriteAttributes(path, query=query)
         expected_res = self._make_expected_res(
             req, Lwm2mChanged, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
@@ -518,6 +569,14 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             sys.exit(-1)
 
         return demo_executable
+    
+    def skipIfFeatureStatus(self, log, message):
+        import subprocess
+        import unittest
+        output = subprocess.run([self._get_demo_executable(), '-e', 'dummy', '-u', 'invalid'],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout.decode('utf-8')
+        if log in output:
+            raise unittest.SkipTest(message)
 
     def _start_demo(self, cmdline_args, timeout_s=60, prepend_args=None):
         """

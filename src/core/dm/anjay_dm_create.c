@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -94,16 +94,18 @@ dm_create_inner_and_move_to_next_entry(anjay_unlocked_t *anjay,
     int result = _anjay_dm_call_instance_create(anjay, obj, iid);
     if (result) {
         dm_log(DEBUG,
-               _("Instance Create handler for object ") "%" PRIu16 _(" failed"),
-               _anjay_dm_installed_object_oid(obj));
+               _("Instance Create handler for object ") DM_LOG_PREFIX
+               "/%" PRIu16 _(" failed"),
+               DM_LOG_PREFIX_OBJ_ARG(obj) _anjay_dm_installed_object_oid(obj));
         return result;
     } else if ((result =
                         _anjay_dm_write_created_instance_and_move_to_next_entry(
                                 anjay, obj, iid, in_ctx))) {
         dm_log(DEBUG,
-               _("Writing Resources for newly created ") "/%" PRIu16 "/%" PRIu16
-                       _(" failed; removing"),
-               _anjay_dm_installed_object_oid(obj), iid);
+               _("Writing Resources for newly created ") DM_LOG_PREFIX
+               "/%" PRIu16 "/%" PRIu16 _(" failed; removing"),
+               DM_LOG_PREFIX_OBJ_ARG(obj) _anjay_dm_installed_object_oid(obj),
+               iid);
     }
     return result;
 }
@@ -118,14 +120,17 @@ static int dm_create_with_explicit_iid(anjay_unlocked_t *anjay,
     int result = _anjay_dm_instance_present(anjay, obj, iid);
     if (result > 0) {
         dm_log(DEBUG,
-               _("Instance ") "/%" PRIu16 "/%" PRIu16 _(" already exists"),
-               _anjay_dm_installed_object_oid(obj), iid);
+               _("Instance ") DM_LOG_PREFIX "/%" PRIu16
+                                            "/%" PRIu16 _(" already exists"),
+               DM_LOG_PREFIX_OBJ_ARG(obj) _anjay_dm_installed_object_oid(obj),
+               iid);
         return ANJAY_ERR_BAD_REQUEST;
     } else if (result) {
         dm_log(DEBUG,
-               _("Instance Present handler for ") "/%" PRIu16
-                                                  "/%" PRIu16 _(" failed"),
-               _anjay_dm_installed_object_oid(obj), iid);
+               _("Instance Present handler for ") DM_LOG_PREFIX
+               "/%" PRIu16 "/%" PRIu16 _(" failed"),
+               DM_LOG_PREFIX_OBJ_ARG(obj) _anjay_dm_installed_object_oid(obj),
+               iid);
         return result;
     }
     result = dm_create_inner_and_move_to_next_entry(anjay, obj, iid, in_ctx);
@@ -181,9 +186,14 @@ int _anjay_dm_create(anjay_unlocked_t *anjay,
     }
     if (!result) {
         anjay_notify_queue_t notify_queue = NULL;
-        (void) ((result = _anjay_notify_queue_instance_created(
-                         &notify_queue, request->uri.ids[ANJAY_ID_OID],
-                         path.ids[ANJAY_ID_IID]))
+        path.ids[ANJAY_ID_OID] = request->uri.ids[ANJAY_ID_OID];
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+        if (_anjay_uri_path_has_prefix(&request->uri)) {
+            strcpy(path.prefix, request->uri.prefix);
+        }
+#endif // ANJAY_WITH_LWM2M_GATEWAY
+        (void) ((result = _anjay_notify_queue_instance_created(&notify_queue,
+                                                               &path))
                 || (result = _anjay_notify_flush(anjay, ssid, &notify_queue)));
     }
     return result;

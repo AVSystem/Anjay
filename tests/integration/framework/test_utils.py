@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -314,6 +314,7 @@ class RID:
         ResetMinAndMaxMeasuredValues = 5605
         SensorValue = 5700
         SensorUnits = 5701
+        ApplicationType = 5750
 
     class Accelerometer:
         MinRangeValue = 5603
@@ -420,6 +421,10 @@ class RID:
         TotalBytes = 5
         Run = 6
 
+    class Lwm2mGateway:
+        DeviceID = 0
+        Prefix = 1
+        IoTEndDeviceObjects = 3
 
     class BinaryAppDataContainer:
         Data = 0

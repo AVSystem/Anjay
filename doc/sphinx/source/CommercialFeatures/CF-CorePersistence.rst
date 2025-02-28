@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
@@ -80,6 +80,9 @@ Reconnection, successful resumption:
 +------------------+-----------------------------------+---------------------------+
 
 The difference is **4523 bytes (87.6 % reduction)**.
+
+.. note::
+   Core Persistence must not be used in LwM2M Clients acting as LwM2M Gateway.
 
 Technical documentation
 -----------------------

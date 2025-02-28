@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -164,6 +164,11 @@ static inline void _anjay_log_feature_list(void) {
 #else // ANJAY_WITH_LWM2M11
     _anjay_log(anjay, TRACE, "ANJAY_WITH_LWM2M11 = OFF");
 #endif // ANJAY_WITH_LWM2M11
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_LWM2M_GATEWAY = ON");
+#else // ANJAY_WITH_LWM2M_GATEWAY
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_LWM2M_GATEWAY = OFF");
+#endif // ANJAY_WITH_LWM2M_GATEWAY
 #ifdef ANJAY_WITH_LWM2M_JSON
     _anjay_log(anjay, TRACE, "ANJAY_WITH_LWM2M_JSON = ON");
 #else // ANJAY_WITH_LWM2M_JSON

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
 # AVSystem CoAP library
 # All rights reserved.
 #
@@ -17,7 +17,7 @@ from io import StringIO
 
 import avs_common
 
-EXPECTED_COPYRIGHT_HEADER = 'Copyright 2017-2024 AVSystem <avsystem@avsystem.com>'
+EXPECTED_COPYRIGHT_HEADER = 'Copyright 2017-2025 AVSystem <avsystem@avsystem.com>'
 
 LICENSE = (
     'AVSystem CoAP library',

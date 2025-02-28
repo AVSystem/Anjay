@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -29,6 +29,9 @@
 #    include "anjay_common.h"
 #    include "anjay_vtable.h"
 
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+#        include <ctype.h>
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
 #    include <errno.h>
 #    include <math.h>
 
@@ -303,6 +306,23 @@ static int parse_absolute_path(anjay_uri_path_t *out_path, const char *input) {
     }
 
     const char *ch;
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+    bool is_prefix = false;
+    size_t prefix_len = 0;
+    for (ch = &input[1]; *ch != '/' && *ch; ch++, prefix_len++) {
+        if (!isdigit(*ch)) {
+            is_prefix = true;
+        }
+    }
+    if (is_prefix) {
+        if (prefix_len >= ANJAY_GATEWAY_MAX_PREFIX_LEN) {
+            return -1;
+        }
+        memcpy(out_path->prefix, &input[1], prefix_len);
+        assert(out_path->prefix[prefix_len] == '\0');
+        input = ch;
+    }
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
 
     size_t curr_len = 0;
     for (ch = input; *ch;) {
@@ -323,6 +343,13 @@ static int parse_absolute_path(anjay_uri_path_t *out_path, const char *input) {
 
 static bool uri_path_outside_base(const anjay_uri_path_t *path,
                                   const anjay_uri_path_t *base) {
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+    bool base_set = _anjay_uri_path_length(base) > 0
+                    || _anjay_uri_path_has_prefix(base);
+    if (base_set && !_anjay_uri_path_prefix_equal(path, base)) {
+        return true;
+    }
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
     return _anjay_uri_path_outside_base(path, base);
 }
 

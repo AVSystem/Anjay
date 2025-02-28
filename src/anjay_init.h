@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -15,6 +15,12 @@
 #ifdef ANJAY_WITH_MODULE_ATTR_STORAGE
 #    error "ANJAY_WITH_MODULE_ATTR_STORAGE has been removed since Anjay 3.0. Please update your anjay_config.h to use ANJAY_WITH_ATTR_STORAGE instead."
 #endif // ANJAY_WITH_MODULE_ATTR_STORAGE
+
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+#    ifndef ANJAY_WITH_LWM2M11
+#        error "LwM2M Gateway functionality requires LwM2M 1.1 support."
+#    endif // ANJAY_WITH_LWM2M11
+#endif     // ANJAY_WITH_LWM2M_GATEWAY
 
 #if defined(AVS_COMMONS_HAVE_VISIBILITY) && !defined(ANJAY_TEST)
 /* set default visibility for external symbols */

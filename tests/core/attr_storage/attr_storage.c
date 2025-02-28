@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -15,6 +15,7 @@
 #include <anjay/attr_storage.h>
 #include <anjay/core.h>
 
+#include <anjay_modules/anjay_dm_utils.h>
 #include <anjay_modules/dm/anjay_execute.h>
 
 #include "attr_storage_test.h"
@@ -228,12 +229,12 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_1) {
                               NULL));
 
     anjay_notify_queue_t queue = NULL;
-    AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_notify_queue_instance_set_unknown_change(&queue, 0));
-    AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_notify_queue_instance_set_unknown_change(&queue, 42));
-    AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_notify_queue_instance_set_unknown_change(&queue, 43));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_notify_queue_instance_set_unknown_change(
+            &queue, &MAKE_OBJECT_PATH(0)));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_notify_queue_instance_set_unknown_change(
+            &queue, &MAKE_OBJECT_PATH(42)));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_notify_queue_instance_set_unknown_change(
+            &queue, &MAKE_OBJECT_PATH(43)));
 
     // server mapping:
     // /0/4/10 == 7
@@ -337,16 +338,16 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_1) {
     AVS_UNIT_ASSERT_TRUE(anjay_unlocked->attr_storage.modified_since_persist);
 
     anjay_unlocked->attr_storage.modified_since_persist = false;
-    AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_notify_queue_instance_set_unknown_change(&queue, 2));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_notify_queue_instance_set_unknown_change(
+            &queue, &MAKE_OBJECT_PATH(2)));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_attr_storage_notify(anjay_unlocked, queue));
     AVS_UNIT_ASSERT_FALSE(anjay_unlocked->attr_storage.modified_since_persist);
     _anjay_notify_clear_queue(&queue);
 
     // error
     anjay_unlocked->attr_storage.modified_since_persist = false;
-    AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_notify_queue_instance_set_unknown_change(&queue, 42));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_notify_queue_instance_set_unknown_change(
+            &queue, &MAKE_OBJECT_PATH(42)));
     _anjay_mock_dm_expect_list_instances(
             anjay, &OBJ, -11, (const anjay_iid_t[]) { 7, ANJAY_ID_INVALID });
     AVS_UNIT_ASSERT_FAILED(_anjay_attr_storage_notify(anjay_unlocked, queue));
@@ -469,20 +470,20 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_2) {
                     NULL));
 
     anjay_notify_queue_t queue = NULL;
-    AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_notify_queue_instance_set_unknown_change(&queue, 1));
-    AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_notify_queue_resource_change(&queue, 42, 4, 1));
-    AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_notify_queue_resource_change(&queue, 42, 4, 6));
-    AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_notify_queue_resource_change(&queue, 42, 7, 11));
-    AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_notify_queue_resource_change(&queue, 42, 21, 22));
-    AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_notify_queue_resource_change(&queue, 42, 21, 23));
-    AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_notify_queue_resource_change(&queue, 42, 42, 42));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_notify_queue_instance_set_unknown_change(
+            &queue, &MAKE_OBJECT_PATH(1)));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_notify_queue_resource_change(
+            &queue, &MAKE_RESOURCE_PATH(42, 4, 1)));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_notify_queue_resource_change(
+            &queue, &MAKE_RESOURCE_PATH(42, 4, 6)));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_notify_queue_resource_change(
+            &queue, &MAKE_RESOURCE_PATH(42, 7, 11)));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_notify_queue_resource_change(
+            &queue, &MAKE_RESOURCE_PATH(42, 21, 22)));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_notify_queue_resource_change(
+            &queue, &MAKE_RESOURCE_PATH(42, 21, 23)));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_notify_queue_resource_change(
+            &queue, &MAKE_RESOURCE_PATH(42, 42, 42)));
 
     // server mapping:
     // /1/9/0 == 514

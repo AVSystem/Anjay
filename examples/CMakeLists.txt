@@ -1,4 +1,4 @@
-# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -28,6 +28,7 @@ add_custom_command(TARGET tutorial_examples
                         -DWITH_LIBRARY_SHARED=OFF
                         -DWITH_DEMO=OFF
                         -DWITH_MODULE_advanced_fw_update=ON
+                        -DWITH_LWM2M_GATEWAY=ON
                         -DCMAKE_BUILD_TYPE=Debug
                    COMMAND ${CMAKE_COMMAND} --build . --target install -- -j${NPROC}
                    WORKING_DIRECTORY ${ANJAY_TUTORIALS_ANJAY_BUILD_DIR})

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -12,6 +12,7 @@ import sphinx.writers.html
 import sphinx.writers.latex
 import sphinx.writers.text
 from docutils.parsers.rst import directives
+from sphinx.application import Sphinx
 from sphinx.directives.code import container_wrapper
 from sphinx.transforms.post_transforms.code import HighlightLanguageVisitor
 from sphinx.util import parselinenos
@@ -85,7 +86,7 @@ class SnippetSourceDirective(SphinxDirective):
         return [node]
 
 
-def setup(app):
+def setup(app: Sphinx):
     app.add_node(SnippetSourceNode,
                  html=(sphinx.writers.html.HTMLTranslator.visit_literal_block,
                        sphinx.writers.html.HTMLTranslator.depart_literal_block),

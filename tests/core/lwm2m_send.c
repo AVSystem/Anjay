@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -29,6 +29,10 @@
 #include "src/modules/server/anjay_mod_server.h"
 #include "tests/core/coap/utils.h"
 #include "tests/utils/dm.h"
+
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+#    include <anjay/lwm2m_gateway.h>
+#endif // ANJAY_WITH_LWM2M_GATEWAY
 
 static const anjay_ssid_t SSID = 1;
 
@@ -909,3 +913,177 @@ AVS_UNIT_TEST(anjay_send, add_multiple_ignore_not_found) {
     anjay_send_batch_builder_cleanup(&builder);
     DM_TEST_FINISH;
 }
+
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+
+// clang-format off
+// array(1)
+// map(3)
+// negative(1) "bn"
+// text(11)
+// "/dev0/4/4/1"
+// timestamp
+#define GATEWAY_MSG_PAYLOAD_BEGIN                               \
+        "\x81"                                                  \
+           "\xA3"                                               \
+              "\x21"                                            \
+              "\x6B"                                            \
+                 "\x2F"GATEWAY_PREFIX"\x2F\x34\x2F\x34\x2F\x31" \
+              "\x22\xFA\xC4\x7A\x00\x00"
+// clang-format on
+#    define GATEWAY_IID 0
+#    define GATEWAY_PREFIX "dev0"
+
+static const anjay_uri_path_t GATEWAY_PATH = RESOURCE_PATH_INITIALIZER(4, 4, 1);
+
+#    define PROCESS_SEND_OP_GATEWAY()                                      \
+        anjay_send_batch_t *batch =                                        \
+                anjay_send_batch_builder_compile(&builder);                \
+        expected_payload_t expected_payload;                               \
+        expected_payload.payload_size = sizeof(EXPECTED_DATA) - 1;         \
+        memcpy(expected_payload.payload, EXPECTED_DATA,                    \
+               sizeof(EXPECTED_DATA));                                     \
+        test_expect_scheduled_lwm2m_send_request(                          \
+                mocksocks[0], MSG_ID, nth_token(0), expected_payload);     \
+        test_call_anjay_send(anjay, SSID, batch,                           \
+                             send_finished_handler_result_validator,       \
+                             (void *) (intptr_t) ANJAY_SEND_SUCCESS);      \
+        anjay_send_batch_release(&batch);                                  \
+        test_handle_lwm2m_send_response(                                   \
+                anjay, mocksocks[0],                                       \
+                COAP_MSG(ACK, CHANGED, ID_TOKEN_RAW(MSG_ID, nth_token(0)), \
+                         NO_PAYLOAD));
+
+AVS_UNIT_TEST(anjay_send, gateway_add_int) {
+    DM_TEST_INIT;
+
+    anjay_send_batch_builder_t *builder = anjay_send_batch_builder_new();
+    avs_time_real_t timestamp = { 0 };
+    AVS_UNIT_ASSERT_SUCCESS(anjay_lwm2m_gateway_send_batch_add_int(
+            builder, GATEWAY_IID, GATEWAY_PATH.ids[ANJAY_ID_OID],
+            GATEWAY_PATH.ids[ANJAY_ID_IID], GATEWAY_PATH.ids[ANJAY_ID_RID],
+            UINT16_MAX, timestamp, 42));
+
+    static const char EXPECTED_DATA[] = {
+        GATEWAY_MSG_PAYLOAD_BEGIN "\x02"     // unsigned(2) "v"
+                                  "\x18\x2A" // unsigned(42)
+    };
+    PROCESS_SEND_OP_GATEWAY();
+
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(anjay_send, gateway_add_uint) {
+    DM_TEST_INIT;
+
+    anjay_send_batch_builder_t *builder = anjay_send_batch_builder_new();
+    avs_time_real_t timestamp = { 0 };
+    AVS_UNIT_ASSERT_SUCCESS(anjay_lwm2m_gateway_send_batch_add_uint(
+            builder, GATEWAY_IID, GATEWAY_PATH.ids[ANJAY_ID_OID],
+            GATEWAY_PATH.ids[ANJAY_ID_IID], GATEWAY_PATH.ids[ANJAY_ID_RID],
+            UINT16_MAX, timestamp, 42));
+
+    static const char EXPECTED_DATA[] = {
+        GATEWAY_MSG_PAYLOAD_BEGIN "\x02"     // unsigned(2) "v"
+                                  "\x18\x2A" // unsigned(42)
+    };
+    PROCESS_SEND_OP_GATEWAY();
+
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(anjay_send, gateway_add_bool) {
+    DM_TEST_INIT;
+
+    anjay_send_batch_builder_t *builder = anjay_send_batch_builder_new();
+    avs_time_real_t timestamp = { 0 };
+    AVS_UNIT_ASSERT_SUCCESS(anjay_lwm2m_gateway_send_batch_add_bool(
+            builder, GATEWAY_IID, GATEWAY_PATH.ids[ANJAY_ID_OID],
+            GATEWAY_PATH.ids[ANJAY_ID_IID], GATEWAY_PATH.ids[ANJAY_ID_RID],
+            UINT16_MAX, timestamp, false));
+
+    static const char EXPECTED_DATA[] = {
+        GATEWAY_MSG_PAYLOAD_BEGIN "\x04" // unsigned(4) "vb"
+                                  "\xF4" // primitive(20)
+    };
+    PROCESS_SEND_OP_GATEWAY();
+
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(anjay_send, gateway_add_string) {
+    DM_TEST_INIT;
+
+    anjay_send_batch_builder_t *builder = anjay_send_batch_builder_new();
+    avs_time_real_t timestamp = { 0 };
+    AVS_UNIT_ASSERT_SUCCESS(anjay_lwm2m_gateway_send_batch_add_string(
+            builder, GATEWAY_IID, GATEWAY_PATH.ids[ANJAY_ID_OID],
+            GATEWAY_PATH.ids[ANJAY_ID_IID], GATEWAY_PATH.ids[ANJAY_ID_RID],
+            UINT16_MAX, timestamp, "dd"));
+
+    static const char EXPECTED_DATA[] = { GATEWAY_MSG_PAYLOAD_BEGIN
+                                          "\x03" // unsigned(3) "vs"
+                                          "\x62"
+                                          "dd" };
+    PROCESS_SEND_OP_GATEWAY();
+
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(anjay_send, gateway_add_bytes) {
+    DM_TEST_INIT;
+
+    anjay_send_batch_builder_t *builder = anjay_send_batch_builder_new();
+    avs_time_real_t timestamp = { 0 };
+    AVS_UNIT_ASSERT_SUCCESS(anjay_lwm2m_gateway_send_batch_add_bytes(
+            builder, GATEWAY_IID, GATEWAY_PATH.ids[ANJAY_ID_OID],
+            GATEWAY_PATH.ids[ANJAY_ID_IID], GATEWAY_PATH.ids[ANJAY_ID_RID],
+            UINT16_MAX, timestamp, "ddd", 3));
+
+    static const char EXPECTED_DATA[] = { GATEWAY_MSG_PAYLOAD_BEGIN
+                                          "\x08" // unsigned(8) "vb"
+                                          "\x43"
+                                          "ddd" };
+    PROCESS_SEND_OP_GATEWAY();
+
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(anjay_send, gateway_add_double) {
+    DM_TEST_INIT;
+
+    anjay_send_batch_builder_t *builder = anjay_send_batch_builder_new();
+    avs_time_real_t timestamp = { 0 };
+    AVS_UNIT_ASSERT_SUCCESS(anjay_lwm2m_gateway_send_batch_add_double(
+            builder, GATEWAY_IID, GATEWAY_PATH.ids[ANJAY_ID_OID],
+            GATEWAY_PATH.ids[ANJAY_ID_IID], GATEWAY_PATH.ids[ANJAY_ID_RID],
+            UINT16_MAX, timestamp, 1.1));
+
+    static const char EXPECTED_DATA[] = {
+        GATEWAY_MSG_PAYLOAD_BEGIN "\x02\xFB\x3F\xF1\x99\x99\x99\x99\x99\x9A"
+    };
+    PROCESS_SEND_OP_GATEWAY();
+
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(anjay_send, gateway_add_objlink) {
+    DM_TEST_INIT;
+
+    anjay_send_batch_builder_t *builder = anjay_send_batch_builder_new();
+    avs_time_real_t timestamp = { 0 };
+    AVS_UNIT_ASSERT_SUCCESS(anjay_lwm2m_gateway_send_batch_add_objlnk(
+            builder, GATEWAY_IID, GATEWAY_PATH.ids[ANJAY_ID_OID],
+            GATEWAY_PATH.ids[ANJAY_ID_IID], GATEWAY_PATH.ids[ANJAY_ID_RID],
+            UINT16_MAX, timestamp, 1, 1));
+
+    static const char EXPECTED_DATA[] = { GATEWAY_MSG_PAYLOAD_BEGIN
+                                          "\x63"
+                                          "vlo"
+                                          "\x63\x31\x3A\x31" };
+    PROCESS_SEND_OP_GATEWAY();
+
+    DM_TEST_FINISH;
+}
+
+#endif // ANJAY_WITH_LWM2M_GATEWAY

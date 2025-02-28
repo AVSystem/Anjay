@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -22,6 +22,10 @@
 #include <avsystem/commons/avs_time.h>
 
 #include <anjay/anjay_config.h>
+
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+#    define ANJAY_GATEWAY_MAX_PREFIX_LEN sizeof("dev65535")
+#endif // ANJAY_WITH_LWM2M_GATEWAY
 
 #ifdef __cplusplus
 extern "C" {
@@ -595,6 +599,45 @@ typedef struct anjay_configuration {
      */
     void *server_connection_status_cb_arg;
 #endif // ANJAY_WITH_CONN_STATUS_API
+#ifdef ANJAY_WITH_COAP_DOWNLOAD
+    /**
+     * @experimental This is experimental feature of CoAP downloader. This API
+     * can change in future versions without any notice.
+     *
+     * If set, defines the number of additional CoAP download attempts that will
+     * be made in case of failure. Can be useful for large files (Firmware
+     * Update) and poor network quality. If the resumption of the transfer
+     * was successful then the retry counter is reset.
+     *
+     * Retries are performed only in case of network problems - @ref
+     * AVS_ERRNO_CATEGORY or exchange timeout, in case of internal problems or
+     * error server responses the download is stopped.
+     *
+     * Each try will establish new connections and start a new exchange but
+     * preserve the download status. This logic does not comply with CoAP, but
+     * it can prevent multiple downloads of the same file.
+     *
+     * NOTE: Keep in mind that the behavior of this feature changes when the
+     * same socket is used for both file downloads and other CoAP operations
+     * (which may happen if the @ref prefer_same_socket_downloads flag is set).
+     * A specific difference is how network errors (e.g., ICMP) are handled: if
+     * a separate socket is used for downloads, Anjay will retry downloading;
+     * however, if the same socket is used for other CoAP operations, Anjay will
+     * abort the download. In the event of a timeout, Anjay will retry
+     * downloading in both cases.
+     */
+    size_t coap_downloader_retry_count;
+
+    /**
+     * @experimental This is experimental feature of CoAP downloader. This API
+     * can change in future versions without any notice.
+     *
+     * If set, defines the delay between CoAP download attempts in case of
+     * failure. If not set, next attempt will be made immediately. Related to
+     * @ref coap_downloader_retry_count.
+     */
+    avs_time_duration_t coap_downloader_retry_delay;
+#endif // ANJAY_WITH_COAP_DOWNLOAD
 } anjay_configuration_t;
 
 /**

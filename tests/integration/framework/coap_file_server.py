@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -53,7 +53,7 @@ class CoapFileServer:
         return '%s://127.0.0.1:%d%s' % (proto, self._server.get_listen_port(), path)
 
     def _recv_request(self, timeout_s):
-        if self._server.get_remote_addr() is None:
+        if self._server.get_remote_addr() is None and not self._server.accepted_connection:
             try:
                 self._server.listen(timeout_s=timeout_s)
             except socket.timeout:
@@ -117,6 +117,7 @@ class CoapFileServerThread(threading.Thread):
         self._mutex = threading.RLock()
         self._file_server = CoapFileServer(coap_server or coap.Server())
         self._shutdown = False
+        self._timeout_occurred = False
 
     def run(self):
         while not self._shutdown:
@@ -124,12 +125,18 @@ class CoapFileServerThread(threading.Thread):
                 with self._mutex:
                     self._file_server.handle_request()
             except socket.timeout:
-                pass
+                self._timeout_occurred = True
             time.sleep(0.01)  # yield to the scheduler
 
     def join(self):
         self._shutdown = True
         super().join()
+
+    def get_timeout_occurred(self):
+        return self._timeout_occurred
+
+    def reset_timeout_occurred(self):
+        self._timeout_occurred = False
 
     @property
     @contextlib.contextmanager

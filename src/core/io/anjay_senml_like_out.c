@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -27,6 +27,10 @@
 #    include "anjay_senml_like_encoder.h"
 #    include "anjay_vtable.h"
 
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+#        include <anjay/lwm2m_gateway.h>
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
+
 #    define senml_log(level, ...) _anjay_log(senml_like_out, level, __VA_ARGS__)
 
 VISIBILITY_SOURCE_BEGIN
@@ -51,6 +55,22 @@ static int path_to_string(const anjay_uri_path_t *path,
                           size_t end_index,
                           char *dest,
                           size_t size) {
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+    if (_anjay_uri_path_has_prefix(path)) {
+        if (start_index == 0) {
+            int written_chars =
+                    avs_simple_snprintf(dest, size, "/%s", path->prefix);
+            if (written_chars < 0) {
+                return -1;
+            }
+            dest += written_chars;
+            size -= (size_t) written_chars;
+        } else {
+            start_index--;
+        }
+        end_index--;
+    }
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
     for (; start_index < end_index; start_index++) {
         int written_chars = avs_simple_snprintf(dest, size, "/%" PRIu16,
                                                 path->ids[start_index]);
@@ -65,6 +85,9 @@ static int path_to_string(const anjay_uri_path_t *path,
 
 static char *maybe_get_basename(senml_out_t *ctx, char *buf, size_t size) {
     size_t base_path_length = _anjay_uri_path_length(&ctx->base_path);
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+    base_path_length += (size_t) _anjay_uri_path_has_prefix(&ctx->base_path);
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
     char *retptr = NULL;
     if (!ctx->basename_written && base_path_length > 0) {
         *buf = '\0';
@@ -80,6 +103,10 @@ static char *maybe_get_basename(senml_out_t *ctx, char *buf, size_t size) {
 static char *maybe_get_name(senml_out_t *ctx, char *buf, size_t size) {
     size_t base_path_length = _anjay_uri_path_length(&ctx->base_path);
     size_t path_length = _anjay_uri_path_length(&ctx->path);
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+    base_path_length += (size_t) _anjay_uri_path_has_prefix(&ctx->base_path);
+    path_length += (size_t) _anjay_uri_path_has_prefix(&ctx->path);
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
     char *retptr = NULL;
     if (path_length > base_path_length) {
         *buf = '\0';
@@ -226,6 +253,12 @@ static int senml_ret_start_aggregate(anjay_unlocked_output_ctx_t *ctx_) {
 
 static bool uri_path_outside_base(const anjay_uri_path_t *path,
                                   const anjay_uri_path_t *base) {
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+    if (_anjay_uri_path_has_prefix(base)
+            && !_anjay_uri_path_prefix_equal(path, base)) {
+        return true;
+    }
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
     return _anjay_uri_path_outside_base(path, base);
 }
 
@@ -235,7 +268,11 @@ static int senml_set_path(anjay_unlocked_output_ctx_t *ctx_,
     AVS_ASSERT(!uri_path_outside_base(uri, &ctx->base_path),
                "Attempted to set path outside the context's base path. "
                "This is a bug in resource reading logic.");
-    if (_anjay_uri_path_length(&ctx->path) > 0) {
+    if (_anjay_uri_path_length(&ctx->path) > 0
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+            || _anjay_uri_path_has_prefix(&ctx->path)
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
+    ) {
         senml_log(ERROR, _("Path already set"));
         return -1;
     }
@@ -245,7 +282,11 @@ static int senml_set_path(anjay_unlocked_output_ctx_t *ctx_,
 
 static int senml_clear_path(anjay_unlocked_output_ctx_t *ctx_) {
     senml_out_t *ctx = (senml_out_t *) ctx_;
-    if (_anjay_uri_path_length(&ctx->path) == 0) {
+    if (_anjay_uri_path_length(&ctx->path) == 0
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+            && !_anjay_uri_path_has_prefix(&ctx->path)
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
+    ) {
         senml_log(ERROR, _("Path not set"));
         return -1;
     }
@@ -268,7 +309,11 @@ static int senml_output_close(anjay_unlocked_output_ctx_t *ctx_) {
     _anjay_update_ret(&result,
                       _anjay_senml_like_encoder_cleanup(&ctx->encoder));
 
-    if (_anjay_uri_path_length(&ctx->path) > 0) {
+    if (_anjay_uri_path_length(&ctx->path) > 0
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+            || _anjay_uri_path_has_prefix(&ctx->path)
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
+    ) {
         _anjay_update_ret(&result, ANJAY_OUTCTXERR_ANJAY_RET_NOT_CALLED);
     }
     return result;

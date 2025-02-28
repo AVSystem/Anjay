@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -165,6 +165,10 @@ struct
     anjay_atomic_fields_t atomic_fields;
 #endif // !defined(ANJAY_WITH_THREAD_SAFETY) &&
        // defined(ANJAY_ATOMIC_FIELDS_DEFINED)
+#ifdef ANJAY_WITH_COAP_DOWNLOAD
+    size_t coap_downloader_retry_count;
+    avs_time_duration_t coap_downloader_retry_delay;
+#endif // ANJAY_WITH_COAP_DOWNLOAD
 };
 
 #define ANJAY_DM_DEFAULT_PMIN_VALUE 0

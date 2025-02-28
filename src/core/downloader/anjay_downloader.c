@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -381,7 +381,7 @@ void _anjay_downloader_suspend(anjay_downloader_t *dl,
     }
 }
 
-static void reconnect_job(avs_sched_t *sched, const void *id_ptr) {
+void _anjay_downloader_reconnect_job(avs_sched_t *sched, const void *id_ptr) {
     anjay_t *anjay_locked = _anjay_get_from_sched(sched);
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     uintptr_t id = *(const uintptr_t *) id_ptr;
@@ -404,8 +404,9 @@ static void reconnect_job(avs_sched_t *sched, const void *id_ptr) {
 
 int _anjay_downloader_sched_reconnect_ctx(anjay_download_ctx_t *ctx) {
     return AVS_SCHED_NOW(_anjay_downloader_get_anjay(ctx->common.dl)->sched,
-                         &ctx->common.reconnect_job_handle, reconnect_job,
-                         &ctx->common.id, sizeof(ctx->common.id));
+                         &ctx->common.reconnect_job_handle,
+                         _anjay_downloader_reconnect_job, &ctx->common.id,
+                         sizeof(ctx->common.id));
 }
 
 int _anjay_downloader_sched_reconnect_by_handle(
@@ -420,10 +421,9 @@ int _anjay_downloader_sched_reconnect_by_handle(
         return -1;
     }
     (*ctx_ptr)->common.administratively_suspended = false;
-    if (!(*ctx_ptr)->common.reconnect_job_handle
-            && _anjay_socket_transport_included(
-                       _anjay_downloader_get_anjay(dl)->online_transports,
-                       get_ctx_socket_transport(*ctx_ptr))) {
+    if (_anjay_socket_transport_included(
+                _anjay_downloader_get_anjay(dl)->online_transports,
+                get_ctx_socket_transport(*ctx_ptr))) {
         return _anjay_downloader_sched_reconnect_ctx(*ctx_ptr);
     }
     return 0;
@@ -483,9 +483,8 @@ int _anjay_downloader_sched_reconnect_by_transports(
     int result = 0;
     AVS_LIST(anjay_download_ctx_t) ctx;
     AVS_LIST_FOREACH(ctx, dl->downloads) {
-        if (!ctx->common.reconnect_job_handle
-                && _anjay_socket_transport_included(
-                           transport_set, get_ctx_socket_transport(ctx))) {
+        if (_anjay_socket_transport_included(transport_set,
+                                             get_ctx_socket_transport(ctx))) {
             int partial_result = _anjay_downloader_sched_reconnect_ctx(ctx);
             if (!result && partial_result) {
                 result = partial_result;
@@ -499,12 +498,34 @@ int _anjay_downloader_sync_online_transports(anjay_downloader_t *dl) {
     int result = 0;
     AVS_LIST(anjay_download_ctx_t) ctx;
     AVS_LIST_FOREACH(ctx, dl->downloads) {
-        if (!ctx->common.reconnect_job_handle
-                && _anjay_socket_transport_included(
-                           _anjay_downloader_get_anjay(dl)->online_transports,
-                           get_ctx_socket_transport(ctx))
-                               != _anjay_socket_is_online(
-                                          get_ctx_socket(ctx))) {
+
+        /**
+         * This condition implements the XOR logic;
+         * if the downloader transport is not included in the
+         * online_transports while the socket is online, or if the
+         * downloader transport is included in the online_transports
+         * while the socket is offline, then call
+         * _anjay_downloader_sched_reconnect_ctx() to synchronize
+         * the downloader transport and suspend or reconnect the
+         * download.
+         */
+        if (_anjay_socket_transport_included(
+                    _anjay_downloader_get_anjay(dl)->online_transports,
+                    get_ctx_socket_transport(ctx))
+                /**
+                 * The reason why we need a callback here instead
+                 * of a simple call to _anjay_socket_is_online()
+                 * is that there is an additional mechanism to
+                 * handle CoAP downloader retries (the user can
+                 * enable it by modifying the
+                 * coap_downloader_retry_count variable). For
+                 * example, when Anjay enters offline mode, the
+                 * suspend callback should be called if a retry
+                 * is in progress - even if the socket is already
+                 * offline - to cancel any scheduled retry job.
+                 */
+                != ctx->common.vtable->is_socket_online_or_retry_in_progress(
+                           ctx)) {
             int partial_result = _anjay_downloader_sched_reconnect_ctx(ctx);
             if (!result && partial_result) {
                 result = partial_result;

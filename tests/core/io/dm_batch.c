@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -8,6 +8,10 @@
  */
 
 #include <anjay/lwm2m_send.h>
+
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+#    include <anjay/lwm2m_gateway.h>
+#endif // ANJAY_WITH_LWM2M_GATEWAY
 
 #include <avsystem/commons/avs_base64.h>
 #include <avsystem/commons/avs_unit_test.h>
@@ -920,3 +924,213 @@ AVS_UNIT_TEST(dm_batch, negative_timestamp) {
 
     TEST_TEARDOWN();
 }
+
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+
+static const anjay_dm_object_def_t OBJECT_DEF_GATEWAY_1 = {
+    .oid = TEST_OID,
+    .handlers = {
+        .list_instances = anjay_dm_list_instances_SINGLE,
+        .list_resources = test_list_resources,
+        .resource_read = test_resource_read,
+        .list_resource_instances = test_list_resource_instances
+    }
+};
+
+static const anjay_dm_object_def_t OBJECT_DEF_GATEWAY_2 = {
+    .oid = TEST_OID,
+    .handlers = {
+        .list_instances = anjay_dm_list_instances_SINGLE,
+        .list_resources = test_list_resources,
+        .resource_read = test_resource_read,
+        .list_resource_instances = test_list_resource_instances
+    }
+};
+
+#    define TEST_END_DEVICE_IID_1 0
+#    define TEST_END_DEVICE_IID_2 1
+
+#    define TEST_SETUP_GATEWAY(TimeStart)                                    \
+        static const anjay_configuration_t CONFIG = {                        \
+            .endpoint_name = "test"                                          \
+        };                                                                   \
+                                                                             \
+        anjay_t *anjay = anjay_new(&CONFIG);                                 \
+        AVS_UNIT_ASSERT_NOT_NULL(anjay);                                     \
+        const anjay_dm_object_def_t *test_object_def_ptr_1 =                 \
+                &OBJECT_DEF_GATEWAY_1;                                       \
+        const anjay_dm_object_def_t *test_object_def_ptr_2 =                 \
+                &OBJECT_DEF_GATEWAY_2;                                       \
+        const anjay_dm_object_def_t *test_object_def_ptr_gateway =           \
+                &OBJECT_DEF;                                                 \
+        AVS_UNIT_ASSERT_SUCCESS(anjay_lwm2m_gateway_install(anjay));         \
+        anjay_iid_t iid = ANJAY_ID_INVALID;                                  \
+        AVS_UNIT_ASSERT_SUCCESS(anjay_lwm2m_gateway_register_device(         \
+                anjay, "device_id_1", &iid));                                \
+        AVS_UNIT_ASSERT_EQUAL(iid, TEST_END_DEVICE_IID_1);                   \
+        AVS_UNIT_ASSERT_SUCCESS(anjay_lwm2m_gateway_register_object(         \
+                anjay, iid, &test_object_def_ptr_1));                        \
+        iid = ANJAY_ID_INVALID;                                              \
+        AVS_UNIT_ASSERT_SUCCESS(anjay_lwm2m_gateway_register_device(         \
+                anjay, "device_id_2", &iid));                                \
+        AVS_UNIT_ASSERT_EQUAL(iid, TEST_END_DEVICE_IID_2);                   \
+        AVS_UNIT_ASSERT_SUCCESS(anjay_lwm2m_gateway_register_object(         \
+                anjay, iid, &test_object_def_ptr_2));                        \
+        AVS_UNIT_ASSERT_SUCCESS(                                             \
+                anjay_register_object(anjay, &test_object_def_ptr_gateway)); \
+        anjay_batch_builder_t *builder = _anjay_batch_builder_new();         \
+        AVS_UNIT_ASSERT_NOT_NULL(builder);                                   \
+                                                                             \
+        _anjay_mock_clock_start(                                             \
+                avs_time_monotonic_from_scalar((TimeStart), AVS_TIME_S));
+
+#    define BATCH_COMPILE_BUILD_MSG()                                         \
+        anjay_batch_t *batch = _anjay_batch_builder_compile(&builder);        \
+        AVS_UNIT_ASSERT_NULL(builder);                                        \
+        AVS_UNIT_ASSERT_NOT_NULL(batch);                                      \
+                                                                              \
+        char buffer[200] = { 0 };                                             \
+        avs_stream_outbuf_t stream = AVS_STREAM_OUTBUF_STATIC_INITIALIZER;    \
+        avs_stream_outbuf_set_buffer(&stream, buffer, sizeof(buffer));        \
+        anjay_unlocked_output_ctx_t *out_ctx =                                \
+                _anjay_output_senml_like_create((avs_stream_t *) &stream,     \
+                                                &MAKE_ROOT_PATH(),            \
+                                                AVS_COAP_FORMAT_SENML_JSON,   \
+                                                NULL);                        \
+        AVS_UNIT_ASSERT_NOT_NULL(out_ctx);                                    \
+        ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);                              \
+        AVS_UNIT_ASSERT_SUCCESS(                                              \
+                _anjay_batch_data_output(anjay_unlocked, batch, 1, out_ctx)); \
+        ANJAY_MUTEX_UNLOCK(anjay);                                            \
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out_ctx));
+
+AVS_UNIT_TEST(dm_batch, serialize_one_end_device_resource) {
+    TEST_SETUP_GATEWAY(MOCK_CLOCK_START_RELATIVE);
+
+    anjay_uri_path_t path;
+    _anjay_uri_path_with_prefix_from_end_device_iid(
+            &path, TEST_END_DEVICE_IID_1, TEST_OID, 0, INT_RID, UINT16_MAX);
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_batch_add_int(
+            builder, &path, AVS_TIME_REAL_INVALID, INT_VALUE));
+
+    BATCH_COMPILE_BUILD_MSG();
+
+    char expected[200];
+    int expected_size =
+            avs_simple_snprintf(expected, sizeof(expected),
+                                "[{\"n\":\"/%s/%" PRIu16 "/%" PRIu16 "/%" PRIu16
+                                "\",\"v\":%" PRIi64 "}]",
+                                path.prefix, TEST_OID, 0, INT_RID,
+                                (int64_t) INT_VALUE);
+    AVS_UNIT_ASSERT_EQUAL(avs_stream_outbuf_offset(&stream), expected_size);
+    AVS_UNIT_ASSERT_EQUAL_STRING(buffer, expected);
+
+    _anjay_batch_release(&batch);
+    AVS_UNIT_ASSERT_NULL(batch);
+
+    TEST_TEARDOWN();
+}
+
+AVS_UNIT_TEST(dm_batch, serialize_two_resources_different_end_devices) {
+    TEST_SETUP_GATEWAY(MOCK_CLOCK_START_RELATIVE);
+
+    anjay_uri_path_t path;
+    _anjay_uri_path_with_prefix_from_end_device_iid(
+            &path, TEST_END_DEVICE_IID_1, TEST_OID, 0, INT_RID, UINT16_MAX);
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_batch_add_int(
+            builder, &path, AVS_TIME_REAL_INVALID, INT_VALUE));
+    _anjay_uri_path_with_prefix_from_end_device_iid(
+            &path, TEST_END_DEVICE_IID_1, TEST_OID, 0, UINT_RID, UINT16_MAX);
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_batch_add_uint(
+            builder, &path, AVS_TIME_REAL_INVALID, UINT_VALUE));
+
+    BATCH_COMPILE_BUILD_MSG();
+
+    char expected[200];
+    int expected_size = avs_simple_snprintf(
+            expected, sizeof(expected),
+            "[{\"n\":\"/%s/%" PRIu16 "/%" PRIu16 "/%" PRIu16 "\",\"v\":%" PRIi64
+            "},{\"n\":\"/%s/%" PRIu16 "/%" PRIu16 "/%" PRIu16
+            "\",\"v\":%" PRIu64 "}]",
+            path.prefix, TEST_OID, 0, INT_RID, (int64_t) INT_VALUE, path.prefix,
+            TEST_OID, 0, UINT_RID, (uint64_t) UINT_VALUE);
+    AVS_UNIT_ASSERT_EQUAL(avs_stream_outbuf_offset(&stream), expected_size);
+    AVS_UNIT_ASSERT_EQUAL_STRING(buffer, expected);
+
+    _anjay_batch_release(&batch);
+    AVS_UNIT_ASSERT_NULL(batch);
+
+    TEST_TEARDOWN();
+}
+
+AVS_UNIT_TEST(dm_batch, serialize_two_end_device_resources) {
+    TEST_SETUP_GATEWAY(MOCK_CLOCK_START_RELATIVE);
+
+    anjay_uri_path_t path_1, path_2;
+    _anjay_uri_path_with_prefix_from_end_device_iid(
+            &path_1, TEST_END_DEVICE_IID_1, TEST_OID, 0, INT_RID, UINT16_MAX);
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_batch_add_int(
+            builder, &path_1, AVS_TIME_REAL_INVALID, INT_VALUE));
+    _anjay_uri_path_with_prefix_from_end_device_iid(
+            &path_2, TEST_END_DEVICE_IID_2, TEST_OID, 0, UINT_RID, UINT16_MAX);
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_batch_add_uint(
+            builder, &path_2, AVS_TIME_REAL_INVALID, UINT_VALUE));
+
+    BATCH_COMPILE_BUILD_MSG();
+
+    char expected[200];
+    int expected_size = avs_simple_snprintf(
+            expected, sizeof(expected),
+            "[{\"n\":\"/%s/%" PRIu16 "/%" PRIu16 "/%" PRIu16 "\",\"v\":%" PRIi64
+            "},{\"n\":\"/%s/%" PRIu16 "/%" PRIu16 "/%" PRIu16
+            "\",\"v\":%" PRIu64 "}]",
+            path_1.prefix, TEST_OID, 0, INT_RID, (int64_t) INT_VALUE,
+            path_2.prefix, TEST_OID, 0, UINT_RID, (uint64_t) UINT_VALUE);
+    AVS_UNIT_ASSERT_EQUAL(avs_stream_outbuf_offset(&stream), expected_size);
+    AVS_UNIT_ASSERT_EQUAL_STRING(buffer, expected);
+
+    _anjay_batch_release(&batch);
+    AVS_UNIT_ASSERT_NULL(batch);
+
+    TEST_TEARDOWN();
+}
+
+AVS_UNIT_TEST(dm_batch,
+              serialize_two_end_device_resource_one_gateway_resource) {
+    TEST_SETUP_GATEWAY(MOCK_CLOCK_START_RELATIVE);
+
+    anjay_uri_path_t path_1, path_2;
+    _anjay_uri_path_with_prefix_from_end_device_iid(
+            &path_1, TEST_END_DEVICE_IID_1, TEST_OID, 0, INT_RID, UINT16_MAX);
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_batch_add_int(
+            builder, &path_1, AVS_TIME_REAL_INVALID, INT_VALUE));
+    _anjay_uri_path_with_prefix_from_end_device_iid(
+            &path_2, TEST_END_DEVICE_IID_2, TEST_OID, 0, UINT_RID, UINT16_MAX);
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_batch_add_uint(
+            builder, &path_2, AVS_TIME_REAL_INVALID, UINT_VALUE));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_batch_add_int(
+            builder, &MAKE_RESOURCE_PATH(TEST_OID, 0, INT_RID),
+            AVS_TIME_REAL_INVALID, INT_VALUE));
+
+    BATCH_COMPILE_BUILD_MSG();
+
+    char expected[200];
+    int expected_size = avs_simple_snprintf(
+            expected, sizeof(expected),
+            "[{\"n\":\"/%s/%" PRIu16 "/%" PRIu16 "/%" PRIu16 "\",\"v\":%" PRIi64
+            "},{\"n\":\"/%s/%" PRIu16 "/%" PRIu16 "/%" PRIu16
+            "\",\"v\":%" PRIu64 "},{\"n\":\"/%" PRIu16 "/%" PRIu16 "/%" PRIu16
+            "\",\"v\":%" PRIu64 "}]",
+            path_1.prefix, TEST_OID, 0, INT_RID, (int64_t) INT_VALUE,
+            path_2.prefix, TEST_OID, 0, UINT_RID, (uint64_t) UINT_VALUE,
+            TEST_OID, 0, INT_RID, (int64_t) INT_VALUE);
+    AVS_UNIT_ASSERT_EQUAL(avs_stream_outbuf_offset(&stream), expected_size);
+    AVS_UNIT_ASSERT_EQUAL_STRING(buffer, expected);
+
+    _anjay_batch_release(&batch);
+    AVS_UNIT_ASSERT_NULL(batch);
+
+    TEST_TEARDOWN();
+}
+
+#endif // ANJAY_WITH_LWM2M_GATEWAY

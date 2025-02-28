@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -21,7 +21,9 @@ from framework.coap_file_server import CoapFileServerThread, CoapFileServer
 from framework.lwm2m_test import *
 from .access_control import AccessMask
 from .block_write import Block, equal_chunk_splitter
+from .connection_id import CoapServerWithProxy, disconnect_socket
 
+import pymbedtls
 
 class UpdateState:
     IDLE = 0
@@ -423,6 +425,7 @@ class FirmwareUpdate:
     class TestWithCoapsServerMixin(TestWithCoapServerMixin):
         FW_PSK_IDENTITY = b'fw-psk-identity'
         FW_PSK_KEY = b'fw-psk-key'
+        CONNECTION_ID_VALUE = 'connection_id_val'
 
         def setUp(self, coap_server_class=coap.DtlsServer, extra_cmdline_args=None, *args, **kwargs):
             extra_cmdline_args = (extra_cmdline_args or []) + ['--fw-psk-identity',
@@ -430,9 +433,21 @@ class FirmwareUpdate:
                                                                    self.FW_PSK_IDENTITY), 'ascii'),
                                                                '--fw-psk-key', str(binascii.hexlify(
                     self.FW_PSK_KEY), 'ascii')]
+
             super().setUp(*args, coap_server=coap_server_class(psk_identity=self.FW_PSK_IDENTITY,
-                                                               psk_key=self.FW_PSK_KEY),
+                                                               psk_key=self.FW_PSK_KEY,
+                                                               connection_id=self.CONNECTION_ID_VALUE
+                                                                   if '--use-connection-id' in extra_cmdline_args else ''
+                                                               ),
                           extra_cmdline_args=extra_cmdline_args, **kwargs)
+
+    class TestWithCoapsServerProxyMixin(TestWithCoapsServerMixin):
+        def setUp(self, extra_cmdline_args=['--use-connection-id'], *args, **kwargs):
+           super().setUp(coap_server_class=CoapServerWithProxy,
+                         extra_cmdline_args=extra_cmdline_args, *args, **kwargs)
+
+    class TestWithCoapsServerProxy(TestWithCoapsServerProxyMixin, Test):
+        pass
 
     class TestWithCoapsServer(TestWithCoapsServerMixin, Test):
         pass
@@ -449,20 +464,27 @@ class FirmwareUpdate:
 
     class TestWithPartialDownload:
         GARBAGE_SIZE = 8000
-
-        def wait_for_half_download(self):
+        
+        def _wait_for_download(self, fw_part_multiplier=0.5):
             # roughly twice the time expected as per SlowServer
             deadline = time.time() + self.GARBAGE_SIZE / 500
             fsize = 0
             while time.time() < deadline:
                 time.sleep(0.5)
                 fsize = os.stat(self.fw_file_name).st_size
-                if fsize * 2 > self.GARBAGE_SIZE:
+                if fsize > self.GARBAGE_SIZE * fw_part_multiplier:
                     break
-            if fsize * 2 <= self.GARBAGE_SIZE:
+            if fsize <= self.GARBAGE_SIZE * fw_part_multiplier:
                 self.fail('firmware image not downloaded fast enough')
             elif fsize > self.GARBAGE_SIZE:
                 self.fail('firmware image downloaded too quickly')
+
+
+        def wait_for_half_download(self):
+            self._wait_for_download(0.5)
+
+        def wait_for_three_quarters_download(self):
+            self._wait_for_download(0.75)
 
         def setUp(self, *args, **kwargs):
             super().setUp(garbage=self.GARBAGE_SIZE, *args, **kwargs)
@@ -481,10 +503,11 @@ class FirmwareUpdate:
                 kwargs = {**kwargs, 'auto_remove': False}
             super().setUp(*args, **kwargs)
 
-        def tearDown(self):
+        def tearDown(self, check_fw_file=True):
             try:
-                with open(self.fw_file_name, "rb") as f:
-                    self.assertEqual(f.read(), self.FIRMWARE_SCRIPT_CONTENT)
+                if check_fw_file:
+                    with open(self.fw_file_name, "rb") as f:
+                        self.assertEqual(f.read(), self.FIRMWARE_SCRIPT_CONTENT)
                 super().tearDown()
             finally:
                 try:
@@ -512,18 +535,46 @@ class FirmwareUpdate:
 
     class TestWithPartialCoapsDownloadAndRestart(TestWithPartialDownloadAndRestart,
                                                  TestWithCoapsServer):
-        def setUp(self):
+        def setUp(self, extra_cmdline_args=[]):
             class SlowServer(coap.DtlsServer):
                 def send(self, *args, **kwargs):
                     time.sleep(0.5)
                     return super().send(*args, **kwargs)
 
-            super().setUp(coap_server_class=SlowServer)
+            super().setUp(coap_server_class=SlowServer, extra_cmdline_args=extra_cmdline_args)
 
             with self.file_server as file_server:
                 file_server.set_resource(self.PATH,
                                          make_firmware_package(self.FIRMWARE_SCRIPT_CONTENT))
                 self.fw_uri = file_server.get_resource_uri(self.PATH)
+
+    class CoapDownloaderRetryMixIn:
+        COAP_DOWNLOADER_RETRY_COUNT_DEF = 1
+        COAP_DOWNLOADER_RETRY_DELAY_DEF = 5
+        FW_MAX_RETRANSMIT_DEF = 1
+
+        def setUp(
+                self,
+                retry_count=COAP_DOWNLOADER_RETRY_COUNT_DEF,
+                retry_delay=COAP_DOWNLOADER_RETRY_DELAY_DEF,
+                fw_max_retransmit=FW_MAX_RETRANSMIT_DEF,
+                extra_cmdline_args=[]):
+            self.coap_downloader_retry_delay = retry_delay
+            extra_cmdline_args += ['--coap-downloader-retry-count',
+                                   str(retry_count),
+                                   '--coap-downloader-retry-delay',
+                                   str(retry_delay),
+                                   '--fwu-max-retransmit',
+                                   str(fw_max_retransmit)]
+            super().setUp(extra_cmdline_args=extra_cmdline_args)
+
+    class CoapsDownloaderRetry(
+            CoapDownloaderRetryMixIn,
+            TestWithPartialCoapsDownloadAndRestart):
+        pass
+
+    class CoapsDownloaderRetry(CoapDownloaderRetryMixIn, TestWithPartialCoapsDownloadAndRestart):
+        pass
 
     class TestWithPartialHttpDownloadAndRestartMixin:
         def get_etag(self, response_content):
@@ -1464,6 +1515,594 @@ class FirmwareUpdateCoapsOfflineDuringSuspendAndReconnectDuringOfflineTest(
         self.wait_for_download()
 
 
+class FirmwareUpdateCoapsSocketCloseResumptionTest(
+        FirmwareUpdate.CoapsDownloaderRetry):
+    def runTest(self):
+        # Write /5/0/1 (Firmware URI)
+        self.write_firmware_uri_expect_success(self.fw_uri)
+
+        self.wait_for_half_download()
+
+        with self.server_thread[0].file_server as file_server:
+            port = file_server._server.get_listen_port()
+            file_server._server.close()
+            if self.read_log_until_match(
+                regex=re.escape(
+                    b'retrying download 1, attempt number 1, with delay ' + str(
+                        self.coap_downloader_retry_delay).encode()),
+                    timeout_s=10) is None:
+                raise self.failureException('string not found')
+            download_failed_timestamp = time.time()
+            file_server._server.reset(port)
+
+            self.assertPktIsDtlsClientHello(
+                file_server._server._raw_udp_socket.recv(
+                    65536, socket.MSG_PEEK))
+            self.assertAlmostEqual(
+                download_failed_timestamp +
+                self.coap_downloader_retry_delay,
+                time.time(),
+                delta=1)
+
+        self.wait_for_download()
+
+
+class FirmwareUpdateCoapsTimeoutResumptionTest(
+        FirmwareUpdate.CoapsDownloaderRetry):
+    def runTest(self):
+        # Write /5/0/1 (Firmware URI)
+        self.write_firmware_uri_expect_success(self.fw_uri)
+
+        self.wait_for_half_download()
+
+        # we take file server mutex, so it stops processing incoming packages
+        # and that's why there is a timeout on client side
+        with self.server_thread[0].file_server as file_server:
+            port = file_server._server.get_listen_port()
+
+            if self.read_log_until_match(
+                regex=re.escape(
+                    b'retrying download 1, attempt number 1, with delay ' + str(
+                        self.coap_downloader_retry_delay).encode()),
+                    timeout_s=10) is None:
+                raise self.failureException('string not found')
+            download_failed_timestamp = time.time()
+            file_server._server.reset(port)
+
+            self.assertPktIsDtlsClientHello(
+                file_server._server._raw_udp_socket.recv(
+                    65536, socket.MSG_PEEK))
+            self.assertAlmostEqual(
+                download_failed_timestamp +
+                self.coap_downloader_retry_delay,
+                time.time(),
+                delta=1)
+
+        self.wait_for_download()
+
+
+@unittest.skipIf(not pymbedtls.Context.supports_connection_id(),
+                 "connection_id support is not enabled in pymbedtls")
+class FirmwareUpdateCoapsSocketCloseResumptionWithCIDTest(
+        FirmwareUpdate.CoapsDownloaderRetry):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--use-connection-id'])
+
+    def runTest(self):
+        # Write /5/0/1 (Firmware URI)
+        self.write_firmware_uri_expect_success(self.fw_uri)
+
+        self.wait_for_half_download()
+
+        with self.server_thread[0].file_server as file_server:
+            with file_server._server.fake_close():
+                if self.read_log_until_match(
+                    regex=re.escape(
+                        b'retrying download 1, attempt number 1, with delay ' + str(
+                            self.coap_downloader_retry_delay).encode()),
+                        timeout_s=10) is None:
+                    raise self.failureException('string not found')
+                download_failed_timestamp = time.time()
+            # Unconnect the socket at the pymbedtls site,
+            # to allow accepting packets from unknown endpoints.
+            disconnect_socket(file_server._server.socket.py_socket)
+
+            file_server._server._raw_udp_socket.settimeout(
+                self.coap_downloader_retry_delay * 2)
+            # we don't expect handshake since we are using CID
+            with self.assertRaises(AssertionError):
+                self.assertPktIsDtlsClientHello(
+                    file_server._server._raw_udp_socket.recv(
+                        65536, socket.MSG_PEEK))
+            self.assertAlmostEqual(
+                download_failed_timestamp +
+                self.coap_downloader_retry_delay,
+                time.time(),
+                delta=1)
+
+        self.wait_for_download()
+
+
+class FirmareUpdateCoapsRetryCountResetAndReachMaxRetryTest(
+        FirmwareUpdate.CoapsDownloaderRetry):
+    def setUp(self):
+        super().setUp(retry_count=2)
+
+    def runTest(self):
+        # Write /5/0/1 (Firmware URI)
+        self.write_firmware_uri_expect_success(self.fw_uri)
+
+        self.wait_for_half_download()
+
+        with self.server_thread[0].file_server as file_server:
+            port = file_server._server.get_listen_port()
+            file_server._server.close()
+            if self.read_log_until_match(
+                regex=re.escape(
+                    b'retrying download 1, attempt number 1, with delay ' + str(
+                        self.coap_downloader_retry_delay).encode()),
+                    timeout_s=10) is None:
+                raise self.failureException('string not found')
+            download_failed_timestamp = time.time()
+            file_server._server.reset(port)
+
+            self.assertPktIsDtlsClientHello(
+                file_server._server._raw_udp_socket.recv(
+                    65536, socket.MSG_PEEK))
+            self.assertAlmostEqual(
+                download_failed_timestamp +
+                self.coap_downloader_retry_delay,
+                time.time(),
+                delta=1)
+
+        self.wait_for_three_quarters_download()
+
+        with self.server_thread[0].file_server as file_server:
+            port = file_server._server.get_listen_port()
+            file_server._server.close()
+            if self.read_log_until_match(
+                regex=re.escape(
+                    b'retrying download 1, attempt number 1, with delay ' + str(
+                        self.coap_downloader_retry_delay).encode()),
+                    timeout_s=10) is None:
+                raise self.failureException('string not found')
+            download_failed_timestamp = time.time()
+
+            # first retry
+            if self.read_log_until_match(
+                    regex=re.escape(b'could not connect socket for download id = '),
+                    timeout_s=10) is None:
+                raise self.failureException('string not found')
+            self.assertAlmostEqual(
+                download_failed_timestamp +
+                self.coap_downloader_retry_delay,
+                time.time(),
+                delta=1)
+            retry_timestamp = time.time()
+
+            # second retry
+            if self.read_log_until_match(
+                    regex=re.escape(b'could not connect socket for download id = '),
+                    timeout_s=10) is None:
+                raise self.failureException('string not found')
+            self.assertAlmostEqual(
+                retry_timestamp +
+                self.coap_downloader_retry_delay,
+                time.time(),
+                delta=1)
+
+            file_server._server.reset(port)
+            file_server._server._raw_udp_socket.settimeout(
+                self.coap_downloader_retry_delay * 2)
+            # there should be no more retries
+            with self.assertRaises(socket.timeout):
+                file_server._server._raw_udp_socket.recv(
+                    65536, socket.MSG_PEEK)
+
+    def tearDown(self):
+        super().tearDown(check_fw_file=False)
+
+class FirmareUpdateCoapsRetryCountResetAndFinishDownloadTest(
+        FirmwareUpdate.CoapsDownloaderRetry):
+    def setUp(self):
+        super().setUp(retry_count=2)
+
+    def runTest(self):
+        # Write /5/0/1 (Firmware URI)
+        self.write_firmware_uri_expect_success(self.fw_uri)
+
+        self.wait_for_half_download()
+
+        with self.server_thread[0].file_server as file_server:
+            port = file_server._server.get_listen_port()
+            file_server._server.close()
+
+            if self.read_log_until_match(
+                regex=re.escape(
+                    b'retrying download 1, attempt number 1, with delay ' + str(
+                        self.coap_downloader_retry_delay).encode()),
+                    timeout_s=10) is None:
+                raise self.failureException('string not found')
+            download_failed_timestamp = time.time()
+
+            # first retry - failed this will increment the counter
+            if self.read_log_until_match(
+                    regex=re.escape(b'could not connect socket for download id = '),
+                    timeout_s=10) is None:
+                raise self.failureException('string not found')
+            self.assertAlmostEqual(
+                download_failed_timestamp +
+                self.coap_downloader_retry_delay,
+                time.time(),
+                delta=1)
+
+            if self.read_log_until_match(
+                regex=re.escape(
+                    b'retrying download 1, attempt number 2, with delay ' + str(
+                        self.coap_downloader_retry_delay).encode()),
+                    timeout_s=10) is None:
+                raise self.failureException('string not found')
+            download_failed_timestamp = time.time()
+            file_server._server.reset(port)
+
+            self.assertPktIsDtlsClientHello(
+                file_server._server._raw_udp_socket.recv(
+                    65536, socket.MSG_PEEK))
+            self.assertAlmostEqual(
+                download_failed_timestamp +
+                self.coap_downloader_retry_delay,
+                time.time(),
+                delta=1)
+
+        self.wait_for_three_quarters_download()
+
+        with self.server_thread[0].file_server as file_server:
+            port = file_server._server.get_listen_port()
+            file_server._server.close()
+
+            # Counter was reseted after successful processing of next package
+            if self.read_log_until_match(
+                regex=re.escape(
+                    b'retrying download 1, attempt number 1, with delay ' + str(
+                        self.coap_downloader_retry_delay).encode()),
+                    timeout_s=10) is None:
+                raise self.failureException('string not found')
+            download_failed_timestamp = time.time()
+            file_server._server.reset(port)
+
+            self.assertPktIsDtlsClientHello(
+                file_server._server._raw_udp_socket.recv(
+                    65536, socket.MSG_PEEK))
+            self.assertAlmostEqual(
+                download_failed_timestamp +
+                self.coap_downloader_retry_delay,
+                time.time(),
+                delta=1)
+
+        self.wait_for_download()
+
+class FirmwareUpdateCoapsResumptionScheduledDownloadCancelTest(
+        FirmwareUpdate.CoapsDownloaderRetry):
+    def runTest(self):
+        # Write /5/0/1 (Firmware URI)
+        self.write_firmware_uri_expect_success(self.fw_uri)
+
+        self.wait_for_half_download()
+
+        with self.server_thread[0].file_server as file_server:
+            port = file_server._server.get_listen_port()
+            file_server._server.close()
+            if self.read_log_until_match(
+                regex=re.escape(
+                    b'retrying download 1, attempt number 1, with delay ' + str(
+                        self.coap_downloader_retry_delay).encode()),
+                    timeout_s=10) is None:
+                raise self.failureException('string not found')
+            file_server._server.reset(port)
+
+            # cancel download
+            self.write_firmware_uri_expect_success(b'')
+            self.assertEqual(UpdateState.IDLE, self.read_state())
+            self.assertEqual(UpdateResult.INITIAL, self.read_update_result())
+
+            file_server._server._raw_udp_socket.settimeout(
+                self.coap_downloader_retry_delay * 2)
+
+            with self.assertRaises(socket.timeout):
+                file_server._server._raw_udp_socket.recv(
+                    65536, socket.MSG_PEEK)
+
+    def tearDown(self):
+        super().tearDown(check_fw_file=False)
+
+
+class FirmwareUpdateCoapsResumptionScheduledOfflineModeBetweenTest(
+        FirmwareUpdate.CoapsDownloaderRetry):
+    def runTest(self):
+        # Write /5/0/1 (Firmware URI)
+        self.write_firmware_uri_expect_success(self.fw_uri)
+
+        self.wait_for_half_download()
+
+        with self.server_thread[0].file_server as file_server:
+            port = file_server._server.get_listen_port()
+            file_server._server.close()
+            if self.read_log_until_match(
+                regex=re.escape(
+                    b'retrying download 1, attempt number 1, with delay ' + str(
+                        self.coap_downloader_retry_delay).encode()),
+                    timeout_s=10) is None:
+                raise self.failureException('string not found')
+            download_failed_timestamp = time.time()
+            file_server._server.reset(port)
+
+            self.communicate('enter-offline')
+            time.sleep(2)
+            self.communicate('exit-offline')
+
+            # after exiting offline mode we should try to reconnect immediately
+            self.assertPktIsDtlsClientHello(
+                file_server._server._raw_udp_socket.recv(
+                    65536, socket.MSG_PEEK))
+            self.assertAlmostEqual(
+                download_failed_timestamp + 2, time.time(), delta=1)
+
+        self.assertDemoRegisters()
+
+        self.wait_for_download()
+
+
+class FirmwareUpdateCoapsResumptionScheduledOfflineModeBetweenCheckRetryCounterTest(
+        FirmwareUpdate.CoapsDownloaderRetry):
+    def setUp(self):
+        super().setUp(retry_count=3)
+
+    def runTest(self):
+        # Write /5/0/1 (Firmware URI)
+        self.write_firmware_uri_expect_success(self.fw_uri)
+
+        self.wait_for_half_download()
+
+        with self.server_thread[0].file_server as file_server:
+            port = file_server._server.get_listen_port()
+            file_server._server.close()
+            if self.read_log_until_match(
+                regex=re.escape(
+                    b'retrying download 1, attempt number 1, with delay ' + str(
+                        self.coap_downloader_retry_delay).encode()),
+                    timeout_s=10) is None:
+                raise self.failureException('string not found')
+            download_failed_timestamp = time.time()
+
+            # first retray
+            if self.read_log_until_match(
+                    regex=re.escape(b'could not connect socket for download id = '),
+                    timeout_s=10) is None:
+                raise self.failureException('string not found')
+            retry_timestamp = time.time()
+            self.assertAlmostEqual(
+                download_failed_timestamp +
+                self.coap_downloader_retry_delay,
+                retry_timestamp,
+                delta=1)
+
+            self.communicate('enter-offline')
+            time.sleep(2)
+            self.communicate('exit-offline')
+
+            self.assertDemoRegisters()
+
+            # after exiting offline mode we should try to reconnect
+            # immediately, second retry
+            if self.read_log_until_match(
+                    regex=re.escape(b'could not connect socket for download id = '),
+                    timeout_s=10) is None:
+                raise self.failureException('string not found')
+            self.assertAlmostEqual(retry_timestamp + 2, time.time(), delta=1)
+            retry_timestamp = time.time()
+
+            # thrird retry
+            if self.read_log_until_match(
+                    regex=re.escape(b'could not connect socket for download id = '),
+                    timeout_s=10) is None:
+                raise self.failureException('string not found')
+            self.assertAlmostEqual(
+                retry_timestamp +
+                self.coap_downloader_retry_delay,
+                time.time(),
+                delta=1)
+
+            file_server._server.reset(port)
+            file_server._server._raw_udp_socket.settimeout(
+                self.coap_downloader_retry_delay * 2)
+            # there should be no more retries
+            with self.assertRaises(socket.timeout):
+                file_server._server._raw_udp_socket.recv(
+                    65536, socket.MSG_PEEK)
+
+    def tearDown(self):
+        super().tearDown(check_fw_file=False)
+
+class FirmwareUpdateCoapsResumptionScheduledOfflineModeTest(
+        FirmwareUpdate.CoapsDownloaderRetry):
+    def runTest(self):
+        # Write /5/0/1 (Firmware URI)
+        self.write_firmware_uri_expect_success(self.fw_uri)
+
+        self.wait_for_half_download()
+
+        with self.server_thread[0].file_server as file_server:
+            port = file_server._server.get_listen_port()
+            file_server._server.close()
+            if self.read_log_until_match(
+                regex=re.escape(
+                    b'retrying download 1, attempt number 1, with delay ' + str(
+                        self.coap_downloader_retry_delay).encode()),
+                    timeout_s=10) is None:
+                raise self.failureException('string not found')
+            file_server._server.reset(port)
+
+            self.communicate('enter-offline')
+
+            timeout = file_server._server._raw_udp_socket.gettimeout()
+            file_server._server._raw_udp_socket.settimeout(
+                self.coap_downloader_retry_delay * 2)
+            # there should be no retries
+            with self.assertRaises(socket.timeout):
+                file_server._server._raw_udp_socket.recv(
+                    65536, socket.MSG_PEEK)
+            file_server._server._raw_udp_socket.settimeout(timeout)
+            self.communicate('exit-offline')
+
+        self.assertDemoRegisters()
+
+        self.wait_for_download()
+
+class FirmwareUpdateCoapsResumptionScheduledUpdateSuspendTest(
+        FirmwareUpdate.CoapsDownloaderRetry):
+    def runTest(self):
+        # Write /5/0/1 (Firmware URI)
+        self.write_firmware_uri_expect_success(self.fw_uri)
+
+        self.wait_for_half_download()
+
+        with self.server_thread[0].file_server as file_server:
+            port = file_server._server.get_listen_port()
+            file_server._server.close()
+            if self.read_log_until_match(
+                regex=re.escape(
+                    b'retrying download 1, attempt number 1, with delay ' + str(
+                        self.coap_downloader_retry_delay).encode()),
+                    timeout_s=10) is None:
+                raise self.failureException('string not found')
+            file_server._server.reset(port)
+
+            self.communicate('fw-update-suspend')
+
+            timeout = file_server._server._raw_udp_socket.gettimeout()
+            file_server._server._raw_udp_socket.settimeout(
+                self.coap_downloader_retry_delay * 2)
+            # there should be no retries
+            with self.assertRaises(socket.timeout):
+                file_server._server._raw_udp_socket.recv(
+                    65536, socket.MSG_PEEK)
+            file_server._server._raw_udp_socket.settimeout(timeout)
+            self.communicate('fw-update-reconnect')
+
+        self.wait_for_download()
+
+class FirmwareUpdateCoapsResumptionScheduledForceReconnect(
+        FirmwareUpdate.CoapsDownloaderRetry):
+    def runTest(self):
+        # Write /5/0/1 (Firmware URI)
+        self.write_firmware_uri_expect_success(self.fw_uri)
+
+        self.wait_for_half_download()
+
+        with self.server_thread[0].file_server as file_server:
+            port = file_server._server.get_listen_port()
+            file_server._server.close()
+            if self.read_log_until_match(
+                regex=re.escape(
+                    b'retrying download 1, attempt number 1, with delay ' + str(
+                        self.coap_downloader_retry_delay).encode()),
+                    timeout_s=10) is None:
+                raise self.failureException('string not found')
+            download_failed_timestamp = time.time()
+            file_server._server.reset(port)
+
+            # We don't call `fw-update-reconnect` right away to provoke a situation
+            # in which a reconnection attempt may occur from two sources. Without
+            # this delay reconnection related to retry mechanizm will be canceled
+            # becuase the file will have time to download before the time when the
+            # retry should take place.
+            sleep_time = self.coap_downloader_retry_delay - 1
+            time.sleep(sleep_time)
+            self.communicate('fw-update-reconnect')
+            self.assertPktIsDtlsClientHello(
+                file_server._server._raw_udp_socket.recv(
+                    65536, socket.MSG_PEEK))
+
+            # check if we didn't wait for the resumption delay and started it
+            # right away
+            self.assertAlmostEqual(
+                download_failed_timestamp + sleep_time,
+                time.time(),
+                delta=0.5)
+
+        self.wait_for_download()
+        self.assertTrue(
+            time.time() -
+            download_failed_timestamp -
+            1 > self.coap_downloader_retry_delay)
+
+
+class FirmwareUpdateCoapsResumptionScheduledOfflineModeDifferentTransportTest(
+        FirmwareUpdate.CoapsDownloaderRetry):
+    def runTest(self):
+        # Write /5/0/1 (Firmware URI)
+        self.write_firmware_uri_expect_success(self.fw_uri)
+
+        self.wait_for_half_download()
+
+        with self.server_thread[0].file_server as file_server:
+            port = file_server._server.get_listen_port()
+            file_server._server.close()
+            if self.read_log_until_match(
+                regex=re.escape(
+                    b'retrying download 1, attempt number 1, with delay ' + str(
+                        self.coap_downloader_retry_delay).encode()),
+                    timeout_s=10) is None:
+                raise self.failureException('string not found')
+            file_server._server.reset(port)
+            download_failed_timestamp = time.time()
+
+            self.communicate('enter-offline tcp')
+            # retry should not by immediate
+            self.assertPktIsDtlsClientHello(
+                file_server._server._raw_udp_socket.recv(
+                    65536, socket.MSG_PEEK))
+            self.assertAlmostEqual(
+                download_failed_timestamp +
+                self.coap_downloader_retry_delay,
+                time.time(),
+                delta=1)
+
+        self.wait_for_download()
+
+class FirmwareUpdateCoapsResumptionDuringReconnect(
+        FirmwareUpdate.CoapsDownloaderRetry):
+    def runTest(self):
+        # Write /5/0/1 (Firmware URI)
+        self.write_firmware_uri_expect_success(self.fw_uri)
+
+        self.wait_for_half_download()
+        self.communicate('fw-update-suspend')
+
+        with self.server_thread[0].file_server as file_server:
+            port = file_server._server.get_listen_port()
+            self.communicate('fw-update-reconnect')
+
+            if self.read_log_until_match(
+                regex=re.escape(
+                    b'retrying download 1, attempt number 1, with delay ' + str(
+                        self.coap_downloader_retry_delay).encode()),
+                    timeout_s=10) is None:
+                raise self.failureException('string not found')
+            download_failed_timestamp = time.time()
+            file_server._server.reset(port)
+
+            self.assertPktIsDtlsClientHello(
+                file_server._server._raw_udp_socket.recv(
+                    65536, socket.MSG_PEEK))
+            self.assertAlmostEqual(
+                download_failed_timestamp +
+                self.coap_downloader_retry_delay,
+                time.time(),
+                delta=1)
+
+        self.wait_for_download()
+
 class FirmwareUpdateHttpSuspendDuringOfflineAndReconnectDuringOnlineTest(
     FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
     def runTest(self):
@@ -1720,6 +2359,151 @@ class FirmwareUpdateRestartWithDownloadingETagChange(
         self.assertEqual(state, UpdateState.DOWNLOADED)
         self.assertTrue(file_truncated)
 
+# For more information on how this test works, please refer to the DtlsConnectionIdTest header.
+# Keep in mind that in this test, we are testing the connection between the file server and the
+# client, as opposed to the previously mentioned test, where we test the connection between the
+# client and the LwM2M server.
+@unittest.skipIf(not pymbedtls.Context.supports_connection_id(),
+                 "connection_id support is not enabled in pymbedtls")
+class FirmwareUpdateCoapsUriConnectionID(FirmwareUpdate.TestWithCoapsServerProxy):
+    REQUEST_FINAL_COUNT = 11
+
+    def setUp(self):
+        super().setUp(garbage=10240)
+
+    def tearDown(self):
+        super().tearDown()
+
+        with self.file_server as file_server:
+            # There might be some retransmissions, but they do not occur often and there is not
+            # much that we can do about it because we have to add the BLOCK2 option in following loop
+            # if we want to check requests
+            self.assertEqual(self.REQUEST_FINAL_COUNT, len(file_server.requests))
+
+            self.assertMsgEqual(CoapGet('/firmware'), file_server.requests[0])
+            for i in range(1, self.REQUEST_FINAL_COUNT):
+                self.assertMsgEqual(CoapGet('/firmware', options=[coap.Option.BLOCK2(
+                    seq_num=i, has_more=False, block_size=1024)]), file_server.requests[i])
+
+    def runTest(self):
+        with self.file_server as file_server:
+            file_server.set_resource('/firmware',
+                                    make_firmware_package(self.FIRMWARE_SCRIPT_CONTENT))
+            fw_uri = file_server.get_resource_uri('/firmware')
+        with self.server_thread[0]._file_server._server.server_proxy():
+            self.write_firmware_uri_expect_success(fw_uri)
+
+            deadline = time.time() + 20
+            while time.time() < deadline:
+                if self.REQUEST_FINAL_COUNT / 2 <= len(file_server.requests):
+                    break
+            else:
+                self.fail('at this point half of the firmware should have been downloaded')
+
+        # Unconnect the socket at the pymbedtls site (this unconnects the link between "server proxy"
+        # and CoAP file server, to allow accepting packets from unknown endpoints.
+        disconnect_socket(self.server_thread[0]._file_server._server.socket.py_socket)
+
+        self.assertTrue(len(file_server.requests) < 10)
+
+        with self.server_thread[0]._file_server._server.server_proxy():
+            self.server_thread[0].reset_timeout_occurred()
+            self.wait_for_download(20)
+            self.assertFalse(self.server_thread[0].get_timeout_occurred())
+
+@unittest.skipIf(not pymbedtls.Context.supports_connection_id(),
+                 "connection_id support is not enabled in pymbedtls")
+class FirmwareUpdateCoapsUriConnectionIDSuspendAndReconnect(
+    FirmwareUpdate.TestWithPartialCoapsDownloadAndRestart):
+    def setUp(self):
+        extra_cmdline_args = ['--use-connection-id']
+        super().setUp(extra_cmdline_args=extra_cmdline_args)
+
+    def runTest(self):
+        # Write /5/0/1 (Firmware URI)
+        self.write_firmware_uri_expect_success(self.fw_uri)
+
+        self.wait_for_half_download()
+
+        with self.file_server as file_server:
+            # Flush any buffers
+            while True:
+                try:
+                    file_server._server.recv(timeout_s=1)
+                except socket.timeout:
+                    break
+
+            self.communicate('fw-update-suspend')
+
+            with self.assertRaises(socket.timeout):
+                file_server._server.recv(timeout_s=5)
+
+            self.communicate('enter-offline')
+
+            with self.assertRaises(socket.timeout):
+                file_server._server.recv(timeout_s=5)
+
+            self.communicate('exit-offline')
+
+            self.assertDemoRegisters()
+
+            with self.assertRaises(socket.timeout):
+                file_server._server.recv(timeout_s=5)
+
+            # Unconnect the socket at the pymbedtls site,
+            # to allow accepting packets from unknown endpoints.
+            disconnect_socket(file_server._server.socket.py_socket)
+
+            self.communicate('fw-update-reconnect')
+
+        self.wait_for_download()
+
+class FirmwareUpdateCoapsUriWithoutConnectionID(FirmwareUpdate.TestWithCoapsServerProxy):
+    REQUEST_FINAL_COUNT = 5
+
+    def setUp(self):
+        super().setUp(extra_cmdline_args='', garbage=10240)
+
+    def tearDown(self):
+        self.assertEqual(self.read_state(), UpdateState.DOWNLOADING)
+        super().tearDown()
+
+        with self.file_server as file_server:
+            # +1 for one additional request
+            self.assertTrue(self.REQUEST_FINAL_COUNT + 1 >= len(file_server.requests))
+
+            self.assertMsgEqual(CoapGet('/firmware'), file_server.requests[0])
+            for i in range(1, len(file_server.requests)):
+                self.assertMsgEqual(CoapGet('/firmware', options=[coap.Option.BLOCK2(
+                    seq_num=i, has_more=False, block_size=1024)]), file_server.requests[i])
+
+    def runTest(self):
+        with self.file_server as file_server:
+            file_server.set_resource('/firmware',
+                                    make_firmware_package(self.FIRMWARE_SCRIPT_CONTENT))
+            fw_uri = file_server.get_resource_uri('/firmware')
+        with self.server_thread[0]._file_server._server.server_proxy():
+            self.write_firmware_uri_expect_success(fw_uri)
+
+            deadline = time.time() + 20
+            while time.time() < deadline:
+                if self.REQUEST_FINAL_COUNT <= len(file_server.requests):
+                    break
+            else:
+                self.fail('at this point half of the firmware should have been downloaded')
+
+        # Unconnect the socket at the pymbedtls site (this unconnects the link between "server proxy"
+        # and CoAP file server, to allow accepting packets from unknown endpoints.
+        disconnect_socket(self.server_thread[0]._file_server._server.socket.py_socket)
+
+        with self.server_thread[0]._file_server._server.server_proxy():
+            self.server_thread[0].reset_timeout_occurred()
+            deadline = time.time() + 7.5
+            while time.time() < deadline:
+                if self.server_thread[0].get_timeout_occurred():
+                    break
+            else:
+                self.fail('timeout should have occurred')
 
 class FirmwareUpdateRestartWithDownloadingOverHttp(
     FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
@@ -2165,7 +2949,7 @@ class SameSocketDownload:
         GARBAGE_SIZE = 2048
         # Set to be able to comfortably test interleaved requests
         ACK_TIMEOUT = 10
-        MAX_RETRANSMIT = 4
+        DEF_MAX_RETRANSMIT = 4
         # Sometimes we want to allow the client to send more than one request at a time
         # e.g. Update and GET.
         NSTART = 1
@@ -2180,10 +2964,15 @@ class SameSocketDownload:
             kwargs['extra_cmdline_args'] += [
                 '--prefer-same-socket-downloads',
                 '--ack-timeout', str(self.ACK_TIMEOUT),
-                '--max-retransmit', str(self.MAX_RETRANSMIT),
                 '--ack-random-factor', str(1.0),
                 '--nstart', str(self.NSTART)
             ]
+
+            if '--max-retransmit' not in kwargs['extra_cmdline_args']:
+                kwargs['extra_cmdline_args'] += [
+                    '--max-retransmit', str(self.DEF_MAX_RETRANSMIT)
+                ]
+
             kwargs['lifetime'] = self.LIFETIME
             super().setUp(*args, **kwargs)
             self.file_server = CoapFileServer(
@@ -2361,7 +3150,7 @@ class FirmwareDownloadSameSocketAndReconnectNstart1(SameSocketDownload.Test):
 class FirmwareDownloadSameSocketUpdateTimeoutNstart2(SameSocketDownload.Test):
     NSTART = 2
     LIFETIME = 5
-    MAX_RETRANSMIT = 1
+    DEF_MAX_RETRANSMIT = 1
     ACK_TIMEOUT = 2
 
     def runTest(self):
@@ -2392,7 +3181,7 @@ class FirmwareDownloadSameSocketUpdateTimeoutNstart2(SameSocketDownload.Test):
 
 class FirmwareDownloadSameSocketUpdateTimeoutNstart1(SameSocketDownload.Test):
     LIFETIME = 5
-    MAX_RETRANSMIT = 1
+    DEF_MAX_RETRANSMIT = 1
     ACK_TIMEOUT = 2
 
     def runTest(self):
@@ -2669,6 +3458,134 @@ class FirmwareDownloadSameSocketInterruptedByRebootTwoServersCancel(
             self.servers[1]), UpdateResult.INITIAL)
         self.assertEqual(self.read_state(self.servers[1]), UpdateState.IDLE)
         self.assertDemoRegisters(self.servers[0])
+
+
+class FirmwareDownloadSameSocketResumptionTimeoutSocket(
+        FirmwareUpdate.CoapDownloaderRetryMixIn,
+        SameSocketDownload.Test):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--max-retransmit', '1'])
+
+    def runTest(self):
+        self.start_download()
+
+        dl_req_get = self.serv.recv()
+        self.handle_get(dl_req_get)
+
+        # second block request
+        dl_req_get = self.serv.recv()
+
+        if self.read_log_until_match(
+                regex=re.escape(b'download failed: timeout'),
+                timeout_s=60) is None:
+            raise self.failureException('string not found')
+
+        # receive CoAP retransmission
+        dl_req_get_ret = self.serv.recv()
+        self.assertEqual(dl_req_get.token, dl_req_get_ret.token)
+
+        # receive retransmission related to our mechanism
+        dl_req_get = self.serv.recv()
+        self.handle_get(dl_req_get)
+
+        # last request
+        dl_req_get = self.serv.recv()
+        self.handle_get(dl_req_get)
+
+        self.assertEqual(self.read_state(), UpdateState.DOWNLOADED)
+
+
+class FirmwareDownloadSameSocketResumptionDownloadAbortInduceByOtherOperation(
+        test_suite.PcapEnabledTest,
+        FirmwareUpdate.CoapDownloaderRetryMixIn,
+        SameSocketDownload.Test):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--max-retransmit', '1'])
+
+    def runTest(self):
+        self.start_download()
+
+        dl_req_get = self.serv.recv()
+        self.handle_get(dl_req_get)
+
+        deadline = time.time() + 5
+        while deadline > time.time():
+            num_initial_dtls_hs_packets = self.count_dtls_client_hello_packets()
+            if num_initial_dtls_hs_packets == 5:
+                break
+        else:
+            self.fail('wrong dtls handshake packets count')
+
+        # second block request
+        dl_req_get = self.serv.recv()
+
+        if self.read_log_until_match(
+                regex=re.escape(b'download failed: timeout'),
+                timeout_s=60) is None:
+            raise self.failureException('string not found')
+        
+        # receive CoAP retransmission
+        dl_req_get_ret = self.serv.recv()
+        self.assertEqual(dl_req_get.token, dl_req_get_ret.token)
+
+        # get ICMP error while sending update, download should also be aborted
+        self.serv.close()
+        self.communicate('send-update')
+
+        # Wait for ICMP port unreachable.
+        self.wait_until_icmp_unreachable_count(1, timeout_s=10)
+
+        time.sleep(self.coap_downloader_retry_delay * 2)
+        # Ensure that no more retransmissions occurred.
+        self.assertEqual(1, self.count_icmp_unreachable_packets())
+        # Ensure that no more handashakes occurred.
+        self.assertEqual(num_initial_dtls_hs_packets,
+                         self.count_dtls_client_hello_packets())
+
+        # Ensure that the control is given back to the user.
+        self.assertTrue(self.get_all_connections_failed())
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+class FirmwareDownloadSameSocketResumptionCloseSocket(
+        test_suite.PcapEnabledTest,
+        FirmwareUpdate.CoapDownloaderRetryMixIn,
+        SameSocketDownload.Test):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--max-retransmit', '1'])
+
+    def runTest(self):
+        self.start_download()
+
+        dl_req_get = self.serv.recv()
+        self.handle_get(dl_req_get)
+
+        deadline = time.time() + 5
+        while deadline > time.time():
+            num_initial_dtls_hs_packets = self.count_dtls_client_hello_packets()
+            if num_initial_dtls_hs_packets == 5:
+                break
+        else:
+            self.fail('wrong dtls handshake packets count')
+
+        self.serv.close()
+
+        # Wait for ICMP port unreachable.
+        self.wait_until_icmp_unreachable_count(1, timeout_s=10)
+
+        time.sleep(self.coap_downloader_retry_delay * 2)
+        # Ensure that no more retransmissions occurred.
+        self.assertEqual(1, self.count_icmp_unreachable_packets())
+        # Ensure that no more handashakes occurred.
+        self.assertEqual(num_initial_dtls_hs_packets,
+                         self.count_dtls_client_hello_packets())
+
+        # Ensure that the control is given back to the user.
+        self.assertTrue(self.get_all_connections_failed())
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
 
 
 class FirmwareUpdateHttpRequestTimeoutTest(FirmwareUpdate.TestWithPartialDownload,

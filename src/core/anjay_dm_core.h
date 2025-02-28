@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -69,13 +69,24 @@ typedef struct {
     anjay_request_attributes_t attributes;
 } anjay_request_t;
 
-#define REQUEST_TO_ACTION_INFO(Request, Ssid)    \
-    (const anjay_action_info_t) {                \
-        .oid = (Request)->uri.ids[ANJAY_ID_OID], \
-        .iid = (Request)->uri.ids[ANJAY_ID_IID], \
-        .ssid = (Ssid),                          \
-        .action = (Request)->action              \
-    }
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+#    define REQUEST_TO_ACTION_INFO(Request, Ssid)                      \
+        (const anjay_action_info_t) {                                  \
+            .end_device = _anjay_uri_path_has_prefix(&(Request)->uri), \
+            .oid = (Request)->uri.ids[ANJAY_ID_OID],                   \
+            .iid = (Request)->uri.ids[ANJAY_ID_IID],                   \
+            .ssid = (Ssid),                                            \
+            .action = (Request)->action                                \
+        }
+#else // ANJAY_WITH_LWM2M_GATEWAY
+#    define REQUEST_TO_ACTION_INFO(Request, Ssid)    \
+        (const anjay_action_info_t) {                \
+            .oid = (Request)->uri.ids[ANJAY_ID_OID], \
+            .iid = (Request)->uri.ids[ANJAY_ID_IID], \
+            .ssid = (Ssid),                          \
+            .action = (Request)->action              \
+        }
+#endif // ANJAY_WITH_LWM2M_GATEWAY
 
 int _anjay_dm_transaction_validate(anjay_unlocked_t *anjay);
 int _anjay_dm_transaction_finish_without_validation(anjay_unlocked_t *anjay,

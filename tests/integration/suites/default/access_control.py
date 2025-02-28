@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -97,12 +97,12 @@ class AccessControl:
                                               accept=coap.ContentFormat.APPLICATION_LWM2M_TLV)
                 self.assertEqual(expected_tlv, read_tlv.content)
 
-        def setUp(self, servers=2, extra_cmdline_args=[], **kwargs):
+        def setUp(self, servers=2, oid=OID.Test, extra_cmdline_args=[], **kwargs):
             if isinstance(servers, int):
                 servers_count = servers
             else:
                 servers_count = len(servers)
-            extra_args = sum((['--access-entry', '/%d/65535,%d,%d' % (OID.Test, ssid, AccessMask.CREATE)] for ssid in
+            extra_args = sum((['--access-entry', '/%d/65535,%d,%d' % (oid, ssid, AccessMask.CREATE)] for ssid in
                               range(2, servers_count + 1)),
                              extra_cmdline_args)
             self.setup_demo_with_servers(servers=servers,

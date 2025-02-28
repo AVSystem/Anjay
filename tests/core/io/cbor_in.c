@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -584,7 +584,9 @@ AVS_UNIT_TEST(cbor_in, invalid_paths) {
     ASSERT_FAIL(parse_absolute_path(&path, "/1/2/3/65535"));
     ASSERT_FAIL(parse_absolute_path(&path, "/1/2/3/65536"));
     ASSERT_FAIL(parse_absolute_path(&path, "/1/2//3"));
+#ifndef ANJAY_WITH_LWM2M_GATEWAY
     ASSERT_FAIL(parse_absolute_path(&path, "/-1/2/3"));
+#endif // ANJAY_WITH_LWM2M_GATEWAY
 }
 #undef TEST_VALUE_ENV
 
@@ -681,6 +683,715 @@ AVS_UNIT_TEST(cbor_in_composite, composite_read_mode_additional_payload) {
     ASSERT_FAIL(_anjay_input_get_path(in, &path, NULL));
     TEST_TEARDOWN(FAIL);
 }
+
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+AVS_UNIT_TEST(cbor_in_resource_with_prefix, single_instance) {
+    static const char RESOURCE_WITH_PREFIX[] = {
+        "\x81"                 // array(1)
+        "\xA2"                 // map(3)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/26/1" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2A"             // unsigned(42)
+    };
+    TEST_ENV(RESOURCE_WITH_PREFIX, TEST_RESOURCE_PATH_WITH_PREFIX);
+    check_paths(in, &MAKE_RESOURCE_PATH_WITH_PREFIX("0aapud0", 13, 26, 1), 1);
+    TEST_TEARDOWN(OK);
+}
+
+AVS_UNIT_TEST(cbor_in_resource_permuted_with_prefix, single_instance) {
+    static const char RESOURCE_WITH_PREFIX[] = {
+        "\x81"                 // array(1)
+        "\xA2"                 // map(2)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2A"             // unsigned(42)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/26/1" // text(16)
+    };
+
+    TEST_ENV(RESOURCE_WITH_PREFIX, TEST_RESOURCE_PATH_WITH_PREFIX);
+    check_paths(in, &MAKE_RESOURCE_PATH_WITH_PREFIX("0aapud0", 13, 26, 1), 1);
+    TEST_TEARDOWN(OK);
+}
+
+AVS_UNIT_TEST(cbor_in_resource_with_prefix, single_instance_but_more_than_one) {
+    static const char RESOURCES_WITH_PREFIX[] = {
+        "\x82"                 // array(2)
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/26/1" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2A"             // unsigned(42)
+                               // ,
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/26/2" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2B"             // unsigned(43)
+    };
+    TEST_ENV(RESOURCES_WITH_PREFIX, TEST_RESOURCE_PATH_WITH_PREFIX);
+    test_single_instance_but_more_than_one(
+            in, &MAKE_RESOURCE_PATH_WITH_PREFIX("0aapud0", 13, 26, 1));
+    TEST_TEARDOWN(OK);
+}
+
+AVS_UNIT_TEST(cbor_in_resource_with_prefix,
+              single_instance_but_more_than_one_without_last_get_path) {
+    static const char RESOURCES_WITH_PREFIX[] = {
+        "\x82"                 // array(2)
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/26/1" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2A"             // unsigned(42)
+                               // ,
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/26/2" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2B"             // unsigned(43)
+    };
+
+    TEST_ENV(RESOURCES_WITH_PREFIX, TEST_RESOURCE_PATH_WITH_PREFIX);
+    check_path(in, &MAKE_RESOURCE_PATH_WITH_PREFIX("0aapud0", 13, 26, 1), 42);
+
+    // Context is restricted to /0aapud0/13/26/1, but it has more data to
+    // obtain, which means the request is broken.
+    TEST_TEARDOWN(FAIL);
+}
+
+AVS_UNIT_TEST(cbor_in_resource_with_prefix,
+              single_instance_with_first_resource_unrelated) {
+    static const char RESOURCES_WITH_PREFIX[] = {
+        "\x82"                 // array(2)
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/26/2" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2A"             // unsigned(42)
+                               // ,
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/26/1" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2B"             // unsigned(43)
+    };
+
+    // NOTE: Request is on /0aapud0/13/26/1 but the first resource in the
+    // payload is /0aapud0/13/26/2.
+    TEST_ENV(RESOURCES_WITH_PREFIX, TEST_RESOURCE_PATH_WITH_PREFIX);
+
+    ASSERT_EQ(_anjay_input_get_path(in, NULL, NULL), ANJAY_ERR_BAD_REQUEST);
+
+    // Basically nothing was extracted from the context, because it was broken
+    // from the very beginning.
+    TEST_TEARDOWN(FAIL);
+}
+
+AVS_UNIT_TEST(cbor_in_resource_permuted_with_prefix,
+              single_instance_but_more_than_one) {
+    static const char RESOURCES_WITH_PREFIX[] = {
+        "\x82"                 // array(2)
+        "\xA2"                 // map(2)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2A"             // unsigned(42)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/26/1" // text(16)
+                               // ,
+        "\xA2"                 // map(2)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2B"             // unsigned(43)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/26/2" // text(16)
+    };
+    TEST_ENV(RESOURCES_WITH_PREFIX, TEST_RESOURCE_PATH_WITH_PREFIX);
+    test_single_instance_but_more_than_one(
+            in, &MAKE_RESOURCE_PATH_WITH_PREFIX("0aapud0", 13, 26, 1));
+    TEST_TEARDOWN(OK);
+}
+
+AVS_UNIT_TEST(cbor_in_resource_with_prefix, multiple_instance) {
+    static const char RESOURCES_WITH_PREFIX[] = {
+        "\x82"                   // array(2)
+        "\xA2"                   // map(2)
+        "\x00"                   // unsigned(0) => SenML Name
+        "\x72/0aapud0/13/26/1/4" // text(18)
+        "\x02"                   // unsigned(2) => SenML Value
+        "\x18\x2A"               // unsigned(42)
+                                 // ,
+        "\xA2"                   // map(2)
+        "\x00"                   // unsigned(0) => SenML Name
+        "\x72/0aapud0/13/26/1/5" // text(18)
+        "\x02"                   // unsigned(2) => SenML Value
+        "\x18\x2B"               // unsigned(43)
+    };
+    TEST_ENV(RESOURCES_WITH_PREFIX, TEST_RESOURCE_PATH_WITH_PREFIX);
+    check_paths(in,
+                (const anjay_uri_path_t[2]) {
+                        MAKE_RESOURCE_INSTANCE_PATH_WITH_PREFIX("0aapud0", 13,
+                                                                26, 1, 4),
+                        MAKE_RESOURCE_INSTANCE_PATH_WITH_PREFIX("0aapud0", 13,
+                                                                26, 1, 5) },
+                2);
+    TEST_TEARDOWN(OK);
+}
+
+AVS_UNIT_TEST(cbor_in_resource_with_prefix,
+              multiple_instance_with_different_prefixes) {
+    static const char RESOURCES_WITH_PREFIX[] = {
+        "\x82"                   // array(2)
+        "\xA2"                   // map(2)
+        "\x00"                   // unsigned(0) => SenML Name
+        "\x72/prefix1/13/26/1/4" // text(18)
+        "\x02"                   // unsigned(2) => SenML Value
+        "\x18\x2A"               // unsigned(42)
+                                 // ,
+        "\xA2"                   // map(2)
+        "\x00"                   // unsigned(0) => SenML Name
+        "\x72/prefix2/13/26/1/5" // text(18)
+        "\x02"                   // unsigned(2) => SenML Value
+        "\x18\x2B"               // unsigned(43)
+    };
+    TEST_ENV(RESOURCES_WITH_PREFIX, MAKE_ROOT_PATH());
+    check_paths(in,
+                (const anjay_uri_path_t[2]) {
+                        MAKE_RESOURCE_INSTANCE_PATH_WITH_PREFIX("prefix1", 13,
+                                                                26, 1, 4),
+                        MAKE_RESOURCE_INSTANCE_PATH_WITH_PREFIX("prefix2", 13,
+                                                                26, 1, 5) },
+                2);
+    TEST_TEARDOWN(OK);
+}
+
+AVS_UNIT_TEST(cbor_in_resource_permuted_with_prefix, multiple_instance) {
+    static const char RESOURCES_WITH_PREFIX[] = {
+        "\x82"                   // array(2)
+        "\xA2"                   // map(2)
+        "\x02"                   // unsigned(2) => SenML Value
+        "\x18\x2A"               // unsigned(42)
+        "\x00"                   // unsigned(0) => SenML Name
+        "\x72/0aapud0/13/26/1/4" // text(18)
+                                 // ,
+        "\xA2"                   // map(2)
+        "\x02"                   // unsigned(2) => SenML Value
+        "\x18\x2B"               // unsigned(43)
+        "\x00"                   // unsigned(0) => SenML Name
+        "\x72/0aapud0/13/26/1/5" // text(18)
+    };
+    TEST_ENV(RESOURCES_WITH_PREFIX, TEST_RESOURCE_PATH_WITH_PREFIX);
+    check_paths(in,
+                (const anjay_uri_path_t[2]) {
+                        MAKE_RESOURCE_INSTANCE_PATH_WITH_PREFIX("0aapud0", 13,
+                                                                26, 1, 4),
+                        MAKE_RESOURCE_INSTANCE_PATH_WITH_PREFIX("0aapud0", 13,
+                                                                26, 1, 5) },
+                2);
+    TEST_TEARDOWN(OK);
+}
+
+AVS_UNIT_TEST(cbor_in_resource_permuted_with_prefix,
+              multiple_instance_with_different_prefixes) {
+    static const char RESOURCES_WITH_PREFIX[] = {
+        "\x82"                   // array(2)
+        "\xA2"                   // map(2)
+        "\x02"                   // unsigned(2) => SenML Value
+        "\x18\x2A"               // unsigned(42)
+        "\x00"                   // unsigned(0) => SenML Name
+        "\x72/prefix1/13/26/1/4" // text(18)
+                                 // ,
+        "\xA2"                   // map(2)
+        "\x02"                   // unsigned(2) => SenML Value
+        "\x18\x2B"               // unsigned(43)
+        "\x00"                   // unsigned(0) => SenML Name
+        "\x72/prefix2/13/26/1/5" // text(18)
+    };
+    TEST_ENV(RESOURCES_WITH_PREFIX, MAKE_ROOT_PATH());
+    check_paths(in,
+                (const anjay_uri_path_t[2]) {
+                        MAKE_RESOURCE_INSTANCE_PATH_WITH_PREFIX("prefix1", 13,
+                                                                26, 1, 4),
+                        MAKE_RESOURCE_INSTANCE_PATH_WITH_PREFIX("prefix2", 13,
+                                                                26, 1, 5) },
+                2);
+    TEST_TEARDOWN(OK);
+}
+
+AVS_UNIT_TEST(cbor_in_instance_with_prefix, with_simple_resource) {
+    static const char RESOURCE_WITH_PREFIX[] = {
+        "\x81"                 // array(1)
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/26/1" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2A"             // unsigned(42)
+    };
+    TEST_ENV(RESOURCE_WITH_PREFIX, TEST_INSTANCE_PATH_WITH_PREFIX);
+    check_paths(in, &MAKE_RESOURCE_PATH_WITH_PREFIX("0aapud0", 13, 26, 1), 1);
+    TEST_TEARDOWN(OK);
+}
+
+AVS_UNIT_TEST(cbor_in_instance_with_prefix, with_more_than_one_resource) {
+    static const char RESOURCES_WITH_PREFIX[] = {
+        "\x82"                 // array(2)
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/26/1" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2A"             // unsigned(42)
+                               // ,
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/26/2" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2B"             // unsigned(43)
+    };
+    TEST_ENV(RESOURCES_WITH_PREFIX, TEST_INSTANCE_PATH_WITH_PREFIX);
+    check_paths(in,
+                (const anjay_uri_path_t[2]) {
+                        MAKE_RESOURCE_PATH_WITH_PREFIX("0aapud0", 13, 26, 1),
+                        MAKE_RESOURCE_PATH_WITH_PREFIX("0aapud0", 13, 26, 2) },
+                2);
+    TEST_TEARDOWN(OK);
+}
+
+AVS_UNIT_TEST(cbor_in_instance_with_prefix,
+              with_more_than_one_resource_with_different_prefixes) {
+    static const char RESOURCES_WITH_PREFIX[] = {
+        "\x82"                 // array(2)
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/prefix1/13/26/1" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2A"             // unsigned(42)
+                               // ,
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/prefix2/13/26/2" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2B"             // unsigned(43)
+    };
+    TEST_ENV(RESOURCES_WITH_PREFIX, MAKE_ROOT_PATH());
+    check_paths(in,
+                (const anjay_uri_path_t[2]) {
+                        MAKE_RESOURCE_PATH_WITH_PREFIX("prefix1", 13, 26, 1),
+                        MAKE_RESOURCE_PATH_WITH_PREFIX("prefix2", 13, 26, 2) },
+                2);
+    TEST_TEARDOWN(OK);
+}
+
+AVS_UNIT_TEST(cbor_in_instance_with_prefix, resource_skipping) {
+    static const char RESOURCES_WITH_PREFIX[] = {
+        "\x82"                 // array(2)
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/26/1" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2A"             // unsigned(42)
+                               // ,
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/26/2" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2B"             // unsigned(43)
+    };
+    TEST_ENV(RESOURCES_WITH_PREFIX, TEST_INSTANCE_PATH_WITH_PREFIX);
+    test_skipping(
+            in,
+            (const anjay_uri_path_t[2]) {
+                    MAKE_RESOURCE_PATH_WITH_PREFIX("0aapud0", 13, 26, 1),
+                    MAKE_RESOURCE_PATH_WITH_PREFIX("0aapud0", 13, 26, 2) },
+            2);
+    TEST_TEARDOWN(OK);
+}
+
+AVS_UNIT_TEST(cbor_in_instance_permuted_with_prefix, resource_skipping) {
+    static const char RESOURCES_WITH_PREFIX[] = {
+        "\x82"                 // array(2)
+        "\xA2"                 // map(2)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2A"             // unsigned(42)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/26/1" // text(16)
+                               // ,
+        "\xA2"                 // map(2)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2B"             // unsigned(43)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/26/2" // text(16)
+    };
+    TEST_ENV(RESOURCES_WITH_PREFIX, TEST_INSTANCE_PATH_WITH_PREFIX);
+    test_skipping(
+            in,
+            (const anjay_uri_path_t[2]) {
+                    MAKE_RESOURCE_PATH_WITH_PREFIX("0aapud0", 13, 26, 1),
+                    MAKE_RESOURCE_PATH_WITH_PREFIX("0aapud0", 13, 26, 2) },
+            2);
+    TEST_TEARDOWN(OK);
+}
+AVS_UNIT_TEST(cbor_in_instance_with_prefix, multiple_resource_skipping) {
+    static const char RESOURCES_WITH_PREFIX[] = {
+        "\x82"                   // array(2)
+        "\xA2"                   // map(2)
+        "\x00"                   // unsigned(0) => SenML Name
+        "\x72/0aapud0/13/26/1/4" // text(18)
+        "\x02"                   // unsigned(2) => SenML Value
+        "\x18\x2A"               // unsigned(42)
+                                 // ,
+        "\xA2"                   // map(2)
+        "\x00"                   // unsigned(0) => SenML Name
+        "\x72/0aapud0/13/26/2/5" // text(18)
+        "\x02"                   // unsigned(2) => SenML Value
+        "\x18\x2B"               // unsigned(43)
+    };
+    TEST_ENV(RESOURCES_WITH_PREFIX, TEST_INSTANCE_PATH_WITH_PREFIX);
+    test_skipping(in,
+                  (const anjay_uri_path_t[2]) {
+                          MAKE_RESOURCE_INSTANCE_PATH_WITH_PREFIX("0aapud0", 13,
+                                                                  26, 1, 4),
+                          MAKE_RESOURCE_INSTANCE_PATH_WITH_PREFIX("0aapud0", 13,
+                                                                  26, 2, 5) },
+                  2);
+    TEST_TEARDOWN(OK);
+}
+
+AVS_UNIT_TEST(cbor_in_object_with_prefix,
+              with_single_instance_and_some_resources) {
+    static const char RESOURCES_WITH_PREFIX[] = {
+        "\x82"                 // array(2)
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/26/1" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2A"             // unsigned(42)
+                               // ,
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/26/2" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2B"             // unsigned(43)
+    };
+    TEST_ENV(RESOURCES_WITH_PREFIX,
+             MAKE_OBJECT_PATH_WITH_PREFIX("0aapud0", 13));
+    check_paths(in,
+                (const anjay_uri_path_t[2]) {
+                        MAKE_RESOURCE_PATH_WITH_PREFIX("0aapud0", 13, 26, 1),
+                        MAKE_RESOURCE_PATH_WITH_PREFIX("0aapud0", 13, 26, 2) },
+                2);
+    TEST_TEARDOWN(OK);
+}
+
+AVS_UNIT_TEST(cbor_in_object_with_prefix,
+              with_single_instance_and_some_resources_with_different_prefixes) {
+    static const char RESOURCES_WITH_PREFIX[] = {
+        "\x82"                 // array(2)
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/prefix1/13/26/1" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2A"             // unsigned(42)
+                               // ,
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/prefix2/13/26/2" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2B"             // unsigned(43)
+    };
+    TEST_ENV(RESOURCES_WITH_PREFIX, MAKE_ROOT_PATH());
+    check_paths(in,
+                (const anjay_uri_path_t[2]) {
+                        MAKE_RESOURCE_PATH_WITH_PREFIX("prefix1", 13, 26, 1),
+                        MAKE_RESOURCE_PATH_WITH_PREFIX("prefix2", 13, 26, 2) },
+                2);
+    TEST_TEARDOWN(OK);
+}
+
+AVS_UNIT_TEST(cbor_in_object_with_prefix,
+              with_single_instance_and_some_resources_with_and_without_prefix) {
+    static const char RESOURCES_WITH_PREFIX[] = {
+        "\x82"                // array(2)
+        "\xA2"                // map(2)
+        "\x00"                // unsigned(0) => SenML Name
+        "\x68/13/26/1"        // text(8)
+        "\x02"                // unsigned(2) => SenML Value
+        "\x18\x2A"            // unsigned(42)
+                              // ,
+        "\xA2"                // map(2)
+        "\x00"                // unsigned(0) => SenML Name
+        "\x6F/prefix/13/26/2" // text(15)
+        "\x02"                // unsigned(2) => SenML Value
+        "\x18\x2B"            // unsigned(43)
+    };
+    TEST_ENV(RESOURCES_WITH_PREFIX, MAKE_ROOT_PATH());
+    check_paths(in,
+                (const anjay_uri_path_t[2]) {
+                        MAKE_RESOURCE_PATH(13, 26, 1),
+                        MAKE_RESOURCE_PATH_WITH_PREFIX("prefix", 13, 26, 2) },
+                2);
+    TEST_TEARDOWN(OK);
+}
+
+AVS_UNIT_TEST(cbor_in_object_with_prefix,
+              with_some_instances_and_some_resources) {
+    static const char RESOURCES_WITH_PREFIX[] = {
+        "\x84"                 // array(4)
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/26/1" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2A"             // unsigned(42)
+                               // ,
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/26/2" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2B"             // unsigned(43)
+                               //
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/27/3" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2C"             // unsigned(44)
+                               // ,
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/27/4" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2D"             // unsigned(45)
+    };
+    TEST_ENV(RESOURCES_WITH_PREFIX,
+             MAKE_OBJECT_PATH_WITH_PREFIX("0aapud0", 13));
+    check_paths(in,
+                (const anjay_uri_path_t[4]) {
+                        MAKE_RESOURCE_PATH_WITH_PREFIX("0aapud0", 13, 26, 1),
+                        MAKE_RESOURCE_PATH_WITH_PREFIX("0aapud0", 13, 26, 2),
+                        MAKE_RESOURCE_PATH_WITH_PREFIX("0aapud0", 13, 27, 3),
+                        MAKE_RESOURCE_PATH_WITH_PREFIX("0aapud0", 13, 27, 4) },
+                4);
+    TEST_TEARDOWN(OK);
+}
+
+AVS_UNIT_TEST(cbor_in_object_with_prefix,
+              with_some_instances_and_some_resources_with_different_prefixes) {
+    static const char RESOURCES_WITH_PREFIX[] = {
+        "\x84"                 // array(4)
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/prefix1/13/26/1" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2A"             // unsigned(42)
+                               // ,
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/prefix2/13/26/2" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2B"             // unsigned(43)
+                               //
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/prefix3/13/27/3" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2C"             // unsigned(44)
+                               // ,
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/prefix4/13/27/4" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2D"             // unsigned(45)
+    };
+    TEST_ENV(RESOURCES_WITH_PREFIX, MAKE_ROOT_PATH());
+    check_paths(in,
+                (const anjay_uri_path_t[4]) {
+                        MAKE_RESOURCE_PATH_WITH_PREFIX("prefix1", 13, 26, 1),
+                        MAKE_RESOURCE_PATH_WITH_PREFIX("prefix2", 13, 26, 2),
+                        MAKE_RESOURCE_PATH_WITH_PREFIX("prefix3", 13, 27, 3),
+                        MAKE_RESOURCE_PATH_WITH_PREFIX("prefix4", 13, 27, 4) },
+                4);
+    TEST_TEARDOWN(OK);
+}
+
+AVS_UNIT_TEST(cbor_in_with_prefix_mismatch, mismatch_no_prefix_in_base) {
+    static const char RESOURCE_WITH_PREFIX[] = {
+        "\x81"                 // array(1)
+        "\xA2"                 // map(3)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/26/1" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2A"             // unsigned(42)
+    };
+    TEST_ENV(RESOURCE_WITH_PREFIX, TEST_RESOURCE_PATH);
+    ASSERT_EQ(_anjay_input_get_path(in, NULL, NULL), ANJAY_ERR_BAD_REQUEST);
+    TEST_TEARDOWN(OK);
+}
+
+AVS_UNIT_TEST(cbor_in_with_prefix_mismatch, mismatch_no_prefix_in_payload) {
+    static const char RESOURCE_WITH_PREFIX[] = {
+        "\x81"         // array(1)
+        "\xA2"         // map(3)
+        "\x00"         // unsigned(0) => SenML Name
+        "\x68/13/26/1" // text(8)
+        "\x02"         // unsigned(2) => SenML Value
+        "\x18\x2A"     // unsigned(42)
+    };
+    TEST_ENV(RESOURCE_WITH_PREFIX, TEST_RESOURCE_PATH_WITH_PREFIX);
+    ASSERT_EQ(_anjay_input_get_path(in, NULL, NULL), ANJAY_ERR_BAD_REQUEST);
+    TEST_TEARDOWN(OK);
+}
+
+AVS_UNIT_TEST(cbor_in_with_prefix_mismatch, mismatch_different_prefix) {
+    static const char RESOURCE_WITH_PREFIX[] = {
+        "\x81"                 // array(1)
+        "\xA2"                 // map(3)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/13/26/1" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2A"             // unsigned(42)
+    };
+    TEST_ENV(RESOURCE_WITH_PREFIX,
+             MAKE_RESOURCE_PATH_WITH_PREFIX("prefix", 13, 26, 1));
+    ASSERT_EQ(_anjay_input_get_path(in, NULL, NULL), ANJAY_ERR_BAD_REQUEST);
+    TEST_TEARDOWN(OK);
+}
+
+AVS_UNIT_TEST(cbor_in_with_prefix_mismatch,
+              mismatch_first_prefix_fine_second_no) {
+    static const char RESOURCE_WITH_PREFIX[] = {
+        "\x82"                 // array(2)
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/prefix1/13/26/1" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2A"             // unsigned(42)
+                               // ,
+        "\xA2"                 // map(2)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/prefix2/13/26/2" // text(16)
+        "\x02"                 // unsigned(2) => SenML Value
+        "\x18\x2B"             // unsigned(43)
+    };
+    TEST_ENV(RESOURCE_WITH_PREFIX,
+             MAKE_INSTANCE_PATH_WITH_PREFIX("prefix1", 13, 26));
+    check_path(in, &MAKE_RESOURCE_PATH_WITH_PREFIX("prefix1", 13, 26, 1), 42);
+    ASSERT_OK(_anjay_input_next_entry(in));
+    ASSERT_EQ(_anjay_input_get_path(in, NULL, NULL), ANJAY_ERR_BAD_REQUEST);
+    TEST_TEARDOWN(OK);
+}
+
+AVS_UNIT_TEST(cbor_in_with_prefix, valid_paths) {
+    anjay_uri_path_t path;
+    ASSERT_OK(parse_absolute_path(&path, "/prefix"));
+    ASSERT_OK(parse_absolute_path(&path, "/prefix/1"));
+    ASSERT_OK(parse_absolute_path(&path, "/prefix/1/2"));
+    ASSERT_OK(parse_absolute_path(&path, "/prefix/1/2/3"));
+    ASSERT_OK(parse_absolute_path(&path, "/prefix/1/2/3/4"));
+    ASSERT_OK(parse_absolute_path(&path, "/prefix/1/2/3/65534"));
+    ASSERT_OK(parse_absolute_path(&path, "/prefix/65534/65534/65534/65534"));
+    ASSERT_OK(parse_absolute_path(&path, "/dev65535"));
+    ASSERT_OK(parse_absolute_path(&path, "/.2137"));
+}
+
+AVS_UNIT_TEST(cbor_in_with_prefix, invalid_paths) {
+    anjay_uri_path_t path;
+    ASSERT_FAIL(parse_absolute_path(&path, "prefix"));
+    ASSERT_FAIL(parse_absolute_path(&path, "/prefix/"));
+    ASSERT_FAIL(parse_absolute_path(&path, "/prefix/prefix"));
+    ASSERT_FAIL(parse_absolute_path(&path, "/prefix//"));
+    ASSERT_FAIL(parse_absolute_path(&path, "/prefix/1/"));
+    ASSERT_FAIL(parse_absolute_path(&path, "/prefix/1/2/"));
+    ASSERT_FAIL(parse_absolute_path(&path, "/prefix/1/2/3/"));
+    ASSERT_FAIL(parse_absolute_path(&path, "/prefix/1/2/3/4/"));
+    ASSERT_FAIL(parse_absolute_path(&path, "/prefix/1/2/3/65535"));
+    ASSERT_FAIL(parse_absolute_path(&path, "/prefix/1/2/3/65536"));
+    ASSERT_FAIL(parse_absolute_path(&path, "/prefix/1/2//3"));
+    ASSERT_FAIL(parse_absolute_path(&path, "/prefix/-1/2/3"));
+    ASSERT_FAIL(parse_absolute_path(&path, "/dev655351"));
+}
+
+AVS_UNIT_TEST(cbor_in_with_prefix, get_path_for_resource_instance_path) {
+    static const char RESOURCE_INSTANCE_PATH[] = {
+        "\x81"                 // array(1)
+        "\xA1"                 // map(1)
+        "\x00"                 // unsigned(0) => SenML Name
+        "\x70/0aapud0/3/0/0/1" // text(16)
+    };
+    TEST_ENV(RESOURCE_INSTANCE_PATH,
+             MAKE_RESOURCE_INSTANCE_PATH_WITH_PREFIX("0aapud0", 3, 0, 0, 1));
+    anjay_uri_path_t path;
+    ASSERT_OK(_anjay_input_get_path(in, &path, NULL));
+    URI_EQUAL(&path,
+              &MAKE_RESOURCE_INSTANCE_PATH_WITH_PREFIX("0aapud0", 3, 0, 0, 1));
+    TEST_TEARDOWN(OK);
+}
+
+#    define TEST_NAME_WITH_PREFIX_LONGER_THAN(prefix_len, base_name)           \
+        static const size_t RESOURCE_WITH_PREFIX_MAX_SIZE = 100;               \
+        const size_t path_len = prefix_len + strlen("//13/26/1");              \
+        size_t payload_size_without_prefix;                                    \
+        if (path_len > 23) {                                                   \
+            payload_size_without_prefix =                                      \
+                    strlen("\x81\xA2\xFF\x78\xFF//13/26/1\x02\x18\x2A");       \
+        } else {                                                               \
+            payload_size_without_prefix =                                      \
+                    strlen("\x81\xA2\xFF\xFF//13/26/1\x02\x18\x2A");           \
+        }                                                                      \
+        ASSERT_TRUE(RESOURCE_WITH_PREFIX_MAX_SIZE                              \
+                    >= (prefix_len + 1 + payload_size_without_prefix));        \
+        uint8_t resource_with_prefix[RESOURCE_WITH_PREFIX_MAX_SIZE];           \
+                                                                               \
+        /* If this assertion is not met then change the path encoding */       \
+        ASSERT_TRUE(path_len < 256);                                           \
+                                                                               \
+        char prefix[prefix_len + 1] = { 0 };                                   \
+        for (size_t i = 0; i < prefix_len; ++i) {                              \
+            prefix[i] = 'A';                                                   \
+        }                                                                      \
+                                                                               \
+        int ret;                                                               \
+        if (path_len > 23) {                                                   \
+            ret = snprintf(resource_with_prefix,                               \
+                           RESOURCE_WITH_PREFIX_MAX_SIZE,                      \
+                           "\x81\xA2\xFF\x78\xFF/%s/13/26/1\x02\x18\x2A",      \
+                           prefix);                                            \
+            resource_with_prefix[4] = (uint8_t) path_len;                      \
+        } else {                                                               \
+            ret = snprintf(resource_with_prefix,                               \
+                           RESOURCE_WITH_PREFIX_MAX_SIZE,                      \
+                           "\x81\xA2\xFF\xFF/%s/13/26/1\x02\x18\x2A", prefix); \
+            resource_with_prefix[3] = 0x60 + (uint8_t) path_len;               \
+        }                                                                      \
+        resource_with_prefix[2] = base_name ? '\x21' : '\x00';                 \
+                                                                               \
+        ASSERT_TRUE(ret == (int) (prefix_len + payload_size_without_prefix));  \
+                                                                               \
+        TEST_ENV(resource_with_prefix, MAKE_ROOT_PATH());                      \
+                                                                               \
+        anjay_uri_path_t path;                                                 \
+        ASSERT_EQ(_anjay_input_get_path(in, &path, NULL),                      \
+                  ANJAY_ERR_BAD_REQUEST);                                      \
+        TEST_TEARDOWN(FAIL);
+
+AVS_UNIT_TEST(
+        cbor_in_resource_with_prefix,
+        single_instance_with_prefix_in_name_longer_than_max_path_string_size) {
+    TEST_NAME_WITH_PREFIX_LONGER_THAN(MAX_PATH_STRING_SIZE, false);
+}
+
+AVS_UNIT_TEST(
+        cbor_in_resource_with_prefix,
+        single_instance_with_prefix_in_basename_longer_than_max_path_string_size) {
+    TEST_NAME_WITH_PREFIX_LONGER_THAN(MAX_PATH_STRING_SIZE, true);
+}
+
+AVS_UNIT_TEST(cbor_in_resource_with_prefix,
+              single_instance_with_prefix_in_name_longer_than_max_prefix_len) {
+    TEST_NAME_WITH_PREFIX_LONGER_THAN(ANJAY_GATEWAY_MAX_PREFIX_LEN, false);
+}
+
+AVS_UNIT_TEST(
+        cbor_in_resource_with_prefix,
+        single_instance_with_prefix_in_basename_longer_than_max_prefix_len) {
+    TEST_NAME_WITH_PREFIX_LONGER_THAN(ANJAY_GATEWAY_MAX_PREFIX_LEN, true);
+}
+#endif // ANJAY_WITH_LWM2M_GATEWAY
 
 #undef COMPOSITE_TEST_ENV
 #undef TEST_VALUE_ENV

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -169,6 +169,7 @@ _anjay_attr_storage_persist_inner(anjay_attr_storage_t *attr_storage,
                                   avs_stream_t *out);
 
 avs_error_t _anjay_attr_storage_restore_inner(anjay_unlocked_t *anjay,
+                                              anjay_attr_storage_t *as,
                                               avs_stream_t *in);
 
 VISIBILITY_PRIVATE_HEADER_END

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -28,6 +28,9 @@ typedef struct {
 } anjay_notify_queue_resource_entry_t;
 
 typedef struct {
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+    char prefix[ANJAY_GATEWAY_MAX_PREFIX_LEN];
+#endif // ANJAY_WITH_LWM2M_GATEWAY
     anjay_oid_t oid;
     anjay_notify_queue_instance_entry_t instance_set_changes;
     AVS_LIST(anjay_notify_queue_resource_entry_t) resources_changed;
@@ -60,24 +63,20 @@ int _anjay_notify_flush(anjay_unlocked_t *anjay,
                         anjay_notify_queue_t *queue_ptr);
 
 int _anjay_notify_queue_instance_created(anjay_notify_queue_t *out_queue,
-                                         anjay_oid_t oid,
-                                         anjay_iid_t iid);
+                                         const anjay_uri_path_t *path);
 
 int _anjay_notify_queue_instance_removed(anjay_notify_queue_t *out_queue,
-                                         anjay_oid_t oid,
-                                         anjay_iid_t iid);
+                                         const anjay_uri_path_t *path);
 
 int _anjay_notify_queue_instance_set_unknown_change(
-        anjay_notify_queue_t *out_queue, anjay_oid_t oid);
+        anjay_notify_queue_t *out_queue, const anjay_uri_path_t *path);
 
 /**
  * Adds a notification about the change of value of the data model resource
- * specified by <c>oid</c>, <c>iid</c> and <c>rid</c>.
+ * specified by <c>path</c>.
  */
 int _anjay_notify_queue_resource_change(anjay_notify_queue_t *out_queue,
-                                        anjay_oid_t oid,
-                                        anjay_iid_t iid,
-                                        anjay_rid_t rid);
+                                        const anjay_uri_path_t *path);
 
 void _anjay_notify_clear_queue(anjay_notify_queue_t *out_queue);
 
@@ -90,12 +89,34 @@ int _anjay_notify_changed_unlocked(anjay_unlocked_t *anjay,
                                    anjay_iid_t iid,
                                    anjay_rid_t rid);
 
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+int _anjay_notify_changed_gw_unlocked(anjay_unlocked_t *anjay,
+                                      const char *prefix,
+                                      anjay_oid_t oid,
+                                      anjay_iid_t iid,
+                                      anjay_rid_t rid);
+
+int _anjay_notify_instances_changed_gw_unlocked(anjay_unlocked_t *anjay,
+                                                const char *prefix,
+                                                anjay_oid_t oid);
+#endif // ANJAY_WITH_LWM2M_GATEWAY
+
 int _anjay_notify_instances_changed_unlocked(anjay_unlocked_t *anjay,
                                              anjay_oid_t oid);
 
 typedef int anjay_notify_callback_t(anjay_unlocked_t *anjay,
                                     anjay_notify_queue_t queue,
                                     void *data);
+
+#ifdef ANJAY_WITH_OBSERVATION_STATUS
+void _anjay_notify_observation_status_impl_unlocked(
+        anjay_unlocked_t *anjay,
+        anjay_resource_observation_status_t *status,
+        const char *prefix,
+        anjay_oid_t oid,
+        anjay_iid_t iid,
+        anjay_rid_t rid);
+#endif // ANJAY_WITH_OBSERVATION_STATUS
 
 VISIBILITY_PRIVATE_HEADER_END
 

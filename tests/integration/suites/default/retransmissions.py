@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -633,16 +633,8 @@ class NotificationTimeoutIsIgnored:
         CONFIRMABLE_NOTIFICATIONS = True
 
         def runTest(self):
-            import subprocess
-            import unittest
-
-            output = subprocess.run([self._get_demo_executable(), '-e', 'dummy', '-u', 'invalid'],
-                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout.decode(
-                'utf-8')
-
-            if 'WITH_AVS_COAP_OBSERVE_CANCEL_ON_TIMEOUT = ON' in output:
-                raise unittest.SkipTest(
-                    'Timeout cancels observation in that configuration')
+            self.skipIfFeatureStatus('WITH_AVS_COAP_OBSERVE_CANCEL_ON_TIMEOUT = ON',
+                                     'Timeout cancels observation in that configuration')
 
             # Trigger a CON notification
             self.create_instance(self.serv, oid=OID.Test, iid=1)
@@ -691,16 +683,8 @@ class NotificationTimeoutCancelsObservation:
         CONFIRMABLE_NOTIFICATIONS = True
 
         def runTest(self):
-            import subprocess
-            import unittest
-
-            output = subprocess.run([self._get_demo_executable(), '-e', 'dummy', '-u', 'invalid'],
-                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout.decode(
-                'utf-8')
-
-            if 'WITH_AVS_COAP_OBSERVE_CANCEL_ON_TIMEOUT = OFF' in output:
-                raise unittest.SkipTest(
-                    'Timeout does not cancel observation in that configuration')
+            self.skipIfFeatureStatus('WITH_AVS_COAP_OBSERVE_CANCEL_ON_TIMEOUT = OFF',
+                                     'Timeout does not cancel observation in that configuration')
 
             # Trigger a CON notification
             self.create_instance(self.serv, oid=OID.Test, iid=1)

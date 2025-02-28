@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -13,6 +13,8 @@ from . import access_control, retransmissions, firmware_update
 
 
 class QueueMode:
+    # it's kind of a duplicate of skipIfFeatureStatus(), but here it's not
+    # a simple run or skip, expected behavior depends on it
     @staticmethod
     def autoclose_disabled(test_case):
         import subprocess
@@ -33,9 +35,8 @@ class QueueModeBehaviour(retransmissions.RetransmissionTest.TestMixin,
     PSK_KEY = b'test-key'
 
     def setUp(self):
-        import unittest
-        if QueueMode.autoclose_disabled(self):
-            raise unittest.SkipTest('Queue mode autoclose disabled')
+        self.skipIfFeatureStatus('ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE = ON',
+                                 'Queue mode autoclose disabled')
         super().setUp(servers=[
             Lwm2mServer(coap.DtlsServer(psk_key=self.PSK_KEY, psk_identity=self.PSK_IDENTITY)),
             Lwm2mServer(coap.DtlsServer(psk_key=self.PSK_KEY, psk_identity=self.PSK_IDENTITY))],
@@ -147,9 +148,8 @@ class ForceOnlineMode(retransmissions.RetransmissionTest.TestMixin,
 class Lwm2m11QueueMode(retransmissions.RetransmissionTest.TestMixin,
                        framework.test_suite.Lwm2mDtlsSingleServerTest):
     def setUp(self):
-        import unittest
-        if QueueMode.autoclose_disabled(self):
-            raise unittest.SkipTest('Queue mode autoclose disabled')
+        self.skipIfFeatureStatus('ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE = ON',
+                                 'Queue mode autoclose disabled')
         super().setUp(maximum_version='1.1')
 
     def runTest(self):
@@ -251,9 +251,8 @@ class Lwm2m11UQBinding(QueueMode.Test, framework.test_suite.Lwm2mDtlsSingleServe
 class QueueModeAfterManualReconnect(retransmissions.RetransmissionTest.TestMixin,
                                     firmware_update.SameSocketDownload.Test):
     def setUp(self):
-        import unittest
-        if QueueMode.autoclose_disabled(self):
-            raise unittest.SkipTest('Queue mode autoclose disabled')
+        self.skipIfFeatureStatus('ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE = ON',
+                                 'Queue mode autoclose disabled')
         super().setUp(extra_cmdline_args=['--binding=UQ'], maximum_version='1.1', binding=None,
                       lwm2m11_queue_mode=True, psk_identity=b'test-identity', psk_key=b'test-key')
 
@@ -322,9 +321,8 @@ class TlsQueueMode(framework.test_suite.Lwm2mSingleTcpServerTest):
     PSK_KEY = b'test-key'
 
     def setUp(self, *args, **kwargs):
-        import unittest
-        if QueueMode.autoclose_disabled(self):
-            raise unittest.SkipTest('Queue mode autoclose disabled')
+        self.skipIfFeatureStatus('ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE = ON',
+                                 'Queue mode autoclose disabled')
         super().setUp(extra_cmdline_args=['--tcp-request-timeout', '5'],
                       psk_identity=self.PSK_IDENTITY, psk_key=self.PSK_KEY, maximum_version='1.1',
                       binding='T')
@@ -346,9 +344,8 @@ class TlsQueueMode(framework.test_suite.Lwm2mSingleTcpServerTest):
 
 class NosecTcpQueueMode(framework.test_suite.Lwm2mSingleTcpServerTest):
     def setUp(self, *args, **kwargs):
-        import unittest
-        if QueueMode.autoclose_disabled(self):
-            raise unittest.SkipTest('Queue mode autoclose disabled')
+        self.skipIfFeatureStatus('ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE = ON',
+                                 'Queue mode autoclose disabled')
         super().setUp(extra_cmdline_args=['--tcp-request-timeout', '5'], maximum_version='1.1',
                       binding='T')
 
@@ -380,9 +377,8 @@ class ReconnectServerIgnoredDuringQueueMode(QueueModeAfterManualReconnect):
 class ReconnectServerDuringQueueMode(retransmissions.RetransmissionTest.TestMixin,
                                           firmware_update.SameSocketDownload.Test):
     def setUp(self):
-        import unittest
-        if not QueueMode.autoclose_disabled(self):
-            raise unittest.SkipTest('Queue mode autoclose enabled')
+        self.skipIfFeatureStatus('ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE = OFF',
+                                 'Queue mode autoclose enabled')
         super().setUp(extra_cmdline_args=['--binding=UQ'], maximum_version='1.1', binding=None,
                       lwm2m11_queue_mode=True, psk_identity=b'test-identity', psk_key=b'test-key')
 

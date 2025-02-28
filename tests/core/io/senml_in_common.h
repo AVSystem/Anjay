@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -20,14 +20,28 @@
         AVS_CONCAT(ASSERT_, ExpectedResult)(_anjay_input_ctx_destroy(&in)); \
     } while (0)
 
-#define URI_EQUAL(path, expected_path) \
-    ASSERT_TRUE(_anjay_uri_path_equal(path, expected_path));
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+#    define URI_EQUAL(path, expected_path)                       \
+        ASSERT_TRUE(_anjay_uri_path_equal(path, expected_path)); \
+        ASSERT_TRUE(_anjay_uri_path_prefix_equal(path, expected_path));
+#else // ANJAY_WITH_LWM2M_GATEWAY
+#    define URI_EQUAL(path, expected_path) \
+        ASSERT_TRUE(_anjay_uri_path_equal(path, expected_path));
+#endif // ANJAY_WITH_LWM2M_GATEWAY
 
 static const anjay_uri_path_t TEST_RESOURCE_PATH =
         RESOURCE_PATH_INITIALIZER(13, 26, 1);
 
 static const anjay_uri_path_t TEST_INSTANCE_PATH =
         INSTANCE_PATH_INITIALIZER(13, 26);
+
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+static const anjay_uri_path_t TEST_RESOURCE_PATH_WITH_PREFIX =
+        RESOURCE_PATH_INITIALIZER_WITH_PREFIX("0aapud0", 13, 26, 1);
+
+static const anjay_uri_path_t TEST_INSTANCE_PATH_WITH_PREFIX =
+        INSTANCE_PATH_INITIALIZER_WITH_PREFIX("0aapud0", 13, 26);
+#endif // ANJAY_WITH_LWM2M_GATEWAY
 
 static void check_path(anjay_unlocked_input_ctx_t *in,
                        const anjay_uri_path_t *expected_path,

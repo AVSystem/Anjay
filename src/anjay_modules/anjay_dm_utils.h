@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -14,45 +14,28 @@
 #    include <anjay/lwm2m_send.h>
 #endif // ANJAY_WITH_SEND
 
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+#    include <inttypes.h>
+#    include <string.h>
+
+#    include <anjay/core.h>
+#endif // ANJAY_WITH_LWM2M_GATEWAY
+
 #include <anjay_modules/dm/anjay_modules.h>
 
 #include <assert.h>
 #include <limits.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
-#define MAX_PATH_STRING_SIZE sizeof("/65535/65535/65535/65535")
-
-// NOTE: A lot of code depends on numerical values of these constants.
-// Please be careful when refactoring.
-typedef enum {
-    ANJAY_ID_OID,
-    ANJAY_ID_IID,
-    ANJAY_ID_RID,
-    ANJAY_ID_RIID,
-    _ANJAY_URI_PATH_MAX_LENGTH
-} anjay_id_type_t;
-
-/**
- * A data type that represents a data model path.
- *
- * It may represent a root path, an Object path, an Object Instance path, a
- * Resource path, or a Resource Instance path.
- *
- * The path is terminated either by an @ref ANJAY_ID_INVALID value, or
- * end-of-array (in case of Resource Instance paths). In case of root, Object
- * and Object Instance paths, the array elements past the terminating invalid ID
- * value are undefined and shall not be used. They are NOT required to be set to
- * @ref ANJAY_ID_INVALID. Paths object that numerically differ only in values
- * past the terminating invalid ID shall be treated as equal (and this is how
- * @ref _anjay_uri_path_equal is implemented).
- *
- * The <c>ids</c> array is designed to be safely and meaningfully indexed by
- * @ref anjay_id_type_t values.
- */
-typedef struct {
-    uint16_t ids[_ANJAY_URI_PATH_MAX_LENGTH];
-
-} anjay_uri_path_t;
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+// ANJAY_GATEWAY_MAX_PREFIX_LEN contains space for null-terminator, but since
+// sizeof(...) already includes null-terminator, we use that one additional byte
+// for the new leading '/' in path
+#    define MAX_PATH_STRING_SIZE \
+        sizeof("/65535/65535/65535/65535") + ANJAY_GATEWAY_MAX_PREFIX_LEN
+#else // ANJAY_WITH_LWM2M_GATEWAY
+#    define MAX_PATH_STRING_SIZE sizeof("/65535/65535/65535/65535")
+#endif // ANJAY_WITH_LWM2M_GATEWAY
 
 static inline size_t _anjay_uri_path_length(const anjay_uri_path_t *path) {
     size_t result;
@@ -74,8 +57,50 @@ static inline bool _anjay_uri_path_leaf_is(const anjay_uri_path_t *path,
     return _anjay_uri_path_length(path) == (size_t) id_type + 1u;
 }
 
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+static inline bool _anjay_uri_path_prefix_is(const anjay_uri_path_t *path,
+                                             const char *prefix) {
+    return strcmp(path->prefix, prefix) == 0;
+}
+
+static inline bool _anjay_uri_path_prefix_equal(const anjay_uri_path_t *left,
+                                                const anjay_uri_path_t *right) {
+    return strcmp(left->prefix, right->prefix) == 0;
+}
+
+static inline bool _anjay_uri_path_has_prefix(const anjay_uri_path_t *path) {
+    return path->prefix[0] != '\0';
+}
+
+static inline void
+_anjay_uri_path_with_prefix_from_end_device_iid(anjay_uri_path_t *path,
+                                                anjay_iid_t end_device_iid,
+                                                anjay_oid_t oid,
+                                                anjay_iid_t iid,
+                                                anjay_rid_t rid,
+                                                anjay_riid_t riid) {
+    *path = (anjay_uri_path_t) {
+        .ids = {
+            [ANJAY_ID_OID] = oid,
+            [ANJAY_ID_IID] = iid,
+            [ANJAY_ID_RID] = rid,
+            [ANJAY_ID_RIID] = riid
+        }
+    };
+    avs_simple_snprintf(path->prefix, ANJAY_GATEWAY_MAX_PREFIX_LEN,
+                        "dev%" PRIu16, end_device_iid);
+}
+
+#endif // ANJAY_WITH_LWM2M_GATEWAY
+
 static inline int _anjay_uri_path_compare(const anjay_uri_path_t *left,
                                           const anjay_uri_path_t *right) {
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+    int prefix_cmp = strcmp(left->prefix, right->prefix);
+    if (prefix_cmp) {
+        return prefix_cmp;
+    }
+#endif // ANJAY_WITH_LWM2M_GATEWAY
     for (size_t i = 0; i < AVS_ARRAY_SIZE(left->ids); ++i) {
         if (left->ids[i] < right->ids[i]) {
             return -1;
@@ -183,6 +208,62 @@ const char *_anjay_debug_make_path__(char *buffer,
 #define MAKE_ROOT_PATH()                                                \
     MAKE_URI_PATH(ANJAY_ID_INVALID, ANJAY_ID_INVALID, ANJAY_ID_INVALID, \
                   ANJAY_ID_INVALID)
+
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+#    define URI_PATH_INITIALIZER_WITH_PREFIX(Prefix, Oid, Iid, Rid, Riid) \
+        {                                                                 \
+            .ids = {                                                      \
+                [ANJAY_ID_OID] = (Oid),                                   \
+                [ANJAY_ID_IID] = (Iid),                                   \
+                [ANJAY_ID_RID] = (Rid),                                   \
+                [ANJAY_ID_RIID] = (Riid)                                  \
+            },                                                            \
+            .prefix = Prefix                                              \
+        }
+
+#    define RESOURCE_INSTANCE_PATH_INITIALIZER_WITH_PREFIX(Prefix, Oid, Iid, \
+                                                           Rid, Riid)        \
+        URI_PATH_INITIALIZER_WITH_PREFIX(Prefix, Oid, Iid, Rid, Riid)
+
+#    define RESOURCE_PATH_INITIALIZER_WITH_PREFIX(Prefix, Oid, Iid, Rid) \
+        URI_PATH_INITIALIZER_WITH_PREFIX(Prefix, Oid, Iid, Rid,          \
+                                         ANJAY_ID_INVALID)
+
+#    define INSTANCE_PATH_INITIALIZER_WITH_PREFIX(Prefix, Oid, Iid)          \
+        URI_PATH_INITIALIZER_WITH_PREFIX(Prefix, Oid, Iid, ANJAY_ID_INVALID, \
+                                         ANJAY_ID_INVALID)
+
+#    define OBJECT_PATH_INITIALIZER_WITH_PREFIX(Prefix, Oid)            \
+        URI_PATH_INITIALIZER_WITH_PREFIX(Prefix, Oid, ANJAY_ID_INVALID, \
+                                         ANJAY_ID_INVALID, ANJAY_ID_INVALID)
+
+#    define ROOT_PATH_INITIALIZER_WITH_PREFIX(Prefix)                        \
+        URI_PATH_INITIALIZER_WITH_PREFIX(Prefix, ANJAY_ID_INVALID,           \
+                                         ANJAY_ID_INVALID, ANJAY_ID_INVALID, \
+                                         ANJAY_ID_INVALID)
+
+#    define MAKE_URI_PATH_WITH_PREFIX(...) \
+        ((anjay_uri_path_t) URI_PATH_INITIALIZER_WITH_PREFIX(__VA_ARGS__))
+
+#    define MAKE_RESOURCE_INSTANCE_PATH_WITH_PREFIX(Prefix, Oid, Iid, Rid, \
+                                                    Riid)                  \
+        MAKE_URI_PATH_WITH_PREFIX(Prefix, Oid, Iid, Rid, Riid)
+
+#    define MAKE_RESOURCE_PATH_WITH_PREFIX(Prefix, Oid, Iid, Rid) \
+        MAKE_URI_PATH_WITH_PREFIX(Prefix, Oid, Iid, Rid, ANJAY_ID_INVALID)
+
+#    define MAKE_INSTANCE_PATH_WITH_PREFIX(Prefix, Oid, Iid)          \
+        MAKE_URI_PATH_WITH_PREFIX(Prefix, Oid, Iid, ANJAY_ID_INVALID, \
+                                  ANJAY_ID_INVALID)
+
+#    define MAKE_OBJECT_PATH_WITH_PREFIX(Prefix, Oid)            \
+        MAKE_URI_PATH_WITH_PREFIX(Prefix, Oid, ANJAY_ID_INVALID, \
+                                  ANJAY_ID_INVALID, ANJAY_ID_INVALID)
+
+#    define MAKE_ROOT_PATH_WITH_PREFIX(Prefix)                                \
+        MAKE_URI_PATH_WITH_PREFIX(Prefix, ANJAY_ID_INVALID, ANJAY_ID_INVALID, \
+                                  ANJAY_ID_INVALID, ANJAY_ID_INVALID)
+#endif // ANJAY_WITH_LWM2M_GATEWAY
 
 typedef enum anjay_request_action {
     ANJAY_ACTION_READ,
@@ -884,16 +965,11 @@ int _anjay_register_object_unlocked(
         AVS_LIST(anjay_dm_installed_object_t) *elem_ptr_move);
 
 #ifdef ANJAY_WITH_SEND
-int _anjay_send_batch_data_add_current_unlocked(
-        anjay_send_batch_builder_t *builder,
-        anjay_unlocked_t *anjay,
-        anjay_oid_t oid,
-        anjay_iid_t iid,
-        anjay_rid_t rid);
 
 int _anjay_send_batch_data_add_current_multiple_unlocked(
         anjay_send_batch_builder_t *builder,
         anjay_unlocked_t *anjay,
+        anjay_iid_t gateway_iid,
         const anjay_send_resource_path_t *paths,
         size_t paths_length,
         bool ignore_not_found);
@@ -987,6 +1063,21 @@ int _anjay_execute_get_arg_value_unlocked(anjay_unlocked_execute_ctx_t *ctx,
                                           size_t buf_size);
 
 anjay_dm_t *_anjay_get_dm(anjay_unlocked_t *anjay);
+
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+#    define DM_LOG_PREFIX "%s%s"
+#    define DM_LOG_PREFIX_ARG(Prefix)               \
+        ((Prefix && Prefix[0] != '\0') ? "/" : ""), \
+                ((Prefix && Prefix[0] != '\0') ? Prefix : ""),
+#    define DM_LOG_PREFIX_OBJ_ARG(Obj)                                       \
+        (((Obj)->prefix && (Obj)->prefix[0] != '\0') ? "/" : ""),            \
+                (((Obj)->prefix && (Obj)->prefix[0] != '\0') ? (Obj)->prefix \
+                                                             : ""),
+#else
+#    define DM_LOG_PREFIX
+#    define DM_LOG_PREFIX_ARG(Prefix)
+#    define DM_LOG_PREFIX_OBJ_ARG(Obj)
+#endif
 
 VISIBILITY_PRIVATE_HEADER_END
 

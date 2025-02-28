@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -43,6 +43,19 @@ typedef struct {
         const anjay_dm_object_def_t *const *user_provided;
         const anjay_unlocked_dm_object_def_t *const *unlocked;
     } impl;
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+    /*
+     * Prefix that helps to identify which DM is the object installed in.
+     * It is set to NULL by default in _anjay_register_object_unlocked()
+     * and set to a specific prefix only in lwm2m_gateway implementation,
+     * anjay_lwm2m_gateway_register_object() function. The link is necessary
+     * for uri_path_outside_base() checkers. Link to parent DM might make more
+     * sense, but ultimately we just need to compare paths that include prefix.
+     *
+     * Also it's not currently possible to include anjay_dm_t * reference here.
+     */
+    const char *prefix;
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
 } anjay_dm_installed_object_t;
 
 static inline void _anjay_dm_installed_object_init_unlocked(

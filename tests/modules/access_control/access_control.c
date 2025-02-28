@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -58,8 +58,8 @@ AVS_UNIT_TEST(access_control, set_acl) {
     {
         ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
         anjay_notify_queue_t queue = NULL;
-        AVS_UNIT_ASSERT_SUCCESS(
-                _anjay_notify_queue_instance_created(&queue, TEST->oid, iid));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_notify_queue_instance_created(
+                &queue, &MAKE_INSTANCE_PATH(TEST->oid, iid)));
 
         // transaction validation
         _anjay_mock_dm_expect_list_instances(

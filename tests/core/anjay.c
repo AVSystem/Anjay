@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -456,6 +456,7 @@ static void parse_headers_parse_uri_standard() {
             &is_bs, &uri));
 }
 
+#ifndef ANJAY_WITH_LWM2M_GATEWAY
 AVS_UNIT_TEST(parse_headers, parse_uri) {
     parse_headers_parse_uri_standard();
 
@@ -475,6 +476,115 @@ AVS_UNIT_TEST(parse_headers, parse_uri) {
                                     "bs", "1", "2", NULL),
             &is_bs, &uri));
 }
+
+#else  // ANJAY_WITH_LWM2M_GATEWAY
+AVS_UNIT_TEST(parse_headers, parse_uri_with_lwm2m_gateway_support) {
+    parse_headers_parse_uri_standard();
+
+    bool is_bs;
+    anjay_uri_path_t uri;
+    header_with_opts_storage_t header_storage;
+
+    // alphanumeric valid prefix ---------------------------------------------
+    // prefix + OID
+    ASSERT_OK(parse_request_uri(
+            header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_PATH,
+                                    "dev1", "1", NULL),
+            &is_bs, &uri));
+    ASSERT_FALSE(is_bs);
+    anjay_uri_path_t expected_path = MAKE_OBJECT_PATH_WITH_PREFIX("dev1", 1);
+    ASSERT_TRUE(_anjay_uri_path_equal(&uri, &expected_path));
+
+    // prefix + OID + IID
+    ASSERT_OK(parse_request_uri(
+            header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_PATH,
+                                    "dev1", "1", "2", NULL),
+            &is_bs, &uri));
+    ASSERT_FALSE(is_bs);
+    expected_path = MAKE_INSTANCE_PATH_WITH_PREFIX("dev1", 1, 2);
+    ASSERT_TRUE(_anjay_uri_path_equal(&uri, &expected_path));
+
+    // prefix + OID + IID + RID
+    ASSERT_OK(parse_request_uri(
+            header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_PATH,
+                                    "dev1", "1", "2", "3", NULL),
+            &is_bs, &uri));
+    ASSERT_FALSE(is_bs);
+    expected_path = MAKE_RESOURCE_PATH_WITH_PREFIX("dev1", 1, 2, 3);
+    ASSERT_TRUE(_anjay_uri_path_equal(&uri, &expected_path));
+
+    // prefix + OID + IID + RID + RIID
+    ASSERT_OK(parse_request_uri(
+            header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_PATH,
+                                    "dev1", "1", "2", "3", "4", NULL),
+            &is_bs, &uri));
+    ASSERT_FALSE(is_bs);
+    expected_path = MAKE_RESOURCE_INSTANCE_PATH_WITH_PREFIX("dev1", 1, 2, 3, 4);
+    ASSERT_TRUE(_anjay_uri_path_equal(&uri, &expected_path));
+
+    // invalid prefixes ------------------------------------------------
+    // invalid prefix starting with a number
+    ASSERT_FAIL(parse_request_uri(
+            header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_PATH,
+                                    "1dev", "1", "2", NULL),
+            &is_bs, &uri));
+
+    // 2 prefixes
+    ASSERT_FAIL(parse_request_uri(
+            header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_PATH,
+                                    "dev1", "prefix", "1", "2", NULL),
+            &is_bs, &uri));
+
+    // valid prefix + invalid options number --------------------------
+    ASSERT_FAIL(parse_request_uri(
+            header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_PATH,
+                                    "1dev", "1", "2", "3", "4", "5", NULL),
+            &is_bs, &uri));
+
+    // valid prefix max length -----------------------------------
+    char prefix[ANJAY_GATEWAY_MAX_PREFIX_LEN];
+    for (size_t i = 0; i < sizeof(prefix) - 1; i++) {
+        prefix[i] = 'a';
+    }
+    prefix[sizeof(prefix) - 1] = '\0';
+    ASSERT_OK(parse_request_uri(
+            header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_PATH,
+                                    prefix, "1", NULL),
+            &is_bs, &uri));
+    ASSERT_FALSE(is_bs);
+    expected_path = MAKE_OBJECT_PATH(1);
+    strcpy(expected_path.prefix, prefix);
+    ASSERT_TRUE(_anjay_uri_path_equal(&uri, &expected_path));
+
+    // prefix too long -----------------------------------
+    char prefix_too_long[ANJAY_GATEWAY_MAX_PREFIX_LEN + 1];
+    for (size_t i = 0; i < sizeof(prefix_too_long) - 1; i++) {
+        prefix_too_long[i] = 'a';
+    }
+    prefix_too_long[sizeof(prefix_too_long) - 1] = '\0';
+    ASSERT_FAIL(parse_request_uri(
+            header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_PATH,
+                                    prefix_too_long, "1", NULL),
+            &is_bs, &uri));
+
+    // reserved "bs" prefix -----------------------------------
+    // allowed at this point, but assume it's prefix, not a BS request
+    ASSERT_OK(parse_request_uri(
+            header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_PATH,
+                                    "bs", "1", NULL),
+            &is_bs, &uri));
+    ASSERT_FALSE(is_bs);
+    expected_path = MAKE_OBJECT_PATH_WITH_PREFIX("bs", 1);
+    ASSERT_TRUE(_anjay_uri_path_equal(&uri, &expected_path));
+
+    ASSERT_OK(parse_request_uri(
+            header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_PATH,
+                                    "bsprefix", "1", NULL),
+            &is_bs, &uri));
+    ASSERT_FALSE(is_bs);
+    ASSERT_TRUE(_anjay_uri_path_prefix_is(&uri, "bsprefix"));
+}
+#endif // ANJAY_WITH_LWM2M_GATEWAY
 
 AVS_UNIT_TEST(parse_headers, parse_action) {
     anjay_request_t request;

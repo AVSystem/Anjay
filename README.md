@@ -117,8 +117,11 @@ This version includes full support for OMA LwM2M TS 1.1 features. Some features,
     - Server
     - Firmware Update
     - IPSO single and three-axis sensor objects
+    - LwM2M Gateway
 
 - Stream-oriented persistence API
+
+- [LwM2M Gateway functionality](https://www.openmobilealliance.org/release/LwM2M_Gateway/V1_1_1-20240312-A/OMA-TS-LWM2M_Gateway-V1_1_1-20240312-A.pdf)
 
 ## About OMA LwM2M
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -182,7 +182,8 @@ static void perform_lwm2m_send(anjay_unlocked_t *anjay,
         return;
     }
     if (_anjay_send_batch_data_add_current_multiple_unlocked(
-                batch_builder, anjay, paths, paths_len, true)) {
+                batch_builder, anjay, ANJAY_ID_INVALID, paths, paths_len,
+                true)) {
         fw_log(ERROR, _("failed to add data to batch"));
         anjay_send_batch_builder_cleanup(&batch_builder);
         return;
