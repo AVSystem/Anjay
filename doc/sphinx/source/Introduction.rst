@@ -3,7 +3,7 @@
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
-   Licensed under the AVSystem-5-clause License.
+   Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
    See the attached LICENSE file for details.
 
 Introduction
@@ -11,10 +11,9 @@ Introduction
 
 .. attention::
 
-   With release of Anjay 3.0, the `library's license terms have changed
+   With release of Anjay 3.10.0, the `library's license terms have changed
    <https://github.com/AVSystem/Anjay/blob/master/LICENSE>`_. Please make sure
-   that you have reviewed it before updating to the new major release. Previous
-   versions of Anjay remain with the old, Apache 2.0 license.
+   that you have reviewed it before updating to the new major release.
 
 **Anjay** is a library that implements the *OMA Lightweight Machine to Machine*
 protocol, including the necessary subset of CoAP.
@@ -90,7 +89,7 @@ library in turn may additionally depend either on
 or `TinyDTLS <https://projects.eclipse.org/projects/iot.tinydtls>`_ for DTLS
 support.
 
-To build Anjay from source, `CMake <https://www.cmake.org/>`_ version 3.6.0 or
+To build Anjay from source, `CMake <https://www.cmake.org/>`_ version 3.16 or
 newer is necessary.
 
 Deprecated and experimental features

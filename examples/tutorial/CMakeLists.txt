@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.16)
 add_subdirectory(BC-Initialization)
 add_subdirectory(BC-MandatoryObjects)
 add_subdirectory(BC-Security)

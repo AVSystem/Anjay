@@ -3,7 +3,7 @@
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
- * Licensed under the AVSystem-5-clause License.
+ * Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
  * See the attached LICENSE file for details.
  */
 
@@ -704,6 +704,10 @@ static int disable_server_impl(anjay_unlocked_t *anjay,
         anjay_log(ERROR, _("could not schedule ") "%s", disable_action_str);
         return -1;
     }
+    // EMB#4894: We want to avoid disabling the server when Anjay waits for
+    // Update response, so we cancel the coap exchange related to Update message
+    _anjay_registration_exchange_state_cleanup(
+            &server->registration_exchange_state);
 
     if (disable_action
             == ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_EXPLICIT_TIMEOUT) {

@@ -3,7 +3,7 @@
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
- * Licensed under the AVSystem-5-clause License.
+ * Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
  * See the attached LICENSE file for details.
  */
 
@@ -26,6 +26,9 @@
 #else // WITH_DEMO_USE_STANDALONE_OBJECTS
 #    include <anjay/server.h>
 #endif // WITH_DEMO_USE_STANDALONE_OBJECTS
+
+#define IMG_VER_STR_MAX_LEN (sizeof("255.255.65535.4294967295") - 1)
+#define VER_DEFAULT "1.0"
 
 typedef struct anjay_demo_struct anjay_demo_t;
 

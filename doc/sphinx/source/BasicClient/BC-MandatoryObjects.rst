@@ -3,30 +3,28 @@
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
-   Licensed under the AVSystem-5-clause License.
+   Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
    See the attached LICENSE file for details.
 
 Installing mandatory Objects
 ============================
 
-In order to be able to connect to some LwM2M Server and handle incoming
-packets our client has to have at least `LwM2M Security
-<https://www.openmobilealliance.org/tech/profiles/LWM2M_Security-v1_0.xml>`_
-(``/0``) and `LwM2M Server
-<https://www.openmobilealliance.org/tech/profiles/LWM2M_Server-v1_0.xml>`_
-(``/1``) Objects implemented.
+To connect to a LwM2M server and handle incoming packets, the client must support the following mandatory LwM2M Objects:
+  
+  - `LwM2M Security <https://www.openmobilealliance.org/tech/profiles/LWM2M_Security-v1_0.xml>`_ (``/0``)
+  - `LwM2M Server <https://www.openmobilealliance.org/tech/profiles/LWM2M_Server-v1_0.xml>`_ (``/1``)
 
-Fortunately, Anjay provides both of these Objects in the form of pre-implemented
-modules, and they can be used easily.
+Anjay provides pre-implemented modules for all two objects, making setup
+straightforward.
 
 .. note::
-    It doesn't impact on Anjay flexibility -- i.e., users can still provide
-    their own implementation of these Objects if necessary.
+    Users can still provide their own implementation of these Objects if needed
+    — Anjay remains fully flexible.
 
 When Anjay is first instantiated (as in our previous :ref:`hello world
-<anjay-hello-world>` example), it has no knowledge about the Data Model,
-i.e., no LwM2M Objects are registered within it. Security and Server objects can
-be registered using installation mechanism, presented in the next subsection.
+<anjay-hello-world>` example), it has no knowledge about the Data Model, i.e.,
+no LwM2M Objects are registered within it. You must explicitly install the
+required Objects, as shown below.
 
 Installing Objects
 ^^^^^^^^^^^^^^^^^^
@@ -44,30 +42,40 @@ structure and object registration on your own. In case you are interested in
 this topic, :doc:`BC-ObjectImplementation` section provides more information on
 this subject.
 
-To install the Objects we are going to use ``anjay_security_object_install()``
-and ``anjay_server_object_install()`` functions.
+Use the following functions to install the Objects:
+
+  - ``anjay_security_object_install()``
+  - ``anjay_server_object_install()``
 
 .. important::
 
-    Remember to include ``anjay/security.h`` and ``anjay/server.h`` headers to
-    use the functions mentioned above.
+    To use these function you must include the following headers:
+
+      - ``anjay/security.h``
+      - ``anjay/server.h``
 
 Setting up Server and Security Objects
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Now we are going to create functions which install Server and Security Objects
-and add instances of them. We modify the code from the
+This section shows how to implement and register the mandatory Objects:
+Security and Server. It builds upon the setup from the
 :ref:`previous tutorial <anjay-hello-world>`.
 
-The first one will be ``setup_security_object()``. In this tutorial, we will use
-the Coiote IoT Device Management platform as the hard-coded server URI. You can
-go to https://avsystem.com/coiote-iot-device-management-platform/ to create an
-account, and after logging in, add the device entry for your application. If you
-wish to use another server, then you must replace
-``coap://eu.iot.avsystem.cloud:5683`` with a valid value.
+Security Object
+---------------
 
-For now, we will establish non-secure connection, a secure one will be described
-later.
+The Security Object holds connection parameters for the LwM2M server. In this
+example, we configure a non-secure connection to the Coiote IoT Device
+Management platform. A secure connection setup will be described in a later
+section.
+
+To use Coiote:
+
+  - Create an account at avsystem.com/coiote-iot-device-management-platform.
+  - Add your device entry in the Coiote interface using the following URI for
+    the connection: ``coap://eu.iot.avsystem.cloud:5683``
+
+If you are using another server, replace the URI with your target address.
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/BC-MandatoryObjects/src/main.c
@@ -96,9 +104,11 @@ later.
         return 0;
     }
 
-Both Security and Server instances are linked together by the Short Server ID
-Resource (``ssid``). That is why we keep SSID matched in both
-``setup_server_object()`` and ``setup_security_object()``.
+Server Object
+-------------
+
+The Server Object defines registration parameters like lifetime and binding
+mode.
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/BC-MandatoryObjects/src/main.c
@@ -135,7 +145,15 @@ Resource (``ssid``). That is why we keep SSID matched in both
         return 0;
     }
 
-Now we are ready to call these functions from ``main()``.
+Both Security and Server instances are linked together by the Short Server ID
+Resource (``ssid``). That is why the ssid value must match between the Security
+and Server instances.
+
+Integrate Object Installation
+-----------------------------
+
+Once the installation functions are implemented, call them from your ``main()``
+function:
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/BC-MandatoryObjects/src/main.c
@@ -186,16 +204,31 @@ Now we are ready to call these functions from ``main()``.
     `examples/tutorial/BC-MandatoryObjects` subdirectory of main Anjay project
     repository.
 
+Logs example
+~~~~~~~~~~~~
+
 After running the client, you should see ``registration successful, location =
 /rd/<server-dependent identifier>`` once and ``registration successfully
 updated`` every 30 seconds in logs. It means, that the client has connected to
-the server and successfully sends Update messages. Now you can perform some
-Reads for example from the LwM2M Server side.
+the server and successfully sends Update messages. You can now perform
+operations like Read from the server side.
 
 Application events
 ^^^^^^^^^^^^^^^^^^
 
-The code above handles all events that may happen within the Anjay library
-itself. Of course, the application usually needs to handle its own
-functionality. Some ways to do this will be handled later in the
-:doc:`BC-Notifications` tutorial.
+The example code shown above covers events managed internally by the Anjay
+library. However, most real-world applications also need to handle their own
+logic. How to implement application-specific functionality will be explained
+in the following sections.
+
+Coiote experience
+^^^^^^^^^^^^^^^^^
+
+At this stage, you can log in to Coiote IoT Device Management and open the
+**Device Center** for your registered device to explore the platform
+functionality. Check the **Data Model tab** to see which LwM2M Objects are
+currently exposed. You will notice that the Server object is visible, but the
+Security object is not. This is expected behavior defined by the LwM2M
+specification — the Security object is neither readable nor discoverable from
+the device to protect sensitive configuration data.
+

@@ -3,7 +3,7 @@
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
- * Licensed under the AVSystem-5-clause License.
+ * Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
  * See the attached LICENSE file for details.
  */
 
@@ -14,11 +14,9 @@
 #include <stdio.h>
 
 #include "demo_utils.h"
+#include "objects.h"
 #include <anjay/advanced_fw_update.h>
 #include <anjay/anjay_config.h>
-
-#define IMG_VER_STR_MAX_LEN (sizeof("255.255.65535.4294967295") - 1)
-#define VER_DEFAULT "1.0"
 
 #define FW_UPDATE_IID_APP 0
 #define FW_UPDATE_IID_TEE 1
@@ -43,7 +41,7 @@ enum target_image_t {
 
 typedef struct advanced_firmware_metadata {
     uint8_t magic[8];
-    uint16_t version;
+    uint16_t header_ver;
     uint16_t force_error_case;
     uint32_t crc;
     uint8_t linked[METADATA_LINKED_SLOTS];
@@ -58,7 +56,7 @@ typedef struct unpacked_imgs_info {
 
 typedef struct advanced_firmware_multipkg_metadata {
     uint8_t magic[8];
-    uint16_t version;
+    uint16_t header_ver;
     uint16_t packages_count;
     uint32_t package_len[FW_UPDATE_IID_IMAGE_SLOTS];
 } advanced_fw_multipkg_metadata_t;

@@ -3,7 +3,7 @@
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
- * Licensed under the AVSystem-5-clause License.
+ * Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
  * See the attached LICENSE file for details.
  */
 
@@ -985,12 +985,17 @@ struct anjay_dm_object_def_struct {
 };
 
 /**
- * Notifies the library that the value of given Resource changed. It may trigger
- * a LwM2M Notify message, update server connections and perform other tasks,
- * as required for the specified Resource.
+ * Notifies the library that the value of given Resource changed. Calling this
+ * function does not send the notification immediately, but schedules a job to
+ * be run on the next event loop iteration. This job may trigger a LwM2M Notify
+ * message, update server connections and perform other tasks, as required for
+ * the specified Resource.
  *
- * Needs to be called for any Resource after its value is changed by means other
- * than LwM2M.
+ * This function may be called before or after the value of a given Resource
+ * changed in the DM, as long as the Resource is updated before the scheduled
+ * notification job is executed. This ensures that the notification reflects the
+ * correct value. Please see documentation of @ref AVS_SCHED_AT and
+ * @ref anjay_sched_run for more information.
  *
  * Note that it should not be called after a Write performed by the LwM2M
  * server.

@@ -3,7 +3,7 @@
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
- * Licensed under the AVSystem-5-clause License.
+ * Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
  * See the attached LICENSE file for details.
  */
 
@@ -82,8 +82,6 @@ _anjay_servers_find_by_primary_socket(anjay_unlocked_t *anjay,
  * - serv_execute(), as a default implementation of Registration Update Trigger
  * - server_modified_notify(), to force an Update whenever Lifetime or Binding
  *   change
- * - _anjay_schedule_reregister(), although that's probably rather superfluous -
- *   see the docs of that function for details
  */
 int _anjay_schedule_registration_update_unlocked(anjay_unlocked_t *anjay,
                                                  anjay_ssid_t ssid);

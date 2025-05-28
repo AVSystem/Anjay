@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.4)
+cmake_minimum_required(VERSION 3.16)
 project(custom-tls-minimal C)
 
 set(CMAKE_C_STANDARD 99)

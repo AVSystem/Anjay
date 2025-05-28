@@ -1,47 +1,92 @@
-                           AVSystem-5-clause License
+AVSystem Anjay LwM2M Client SDK - Non-Commercial License
+========================================================
 
-Copyright by AVSystem sp. z o.o. (AVSystem) 17th March 2022.
-All rights reserved.
-This software is licensed under the following conditions specified below.
+Version 1.0
+Effective Date: May 2025
+Copyright 2017-2025 AVSystem Sp. z o.o.
 
+Subject to the terms and conditions set forth herein, AVSystem Sp. z o.o.
+("Licensor") hereby grants any person or legal entity obtaining a copy of this
+software and associated documentation files (collectively, the "Software") a
+limited, non-exclusive, non-transferable, royalty-free license to use,
+reproduce, modify, and distribute the Software solely for Non-Commercial
+Purposes, as defined below.
 
+1. DEFINITIONS
 
-All materials referring to features or use of this software must display the
-following acknowledgement:
+   "Non-Commercial Purposes" means use of the Software:
+   - for internal evaluation or prototyping by individuals or legal entities;
+   - in academic or research institutions for educational or scientific
+     purposes;
+   - in personal, non-revenue-generating projects;
+   - in open-source, community, or not-for-profit settings, provided such use is
+     not part of any direct or indirect commercial activity.
 
-"This product includes software developed by AVSystem"
+   "Commercial Use" includes, but is not limited to:
+   - incorporating the Software into any commercial product or service;
+   - using the Software in production systems operated by for-profit entities;
+   - using the Software in any revenue-generating or business-critical
+     operations;
+   - deploying the Software in any manner that supports commercial offerings,
+     including SaaS, OEM integrations, or professional services.
 
-Redistribution and use of the software in source and binary code forms, with or
-without modification, are permitted only provided that the following conditions
-are met:
+2. LICENSE CONDITIONS
 
-1. Redistribution of source code must retain copyright notice and include the
-   list of usage conditions and AVSystem's disclaimer.
+   Subject to compliance with this License, the Licensee may:
+   1. use the Software for Non-Commercial Purposes;
+   2. copy and modify the Software;
+   3. distribute unmodified or modified versions of the Software, provided that:
+      - Redistribution of source code must retain AVSystem’s copyright notice
+        and include the list of usage conditions and AVSystem’s disclaimer;
+      - Redistribution in binary form, except as embedded in a physical device,
+        must include the following acknowledgment in accompanying documentation
+        or user interface: "This product includes software developed by AVSystem
+        Sp. z o.o.", this list of conditions of use and the following disclaimer
+        in the documentation and/or other materials provided with the software.
+      - Neither the name of AVSystem nor its collaborators (if any) may be used
+        to offer or promote products derived from this software without prior
+        written consent of the owner.
 
-2. Redistribution in binary form, except as embedded in a physical device, must
-   contain the above copyright notice, this list of conditions of use and the
-   following disclaimer in the documentation and/or other materials provided
-   with the software.
+3. DISCLAIMER OF WARRANTY
 
-3. Neither the name of the AVSystem nor its collaborators (if any) may be used
-   to offer or promote products derived from this software without prior
-   written consent of the owner.
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING, WITHOUT LIMITATION, WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, TITLE, OR NON-INFRINGEMENT.
+   IN NO EVENT SHALL THE LICENSOR, ITS AFFILIATES, OR CONTRIBUTORS BE LIABLE FOR
+   ANY DAMAGES, INCLUDING DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+   CONSEQUENTIAL DAMAGES (INCLUDING BUT NOT LIMITED TO PROCUREMENT OF SUBSTITUTE
+   GOODS OR SERVICES, LOSS OF USE, DATA, OR PROFITS, OR BUSINESS INTERRUPTION)
+   HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+   LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE), ARISING IN ANY WAY
+   OUT OF THE USE OF THE SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+   DAMAGE.
 
-4. Commercial use of this software, with or without modifications, requires
-   prior notification to AVSystem at sales@avsystem.com of such use. In case
-   the software is used together with AVSystem's CoioteDM Platform, such
-   notification is not required.
+4. COMMERCIAL LICENSING
 
-5. Commercial use of the software is limited to 100.000 (one hundred thousand)
-   devices, unless a separate agreement with AVSystem is made.
+   Any use of the Software falling outside the scope of Non-Commercial Purposes
+   constitutes Commercial Use and is expressly prohibited under this License.
+   To obtain rights for Commercial Use, including deployment, integration into
+   commercial products, or support for business operations, the Licensee must
+   acquire a Commercial License from AVSystem. Commercial Licenses are issued on
+   a per-SKU (Vendor Device Model) basis and may include:
+   - Free-of-charge usage for up to 10,000 devices per SKU;
+   - Access to premium features (subject to additional fees);
+   - Technical support packages (subject to additional fees);
+   - Additional licensing packages (subject to additional fees);
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT OWNER "AS IS" AND ANY DIRECT OR
-IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
-EVENT SHALL THE COPYRIGHT OWNER BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
-BUSINESS INTERRUPTION) HOWEVER CAUSED AND REGARDLESS OF THE SOURCE OF
-LIABILITY, WHETHER CONTRACT, DIRECT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
-OF THE POSSIBILITY OF SUCH DAMAGE.
+To register for a Commercial License, visit:
+https://go.avsystem.com/anjay-registration
+
+For commercial inquiries, contact:
+sales@avsystem.com
+
+5. GOVERNING LAW
+
+   This License shall be governed by and construed in accordance with the laws
+   of the Republic of Poland, without regard to its conflict of law provisions.
+   All disputes arising from or relating to this License shall be subject to the
+   exclusive jurisdiction of the competent courts located in Kraków, Poland.
+
+============================================
+END OF AVSYSTEM ANJAY NON-COMMERCIAL LICENSE
+============================================

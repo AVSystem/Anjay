@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.16)
 add_subdirectory(stub)
 add_subdirectory(minimal)
 add_subdirectory(resumption-simple)

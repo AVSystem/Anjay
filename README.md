@@ -3,11 +3,31 @@
 [![Build Status](https://github.com/AVSystem/Anjay/actions/workflows/anjay-tests.yml/badge.svg?branch=master)](https://github.com/AVSystem/Anjay/actions)
 [![Coverity Status](https://scan.coverity.com/projects/13206/badge.svg)](https://scan.coverity.com/projects/avsystem-anjay)
 
-## New license notice
 
-With release of Anjay 3.0, the [library's license terms have changed](LICENSE). Please make sure that you
-have reviewed it before updating to the new major release. Previous versions of Anjay remain with the old,
-Apache 2.0 license.
+## Licensing Notice (from v3.10.0)
+
+Starting from **version 3.10.0**, the **Anjay LwM2M Client SDK** is distributed
+under a new **License**.
+
+### Mandatory Registration for Commercial Use
+
+If you intend to use Anjay in any **commercial context**, **you must fill in a registration form**
+to obtain a **free commercial license** for your product.
+
+**Register here**: [https://go.avsystem.com/anjay-registration](https://go.avsystem.com/anjay-registration)
+
+### Why is registration required?
+
+We introduced registration to:
+
+- **Gain insight into usage patterns** – so we can prioritize support, features,
+  and enhancements relevant to real-world use cases.
+- **Engage with users** – allow us to notify you about important updates,
+  security advisories, or licensing changes.
+- **Offer tailored commercial plugins, professional services, and technical support**
+  to accelerate your product development.
+
+For inquiries, please contact: [sales@avsystem.com](mailto:sales@avsystem.com)
 
 ## What is Anjay?
 
@@ -15,15 +35,18 @@ Anjay is a C library that aims to be the reference implementation of the OMA Lig
 
 The project has been created and is actively maintained by [AVSystem](https://www.avsystem.com).
 
+Quick links:
 - [Full documentation](https://AVSystem.github.io/Anjay-doc/)
 - [Tutorials](https://AVSystem.github.io/Anjay-doc/BasicClient.html)
 - [API docs](https://AVSystem.github.io/Anjay-doc/api/)
 - [Changelog](CHANGELOG.md)
 
+Table of contents:
 <!-- toc -->
 
 * [Supported features](#supported-features)
 * [About OMA LwM2M](#about-oma-lwm2m)
+* [Embedded operating systems ports](#embedded-operating-systems-ports)
 * [Quickstart guide](#quickstart-guide)
   * [Dependencies](#dependencies)
     * [Ubuntu 20.04 LTS / Raspbian Buster or later](#ubuntu-2004-lts--raspbian-buster-or-later)
@@ -33,11 +56,8 @@ The project has been created and is actively maintained by [AVSystem](https://ww
   * [Running the demo client](#running-the-demo-client)
   * [Detailed compilation guide](#detailed-compilation-guide)
     * [Building using CMake](#building-using-cmake)
-    * [Alternative build systems](#alternative-build-systems)
+  * [Raspberry Pi client](#raspberry-pi-client)
   * [Use a Dockerfile](#use-a-dockerfile)
-* [Embedded operating systems ports](#embedded-operating-systems-ports)
-* [Raspberry Pi client](#raspberry-pi-client)
-* [Java bindings](#java-bindings)
 * [License](#license)
   * [Commercial support](#commercial-support)
 * [Contributing](#contributing)
@@ -93,10 +113,8 @@ This version includes full support for OMA LwM2M TS 1.1 features. Some features,
 - Supported platforms:
     - any Unix-like operating system, such as Linux (including Android), macOS and BSD family
     - Microsoft Windows (preliminary support, see [README.Windows.md](README.Windows.md) for details)
-    - any embedded platform (e.g. FreeRTOS, ThreadX) with lwIP networking stack
+    - any embedded platform (e.g. FreeRTOS, Zephyr) - check the list of [ready to use integrations](#embedded-operating-systems-ports)
     - porting is possible for any other platform that has ISO C99 compiler available, see [Porting guide for non-POSIX platforms](https://avsystem.github.io/Anjay-doc/PortingGuideForNonPOSIXPlatforms.html) for details
-        - preimplemented [integration layer for Arm Mbed OS](https://github.com/AVSystem/Anjay-mbedos) and an [example client based on it](https://github.com/AVSystem/Anjay-mbedos-client) are available
-        - [example client](https://github.com/AVSystem/Anjay-zephyr-client) based on Zephyr OS is available
 
 - CoAP data formats:
     - Plain Text
@@ -127,7 +145,19 @@ This version includes full support for OMA LwM2M TS 1.1 features. Some features,
 
 OMA LwM2M is a remote device management and telemetry protocol designed to conserve network resources. It is especially suitable for constrained wireless devices, where network communication is a major factor affecting battery life. LwM2M features secure (DTLS-encrypted) methods of remote bootstrapping, configuration and notifications over UDP or SMS.
 
+For quick and simple protocol learning, visit [LwM2M Crash Course](https://avsystem.com/crashcourse/lwm2m/)
+
 More details about OMA LwM2M: [Brief introduction to LwM2M](https://AVSystem.github.io/Anjay-doc/LwM2M.html)
+
+## Embedded operating systems ports
+
+If you want to use Anjay on Zephyr OS, FreeRTOS, Azure RTOS, ESP-IDF or RPI Pico W check our demo
+applications available in other repositories:
+- [Anjay-zephyr-client](https://github.com/AVSystem/Anjay-zephyr-client) (uses [Anjay-zephyr](https://github.com/AVSystem/Anjay-zephyr) integration layer)
+- [Anjay-freertos-client](https://github.com/AVSystem/Anjay-freertos-client)
+- [Anjay-stm32-azurertos-client](https://github.com/AVSystem/Anjay-stm32-azurertos-client)
+- [Anjay-esp32-client](https://github.com/AVSystem/Anjay-esp32-client) (uses [Anjay-esp-idf](https://github.com/AVSystem/Anjay-esp-idf) integration layer)
+- [Anjay-pico-client](https://github.com/AVSystem/Anjay-pico-client) (uses FreeRTOS Kernel)
 
 ## Quickstart guide
 
@@ -140,7 +170,7 @@ More details about OMA LwM2M: [Brief introduction to LwM2M](https://AVSystem.git
     -   [mbed TLS 2.0+](https://tls.mbed.org/),
     -   [tinydtls 0.9+](https://projects.eclipse.org/projects/iot.tinydtls),
 -   Optional dependencies (required for tests):
-    -   [CMake 3.6+](https://cmake.org/) - non-mandatory, but preferred build system,
+    -   [CMake 3.16+](https://cmake.org/) - non-mandatory, but preferred build system,
     -   C++ compiler with C++11 support,
     -   [Python 3.5+](https://www.python.org/),
     -   [pybind11](https://github.com/pybind/pybind11) - included in the repository as a subproject,
@@ -183,8 +213,9 @@ pip3 install -U -r requirements.txt
 ### Running the demo client
 
 For initial development and testing of LwM2M clients, we recommend using the [Coiote IoT Device Management](https://avsystem.com/coiote-iot-device-management-platform/) where you can use the basic LwM2M server functionality for free.
+After registering and logging in Coiote, you can [onboard your first device](https://eu.iot.avsystem.cloud/doc/user/getting-started/onboard-your-first-device/).
 
-After setting up an account and adding the device entry, you can compile Anjay demo client and connect it to the platform by running:
+With a device added to the LwM2M Server, you can compile Anjay demo client and connect it to the platform by running:
 
 <!-- compile_instruction_begin -->
 ``` sh
@@ -202,6 +233,8 @@ git clone https://github.com/AVSystem/Anjay.git \
 **NOTE**: We strongly recommend replacing `$(hostname)` with some actual unique hostname. Please see the [documentation](https://avsystem.github.io/Anjay-doc/LwM2M.html#clients-and-servers) for information on preferred endpoint name formats. Note that with the Coiote IoT Device Management platform, you will need to enter the endpoint name into the server UI first.
 
 ### Detailed compilation guide
+
+For a detailed guide on configuring and compiling the project (including cross-compiling), see [Compiling client applications](https://AVSystem.github.io/Anjay-doc/Compiling_client_applications.html).
 
 First, make sure all necessary submodules are downloaded and up-to-date:
 
@@ -231,8 +264,6 @@ cmake . -DDTLS_BACKEND="" && make -j
 
 Compiled executables, including demo client, can be found in output/bin subdirectory.
 
-For a detailed guide on configuring and compiling the project (including cross-compiling), see [Compiling client applications](https://AVSystem.github.io/Anjay-doc/Compiling_client_applications.html).
-
 To start the demo client:
 
 ``` sh
@@ -245,40 +276,9 @@ To start the demo client:
 
 **NOTE**: When establishing a DTLS connection, the URI MUST use "coaps://". In NoSec mode (default), the URI MUST use "<coap://>".
 
-#### Alternative build systems
+### Raspberry Pi client
 
-Alternatively, you may use any other build system. You will need to:
-
-* Prepare your `avs_commons_config.h`, `avs_coap_config.h` and `anjay_config.h` files.
-  * Comments in [`avs_commons_config.h.in`](https://github.com/AVSystem/avs_commons/blob/master/include_public/avsystem/commons/avs_commons_config.h.in), [`avs_coap_config.h.in`](deps/avs_coap/include_public/avsystem/coap/avs_coap_config.h.in) and [`anjay_config.h.in`](include_public/anjay/anjay_config.h.in) will guide you about the meaning of various settings.
-  * You may use one of the directories from [`example_configs`](example_configs) as a starting point. See [`README.md`](example_configs/README.md) inside that directory for details. You may even set one of the subdirectories there as an include path directly in your compiler if you do not need any customizations.
-* Configure your build system so that:
-  * At least all `*.c` and `*.h` files from `src`, `include_public`, `deps/avs_coap/src`, `deps/avs_coap/include_public`, `deps/avs_commons/src` and `deps/avs_commons/include_public` directories are preserved, with the directory structure intact.
-    * It is also safe to merge contents of all `include_public` directories into one. Merging `src` directories should be safe, too, but is not explicitly supported.
-  * All `*.c` files inside `src`, `deps/avs_coap/src`, `deps/avs_commons/src`, or any of their direct or indirect subdirectories are compiled.
-  * `deps/avs_commons/src` and `deps/avs_commons/include_public` directories are included in the header search path when compiling `avs_commons`.
-  * `deps/avs_coap/src`, `deps/avs_coap/include_public` and `deps/avs_commons/include_public` directories are included in the header search path when compiling `avs_coap`.
-  * `src`, `include_public`, `deps/avs_coap/include_public` and `deps/avs_commons/include_public` directories are included in the header search path when compiling Anjay.
-  * `include_public`, `deps/avs_coap/include_public` and `deps/avs_commons/include_public` directories, or copies of them (possibly merged into one directory) are included in the header search path when compiling dependent application code.
-
-Below is an example of a simplistic build process, that builds all of avs_commons, avs_coap and Anjay from a Unix-like shell:
-
-```sh
-# configuration
-cp -r example_configs/linux_lwm2m10 config
-# you may want to edit the files in the "config" directory before continuing
-
-# compilation
-cc -Iconfig -Iinclude_public -Ideps/avs_coap/include_public -Ideps/avs_commons/include_public -Isrc -Ideps/avs_coap/src -Ideps/avs_commons/src -c $(find src deps/avs_coap/src deps/avs_commons/src -name '*.c')
-ar rcs libanjay.a *.o
-
-# installation
-cp libanjay.a /usr/local/lib/
-cp -r include_public/avsystem /usr/local/include/
-cp -r deps/avs_coap/include_public/avsystem /usr/local/include/
-cp -r deps/avs_commons/include_public/avsystem /usr/local/include/
-cp -r config/* /usr/local/include/
-```
+LwM2M Client for Raspberry Pi, with a feature allowing for implementing LwM2M Objects in Python, is available in [Svetovid-raspberry-client repository](https://github.com/AVSystem/Svetovid-raspberry-client).
 
 ### Use a Dockerfile
 
@@ -297,27 +297,6 @@ Then, you can launch the built image and run the demo client:
 docker run -it anjay
 ./output/bin/demo -e $(hostname) -u coap://eu.iot.avsystem.cloud:5683
 ```
-
-## Embedded operating systems ports
-
-If you want to use Anjay on Mbed OS, Zephyr OS, FreeRTOS, Azure RTOS or ESP-IDF check our demo
-applications available in other repositories:
-- [Anjay-mbedos-client](https://github.com/AVSystem/Anjay-mbedos-client) (uses [Anjay-mbedos](https://github.com/AVSystem/Anjay-mbedos) integration layer)
-- [Anjay-zephyr-client](https://github.com/AVSystem/Anjay-zephyr-client) (uses [Anjay-zephyr](https://github.com/AVSystem/Anjay-zephyr) integration layer)
-- [Anjay-freertos-client](https://github.com/AVSystem/Anjay-freertos-client)
-- [Anjay-stm32-azurertos-client](https://github.com/AVSystem/Anjay-stm32-azurertos-client)
-- [Anjay-esp32-client](https://github.com/AVSystem/Anjay-esp32-client) (uses [Anjay-esp-idf](https://github.com/AVSystem/Anjay-esp-idf) integration layer)
-- [Anjay-pico-client](https://github.com/AVSystem/Anjay-pico-client) (uses FreeRTOS Kernel)
-
-## Raspberry Pi client
-
-LwM2M Client for Raspberry Pi, with a feature allowing for implementing LwM2M Objects in Python, is available in [Svetovid-raspberry-client repository](https://github.com/AVSystem/Svetovid-raspberry-client).
-
-## Java bindings
-
-Maven Central repository contains [anjay-java](https://search.maven.org/artifact/com.avsystem.anjay/anjay-java) and [anjay-android](https://search.maven.org/artifact/com.avsystem.anjay/anjay-android) artifacts which allow to use Anjay in Java applications.
-
-In case of using `anjay-java`, check [Anjay-java repository](https://github.com/AVSystem/Anjay-java) for details how to compile the native library. This step isn't required if you want to use `anjay-android` in your Android application.
 
 ## License
 

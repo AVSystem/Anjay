@@ -4,7 +4,7 @@
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
-# Licensed under the AVSystem-5-clause License.
+# Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 import asyncio
 import os
@@ -17,35 +17,6 @@ from framework.coap_file_server import CoapFileServer
 from framework.lwm2m_test import *
 from .firmware_update import FirmwareUpdate
 from .block_write import Block, equal_chunk_splitter, msg_id_generator
-
-
-@enum.unique
-class SoftwareUpdateForcedError(enum.IntEnum):
-    NoError = 0
-    FailedInstall = 1
-    DelayedSuccessInstall = 2
-    DelayedFailedInstall = 3
-    SuccessInPerformInstall = 4
-    SuccessInPerformInstallActivate = 5
-    FailureInPerformInstall = 6
-    FailureInPerformUninstall = 7
-    FailureInPerformActivate = 8
-    FailureInPerformDeactivate = 9
-    FailureInPerformPrepareForUpdate = 10
-    DoNothing = 11
-
-
-def make_software_package(binary: bytes,
-                          magic: bytes = b'ANJAY_SW',
-                          crc: Optional[int] = None,
-                          force_error: SoftwareUpdateForcedError = SoftwareUpdateForcedError.NoError,
-                          version: int = 1):
-    assert len(magic) == 8
-
-    if crc is None:
-        crc = binascii.crc32(binary)
-
-    return struct.pack('>8sHHI', magic, version, force_error, crc) + binary
 
 
 class ActivationState:
@@ -403,8 +374,7 @@ class SoftwareManagementPackageTest(SoftwareManagement.Test):
     def runTest(self):
         # Write /9/0/2 (Software): script content
         req = Lwm2mWrite(ResPath.SoftwareManagement[0].Package,
-                         make_software_package(
-                             self.SOFTWARE_SCRIPT_CONTENT, magic=b'ANJAY_SW'),
+                         make_software_package(self.SOFTWARE_SCRIPT_CONTENT),
                          format=coap.ContentFormat.APPLICATION_OCTET_STREAM)
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
@@ -706,7 +676,7 @@ class SoftwareManagementInstallSetFailedTest(SoftwareManagementStateAndResultCha
     def setUp(self):
         super().setUp()
         self.SW_PKG_OPTS = {
-            'force_error': SoftwareUpdateForcedError.FailureInPerformInstall}
+            'force_error': PackageForcedError.Software.FailureInPerformInstall}
 
     def runTest(self):
         super().runTest()
@@ -729,7 +699,7 @@ class SoftwareManagementInstallFailedTest(SoftwareManagementStateAndResultChange
     def setUp(self):
         super().setUp()
         self.SW_PKG_OPTS = {
-            'force_error': SoftwareUpdateForcedError.FailedInstall}
+            'force_error': PackageForcedError.Software.FailedInstall}
 
     def runTest(self):
         super().runTest()
@@ -752,7 +722,7 @@ class SoftwareManagementUninstallFromInstallStateFailedTest(SoftwareManagementSt
     def setUp(self):
         super().setUp()
         self.SW_PKG_OPTS = {
-            'force_error': SoftwareUpdateForcedError.FailureInPerformUninstall}
+            'force_error': PackageForcedError.Software.FailureInPerformUninstall}
 
     def runTest(self):
         super().runTest()
@@ -889,7 +859,7 @@ class SoftwareManagementUninstallPrepareForUpdateFailedTest(SoftwareManagementSt
     def setUp(self):
         super().setUp()
         self.SW_PKG_OPTS = {
-            'force_error': SoftwareUpdateForcedError.FailureInPerformPrepareForUpdate}
+            'force_error': PackageForcedError.Software.FailureInPerformPrepareForUpdate}
 
     def runTest(self):
         super().runTest()
@@ -2078,14 +2048,14 @@ class SoftwareManagementWithDelayedResultTest:
 class SoftwareManagementWithDelayedSuccessTest(
         SoftwareManagementWithDelayedResultTest.TestMixin, SoftwareManagement.BlockTest):
     def runTest(self):
-        super().runTest(SoftwareUpdateForcedError.DelayedSuccessInstall,
+        super().runTest(PackageForcedError.Software.DelayedSuccessInstall,
                         UpdateState.INSTALLED, UpdateResult.INSTALLED)
 
 
 class SoftwareManagementWithDelayedFailureTest(
         SoftwareManagementWithDelayedResultTest.TestMixin, SoftwareManagement.BlockTest):
     def runTest(self):
-        super().runTest(SoftwareUpdateForcedError.DelayedFailedInstall,
+        super().runTest(PackageForcedError.Software.DelayedFailedInstall,
                         UpdateState.DELIVERED, UpdateResult.INSTALLATION_FAILURE)
 
 
@@ -2097,7 +2067,7 @@ class SoftwareManagementWithSetSuccessInPerformInstall(SoftwareManagement.BlockT
         # Write /9/0/2 (Software)
         self.block_send(software,
                         equal_chunk_splitter(chunk_size=1024),
-                        force_error=SoftwareUpdateForcedError.SuccessInPerformInstall)
+                        force_error=PackageForcedError.Software.SuccessInPerformInstall)
 
         # Execute /9/0/4 (Install)
         self.perform_software_install_expect_success()
@@ -2121,7 +2091,7 @@ class SoftwareManagementWithSetSuccessInPerformInstallActivate(SoftwareManagemen
         # Write /9/0/2 (Software)
         self.block_send(software,
                         equal_chunk_splitter(chunk_size=1024),
-                        force_error=SoftwareUpdateForcedError.SuccessInPerformInstallActivate)
+                        force_error=PackageForcedError.Software.SuccessInPerformInstallActivate)
 
         # Execute /9/0/4 (Install)
         self.perform_software_install_expect_success()
@@ -2145,7 +2115,7 @@ class SoftwareManagementWithSetFailureInPerformInstall(SoftwareManagement.BlockT
         # Write /9/0/2 (Software)
         self.block_send(software,
                         equal_chunk_splitter(chunk_size=1024),
-                        force_error=SoftwareUpdateForcedError.FailureInPerformInstall)
+                        force_error=PackageForcedError.Software.FailureInPerformInstall)
 
         self.wait_until_state_is(UpdateState.DELIVERED)
 
@@ -2173,7 +2143,7 @@ class SoftwareManagementWithoutReboot(SoftwareManagement.BlockTest):
         # Write /9/0/2 (Software)
         self.block_send(software,
                         equal_chunk_splitter(chunk_size=1024),
-                        force_error=SoftwareUpdateForcedError.DoNothing)
+                        force_error=PackageForcedError.Software.DoNothing)
 
         self.wait_until_state_is(UpdateState.DELIVERED)
 

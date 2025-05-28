@@ -3,7 +3,7 @@
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
- * Licensed under the AVSystem-5-clause License.
+ * Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
  * See the attached LICENSE file for details.
  */
 
@@ -13,6 +13,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "objects.h"
 #include <anjay/anjay.h>
 #include <anjay/sw_mgmt.h>
 
@@ -20,9 +21,11 @@
 
 typedef struct software_metadata {
     uint8_t magic[8];
-    uint16_t version;
+    uint16_t header_ver;
     uint16_t force_error_case;
     uint32_t crc;
+    uint8_t pkg_ver_len;
+    uint8_t pkg_ver[IMG_VER_STR_MAX_LEN + 1];
 } sw_metadata_t;
 
 typedef struct {

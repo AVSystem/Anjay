@@ -3,7 +3,7 @@
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
- * Licensed under the AVSystem-5-clause License.
+ * Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
  * See the attached LICENSE file for details.
  */
 
@@ -33,6 +33,8 @@
 #define FORCE_SET_SUCCESS_FROM_PERFORM_UPGRADE 5
 #define FORCE_SET_FAILURE_FROM_PERFORM_UPGRADE 6
 #define FORCE_DO_NOTHING 7
+
+#define HEADER_VER_FW 2
 
 static int maybe_create_firmware_file(fw_update_logic_t *fw) {
     if (fw->next_target_path) {
@@ -78,7 +80,7 @@ void firmware_update_set_package_path(fw_update_logic_t *fw, const char *path) {
 }
 
 static void fix_fw_meta_endianness(fw_metadata_t *meta) {
-    meta->version = avs_convert_be16(meta->version);
+    meta->header_ver = avs_convert_be16(meta->header_ver);
     meta->force_error_case = avs_convert_be16(meta->force_error_case);
     meta->crc = avs_convert_be32(meta->crc);
 }
@@ -88,9 +90,20 @@ static int read_fw_meta_from_file(FILE *f, fw_metadata_t *out_metadata) {
     memset(&m, 0, sizeof(m));
 
     if (fread(m.magic, sizeof(m.magic), 1, f) != 1
-            || fread(&m.version, sizeof(m.version), 1, f) != 1
+            || fread(&m.header_ver, sizeof(m.header_ver), 1, f) != 1
             || fread(&m.force_error_case, sizeof(m.force_error_case), 1, f) != 1
-            || fread(&m.crc, sizeof(m.crc), 1, f) != 1) {
+            || fread(&m.crc, sizeof(m.crc), 1, f) != 1
+            || fread(&m.pkg_ver_len, sizeof(m.pkg_ver_len), 1, f) != 1) {
+        demo_log(ERROR, "could not read firmware metadata");
+        return -1;
+    }
+
+    if (m.pkg_ver_len > IMG_VER_STR_MAX_LEN || m.pkg_ver_len == 0) {
+        demo_log(ERROR, "Wrong pkg version len");
+        return ANJAY_FW_UPDATE_ERR_UNSUPPORTED_PACKAGE_TYPE;
+    }
+
+    if (fread(m.pkg_ver, m.pkg_ver_len, 1, f) != 1) {
         demo_log(ERROR, "could not read firmware metadata");
         return -1;
     }
@@ -184,9 +197,18 @@ static bool fw_magic_valid(const fw_metadata_t *meta) {
     return true;
 }
 
+static bool fw_header_version_valid(const fw_metadata_t *meta) {
+    if (meta->header_ver != HEADER_VER_FW) {
+        demo_log(ERROR, "wrong header version");
+        return false;
+    }
+
+    return true;
+}
+
 static bool fw_version_supported(const fw_metadata_t *meta) {
-    if (meta->version != 1) {
-        demo_log(ERROR, "unsupported firmware version: %u", meta->version);
+    if (memcmp(meta->pkg_ver, VER_DEFAULT, meta->pkg_ver_len)) {
+        demo_log(ERROR, "unsupported firmware version: %s", meta->pkg_ver);
         return false;
     }
 
@@ -195,6 +217,7 @@ static bool fw_version_supported(const fw_metadata_t *meta) {
 
 static int validate_firmware(fw_update_logic_t *fw) {
     if (!fw_magic_valid(&fw->metadata)
+            || !fw_header_version_valid(&fw->metadata)
             || !fw_version_supported(&fw->metadata)) {
         return ANJAY_FW_UPDATE_ERR_UNSUPPORTED_PACKAGE_TYPE;
     }

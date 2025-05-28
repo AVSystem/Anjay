@@ -3,7 +3,7 @@
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
-   Licensed under the AVSystem-5-clause License.
+   Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
    See the attached LICENSE file for details.
 
 OMA LwM2M - Brief description
@@ -43,6 +43,13 @@ to understand the general philosophy and semantics of the parts that remain to
 be implemented. You are encouraged to read the `full specification
 <https://www.omaspecworks.org/what-is-oma-specworks/iot/lightweight-m2m-lwm2m/>`_,
 but this article provides a quick summary of the most important concepts.
+
+.. note::
+  This article targets application developers and covers technical aspects of
+  the protocol that an engineer working with LwM2M should understand. For a
+  more superficial description you might want to read
+  `LwM2M Crash Course <https://avsystem.com/crashcourse/lwm2m/>`_ instead.
+
 
 .. _clients-and-servers:
 

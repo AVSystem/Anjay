@@ -4,7 +4,7 @@
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
-# Licensed under the AVSystem-5-clause License.
+# Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
 import asyncio
@@ -2760,13 +2760,13 @@ class FirmwareUpdateWithDelayedResultTest:
 class FirmwareUpdateWithDelayedSuccessTest(
     FirmwareUpdateWithDelayedResultTest.TestMixin, Block.Test):
     def runTest(self):
-        super().runTest(FirmwareUpdateForcedError.DelayedSuccess, UpdateResult.SUCCESS)
+        super().runTest(PackageForcedError.Firmware.DelayedSuccess, UpdateResult.SUCCESS)
 
 
 class FirmwareUpdateWithDelayedFailureTest(
     FirmwareUpdateWithDelayedResultTest.TestMixin, Block.Test):
     def runTest(self):
-        super().runTest(FirmwareUpdateForcedError.DelayedFailedUpdate, UpdateResult.FAILED)
+        super().runTest(PackageForcedError.Firmware.DelayedFailedUpdate, UpdateResult.FAILED)
 
 
 class FirmwareUpdateWithSetSuccessInPerformUpgrade(Block.Test):
@@ -2777,7 +2777,7 @@ class FirmwareUpdateWithSetSuccessInPerformUpgrade(Block.Test):
         # Write /5/0/0 (Firmware)
         self.block_send(firmware,
                         equal_chunk_splitter(chunk_size=1024),
-                        force_error=FirmwareUpdateForcedError.SetSuccessInPerformUpgrade)
+                        force_error=PackageForcedError.Firmware.SetSuccessInPerformUpgrade)
 
         # Execute /5/0/2 (Update)
         self.perform_firmware_update_expect_success()
@@ -2810,7 +2810,7 @@ class FirmwareUpdateWithSetFailureInPerformUpgrade(Block.Test):
         # Write /5/0/0 (Firmware)
         self.block_send(firmware,
                         equal_chunk_splitter(chunk_size=1024),
-                        force_error=FirmwareUpdateForcedError.SetFailureInPerformUpgrade)
+                        force_error=PackageForcedError.Firmware.SetFailureInPerformUpgrade)
 
         # Execute /5/0/2 (Update)
         self.perform_firmware_update_expect_success()

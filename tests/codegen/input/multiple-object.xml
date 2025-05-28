@@ -4,7 +4,7 @@ Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
 AVSystem Anjay LwM2M SDK
 All rights reserved.
 
-Licensed under the AVSystem-5-clause License.
+ Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 See the attached LICENSE file for details.
 -->
 <LWM2M xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://openmobilealliance.org/tech/profiles/LWM2M.xsd">

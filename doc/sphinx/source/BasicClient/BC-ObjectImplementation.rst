@@ -3,7 +3,7 @@
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
-   Licensed under the AVSystem-5-clause License.
+   Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
    See the attached LICENSE file for details.
 
 Implementing standard Object
@@ -364,7 +364,7 @@ it in Anjay and update ``CMakeLists.txt`` file.
    :caption: CMakeLists.txt
    :emphasize-lines: 11-12
 
-    cmake_minimum_required(VERSION 3.1)
+    cmake_minimum_required(VERSION 3.16)
     project(anjay-bc-object-implementation C)
 
     set(CMAKE_C_STANDARD 99)

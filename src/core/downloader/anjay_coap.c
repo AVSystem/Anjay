@@ -3,7 +3,7 @@
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
- * Licensed under the AVSystem-5-clause License.
+ * Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
  * See the attached LICENSE file for details.
  */
 
@@ -542,9 +542,9 @@ static avs_error_t sched_reconnect(anjay_coap_download_ctx_t *ctx) {
     ctx->retry_in_progress = true;
 
     dl_log(INFO,
-           _("retrying download ") "%" PRIuPTR _(
-                   ", attempt number ") "%" PRIu64 _(", with delay ") "%s",
-           ctx->common.id, (uint64_t) ctx->retry_count,
+           _("retrying download ") "%" PRIuPTR _(", attempt number ") "%zu" _(
+                   ", with delay ") "%s",
+           ctx->common.id, ctx->retry_count,
            AVS_TIME_DURATION_AS_STRING(ctx->coap_downloader_retry_delay));
 
     if (ctx->common.reconnect_job_handle) {

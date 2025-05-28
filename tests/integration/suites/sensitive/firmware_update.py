@@ -4,7 +4,7 @@
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
-# Licensed under the AVSystem-5-clause License.
+# Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
 import os
@@ -27,7 +27,7 @@ class FirmwareUpdateWithoutReboot(Block.Test):
         # Write /5/0/0 (Firmware)
         self.block_send(firmware,
                         equal_chunk_splitter(chunk_size=1024),
-                        force_error=FirmwareUpdateForcedError.DoNothing)
+                        force_error=PackageForcedError.Firmware.DoNothing)
 
         # Execute /5/0/2 (Update)
         self.perform_firmware_update_expect_success()

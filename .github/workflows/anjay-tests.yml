@@ -2,42 +2,15 @@
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
-# Licensed under the AVSystem-5-clause License.
+# Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
 name: Anjay tests
 on: [push]
 jobs:
-  ubuntu1804-compilers-test:
-    runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:ubuntu-18.04-2.0
-    env:
-      CC: ${{ matrix.CC }}
-      CXX: ${{ matrix.CXX }}
-    steps:
-      # NOTE: workaround for https://github.com/actions/checkout/issues/760
-      - run: git config --global safe.directory '*'
-      # NOTE: v2 requires Git 2.18 for submodules, it's not present in the image
-      - uses: actions/checkout@v1
-        with:
-          submodules: recursive
-      - run: apt-get update
-      - run: apt-get -y install $CC $CXX
-      - run: ./devconfig --with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF -DWITH_IPV6=OFF
-      - run: env CC=gcc LC_ALL=C.UTF-8 make -j
-      - run: env CC=gcc LC_ALL=C.UTF-8 make check
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - CC: gcc-7
-            CXX: g++
-          - CC: clang-6.0
-            CXX: clang++-6.0
-
   ubuntu2004-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:ubuntu-20.04-2.0
+    container: avsystemembedded/anjay-travis:ubuntu-20.04-2.1
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
@@ -68,7 +41,7 @@ jobs:
 
   ubuntu2204-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:ubuntu-22.04-2.0
+    container: avsystemembedded/anjay-travis:ubuntu-22.04-2.1
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
@@ -110,7 +83,7 @@ jobs:
 
   rockylinux9-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:rockylinux-9-2.0
+    container: avsystemembedded/anjay-travis:rockylinux-9-2.1
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}

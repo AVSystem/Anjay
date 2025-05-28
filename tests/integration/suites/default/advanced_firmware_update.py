@@ -4,7 +4,7 @@
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
-# Licensed under the AVSystem-5-clause License.
+# Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
 import asyncio
@@ -79,7 +79,7 @@ FIRMWARE_SCRIPT_TEMPLATE = '#!/bin/sh\n%secho updated > "%s"\nrm "$0"\n'
 
 class AdvancedFirmwareUpdate:
     class Test(test_suite.Lwm2mSingleServerTest):
-        FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2, 'linked': []}
+        FW_PKG_OPTS = {'magic': b'AJAY_APP', 'linked': []}
 
         def set_auto_deregister(self, auto_deregister):
             self.auto_deregister = auto_deregister
@@ -1813,7 +1813,7 @@ class AdvancedFirmwareUpdateWithDelayedSuccessTest(
     AdvancedFirmwareUpdateWithDelayedResultTest.TestMixin,
     AdvancedFirmwareUpdate.BlockTest):
     def runTest(self):
-        super().runTest(FirmwareUpdateForcedError.DelayedSuccess,
+        super().runTest(PackageForcedError.Firmware.DelayedSuccess,
                         UpdateResult.SUCCESS)
 
 
@@ -1821,7 +1821,7 @@ class AdvancedFirmwareUpdateWithDelayedFailureTest(
     AdvancedFirmwareUpdateWithDelayedResultTest.TestMixin,
     AdvancedFirmwareUpdate.BlockTest):
     def runTest(self):
-        super().runTest(FirmwareUpdateForcedError.DelayedFailedUpdate,
+        super().runTest(PackageForcedError.Firmware.DelayedFailedUpdate,
                         UpdateResult.FAILED)
 
 
@@ -1835,7 +1835,7 @@ class AdvancedFirmwareUpdateWithSetSuccessInPerformUpgrade(
         # Write /33629/0/0 (Firmware)
         self.block_send(firmware,
                         equal_chunk_splitter(chunk_size=1024),
-                        force_error=FirmwareUpdateForcedError.SetSuccessInPerformUpgrade)
+                        force_error=PackageForcedError.Firmware.SetSuccessInPerformUpgrade)
 
         # Execute /33629/0/2 (Update)
         req = Lwm2mExecute(ResPath.AdvancedFirmwareUpdate[Instances.APP].Update)
@@ -1877,7 +1877,7 @@ class AdvancedFirmwareUpdateWithSetFailureInPerformUpgrade(
         # Write /33629/0/0 (Firmware)
         self.block_send(firmware,
                         equal_chunk_splitter(chunk_size=1024),
-                        force_error=FirmwareUpdateForcedError.SetFailureInPerformUpgrade)
+                        force_error=PackageForcedError.Firmware.SetFailureInPerformUpgrade)
 
         # Execute /33629/0/2 (Update)
         req = Lwm2mExecute(ResPath.AdvancedFirmwareUpdate[Instances.APP].Update)
@@ -2497,8 +2497,8 @@ class AdvancedFirmwareUpdateCancelDuringUpdatingTest(
         self.set_reset_machine(False)
         # Don't run the downloaded package to be able to process Cancel
         self.FW_PKG_OPTS = {
-            "force_error": FirmwareUpdateForcedError.DoNothing,
-            'magic': b'AJAY_APP', 'version': 2, 'linked': []
+            "force_error": PackageForcedError.Firmware.DoNothing,
+            'magic': b'AJAY_APP', 'linked': []
         }
 
     def runTest(self):
@@ -2562,7 +2562,7 @@ class AdvancedFirmwareUpdateWithDefer(AdvancedFirmwareUpdate.BlockTest):
         # Write /33629/0/0 (Firmware)
         self.block_send(firmware,
                         equal_chunk_splitter(chunk_size=1024),
-                        force_error=FirmwareUpdateForcedError.Defer)
+                        force_error=PackageForcedError.Firmware.Defer)
 
         # Execute /33629/0/2 (Update)
         req = Lwm2mExecute(ResPath.AdvancedFirmwareUpdate[Instances.APP].Update)
@@ -2688,7 +2688,7 @@ class AdvancedFirmwareUpdateLastStateChangeTimeWithDelayedSuccessTest(
         # Write /33629/0/0 (Firmware)
         self.block_send(firmware,
                         equal_chunk_splitter(chunk_size=1024),
-                        force_error=FirmwareUpdateForcedError.DelayedSuccess)
+                        force_error=PackageForcedError.Firmware.DelayedSuccess)
 
         _, before_update_timestamp = self.get_states_and_timestamp(
             observe_token)
@@ -2747,7 +2747,7 @@ class AdvancedFirmwareUpdateLastStateChangeTimeWithDeferTest(
         # Write /33629/0/0 (Firmware)
         self.block_send(firmware,
                         equal_chunk_splitter(chunk_size=1024),
-                        force_error=FirmwareUpdateForcedError.Defer)
+                        force_error=PackageForcedError.Firmware.Defer)
 
         _, after_write_timestamp = self.get_states_and_timestamp(observe_token)
 
@@ -2830,7 +2830,7 @@ class AdvancedFirmwareUpdateDeadlinePersistenceTest(
         # Write /33629/0/0 (Firmware)
         self.block_send(firmware,
                         equal_chunk_splitter(chunk_size=1024),
-                        force_error=FirmwareUpdateForcedError.Defer)
+                        force_error=PackageForcedError.Firmware.Defer)
 
         # Execute /33629/0/2 (Update)
         req = Lwm2mExecute(ResPath.AdvancedFirmwareUpdate[Instances.APP].Update)
@@ -2883,7 +2883,7 @@ class AdvancedFirmwareUpdatePackageTestTwoNotLinkedImages(
 
     def runTest(self):
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP'}
         self.prepare_package_app_img()
 
         # Write /33629/0/0 (Firmware)
@@ -2900,7 +2900,7 @@ class AdvancedFirmwareUpdatePackageTestTwoNotLinkedImages(
                          self.read_update_result(Instances.APP))
 
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE'}
         self.prepare_package_additional_img(content=DUMMY_FILE)
 
         # Write /33629/1/0 (Firmware)
@@ -2939,7 +2939,7 @@ class AdvancedFirmwareUpdateUriTestTwoNotLinkedImages(
 
     def runTest(self):
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP'}
         self.provide_response_app_img()
 
         # Write /33629/0/1 (Package URI)
@@ -2951,7 +2951,7 @@ class AdvancedFirmwareUpdateUriTestTwoNotLinkedImages(
                          self.read_update_result(Instances.APP))
 
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE'}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
         # Write /33629/1/1 (Package URI)
@@ -2984,7 +2984,7 @@ class AdvancedFirmwareUpdatePackageTestFourNotLinkedImages(
 
     def runTest(self):
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP'}
         self.prepare_package_app_img()
 
         # Write /33629/0/0 (Firmware)
@@ -3001,7 +3001,7 @@ class AdvancedFirmwareUpdatePackageTestFourNotLinkedImages(
                          self.read_update_result(Instances.APP))
 
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE'}
         self.prepare_package_additional_img(content=DUMMY_FILE)
 
         # Write /33629/1/0 (Firmware)
@@ -3018,7 +3018,7 @@ class AdvancedFirmwareUpdatePackageTestFourNotLinkedImages(
                          self.read_update_result(Instances.TEE))
 
         # Prepare package for /33629/2
-        self.FW_PKG_OPTS = {'magic': b'AJAYBOOT', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAYBOOT'}
         self.prepare_package_additional_img(content=DUMMY_FILE)
 
         # Write /33629/2/0 (Firmware)
@@ -3036,7 +3036,7 @@ class AdvancedFirmwareUpdatePackageTestFourNotLinkedImages(
                          self.read_update_result(Instances.BOOT))
 
         # Prepare package for /33629/3
-        self.FW_PKG_OPTS = {'magic': b'AJAYMODE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAYMODE'}
         self.prepare_package_additional_img(content=DUMMY_FILE)
 
         # Write /33629/3/0 (Firmware)
@@ -3078,7 +3078,7 @@ class AdvancedFirmwareUpdateUriTestFourNotLinkedImages(
 
     def runTest(self):
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP'}
         self.provide_response_app_img()
 
         # Write /33629/0/1 (Package URI)
@@ -3090,7 +3090,7 @@ class AdvancedFirmwareUpdateUriTestFourNotLinkedImages(
                          self.read_update_result(Instances.APP))
 
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE'}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
         # Write /33629/0/1 (Package URI)
@@ -3102,7 +3102,7 @@ class AdvancedFirmwareUpdateUriTestFourNotLinkedImages(
                          self.read_update_result(Instances.TEE))
 
         # Prepare package for /33629/2
-        self.FW_PKG_OPTS = {'magic': b'AJAYBOOT', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAYBOOT'}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
         # Write /33629/0/1 (Package URI)
@@ -3114,7 +3114,7 @@ class AdvancedFirmwareUpdateUriTestFourNotLinkedImages(
                          self.read_update_result(Instances.BOOT))
 
         # Prepare package for /33629/3
-        self.FW_PKG_OPTS = {'magic': b'AJAYMODE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAYMODE'}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
         # Write /33629/0/1 (Package URI)
@@ -3149,7 +3149,7 @@ class AdvancedFirmwareUpdateUriTestFourNotLinkedImagesAPPFirst(
 
     def runTest(self):
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP'}
         self.provide_response_app_img(use_real_app=True)
 
         # Write /33629/0/1 (Package URI)
@@ -3161,7 +3161,7 @@ class AdvancedFirmwareUpdateUriTestFourNotLinkedImagesAPPFirst(
                          self.read_update_result(Instances.APP))
 
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE'}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
         # Write /33629/0/1 (Package URI)
@@ -3173,7 +3173,7 @@ class AdvancedFirmwareUpdateUriTestFourNotLinkedImagesAPPFirst(
                          self.read_update_result(Instances.TEE))
 
         # Prepare package for /33629/2
-        self.FW_PKG_OPTS = {'magic': b'AJAYBOOT', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAYBOOT'}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
         # Write /33629/0/1 (Package URI)
@@ -3185,7 +3185,7 @@ class AdvancedFirmwareUpdateUriTestFourNotLinkedImagesAPPFirst(
                          self.read_update_result(Instances.BOOT))
 
         # Prepare package for /33629/3
-        self.FW_PKG_OPTS = {'magic': b'AJAYMODE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAYMODE'}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
         # Write /33629/0/1 (Package URI)
@@ -3219,7 +3219,7 @@ class AdvancedFirmwareUpdateTestLinkedTeeToApp(
 
     def runTest(self):
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2,
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP',
                             'linked': [Instances.TEE]}
         self.provide_response_app_img()
 
@@ -3246,7 +3246,7 @@ class AdvancedFirmwareUpdateTestLinkedOthersToApp(
 
     def runTest(self):
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2,
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP',
                             'linked': [Instances.TEE,
                                        Instances.BOOT,
                                        Instances.MODEM]}
@@ -3293,7 +3293,7 @@ class AdvancedFirmwareUpdateTestConflictingAppAndTee(
 
     def runTest(self):
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2,
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP',
                             'linked': [Instances.TEE]}
         self.provide_response_app_img()
 
@@ -3320,7 +3320,7 @@ class AdvancedFirmwareUpdateTestResolveConflictingAppAndTee(
 
     def runTest(self):
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2,
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP',
                             'linked': [Instances.TEE]}
         self.provide_response_app_img()
 
@@ -3337,7 +3337,7 @@ class AdvancedFirmwareUpdateTestResolveConflictingAppAndTee(
         self.read_conflicting_and_check(Instances.APP, [(1, Objlink(33629, 1))])
 
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE'}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
         # Write /33629/1/1 (Package URI)
@@ -3363,7 +3363,7 @@ class AdvancedFirmwareUpdateTestResolveConflictingAndUpdateTeeAndBoot(
 
     def runTest(self):
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2,
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE',
                             'linked': [Instances.BOOT]}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
@@ -3380,7 +3380,7 @@ class AdvancedFirmwareUpdateTestResolveConflictingAndUpdateTeeAndBoot(
         self.read_conflicting_and_check(Instances.TEE, [(2, Objlink(33629, 2))])
 
         # Prepare package for /33629/2
-        self.FW_PKG_OPTS = {'magic': b'AJAYBOOT', 'version': 2,
+        self.FW_PKG_OPTS = {'magic': b'AJAYBOOT',
                             'linked': [Instances.TEE]}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
@@ -3421,7 +3421,7 @@ class AdvancedFirmwareUpdateTestNoConflictWithDownloadedEarlier(
 
     def runTest(self):
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE'}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
         # Write /33629/0/1 (Package URI)
@@ -3434,7 +3434,7 @@ class AdvancedFirmwareUpdateTestNoConflictWithDownloadedEarlier(
         self.read_linked_and_check(Instances.TEE, [])
 
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2,
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP',
                             'linked': [Instances.TEE]}
         self.provide_response_app_img()
 
@@ -3463,7 +3463,7 @@ class AdvancedFirmwareUpdateTestFailedUpdate(
 
     def runTest(self):
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2,
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE',
                             'linked': [Instances.BOOT]}
         self.provide_response_additional_img(content=DUMMY_FILE, overwrite_original_img=False)
 
@@ -3480,7 +3480,7 @@ class AdvancedFirmwareUpdateTestFailedUpdate(
         self.read_conflicting_and_check(Instances.TEE, [(2, Objlink(33629, 2))])
 
         # Prepare package for /33629/2
-        self.FW_PKG_OPTS = {'magic': b'AJAYBOOT', 'version': 2,
+        self.FW_PKG_OPTS = {'magic': b'AJAYBOOT',
                             'linked': [Instances.TEE]}
         self.provide_response_additional_img(content=DUMMY_FILE, overwrite_original_img=False)
 
@@ -3528,7 +3528,7 @@ class AdvancedFirmwareUpdateTestUpdateBootWithLinkedTee(
 
     def runTest(self):
         # Prepare package for /33629/2
-        self.FW_PKG_OPTS = {'magic': b'AJAYBOOT', 'version': 2,
+        self.FW_PKG_OPTS = {'magic': b'AJAYBOOT',
                             'linked': [Instances.TEE]}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
@@ -3546,7 +3546,7 @@ class AdvancedFirmwareUpdateTestUpdateBootWithLinkedTee(
                                         [(1, Objlink(33629, 1))])
 
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE'}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
         # Write /33629/0/1 (Package URI)
@@ -3599,7 +3599,7 @@ class AdvancedFirmwareUpdateTestSetConflictAfterCancelOfLinkedImage(
 
     def runTest(self):
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2,
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP',
                             'linked': [Instances.TEE]}
         self.provide_response_app_img()
 
@@ -3616,7 +3616,7 @@ class AdvancedFirmwareUpdateTestSetConflictAfterCancelOfLinkedImage(
         self.read_conflicting_and_check(Instances.APP, [(1, Objlink(33629, 1))])
 
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE'}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
         # Write /33629/0/1 (Package URI)
@@ -3651,12 +3651,12 @@ class AdvancedFirmwareUpdatePackageTestWithMultiPackage(
 
     def runTest(self):
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP'}
         self.prepare_package_app_img()
         app_pkg = self.PACKAGE
 
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE'}
         self.prepare_package_additional_img(content=DUMMY_FILE)
         tee_pkg = self.PACKAGE
 
@@ -3703,23 +3703,23 @@ class AdvancedFirmwareUpdatePackageTestWithMultiPackageAllImages(
 
     def runTest(self):
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP'}
         self.prepare_package_app_img()
         app_pkg = self.PACKAGE
 
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2,
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE',
                             'linked': [Instances.BOOT, Instances.MODEM]}
         self.prepare_package_additional_img(content=DUMMY_FILE)
         tee_pkg = self.PACKAGE
 
         # Prepare package for /33629/2
-        self.FW_PKG_OPTS = {'magic': b'AJAYBOOT', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAYBOOT'}
         self.prepare_package_additional_img(content=DUMMY_FILE)
         boot_pkg = self.PACKAGE
 
         # Prepare package for /33629/3
-        self.FW_PKG_OPTS = {'magic': b'AJAYMODE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAYMODE'}
         self.prepare_package_additional_img(content=DUMMY_FILE)
         modem_pkg = self.PACKAGE
 
@@ -3800,7 +3800,7 @@ class AdvancedFirmwareUpdatePackageTestWithMultiPackageConflictingDownloads(
 
     def runTest(self):
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE'}
         self.prepare_package_additional_img(content=DUMMY_FILE)
 
         # Write multiple package to /33629/1/0 (Firmware)
@@ -3817,12 +3817,12 @@ class AdvancedFirmwareUpdatePackageTestWithMultiPackageConflictingDownloads(
                          self.read_update_result(Instances.TEE))
 
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP'}
         self.prepare_package_app_img()
         app_pkg = self.PACKAGE
 
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE'}
         self.prepare_package_additional_img(content=DUMMY_FILE)
         tee_pkg = self.PACKAGE
 
@@ -3860,7 +3860,7 @@ class AdvancedFirmwareUpdateUriTestExplicitLinkedUpdate(
 
     def runTest(self):
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2, 'linked': [1]}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'linked': [1]}
         self.provide_response_app_img(use_real_app=True)
 
         # Write /33629/0/1 (Package URI)
@@ -3873,7 +3873,7 @@ class AdvancedFirmwareUpdateUriTestExplicitLinkedUpdate(
         self.read_linked_and_check(Instances.APP, [(1, Objlink(33629, 1))])
 
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2, 'linked': [0]}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'linked': [0]}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
         # Write /33629/1/1 (Package URI)
@@ -3886,7 +3886,7 @@ class AdvancedFirmwareUpdateUriTestExplicitLinkedUpdate(
         self.read_linked_and_check(Instances.TEE, [(0, Objlink(33629, 0))])
 
         # Prepare package for /33629/2
-        self.FW_PKG_OPTS = {'magic': b'AJAYBOOT', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAYBOOT'}
         self.prepare_package_additional_img(content=DUMMY_FILE)
 
         # Write /33629/2/0 (Firmware)
@@ -3904,7 +3904,7 @@ class AdvancedFirmwareUpdateUriTestExplicitLinkedUpdate(
                          self.read_update_result(Instances.BOOT))
 
         # Prepare package for /33629/3
-        self.FW_PKG_OPTS = {'magic': b'AJAYMODE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAYMODE'}
         self.prepare_package_additional_img(content=DUMMY_FILE)
 
         # Write /33629/3/0 (Firmware)
@@ -3968,7 +3968,7 @@ class AdvancedFirmwareUpdateUriTestExplicitSinglePartitionUpdate(
 
     def runTest(self):
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2, 'linked': [1]}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'linked': [1]}
         self.provide_response_app_img(use_real_app=True)
 
         # Write /33629/0/1 (Package URI)
@@ -3981,7 +3981,7 @@ class AdvancedFirmwareUpdateUriTestExplicitSinglePartitionUpdate(
         self.read_linked_and_check(Instances.APP, [(1, Objlink(33629, 1))])
 
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2, 'linked': [0]}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'linked': [0]}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
         # Write /33629/1/1 (Package URI)
@@ -3994,7 +3994,7 @@ class AdvancedFirmwareUpdateUriTestExplicitSinglePartitionUpdate(
         self.read_linked_and_check(Instances.TEE, [(0, Objlink(33629, 0))])
 
         # Prepare package for /33629/2
-        self.FW_PKG_OPTS = {'magic': b'AJAYBOOT', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAYBOOT'}
         self.prepare_package_additional_img(content=DUMMY_FILE)
 
         # Write /33629/2/0 (Firmware)
@@ -4012,7 +4012,7 @@ class AdvancedFirmwareUpdateUriTestExplicitSinglePartitionUpdate(
                          self.read_update_result(Instances.BOOT))
 
         # Prepare package for /33629/3
-        self.FW_PKG_OPTS = {'magic': b'AJAYMODE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAYMODE'}
         self.prepare_package_additional_img(content=DUMMY_FILE)
 
         # Write /33629/3/0 (Firmware)
@@ -4064,8 +4064,7 @@ class AdvancedFirmwareUpdateUriTestCheckPkgVersion(
 
     def runTest(self):
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2,
-                            'pkg_version': b'2.0.1'}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'pkg_version': b'2.0.1'}
         self.provide_response_app_img()
 
         # Write /33629/0/1 (Package URI)
@@ -4096,8 +4095,7 @@ class AdvancedFirmwareUpdateVersionConflictTest(
 
     def runTest(self):
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2,
-                            'pkg_version': b'2.0.1'}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'pkg_version': b'2.0.1'}
         self.provide_response_app_img()
 
         # Write /33629/0/1 (Package URI)
@@ -4125,8 +4123,7 @@ class AdvancedFirmwareUpdateVersionConflictTest(
                          self.read_update_result(Instances.APP))
 
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2,
-                            'pkg_version': b'2.0.1'}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'pkg_version': b'2.0.1'}
         self.provide_response_additional_img(content=DUMMY_FILE)
 
         # Write /33629/1/1 (Package URI)
@@ -4145,7 +4142,7 @@ class AdvancedFirmwareUpdateQueueParallelPull(AdvancedFirmwareUpdate.TestWithCoa
 
     def runTest(self):
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP'}
         self.prepare_package_additional_img(content=DUMMY_LONG_FILE)
         with self.get_file_server(serv=0) as file_server:
             file_server.set_resource('/firmwareAPP',
@@ -4158,7 +4155,7 @@ class AdvancedFirmwareUpdateQueueParallelPull(AdvancedFirmwareUpdate.TestWithCoa
         self.serv.send(req1)
 
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE'}
         self.prepare_package_additional_img(content=DUMMY_FILE)
         with self.get_file_server(serv=1) as file_server:
             file_server.set_resource('/firmwareTEE',
@@ -4195,7 +4192,7 @@ class AdvancedFirmwareUpdateQueueParallelPull(AdvancedFirmwareUpdate.TestWithCoa
 class AdvancedFirmwareUpdateRejectPushWhilePull(AdvancedFirmwareUpdate.TestWithCoapServer):
     def runTest(self):
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP'}
         self.prepare_package_additional_img(content=DUMMY_LONG_FILE)
         with self.file_server as file_server:
             file_server.set_resource('/firmwareAPP',
@@ -4208,7 +4205,7 @@ class AdvancedFirmwareUpdateRejectPushWhilePull(AdvancedFirmwareUpdate.TestWithC
         self.serv.send(req1)
 
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE'}
         self.prepare_package_additional_img(content=DUMMY_FILE)
 
         # Write /33629/3/0 (Firmware)
@@ -4237,7 +4234,7 @@ class AdvancedFirmwareUpdateHandleTooManyPulls(AdvancedFirmwareUpdate.TestWithCo
 
     def runTest(self):
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP'}
         self.prepare_package_additional_img(content=DUMMY_LONG_FILE)
         with self.get_file_server(serv=0) as file_server:
             file_server.set_resource('/firmwareAPP',
@@ -4250,7 +4247,7 @@ class AdvancedFirmwareUpdateHandleTooManyPulls(AdvancedFirmwareUpdate.TestWithCo
         self.serv.send(req1)
 
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE'}
         self.prepare_package_additional_img(content=DUMMY_FILE)
         with self.get_file_server(serv=1) as file_server:
             file_server.set_resource('/firmwareTEE',
@@ -4292,7 +4289,7 @@ class AdvancedFirmwareUpdateHandleTooManyPullsWithSecureConnection(AdvancedFirmw
 
     def runTest(self):
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP'}
         self.prepare_package_additional_img(content=DUMMY_FILE)
         with self.get_file_server(serv=0) as file_server:
             file_server.set_resource('/firmwareAPP',
@@ -4305,7 +4302,7 @@ class AdvancedFirmwareUpdateHandleTooManyPullsWithSecureConnection(AdvancedFirmw
         self.serv.send(req1)
 
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE'}
         self.prepare_package_additional_img(content=DUMMY_FILE)
         with self.get_file_server(serv=1) as file_server:
             file_server.set_resource('/firmwareTEE',
@@ -4348,7 +4345,7 @@ class AdvancedFirmwareUpdateForceAppToUpdateFirstAndCheckProperStateOfAdditional
 
     def runTest(self):
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP'}
         self.provide_response_app_img(use_real_app=True)
 
         # Write /33629/0/1 (Package URI)
@@ -4361,7 +4358,7 @@ class AdvancedFirmwareUpdateForceAppToUpdateFirstAndCheckProperStateOfAdditional
                          self.read_update_result(Instances.APP))
 
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE'}
         self.prepare_package_additional_img(content=DUMMY_FILE)
 
         # Write /33629/1/0 (Firmware)
@@ -4405,7 +4402,7 @@ class AdvancedFirmwareUpdateCancelWhileDownloadQueued(AdvancedFirmwareUpdate.Tes
 
     def runTest(self):
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP'}
         self.prepare_package_app_img(use_real_app=True)
         with self.get_file_server(serv=0) as file_server:
             file_server.set_resource('/firmwareAPP',
@@ -4413,7 +4410,7 @@ class AdvancedFirmwareUpdateCancelWhileDownloadQueued(AdvancedFirmwareUpdate.Tes
             fw_uri1 = file_server.get_resource_uri('/firmwareAPP')
 
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE'}
         self.prepare_package_additional_img(content=DUMMY_FILE)
         with self.get_file_server(serv=1) as file_server:
             file_server.set_resource('/firmwareTEE',
@@ -4489,7 +4486,7 @@ class AdvancedFirmwareUpdateCancelCurrentDownloadAndLeaveSecondOne(AdvancedFirmw
 
     def runTest(self):
         # Prepare package for /33629/0
-        self.FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_APP'}
         self.prepare_package_app_img(use_real_app=True)
         with self.get_file_server(serv=0) as file_server:
             file_server.set_resource('/firmwareAPP',
@@ -4497,7 +4494,7 @@ class AdvancedFirmwareUpdateCancelCurrentDownloadAndLeaveSecondOne(AdvancedFirmw
             fw_uri1 = file_server.get_resource_uri('/firmwareAPP')
 
         # Prepare package for /33629/1
-        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE', 'version': 2}
+        self.FW_PKG_OPTS = {'magic': b'AJAY_TEE'}
         self.prepare_package_additional_img(content=DUMMY_FILE)
         with self.get_file_server(serv=1) as file_server:
             file_server.set_resource('/firmwareTEE',

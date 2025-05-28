@@ -4,7 +4,7 @@
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
-# Licensed under the AVSystem-5-clause License.
+# Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
 import contextlib
@@ -36,7 +36,7 @@ class Instances:
 
 class AdvancedFirmwareUpdate:
     class Test(DataModel.Test):
-        FW_PKG_OPTS = {'magic': b'AJAY_APP', 'version': 2, 'linked': []}
+        FW_PKG_OPTS = {'magic': b'AJAY_APP', 'linked': []}
 
         def collect_values(self, path: Lwm2mPath, final_value, max_iterations=300, step_time=0.1):
             observed_values = []
@@ -757,7 +757,7 @@ class Test774_AdvancedFirmwareUpdate_ErrorCase_OutOfMemory(AdvancedFirmwareUpdat
         self.test_write_block(ResPath.AdvancedFirmwareUpdate[Instances.APP].Package,
                               make_firmware_package(payload,
                                                     **self.FW_PKG_OPTS,
-                                                    force_error=FirmwareUpdateForcedError.OutOfMemory),
+                                                    force_error=PackageForcedError.Firmware.OutOfMemory),
                               coap.ContentFormat.APPLICATION_OCTET_STREAM)
 
         # 3. The firmware download process is runing The Server sends repeated
@@ -791,7 +791,7 @@ class AdvancedFirmwareUpdate_ErrorCase_OutOfMemory_PackageURI(AdvancedFirmwareUp
         with open(demo_executable, 'rb') as f:
             pkg = make_firmware_package(f.read(),
                                         **self.FW_PKG_OPTS,
-                                        force_error=FirmwareUpdateForcedError.OutOfMemory)
+                                        force_error=PackageForcedError.Firmware.OutOfMemory)
 
         super().setUp(pkg)
 
@@ -828,7 +828,7 @@ class Test775_AdvancedFirmwareUpdate_ErrorCase_ConnectionLostDuringDownloadPacka
         with open(demo_executable, 'rb') as f:
             pkg = make_firmware_package(f.read(),
                                         **self.FW_PKG_OPTS,
-                                        force_error=FirmwareUpdateForcedError.OutOfMemory)
+                                        force_error=PackageForcedError.Firmware.OutOfMemory)
 
         super().setUp(pkg)
 
@@ -890,7 +890,7 @@ class Test775_AdvancedFirmwareUpdate_ErrorCase_ConnectionLostDuringDownloadPacka
         with open(demo_executable, 'rb') as f:
             pkg = make_firmware_package(f.read(),
                                         **self.FW_PKG_OPTS,
-                                        force_error=FirmwareUpdateForcedError.OutOfMemory)
+                                        force_error=PackageForcedError.Firmware.OutOfMemory)
 
         class MuteServer(coap.Server):
             def send(self, *args, **kwargs):
@@ -1172,7 +1172,7 @@ class Test779_AdvancedFirmwareUpdate_ErrorCase_UnsuccessfulFirmwareUpdate(Advanc
         self.test_write_block(ResPath.AdvancedFirmwareUpdate[Instances.APP].Package,
                               make_firmware_package(payload,
                                                     **self.FW_PKG_OPTS,
-                                                    force_error=FirmwareUpdateForcedError.FailedUpdate),
+                                                    force_error=PackageForcedError.Firmware.FailedUpdate),
                               coap.ContentFormat.APPLICATION_OCTET_STREAM)
 
         # 1. Step 1 – Package Delivery
@@ -1241,7 +1241,7 @@ class AdvancedFirmwareUpdate_ErrorCase_UnsuccessfulFirmwareUpdate_PackageURI(Adv
         with open(demo_executable, 'rb') as f:
             pkg = make_firmware_package(f.read(),
                                         **self.FW_PKG_OPTS,
-                                        force_error=FirmwareUpdateForcedError.FailedUpdate)
+                                        force_error=PackageForcedError.Firmware.FailedUpdate)
 
         super().setUp(pkg)
 
