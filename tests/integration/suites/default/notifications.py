@@ -4,10 +4,14 @@
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
-# Licensed under the AVSystem-5-clause License.
+# Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 from framework.lwm2m_test import *
 from framework.lwm2m.coap.transport import Transport
+
+import re
+from string import Template
+from .access_control import AccessMask, make_acl_entry, AccessControl
 
 
 class CancellingConfirmableNotifications(test_suite.Lwm2mSingleServerTest,
@@ -25,9 +29,7 @@ class CancellingConfirmableNotifications(test_suite.Lwm2mSingleServerTest,
         notify1 = self.serv.recv()
         if bytes(notify1.token) != bytes(observe1.token):
             # which observation is handled first isn't exactly deterministic
-            tmp = observe1
-            observe1 = observe2
-            observe2 = tmp
+            observe1, observe2 = observe2, observe1
 
         self.assertIsInstance(notify1, Lwm2mNotify)
         self.assertEqual(bytes(notify1.token), bytes(observe1.token))
@@ -366,3 +368,415 @@ class NextPlannedNotify(test_suite.Lwm2mSingleServerTest, test_suite.Lwm2mDmOper
                          match_regex='NEXT_PLANNED_PMAX_NOTIFY=TIME_INVALID\n')
         self.communicate('next-planned-notify',
                          match_regex='NEXT_PLANNED_NOTIFY=TIME_INVALID\n')
+
+
+class ConfirmableNotificationStatus():
+
+    class Test(test_suite.Lwm2mDmOperations):
+        PREFIX = "confirmable_notification_status_callback:"
+        CONFIRMABLE_NOTIFICATION_SUCCESS = Template(f"{PREFIX} Acknowledgement for notification was "
+                                                    "received for server SSID $ssid, paths count "
+                                                    "$paths_count:")
+        CONFIRMABLE_NOTIFICATION_FAILURE = Template(f"{PREFIX} There was some error during receiving "
+                                                    "acknowledgement/sending notification for server "
+                                                    "SSID $ssid, paths count $paths_count:")
+        LOG_TIMEOUT = 10
+
+        def read_log_until_confirmable_notification_success(
+                self, ssid, paths_count):
+            if self.read_log_until_match(
+                regex=re.escape(
+                    self.CONFIRMABLE_NOTIFICATION_SUCCESS.substitute(
+                        ssid=ssid, paths_count=paths_count).encode()),
+                    timeout_s=self.LOG_TIMEOUT) is None:
+                raise self.failureException('string not found')
+
+        def read_log_until_confirmable_notification_fail(
+                self, ssid, paths_count):
+            if self.read_log_until_match(
+                regex=re.escape(
+                    self.CONFIRMABLE_NOTIFICATION_FAILURE.substitute(
+                        ssid=ssid, paths_count=paths_count).encode()),
+                    timeout_s=self.LOG_TIMEOUT) is None:
+                raise self.failureException('string not found')
+
+        def read_log_until_path_occur(self, path):
+            if self.read_log_until_match(
+                    regex=re.escape((f'{self.PREFIX} ' + path).encode()),
+                    timeout_s=self.LOG_TIMEOUT) is None:
+                raise self.failureException('string not found')
+
+        # This method is called to be sure that there is no unserved confirmed notification when
+        # leaving test case
+        def receive_notification_and_respond(self, server):
+            notify = server.recv()
+            server.send(Lwm2mEmpty.matching(notify)())
+
+    class BasicTest(Test):
+        def runTest(self):
+            observe_path = self.make_path(
+                OID.Location, 0, RID.Location.Latitude)
+            observe = self.observe_path(self.serv, observe_path)
+
+            notify = self.serv.recv()
+
+            self.assertIsInstance(notify, Lwm2mNotify)
+            self.assertMsgEqual(
+                Lwm2mNotify(
+                    token=observe.token,
+                    confirmable=True),
+                notify)
+            self.serv.send(Lwm2mEmpty.matching(notify)())
+
+            self.read_log_until_confirmable_notification_success(
+                ssid=1, paths_count=1)
+            self.read_log_until_path_occur(observe_path)
+
+        def tearDown(self):
+            self.receive_notification_and_respond(self.serv)
+            super().tearDown()
+
+
+class ConfirmableNotificationStatusUDP(ConfirmableNotificationStatus.BasicTest,
+                                       test_suite.Lwm2mSingleServerTest):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--confirmable-notifications'])
+
+
+class ConfirmableNotificationStatusTCP(ConfirmableNotificationStatus.BasicTest,
+                                       test_suite.Lwm2mSingleTcpServerTest):
+    def setUp(self, *args, **kwargs):
+        super().setUp(binding='T', *args, **kwargs)
+
+
+class ConfirmableNotificationStatusTLS(ConfirmableNotificationStatus.BasicTest,
+                                       test_suite.Lwm2mTlsSingleServerTest):
+    def setUp(self, *args, **kwargs):
+        super().setUp(binding='T', *args, **kwargs)
+
+
+
+class ConfirmableNotificationStatusTwoObservations(test_suite.Lwm2mSingleServerTest,
+                                                   ConfirmableNotificationStatus.Test):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--confirmable-notifications'])
+
+    def runTest(self):
+        self.create_instance(self.serv, oid=OID.Test, iid=0)
+
+        observe1_path = self.make_path(OID.Test, 0, RID.Test.Counter)
+        observe2_path = self.make_path(OID.Location, 0)
+        observe1 = self.observe_path(self.serv, observe1_path)
+        observe2 = self.observe_path(self.serv, observe2_path)
+
+        notify = self.serv.recv()
+
+        self.assertIsInstance(notify, Lwm2mNotify)
+        self.assertMsgEqual(
+            Lwm2mNotify(
+                token=observe2.token,
+                confirmable=True),
+            notify)
+
+        # even if a new notification will be scheduled, the status callback should execute
+        # correctly for the previous notification after sending ack
+        self.execute_resource(
+            self.serv,
+            oid=OID.Test,
+            iid=0,
+            rid=RID.Test.IncrementCounter)
+        if self.read_log_until_match(
+                regex=re.escape(
+                    b'Execute ' +
+                    self.make_path(
+                        OID.Test,
+                        0,
+                        RID.Test.IncrementCounter).encode()),
+                timeout_s=self.LOG_TIMEOUT) is None:
+            raise self.failureException('string not found')
+        time.sleep(0.5)
+        self.serv.send(Lwm2mEmpty.matching(notify)())
+
+        self.read_log_until_confirmable_notification_success(
+            ssid=1, paths_count=1)
+        self.read_log_until_path_occur(observe2_path)
+
+        notify = self.serv.recv()
+        self.assertIsInstance(notify, Lwm2mNotify)
+        self.assertMsgEqual(
+            Lwm2mNotify(
+                token=observe1.token,
+                confirmable=True),
+            notify)
+        self.serv.send(Lwm2mEmpty.matching(notify)())
+
+        self.read_log_until_confirmable_notification_success(
+            ssid=1, paths_count=1)
+        self.read_log_until_path_occur(observe1_path)
+
+    def tearDown(self):
+        self.receive_notification_and_respond(self.serv)
+        super().tearDown()
+
+
+class ConfirmableNotificationStatusComposite(test_suite.Lwm2mSingleServerTest,
+                                             ConfirmableNotificationStatus.Test):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--confirmable-notifications'],
+                      minimum_version='1.1', maximum_version='1.1')
+
+    def runTest(self):
+        paths = [self.make_path(OID.Location, 0, RID.Location.Latitude),
+                 self.make_path(OID.FirmwareUpdate),
+                 self.make_path(OID.Device, 0, RID.Device.AvailablePowerSources)]
+
+        observe = self.observe_composite(self.serv, paths)
+
+        notify = self.serv.recv()
+
+        self.assertIsInstance(notify, Lwm2mNotify)
+        self.assertMsgEqual(
+            Lwm2mNotify(
+                token=observe.token,
+                confirmable=True),
+            notify)
+        self.serv.send(Lwm2mEmpty.matching(notify)())
+
+        self.read_log_until_confirmable_notification_success(
+            ssid=1, paths_count=len(paths))
+        for path in paths:
+            self.read_log_until_path_occur(path)
+
+    def tearDown(self):
+        self.receive_notification_and_respond(self.serv)
+        super().tearDown()
+
+
+class ConfirmableNotificationStatusOffline(test_suite.Lwm2mDtlsSingleServerTest,
+                                           ConfirmableNotificationStatus.Test):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--confirmable-notifications'])
+
+    def runTest(self):
+        PMAX_S = 1
+        QUEUED_NOTIFICATIONS = 3
+
+        observe_path = self.make_path(
+            OID.FirmwareUpdate, 0, RID.FirmwareUpdate.State)
+        self.write_attributes_path(
+            self.serv,
+            observe_path,
+            query=[
+                'pmax=%d' %
+                PMAX_S])
+        observe = self.observe_path(self.serv, observe_path)
+
+        self.communicate('enter-offline')
+
+        time.sleep(PMAX_S * QUEUED_NOTIFICATIONS)
+        self.serv.reset()
+
+        # prevent the demo from queueing any additional notifications
+        self.communicate(
+            'set-attrs %s 1 pmin=9999 pmax=9999' %
+            (ResPath.FirmwareUpdate.State,))
+        # wait until attribute change gets applied during next notification
+        # poll
+        time.sleep(PMAX_S)
+
+        self.communicate('exit-offline')
+
+        for _ in range(3):
+            notify = self.serv.recv()
+            self.assertIsInstance(notify, Lwm2mNotify)
+            self.assertMsgEqual(
+                Lwm2mNotify(
+                    token=observe.token,
+                    confirmable=True),
+                notify)
+            self.serv.send(Lwm2mEmpty.matching(notify)())
+
+            self.read_log_until_confirmable_notification_success(
+                ssid=1, paths_count=1)
+            self.read_log_until_path_occur(observe_path)
+
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(PMAX_S * 2)
+
+
+class ConfirmableNotificationStatusTwoServers(test_suite.Lwm2mSingleServerTest,
+                                              ConfirmableNotificationStatus.Test,
+                                              AccessControl.Test):
+    def setUp(self):
+        super().setUp(servers=2, extra_cmdline_args=[
+            '--confirmable-notifications', '--access-entry', 
+            '/%d/65535,1,%d' % (OID.Test, AccessMask.CREATE)])
+
+    def runTest(self):
+        self.create_instance(self.servers[0], oid=OID.Test, iid=0)
+
+        self.update_access(self.servers[0], OID.Test, 0,
+                           [make_acl_entry(1, AccessMask.EXECUTE | AccessMask.READ),
+                            make_acl_entry(2, AccessMask.READ)])
+
+        observe_path = self.make_path(OID.Test, 0, RID.Test.Counter)
+        observe1 = self.observe_path(self.servers[0], observe_path)
+        observe2 = self.observe_path(self.servers[1], observe_path)
+
+        self.execute_resource(
+            self.serv,
+            oid=OID.Test,
+            iid=0,
+            rid=RID.Test.IncrementCounter)
+
+        notify1 = self.servers[0].recv()
+        notify2 = self.servers[1].recv()
+
+        self.assertIsInstance(notify1, Lwm2mNotify)
+        self.assertMsgEqual(
+            Lwm2mNotify(
+                token=observe1.token,
+                confirmable=True),
+            notify1)
+        self.assertIsInstance(notify2, Lwm2mNotify)
+        self.assertMsgEqual(
+            Lwm2mNotify(
+                token=observe2.token,
+                confirmable=True),
+            notify2)
+
+        self.servers[0].send(Lwm2mEmpty.matching(notify1)())
+
+        self.read_log_until_confirmable_notification_success(
+            ssid=1, paths_count=1)
+        self.read_log_until_path_occur(observe_path)
+
+        self.servers[1].send(Lwm2mEmpty.matching(notify2)())
+
+        self.read_log_until_confirmable_notification_success(
+            ssid=2, paths_count=1)
+        self.read_log_until_path_occur(observe_path)
+
+
+class ConfirmableNotificationStatusNotFound(test_suite.Lwm2mSingleServerTest,
+                                            ConfirmableNotificationStatus.Test):
+    def runTest(self):
+        observe_path = self.make_path(
+            OID.Temperature, 0, RID.Temperature.SensorValue)
+        observe = self.observe_path(self.serv, observe_path)
+
+        self.communicate('temperature-remove-instance 0')
+
+        notify = self.serv.recv()
+
+        if notify.code == coap.Code.RES_CONTENT:
+            self.serv.send(Lwm2mEmpty.matching(notify)())
+            notify = self.serv.recv()
+
+        self.assertEqual(notify.code, coap.Code.RES_NOT_FOUND)
+        self.assertEqual(bytes(notify.token), bytes(observe.token))
+        self.assertEqual(notify.type, coap.Type.CONFIRMABLE)
+        self.serv.send(Lwm2mEmpty.matching(notify)())
+
+        self.read_log_until_confirmable_notification_success(
+            ssid=1, paths_count=1)
+        self.read_log_until_path_occur(observe_path)
+
+
+class ConfirmableNotificationStatusRST(test_suite.Lwm2mSingleServerTest,
+                                       ConfirmableNotificationStatus.Test):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--confirmable-notifications'])
+
+    def runTest(self):
+        observe_path = self.make_path(OID.Location, 0, RID.Location.Latitude)
+        observe = self.observe_path(self.serv, observe_path)
+
+        notify = self.serv.recv()
+
+        self.assertIsInstance(notify, Lwm2mNotify)
+        self.assertMsgEqual(
+            Lwm2mNotify(
+                token=observe.token,
+                confirmable=True),
+            notify)
+
+        self.serv.send(Lwm2mReset.matching(notify)())
+
+        self.read_log_until_confirmable_notification_fail(
+            ssid=1, paths_count=1)
+        self.read_log_until_path_occur(observe_path)
+
+
+class ConfirmableNotificationStatusWithoutAck(test_suite.Lwm2mSingleServerTest,
+                                              ConfirmableNotificationStatus.Test):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--confirmable-notifications', '--max-retransmit', '0',
+                                          '--ack-timeout', '1'])
+
+    def runTest(self):
+        observe_path = self.make_path(OID.Location, 0, RID.Location.Latitude)
+        observe = self.observe_path(self.serv, observe_path)
+
+        notify = self.serv.recv()
+
+        self.assertIsInstance(notify, Lwm2mNotify)
+        self.assertMsgEqual(
+            Lwm2mNotify(
+                token=observe.token,
+                confirmable=True),
+            notify)
+
+        self.read_log_until_confirmable_notification_fail(
+            ssid=1, paths_count=1)
+        self.read_log_until_path_occur(observe_path)
+    
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+
+class ConfirmableNotificationStatusSendFailed(test_suite.Lwm2mSingleServerTest,
+                                              ConfirmableNotificationStatus.Test):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--confirmable-notifications', '--max-retransmit', '0',
+                                          '--ack-timeout', '1'])
+
+    def runTest(self):
+        observe_path = self.make_path(OID.Location, 0, RID.Location.Latitude)
+        self.observe_path(self.serv, observe_path)
+
+        with self.serv.fake_close():
+            self.read_log_until_confirmable_notification_fail(
+                ssid=1, paths_count=1)
+            self.read_log_until_path_occur(observe_path)
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+
+class ConfirmableNotificationStatusNoConfirmable(test_suite.Lwm2mSingleServerTest,
+                                                 ConfirmableNotificationStatus.Test):
+    def runTest(self):
+        observe_path = self.make_path(OID.Location, 0, RID.Location.Latitude)
+        observe = self.observe_path(self.serv, observe_path)
+
+        notify = self.serv.recv()
+
+        self.assertIsInstance(notify, Lwm2mNotify)
+        self.assertMsgEqual(
+            Lwm2mNotify(
+                token=observe.token,
+                confirmable=False),
+            notify)
+
+        self.observe_path(
+            self.serv,
+            observe_path,
+            token=notify.token,
+            observe=1)
+
+        if self.read_log_until_match(
+            regex=re.escape(
+                self.CONFIRMABLE_NOTIFICATION_SUCCESS.substitute(ssid=1, paths_count=1).encode()),
+                timeout_s=10) is not None:
+            raise self.failureException('string should not be found')

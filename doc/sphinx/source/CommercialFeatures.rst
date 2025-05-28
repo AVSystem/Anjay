@@ -3,7 +3,7 @@
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
-   Licensed under the AVSystem-5-clause License.
+   Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
    See the attached LICENSE file for details.
 
 Commercial features

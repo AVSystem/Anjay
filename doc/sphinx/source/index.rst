@@ -3,7 +3,7 @@
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
-   Licensed under the AVSystem-5-clause License.
+   Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
    See the attached LICENSE file for details.
 
 Welcome to Anjay LwM2M library documentation!
@@ -30,6 +30,7 @@ Contents:
    FirmwareUpdateTutorial
    LwM2MGateway
    Tools
+   API_description
    PortingGuideForNonPOSIXPlatforms
    Migrating
    CommercialFeatures
@@ -38,7 +39,6 @@ Links
 -----
 
 * `Source repository <https://github.com/AVSystem/Anjay>`_
-* `Doxygen-generated API documentation <api/index.html>`_
 
 Indices and tables
 ==================

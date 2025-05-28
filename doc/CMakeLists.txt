@@ -2,7 +2,7 @@
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
-# Licensed under the AVSystem-5-clause License.
+# Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
 add_custom_target(anjay_doc)
@@ -71,20 +71,13 @@ endif()
 if(EXISTS "${ANJAY_SOURCE_DIR}/Doxyfile.in")
     find_package(Doxygen)
 
-    get_target_property(DOXYGEN_INPUT_PATHS anjay INTERFACE_INCLUDE_DIRECTORIES)
-    # doxygen expects whitespace-separated list, cmake stores them as
-    # semicolon-separated strings
-    string(REPLACE ";" " " DOXYGEN_INPUT_PATHS "${DOXYGEN_INPUT_PATHS}")
-
-    execute_process(COMMAND ${ANJAY_SOURCE_DIR}/tools/anjay_config_log_tool.py list_flags
-                    RESULT_VARIABLE LIST_FLAGS_RESULT
-                    OUTPUT_VARIABLE DOXYFILE_PREDEFINED_MACROS)
-    if(NOT LIST_FLAGS_RESULT EQUAL 0)
-        message(WARNING "Could not enumerate configuration macros")
-    endif()
-    string(REPLACE "\n" " " DOXYFILE_PREDEFINED_MACROS "${DOXYFILE_PREDEFINED_MACROS}")
-
     set(DOXYGEN_OUTPUT_DIR ${ANJAY_BUILD_OUTPUT_DIR}/doc/doxygen)
+
+    # paths for creating config with everything enabled (so that all options
+    # are documented in doxygen)
+    set(EXAMPLE_CONFIG_PATH "${CMAKE_SOURCE_DIR}/example_configs/linux_lwm2m11/anjay/anjay_config.h")
+    set(INCLUDE_PUBLIC_PATH "${CMAKE_SOURCE_DIR}/include_public")
+    set(DOXYGEN_INPUT_PATHS "${CMAKE_BINARY_DIR}/output/doc/doxygen/config")
 
     # configure_file does not expand CMake generator expressions; file(GENERATE) does
     configure_file(${ANJAY_SOURCE_DIR}/Doxyfile.in
@@ -94,6 +87,10 @@ if(EXISTS "${ANJAY_SOURCE_DIR}/Doxyfile.in")
          INPUT ${CMAKE_CURRENT_BINARY_DIR}/doxygen/Doxyfile.with-cmake-generator-expressions)
 
     add_custom_target(anjay_doc_doxygen
+                      COMMAND bash ${CMAKE_SOURCE_DIR}/tools/generate_doxygen_config.sh
+                                "${EXAMPLE_CONFIG_PATH}"
+                                "${INCLUDE_PUBLIC_PATH}"
+                                "${DOXYGEN_INPUT_PATHS}"
                       COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/doxygen/Doxyfile
                       WORKING_DIRECTORY ${ANJAY_SOURCE_DIR}
                       DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/doxygen/Doxyfile)

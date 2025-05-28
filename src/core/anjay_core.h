@@ -3,7 +3,7 @@
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
- * Licensed under the AVSystem-5-clause License.
+ * Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
  * See the attached LICENSE file for details.
  */
 
@@ -130,6 +130,9 @@ struct
 
     char *endpoint_name;
     anjay_transaction_state_t transaction_state;
+
+    anjay_confirmable_notification_status_cb_t
+            *confirmable_notification_status_cb;
 
 #ifdef ANJAY_WITH_CONN_STATUS_API
     anjay_server_connection_status_cb_t *server_connection_status_cb;

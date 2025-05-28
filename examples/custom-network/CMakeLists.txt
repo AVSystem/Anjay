@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.16)
 add_subdirectory(minimal)
 add_subdirectory(remote-host-port)
 add_subdirectory(bind)

@@ -3,7 +3,7 @@
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
- * Licensed under the AVSystem-5-clause License.
+ * Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
  * See the attached LICENSE file for details.
  */
 
@@ -50,7 +50,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "3.9.0"
+#    define ANJAY_VERSION "3.10.0"
 #endif // ANJAY_VERSION
 
 #ifdef ANJAY_WITH_LWM2M11
@@ -129,6 +129,9 @@ static int init_anjay(anjay_unlocked_t *anjay,
         anjay_log(ERROR, _("endpoint name could not be copied"));
         return -1;
     }
+
+    anjay->confirmable_notification_status_cb =
+            config->confirmable_notification_status_cb;
 
 #ifdef ANJAY_WITH_CONN_STATUS_API
     anjay->server_connection_status_cb = config->server_connection_status_cb;

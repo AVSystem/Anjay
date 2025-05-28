@@ -2,8 +2,12 @@
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
-# Licensed under the AVSystem-5-clause License.
+# Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
+
+# NOTE: After changing this file, please remember to update the Docker image on
+# Docker Hub (for more information, check the help message of 
+# tools/ci/build-docker-images.sh script).
 
 FROM rockylinux/rockylinux:9
 RUN dnf update -y && \

@@ -2,10 +2,10 @@
 # AVSystem CoAP library
 # All rights reserved.
 #
-# Licensed under the AVSystem-5-clause License.
+# Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
-cmake_minimum_required(VERSION 3.4.0)
+cmake_minimum_required(VERSION 3.16.0)
 project(avs_coap C)
 
 include(CMakeDependentOption)

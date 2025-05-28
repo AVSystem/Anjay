@@ -3,7 +3,7 @@
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
- * Licensed under the AVSystem-5-clause License.
+ * Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
  * See the attached LICENSE file for details.
  */
 
@@ -33,6 +33,7 @@
 #include <avsystem/commons/avs_url.h>
 
 #include <assert.h>
+#include <inttypes.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -65,6 +66,17 @@
 
 #ifdef ANJAY_WITH_LWM2M_GATEWAY
 #    include "lwm2m_gateway.h"
+#endif // ANJAY_WITH_LWM2M_GATEWAY
+
+#define MAX_PATH_STRING_SIZE_WO_PREFIX sizeof("/65535/65535/65535/65535")
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+// ANJAY_GATEWAY_MAX_PREFIX_LEN contains space for null-terminator, but since
+// sizeof(...) already includes null-terminator, we use that one additional byte
+// for the new leading '/' in path
+#    define MAX_PATH_STRING_SIZE \
+        MAX_PATH_STRING_SIZE_WO_PREFIX + ANJAY_GATEWAY_MAX_PREFIX_LEN
+#else // ANJAY_WITH_LWM2M_GATEWAY
+#    define MAX_PATH_STRING_SIZE MAX_PATH_STRING_SIZE_WO_PREFIX
 #endif // ANJAY_WITH_LWM2M_GATEWAY
 
 static int security_object_reload(anjay_demo_t *demo) {
@@ -520,6 +532,68 @@ server_connection_status_change_callback(void *demo_,
 }
 #endif // ANJAY_WITH_CONN_STATUS_API
 
+static void confirmable_notification_status_callback(
+        anjay_t *anjay,
+        anjay_ssid_t ssid,
+        const anjay_uri_path_t *observation_paths,
+        const size_t paths_count,
+        avs_error_t err) {
+    (void) anjay;
+
+    if (avs_is_err(err)) {
+        demo_log(WARNING,
+                 "confirmable_notification_status_callback: There was some "
+                 "error during receiving acknowledgement/sending notification "
+                 "for server SSID %" PRIu16 ", paths count %zu:",
+                 ssid, paths_count);
+    } else {
+        demo_log(INFO,
+                 "confirmable_notification_status_callback: Acknowledgement "
+                 "for notification was received for server SSID %" PRIu16
+                 ", paths count %zu:",
+                 ssid, paths_count);
+    }
+
+    char path[MAX_PATH_STRING_SIZE];
+    char *path_ptr = path;
+    int result;
+    for (size_t i = 0; i < paths_count; i++) {
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+        if (observation_paths[i].prefix[0] != '\0') {
+            result = avs_simple_snprintf(path, ANJAY_GATEWAY_MAX_PREFIX_LEN + 1,
+                                         "/%s", observation_paths[i].prefix);
+            assert(result >= 0);
+            path_ptr += result;
+        }
+#endif // ANJAY_WITH_LWM2M_GATEWAY
+        if (observation_paths[i].ids[0] == ANJAY_ID_INVALID) {
+            result = avs_simple_snprintf(path_ptr,
+                                         MAX_PATH_STRING_SIZE_WO_PREFIX, "/");
+        } else if (observation_paths[i].ids[1] == ANJAY_ID_INVALID) {
+            result = avs_simple_snprintf(path_ptr,
+                                         MAX_PATH_STRING_SIZE_WO_PREFIX, "/%d",
+                                         observation_paths[i].ids[0]);
+        } else if (observation_paths[i].ids[2] == ANJAY_ID_INVALID) {
+            result = avs_simple_snprintf(path_ptr,
+                                         MAX_PATH_STRING_SIZE_WO_PREFIX,
+                                         "/%d/%d", observation_paths[i].ids[0],
+                                         observation_paths[i].ids[1]);
+        } else if (observation_paths[i].ids[3] == ANJAY_ID_INVALID) {
+            result = avs_simple_snprintf(
+                    path_ptr, MAX_PATH_STRING_SIZE_WO_PREFIX, "/%d/%d/%d",
+                    observation_paths[i].ids[0], observation_paths[i].ids[1],
+                    observation_paths[i].ids[2]);
+        } else {
+            result = avs_simple_snprintf(
+                    path_ptr, MAX_PATH_STRING_SIZE, "/%d/%d/%d/%d",
+                    observation_paths[i].ids[0], observation_paths[i].ids[1],
+                    observation_paths[i].ids[2], observation_paths[i].ids[3]);
+        }
+        assert(result >= 0);
+        demo_log(INFO, "confirmable_notification_status_callback: %s", path);
+    }
+}
+
 static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
     demo->allocated_buffers = cmdline_args->allocated_buffers;
     cmdline_args->allocated_buffers = NULL;
@@ -576,6 +650,8 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         .lwm2m_version_config = &cmdline_args->lwm2m_version_config,
         .rebuild_client_cert_chain = cmdline_args->rebuild_client_cert_chain,
 #endif // ANJAY_WITH_LWM2M11
+        .confirmable_notification_status_cb =
+                confirmable_notification_status_callback,
 #if defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
         .coap_tcp_request_timeout = cmdline_args->tcp_request_timeout,
 #endif // defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)

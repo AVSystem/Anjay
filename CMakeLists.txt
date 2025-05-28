@@ -2,13 +2,13 @@
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
-# Licensed under the AVSystem-5-clause License.
+# Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
-cmake_minimum_required(VERSION 3.6.0)
+cmake_minimum_required(VERSION 3.16)
 
 project(anjay C)
-set(ANJAY_VERSION "3.9.0" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "3.10.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -46,17 +46,8 @@ set(DLSYM_LIBRARY "${DETECTED_DLSYM_LIBRARY}" CACHE STRING "Name of the library 
 include(CMakeDependentOption)
 
 # compilation flags
-if(NOT CMAKE_VERSION VERSION_LESS 3.1)
-    set(CMAKE_C_STANDARD 99)
-    set(CMAKE_C_EXTENSIONS OFF)
-elseif(CMAKE_C_COMPILER_ID MATCHES "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99")
-endif()
-
-if(POLICY CMP0067)
-    # Make try_compile() respect CMAKE_C_STANDARD and CMAKE_C_EXTENSIONS
-    cmake_policy(SET CMP0067 NEW)
-endif()
+set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_EXTENSIONS OFF)
 
 option(WITH_EXTRA_WARNINGS "Enable extra compilation warnings" OFF)
 if(WITH_EXTRA_WARNINGS)

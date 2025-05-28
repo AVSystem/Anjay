@@ -3,7 +3,7 @@
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
- * Licensed under the AVSystem-5-clause License.
+ * Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
  * See the attached LICENSE file for details.
  */
 
@@ -33,8 +33,8 @@ static int observe_notify(anjay_unlocked_t *anjay,
     AVS_LIST_FOREACH(it, queue) {
         anjay_uri_path_t path = MAKE_OBJECT_PATH(it->oid);
 #    ifdef ANJAY_WITH_LWM2M_GATEWAY
-        if (queue->prefix[0] != '\0') {
-            strcpy(path.prefix, queue->prefix);
+        if (it->prefix[0] != '\0') {
+            strcpy(path.prefix, it->prefix);
         }
 #    endif // ANJAY_WITH_LWM2M_GATEWAY
         if (it->instance_set_changes.instance_set_changed) {

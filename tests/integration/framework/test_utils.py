@@ -4,7 +4,7 @@
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
-# Licensed under the AVSystem-5-clause License.
+# Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
 import binascii
@@ -18,7 +18,7 @@ import socket
 from typing import Optional
 
 from .lwm2m import coap
-from .firmware_package import FirmwareUpdateForcedError, make_firmware_package, make_multiple_firmware_package
+from .create_package import PackageForcedError, make_firmware_package, make_multiple_firmware_package, make_software_package
 
 if sys.version_info[0] == 3 and sys.version_info[1] < 7:
     # based on https://stackoverflow.com/a/18348004/2339636

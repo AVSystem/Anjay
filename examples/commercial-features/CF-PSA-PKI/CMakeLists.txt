@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.16)
 project(anjay-psa-pki C)
 
 set(CMAKE_C_STANDARD 99)

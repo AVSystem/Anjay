@@ -3,7 +3,7 @@
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
- * Licensed under the AVSystem-5-clause License.
+ * Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
  * See the attached LICENSE file for details.
  */
 
@@ -1632,6 +1632,19 @@ handle_notify_delivery(avs_coap_ctx_t *coap, avs_error_t err, void *conn_) {
     (void) coap;
     anjay_observe_connection_entry_t *conn =
             (anjay_observe_connection_entry_t *) conn_;
+
+    anjay_unlocked_t *anjay = _anjay_from_server(conn->conn_ref.server);
+    if (anjay->confirmable_notification_status_cb
+            && (conn->unsent->reliability_hint
+                        == AVS_COAP_NOTIFY_PREFER_CONFIRMABLE
+                || _anjay_connection_transport(conn->conn_ref)
+                           == ANJAY_SOCKET_TRANSPORT_TCP)) {
+        ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, anjay);
+        anjay->confirmable_notification_status_cb(
+                anjay_locked, _anjay_server_ssid(conn->conn_ref.server),
+                conn->unsent->ref->paths, conn->unsent->ref->paths_count, err);
+        ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
+    }
 
     bool is_error = is_error_value(conn->unsent);
     conn->notify_exchange_id = AVS_COAP_EXCHANGE_ID_INVALID;

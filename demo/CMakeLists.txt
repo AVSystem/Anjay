@@ -2,10 +2,10 @@
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
-# Licensed under the AVSystem-5-clause License.
+# Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.16)
 project(lwm2m_demo C)
 
 option(WITH_DEMO_USE_STANDALONE_OBJECTS "Use standalone versions of built-in objects in demo" OFF)
@@ -106,7 +106,7 @@ endif()
 
 
 add_custom_target(demo_firmware
-                  COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tests/integration/framework/firmware_package.py
+                  COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tests/integration/framework/create_package.py
                           -i ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/demo
                           -o ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/demo.fw-pkg
                   DEPENDS demo)

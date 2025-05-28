@@ -5,7 +5,7 @@
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
-# Licensed under the AVSystem-5-clause License.
+# Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
 import argparse
@@ -114,13 +114,15 @@ class Wget2UrlChecker(UrlChecker):
         subprocess.run(['wget2', '--version'], stdout=subprocess.DEVNULL, check=True)
         super().__init__(*args, **kwargs)
 
-    def perform_request(self, url):
-        # Despite the wget2 can handle HTTP/2, there are few servers that use specific implementation
-        # of HTTP/2, which is not handled properly by this tool. That's why the --no-http2 option is used.
-        result = subprocess.run(['wget2', '--no-http2', '--wait=1', '--random-wait', '-q', '-t', '1', '-U',
-                                 USER_AGENT,'-T', '10', '--prefer-family=IPv4', '-O', '/dev/null',
-                                 '--stats-site=csv:-', '--', url],
-                                stdout=subprocess.PIPE, check=True)
+    def run_wget2(self, url, extra_args=None):
+        args = ['wget2', '--no-http2', '--wait=1', '--random-wait', '-q', '-t', '1',
+                '-U', USER_AGENT, '-T', '10', '--prefer-family=IPv4', '-O', '/dev/null',
+                '--stats-site=csv:-']
+        if extra_args:
+            args += extra_args
+        args += ['--', url]
+
+        result = subprocess.run(args, stdout=subprocess.PIPE, check=True)
         csv_lines = result.stdout.strip().split(b'\n')
         header_line = csv_lines[0].split(b',')
         last_line = csv_lines[-1].split(b',')
@@ -128,8 +130,18 @@ class Wget2UrlChecker(UrlChecker):
         # and wget2 does not escape properly
         status_index = header_line.index(b'Status') - len(header_line)
         http_status = last_line[status_index]
+
         if http_status != str(HTTP_STATUS_OK).encode():
             raise IOError(errno.EIO, f'HTTP status: {http_status.decode()}')
+
+    def perform_request(self, url):
+        # Despite the wget2 can handle HTTP/2, there are few servers that use specific implementation
+        # of HTTP/2, which is not handled properly by this tool. That's why the --no-http2 option is used.
+        try:
+            self.run_wget2(url)
+        except subprocess.CalledProcessError as e:
+            logging.warning(f"wget2 exit code: {e.returncode}")
+            self.run_wget2(url, extra_args=['--ca-directory=/usr/local/share/ca-certificates/'])
 
 
 def find_invalid_urls(checker, urls):

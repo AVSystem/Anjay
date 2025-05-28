@@ -3,14 +3,16 @@
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
-   Licensed under the AVSystem-5-clause License.
+   Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
    See the attached LICENSE file for details.
 
-Anjay initialization
-====================
+Initialize Anjay client
+=======================
 
-First, let's create a minimum build environment for our example client. We
-will be using a following directory structure:
+Project structure
+^^^^^^^^^^^^^^^^^
+
+Create the following directory layout for your client project:
 
 .. code-block:: none
 
@@ -19,21 +21,22 @@ will be using a following directory structure:
       └── src/
           └── main.c
 
-Note that all code found in this tutorial is available under
-``examples/tutorial/BC*`` in Anjay source directory. Each tutorial project
-follows the same project
-directory layout.
+.. note::
 
-Build system
-^^^^^^^^^^^^
+    All code found in this tutorial is available under ``examples/tutorial/BC*``
+    in Anjay source directory. Each tutorial project follows the same project
+    directory layout.
 
-We are going to use CMake as a build system. Let's create an initial minimal
-``CMakeLists.txt``:
+Configure the build system
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Create a ``CMakeLists.txt`` file in the root of your project directory with the
+following content:
 
 .. highlight:: cmake
 .. snippet-source:: examples/tutorial/BC-Initialization/CMakeLists.txt
 
-    cmake_minimum_required(VERSION 3.1)
+    cmake_minimum_required(VERSION 3.16)
     project(anjay-bc-initialization C)
 
     set(CMAKE_C_STANDARD 99)
@@ -46,13 +49,15 @@ We are going to use CMake as a build system. Let's create an initial minimal
     add_executable(${PROJECT_NAME} src/main.c)
     target_link_libraries(${PROJECT_NAME} PRIVATE anjay)
 
+This file configures the CMake build system to compile your client and link it
+with the Anjay library.
+
 .. _anjay-hello-world:
 
-Hello World client code
-^^^^^^^^^^^^^^^^^^^^^^^
+Implement the Hello World client
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Now, we can begin the actual client implementation. Simple program with
-instantiation of Anjay object is presented below:
+Create a ``main.c`` file in the ``src/`` directory with the following content:
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/BC-Initialization/src/main.c
@@ -91,8 +96,7 @@ instantiation of Anjay object is presented below:
     `examples/tutorial/BC-Initialization` subdirectory of main Anjay project
     repository.
 
-Code analysis
-^^^^^^^^^^^^^
+**Code explanation:**
 
 .. note::
 
@@ -150,23 +154,22 @@ In case the event loop finishes, `anjay_delete()
 <api/core_8h.html#a243f18f976bca57b5a7b0714bfb99095>`_ - a function that cleans
 up all resources used by the client - is called.
 
-Building and running
-^^^^^^^^^^^^^^^^^^^^
+Build and run the client
+^^^^^^^^^^^^^^^^^^^^^^^^
 
-Let's build our minimal client:
+In your project directory, build the client:
 
 .. code-block:: sh
 
     $ cmake . && make
 
-If that succeeds, we can now run it. We need to pass an endpoint name as the
-program's argument - this is not important now, but when we get to the point of
-being able to communicate with a server, this will be a name that the client
-uses to identify itself to the server. Please look into the :ref:`brief
-description of LwM2M <clients-and-servers>` for details on recommended formats
-of the endpoint name.
+If the build succeeds, you can run the client. Provide an endpoint name as an argument.
+When the communication with the server takes place later in the project this will
+be a name that the client uses to identify itself to the server. Please look into
+the :ref:`brief description of LwM2M <clients-and-servers>` for details on
+recommended formats of the endpoint name.
 
-A simple idea for generating an endpoint name is to use the local hostname:
+At this point, you can use the local hostname to simulate an endpoint name:
 
 .. code-block:: sh
 
@@ -180,4 +183,6 @@ A simple idea for generating an endpoint name is to use the local hostname:
 You will see only some logs and the application will appear to freeze - that's
 because without any server configuration, there are no tasks to do. However, if
 you do not see "Could not create Anjay object" there, then Anjay was properly
-initialized. We will connect to LwM2M Server in the next steps.
+initialized.
+
+The connection to the LwM2M Server will be described in the next steps.

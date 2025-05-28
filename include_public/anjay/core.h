@@ -3,7 +3,7 @@
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
- * Licensed under the AVSystem-5-clause License.
+ * Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
  * See the attached LICENSE file for details.
  */
 
@@ -103,6 +103,92 @@ typedef struct {
     anjay_lwm2m_version_t maximum_version;
 } anjay_lwm2m_version_config_t;
 #endif // ANJAY_WITH_LWM2M11
+
+// NOTE: A lot of code depends on numerical values of these constants.
+// Please be careful when refactoring.
+typedef enum {
+    ANJAY_ID_OID,
+    ANJAY_ID_IID,
+    ANJAY_ID_RID,
+    ANJAY_ID_RIID,
+    _ANJAY_URI_PATH_MAX_LENGTH
+} anjay_id_type_t;
+
+/**
+ * A data type that represents a data model path.
+ *
+ * It may represent a root path, an Object path, an Object Instance path, a
+ * Resource path, or a Resource Instance path.
+ *
+ * The path is terminated either by an @ref ANJAY_ID_INVALID value, or
+ * end-of-array (in case of Resource Instance paths). In case of root, Object
+ * and Object Instance paths, the array elements past the terminating invalid ID
+ * value are undefined and shall not be used. They are NOT required to be set to
+ * @ref ANJAY_ID_INVALID. Paths object that numerically differ only in values
+ * past the terminating invalid ID shall be treated as equal (and this is how
+ * @ref _anjay_uri_path_equal is implemented).
+ *
+ * The <c>ids</c> array is designed to be safely and meaningfully indexed by
+ * @ref anjay_id_type_t values.
+ */
+typedef struct {
+    uint16_t ids[_ANJAY_URI_PATH_MAX_LENGTH];
+
+#ifdef ANJAY_WITH_LWM2M_GATEWAY
+    // NULL-terminated string
+    char prefix[ANJAY_GATEWAY_MAX_PREFIX_LEN];
+#endif // ANJAY_WITH_LWM2M_GATEWAY
+} anjay_uri_path_t;
+
+/**
+ * @experimental This is experimental callback for confirmable notifications.
+ * This API can change in future versions without any notice.
+ *
+ * A handler called if acknowledgement for confirmable notification is received
+ * from the Server or some error has occurred.
+ *
+ * We consider a notification sent by a confirmable transport to be a
+ * confirmable notification. This means that the callback will be triggered both
+ * for notifications sent via a Confirmable CoAP message (which is sent over
+ * UDP) and for notifications sent via CoAP over TCP.
+ *
+ * Please note that even if you have not set the
+ * <c>anjay_configuration_t::confirmable_notifications</c> option, the
+ * Confirmable Notification attribute is not configured on the specified path,
+ * and you are not using TCP, this callback can still be triggered in two
+ * situations:
+ *
+ * 1. Once every 24 hours, Anjay must send a confirmable notification (see RFC
+ *    7641, Section 4.5).
+ * 2. If an error occurs while preparing the notification-then the notification
+ *    containing the error code (e.g., 4.04 Not Found) is sent as a confirmable
+ *    message (if the server acknowledges that notification, the @p err is set
+ *    to <c>AVS_OK</c>).
+ *
+ * @param anjay             Anjay object to operate on.
+ * @param ssid              LwM2M Short Server ID.
+ * @param observation_paths Array containing observation paths used during
+ *                          notification process.
+ * @param paths_count       Number of paths used during notification process.
+ * @param err               Notification error status in category/code format.
+ *                          It includes in particular:
+ *                            - Reset
+ *                              .category = AVS_COAP_ERR_CATEGORY
+ *                              .code = AVS_COAP_ERR_UDP_RESET_RECEIVED
+ *                            - Timeout/missing
+ *                              .category = AVS_COAP_ERR_CATEGORY
+ *                              .code = AVS_COAP_ERR_TIMEOUT
+ *                            - Delivered
+ *                              .code = 0 regardless of .category
+ *                          For more information, please refer to @ref
+ *                          deps/avs_coap/include_public/avsystem/coap/ctx.h.
+ */
+typedef void anjay_confirmable_notification_status_cb_t(
+        anjay_t *anjay,
+        anjay_ssid_t ssid,
+        const anjay_uri_path_t *observation_paths,
+        const size_t paths_count,
+        avs_error_t err);
 
 #ifdef ANJAY_WITH_CONN_STATUS_API
 /**
@@ -577,6 +663,16 @@ typedef struct anjay_configuration {
      */
     bool rebuild_client_cert_chain;
 #endif // ANJAY_WITH_LWM2M11
+
+    /**
+     * @experimental This is experimental callback for confirmable
+     * notifications. This API can change in future versions without any notice.
+     *
+     * A handler called if acknowledgement for confirmable notification is
+     * received from the Server or some error has occurred.
+     */
+    anjay_confirmable_notification_status_cb_t
+            *confirmable_notification_status_cb;
 
 #ifdef ANJAY_WITH_CONN_STATUS_API
     /**

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.16)
 project(custom-event-loop C)
 
 set(CMAKE_C_STANDARD 99)

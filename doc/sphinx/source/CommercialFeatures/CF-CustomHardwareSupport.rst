@@ -3,7 +3,7 @@
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
-   Licensed under the AVSystem-5-clause License.
+   Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
    See the attached LICENSE file for details.
 
 Custom Hardware Support
@@ -33,9 +33,6 @@ example applications for many popular SDKs and prototyping kits:
        <https://www.nordicsemi.com/Products/Development-software/nrf-connect-sdk>`_
      - `Anjay-zephyr <https://github.com/AVSystem/Anjay-zephyr>`_
      - `Anjay-zephyr-client <https://github.com/AVSystem/Anjay-zephyr-client>`_
-   * - `mbedOS <https://os.mbed.com/mbed-os/>`_
-     - `Anjay-mbedos <https://github.com/AVSystem/Anjay-mbedos>`_
-     - `Anjay-mbedos-client <https://github.com/AVSystem/Anjay-mbedos-client/>`_
    * - `STM32Cube
        <https://www.st.com/content/st_com/en/products/ecosystems/stm32-open-development-environment/stm32cube.html>`_
        w/ `FreeRTOS <https://www.freertos.org/>`_ and `X-CUBE-CELLULAR

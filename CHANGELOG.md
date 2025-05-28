@@ -1,5 +1,29 @@
 # Changelog
 
+## 3.10.0 (May 28th, 2025)
+
+### Features
+- Instruction how to generate packages for Anjay Demo was added to documentation.
+- Dropped support for Ubuntu 18.04 and removed tests for it.
+
+### Bugfixes
+
+- Fixed `devconfig` script which was incorrectly setting Anjay version in logs
+  to "unknown".
+- Added canceling the Register or Update message exchange if it's in progress
+  when Server Disable (with resource execution or by API) is called that could
+  have led to disabling the server infinitely.
+
+### Improvements
+
+- Unified script for generating packages in integration tests, now it can also 
+  be used to generate packages for the Software Management object.
+- The format of the metadata for packages used in integration tests and the
+  demo has been revised to be more unambiguous and unified.
+- Added `confirmable_notification_status_cb` handler that is called if
+  acknowledgement for confirmable notification is received from the Server or
+  some error has occurred.  
+
 ## 3.9.0 (February 28th, 2025)
 
 ### Features

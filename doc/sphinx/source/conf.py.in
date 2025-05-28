@@ -36,7 +36,8 @@ extensions = ['snippet_source',
               'builders.snippet_source_list_references',
               'sphinx_rtd_theme',
               'linuxdoc.rstFlatTable',
-              'small_literal']
+              'small_literal',
+              'sphinx_tabs.tabs']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']

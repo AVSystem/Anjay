@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.4)
+cmake_minimum_required(VERSION 3.16)
 project(custom-tls-tcp-support C)
 
 set(CMAKE_C_STANDARD 99)

@@ -4,7 +4,7 @@
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
-# Licensed under the AVSystem-5-clause License.
+# Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 from framework.lwm2m_test import *
 from . import register
@@ -12,6 +12,7 @@ from . import access_control
 from .access_control import AccessMask
 from .bootstrap_client import BootstrapTest
 from .send import Send
+from .notifications import ConfirmableNotificationStatus
 from framework.lwm2m.tlv import TLVType
 from framework.test_utils import *
 import json
@@ -1178,3 +1179,42 @@ class BootstrapEndDevices(Gateway.BaseWithBootstrap,
 
     def tearDown(self):
         super().tearDown(auto_deregister=False)
+
+
+class ConfirmableNotificationStatusGateway(
+        Gateway.ObservationStatus, ConfirmableNotificationStatus.Test):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--confirmable-notifications'])
+
+    def runTest(self):
+        observe1_path = "/%s/%d/%d/%d" % (
+                self.prefixes[0], OID.BinaryAppDataContainer, 0,
+                                  RID.BinaryAppDataContainer.Data)
+        observe2_path = "/%s/%d/%d/%d" % (
+                self.prefixes[1], OID.BinaryAppDataContainer, 0,
+                                  RID.BinaryAppDataContainer.Data)
+        observe1 = self.observe_path(self.serv, observe1_path)
+        observe2 = self.observe_path(self.serv, observe2_path)
+
+        self.communicate("gw-badc-write 0 0 0 value1")
+        self.communicate("gw-badc-write 1 0 0 value2")
+
+        notify = self.serv.recv()
+
+        self.assertIsInstance(notify, Lwm2mNotify)
+        self.assertEqual(bytes(notify.token), bytes(observe1.token))
+        self.serv.send(Lwm2mEmpty.matching(notify)())
+
+        self.read_log_until_confirmable_notification_success(
+            ssid=1, paths_count=1)
+        self.read_log_until_path_occur(observe1_path)
+
+        notify = self.serv.recv()
+
+        self.assertIsInstance(notify, Lwm2mNotify)
+        self.assertEqual(bytes(notify.token), bytes(observe2.token))
+        self.serv.send(Lwm2mEmpty.matching(notify)())
+
+        self.read_log_until_confirmable_notification_success(
+            ssid=1, paths_count=1)
+        self.read_log_until_path_occur(observe2_path)

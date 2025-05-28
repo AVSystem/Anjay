@@ -3,7 +3,7 @@
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
- * Licensed under the AVSystem-5-clause License.
+ * Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
  * See the attached LICENSE file for details.
  */
 
@@ -14,6 +14,9 @@
 
 #include <sys/stat.h>
 #include <unistd.h>
+
+#define HEADER_VER_AFU_SINGLE 3
+#define HEADER_VER_AFU_MULTI 4
 
 typedef struct {
     states_results_paths_t states_results_paths;
@@ -41,7 +44,7 @@ static void set_delayed_fw_update_result(avs_sched_t *sched, const void *arg) {
 }
 
 static void fix_fw_meta_endianness(advanced_fw_metadata_t *meta) {
-    meta->version = avs_convert_be16(meta->version);
+    meta->header_ver = avs_convert_be16(meta->header_ver);
     meta->force_error_case = avs_convert_be16(meta->force_error_case);
     meta->crc = avs_convert_be32(meta->crc);
 }
@@ -53,15 +56,11 @@ static int read_fw_meta_from_file(FILE *f,
     memset(&m, 0, sizeof(m));
 
     if (fread(m.magic, sizeof(m.magic), 1, f) != 1
-            || fread(&m.version, sizeof(m.version), 1, f) != 1
+            || fread(&m.header_ver, sizeof(m.header_ver), 1, f) != 1
             || fread(&m.force_error_case, sizeof(m.force_error_case), 1, f) != 1
             || fread(&m.crc, sizeof(m.crc), 1, f) != 1
-            || fread(m.linked, sizeof(m.linked), 1, f) != 1) {
-        demo_log(ERROR, "could not read firmware metadata");
-        return -1;
-    }
-
-    if (fread(&m.pkg_ver_len, sizeof(m.pkg_ver_len), 1, f) != 1) {
+            || fread(m.linked, sizeof(m.linked), 1, f) != 1
+            || fread(&m.pkg_ver_len, sizeof(m.pkg_ver_len), 1, f) != 1) {
         demo_log(ERROR, "could not read firmware metadata");
         return -1;
     }
@@ -75,11 +74,10 @@ static int read_fw_meta_from_file(FILE *f,
         demo_log(ERROR, "could not read firmware metadata");
         return -1;
     }
-    m.pkg_ver[m.pkg_ver_len] = '\0';
 
     fix_fw_meta_endianness(&m);
     *out_metadata = m;
-    *out_metadata_len = sizeof(m.magic) + sizeof(m.version)
+    *out_metadata_len = sizeof(m.magic) + sizeof(m.header_ver)
                         + sizeof(m.force_error_case) + sizeof(m.crc)
                         + sizeof(m.linked) + sizeof(m.pkg_ver_len)
                         + m.pkg_ver_len;
@@ -93,13 +91,14 @@ handle_multipackage(FILE *f,
     memset(&mm, 0, sizeof(mm));
 
     if (fread(mm.magic, sizeof(mm.magic), 1, f) != 1
-            || fread(&mm.version, sizeof(mm.version), 1, f) != 1) {
+            || fread(&mm.header_ver, sizeof(mm.header_ver), 1, f) != 1) {
         demo_log(ERROR, "could not read firmware metadata");
         return -1;
     }
 
-    mm.version = avs_convert_be16(mm.version);
-    if (mm.version == 3 && !memcmp(mm.magic, "MULTIPKG", sizeof(mm.magic))) {
+    mm.header_ver = avs_convert_be16(mm.header_ver);
+    if (mm.header_ver == HEADER_VER_AFU_MULTI
+            && !memcmp(mm.magic, "MULTIPKG", sizeof(mm.magic))) {
         demo_log(INFO, "Received multi package firmware");
         if (fread(&mm.packages_count, sizeof(mm.packages_count), 1, f) != 1) {
             demo_log(ERROR, "could not read firmware metadata");
@@ -127,8 +126,8 @@ handle_multipackage(FILE *f,
                 return -1;
             }
         }
-        demo_log(INFO, "Multi meta: {version: %u, packages_count: %u}",
-                 mm.version, mm.packages_count);
+        demo_log(INFO, "Multi meta: {header version: %u, packages_count: %u}",
+                 mm.header_ver, mm.packages_count);
         *out_multiple_metadata = mm;
     } else {
         /* It is not multipackage, move stream to the beginning to easily handle
@@ -368,9 +367,9 @@ static bool fw_magic_valid(const advanced_fw_metadata_t *meta,
     return false;
 }
 
-static bool fw_version_supported(const advanced_fw_metadata_t *meta) {
-    if (meta->version != 2) {
-        demo_log(ERROR, "unsupported firmware version: %u", meta->version);
+static bool fw_header_version_valid(const advanced_fw_metadata_t *meta) {
+    if (meta->header_ver != HEADER_VER_AFU_SINGLE) {
+        demo_log(ERROR, "wrong header version");
         return false;
     }
 
@@ -379,7 +378,7 @@ static bool fw_version_supported(const advanced_fw_metadata_t *meta) {
 
 static int validate_firmware(advanced_fw_update_logic_t *fw) {
     if (!fw_magic_valid(&fw->metadata, fw->iid)
-            || !fw_version_supported(&fw->metadata)) {
+            || !fw_header_version_valid(&fw->metadata)) {
         return ANJAY_ADVANCED_FW_UPDATE_ERR_UNSUPPORTED_PACKAGE_TYPE;
     }
 

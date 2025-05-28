@@ -5,7 +5,7 @@
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
-# Licensed under the AVSystem-5-clause License.
+# Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
 import argparse
@@ -53,6 +53,11 @@ def filter_out_static_symbols(violations):
 
 
 def find_unused_code(jobs, ignores):
+    # check installed versions
+    subprocess.run(['gcc', '--version'], text=True, check=True)
+    subprocess.run(['ld', '-v'], text=True, check=True)
+    subprocess.run(['cmake', '--version'], text=True, check=True)
+
     DEVCONFIG_OUT_FNAME = 'devconfig.out'
     MAKE_OUT_FNAME = 'make.out'
     UNUSED_SECTIONS_FNAME = 'unused-sections'
@@ -61,7 +66,7 @@ def find_unused_code(jobs, ignores):
     with open(DEVCONFIG_OUT_FNAME, 'w') as out:
         subprocess.run([os.path.join(PROJECT_ROOT, 'devconfig'), '--without-memcheck',
                         '-DCMAKE_C_FLAGS=-ffunction-sections -fdata-sections',
-                        '-DCMAKE_EXE_LINKER_FLAGS=-Wl,--gc-sections -Wl,--print-gc-sections',
+                        '-DCMAKE_EXE_LINKER_FLAGS=-Wl,--gc-sections -Wl,--print-gc-sections -Wl,--gc-keep-exported',
                         '-DWITH_AVS_CRYPTO_PKI_ENGINE=OFF', '-DWITH_STATIC_ANALYSIS=OFF'],
                        stdout=out, stderr=out, check=True)
 

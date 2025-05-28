@@ -4,7 +4,7 @@
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
-# Licensed under the AVSystem-5-clause License.
+# Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
 import contextlib
@@ -731,7 +731,7 @@ class Test774_FirmwareUpdate_ErrorCase_OutOfMemory(FirmwareUpdate.Test):
         #    setting the Package Resource, according to the chosen firmware
         #    delivery method.
         self.test_write_block(ResPath.FirmwareUpdate.Package,
-                              make_firmware_package(payload, force_error=FirmwareUpdateForcedError.OutOfMemory),
+                              make_firmware_package(payload, force_error=PackageForcedError.Firmware.OutOfMemory),
                               coap.ContentFormat.APPLICATION_OCTET_STREAM)
 
         # 3. The firmware download process is runing The Server sends repeated
@@ -763,7 +763,7 @@ class FirmwareUpdate_ErrorCase_OutOfMemory_PackageURI(FirmwareUpdateWithHttpServ
     def setUp(self):
         demo_executable = os.path.join(self.config.demo_path, self.config.demo_cmd)
         with open(demo_executable, 'rb') as f:
-            pkg = make_firmware_package(f.read(), force_error=FirmwareUpdateForcedError.OutOfMemory)
+            pkg = make_firmware_package(f.read(), force_error=PackageForcedError.Firmware.OutOfMemory)
 
         super().setUp(pkg)
 
@@ -797,7 +797,7 @@ class Test775_FirmwareUpdate_ErrorCase_ConnectionLostDuringDownloadPackageURI(Fi
         self._dangling_http_socket = None
         demo_executable = os.path.join(self.config.demo_path, self.config.demo_cmd)
         with open(demo_executable, 'rb') as f:
-            pkg = make_firmware_package(f.read(), force_error=FirmwareUpdateForcedError.OutOfMemory)
+            pkg = make_firmware_package(f.read(), force_error=PackageForcedError.Firmware.OutOfMemory)
 
         super().setUp(pkg)
 
@@ -856,7 +856,7 @@ class Test775_FirmwareUpdate_ErrorCase_ConnectionLostDuringDownloadPackageURI_Co
     def setUp(self):
         demo_executable = os.path.join(self.config.demo_path, self.config.demo_cmd)
         with open(demo_executable, 'rb') as f:
-            pkg = make_firmware_package(f.read(), force_error=FirmwareUpdateForcedError.OutOfMemory)
+            pkg = make_firmware_package(f.read(), force_error=PackageForcedError.Firmware.OutOfMemory)
 
         class MuteServer(coap.Server):
             def send(self, *args, **kwargs):
@@ -1132,7 +1132,7 @@ class Test779_FirmwareUpdate_ErrorCase_UnsuccessfulFirmwareUpdate(FirmwareUpdate
         #       setting the Package Resource, according to the chosen firmware
         #       delivery method.
         self.test_write_block(ResPath.FirmwareUpdate.Package,
-                              make_firmware_package(payload, force_error=FirmwareUpdateForcedError.FailedUpdate),
+                              make_firmware_package(payload, force_error=PackageForcedError.Firmware.FailedUpdate),
                               coap.ContentFormat.APPLICATION_OCTET_STREAM)
 
         # 1. Step 1 – Package Delivery
@@ -1199,7 +1199,7 @@ class FirmwareUpdate_ErrorCase_UnsuccessfulFirmwareUpdate_PackageURI(FirmwareUpd
     def setUp(self):
         demo_executable = os.path.join(self.config.demo_path, self.config.demo_cmd)
         with open(demo_executable, 'rb') as f:
-            pkg = make_firmware_package(f.read(), force_error=FirmwareUpdateForcedError.FailedUpdate)
+            pkg = make_firmware_package(f.read(), force_error=PackageForcedError.Firmware.FailedUpdate)
 
         super().setUp(pkg)
 
