@@ -1243,6 +1243,22 @@ static int schedule_request_bootstrap(anjay_unlocked_t *anjay) {
                 AVS_TIME_DURATION_ZERO;
     }
 
+    const avs_time_duration_t MIN_HOLDOFF =
+            avs_time_duration_from_scalar(3, AVS_TIME_S);
+    const avs_time_duration_t MAX_HOLDOFF =
+            avs_time_duration_from_scalar(ANJAY_MAX_HOLDOFF_TIME, AVS_TIME_S);
+
+    if (avs_time_duration_less(
+                MAX_HOLDOFF,
+                anjay->bootstrap.client_initiated_bootstrap_holdoff)) {
+        anjay->bootstrap.client_initiated_bootstrap_holdoff = MAX_HOLDOFF;
+        anjay_log(WARNING,
+                  _("Holdoff time is bigger then max allowed value, setting "
+                    "to ") "%s" _(" seconds"),
+                  AVS_TIME_DURATION_AS_STRING(
+                          anjay->bootstrap.client_initiated_bootstrap_holdoff));
+    }
+
     avs_time_monotonic_t attempt_instant = avs_time_monotonic_add(
             anjay->bootstrap.client_initiated_bootstrap_last_attempt,
             anjay->bootstrap.client_initiated_bootstrap_holdoff);
@@ -1256,11 +1272,6 @@ static int schedule_request_bootstrap(anjay_unlocked_t *anjay) {
         anjay_log(WARNING, _("Could not schedule Client Initiated Bootstrap"));
         return -1;
     }
-
-    const avs_time_duration_t MIN_HOLDOFF =
-            avs_time_duration_from_scalar(3, AVS_TIME_S);
-    const avs_time_duration_t MAX_HOLDOFF =
-            avs_time_duration_from_scalar(120, AVS_TIME_S);
 
     anjay->bootstrap.client_initiated_bootstrap_last_attempt = attempt_instant;
     anjay->bootstrap.client_initiated_bootstrap_holdoff = avs_time_duration_mul(
@@ -1292,9 +1303,6 @@ static void request_bootstrap_job(avs_sched_t *sched, const void *dummy) {
         anjay->bootstrap.bootstrap_trigger = false;
         goto finish;
     }
-    if (connection.conn_type == ANJAY_CONNECTION_UNSET) {
-        goto error;
-    }
     if (_anjay_conn_session_tokens_equal(
                 anjay->bootstrap.bootstrap_session_token,
                 _anjay_server_primary_session_token(connection.server))) {
@@ -1302,7 +1310,7 @@ static void request_bootstrap_job(avs_sched_t *sched, const void *dummy) {
         goto error;
     }
     if (!_anjay_connection_get_online_socket(connection)) {
-        anjay_log(DEBUG, _("bootstrap server connection is not online"));
+        anjay_log(DEBUG, _("Bootstrap server connection is not online"));
         goto error;
     }
     // Bootstrap Server has no concept of "registration", but we're reusing the
@@ -1373,7 +1381,7 @@ int _anjay_perform_bootstrap_action_if_appropriate(
                             "scheduling Client Initiated Bootstrap"));
                 return 0;
             }
-            anjay_log(DEBUG, _("scheduling Client Initiated Bootstrap"));
+            anjay_log(DEBUG, _("Scheduling Client Initiated Bootstrap"));
             anjay->bootstrap.client_initiated_bootstrap_holdoff =
                     avs_time_duration_from_scalar(holdoff_s, AVS_TIME_S);
         }
@@ -1419,15 +1427,15 @@ int _anjay_schedule_bootstrap_request_unlocked(anjay_unlocked_t *anjay) {
     }
 
     if (!_anjay_bootstrap_server_exists(anjay)) {
-        anjay_log(WARNING, _("Bootstrap Server Account does not exist, cannot "
-                             "schedule Bootstrap Request"));
+        anjay_log(WARNING,
+                  _("Bootstrap Server Account does not exist, cannot "
+                    "schedule Bootstrap Request"));
         return -1;
     }
 
-    avs_sched_del(&anjay->bootstrap.client_initiated_bootstrap_handle);
+    cancel_client_initiated_bootstrap(anjay);
     cancel_est_sren(anjay);
     anjay->bootstrap.bootstrap_trigger = true;
-    reset_client_initiated_bootstrap_backoff(&anjay->bootstrap);
     anjay->bootstrap.client_initiated_bootstrap_last_attempt =
             avs_time_monotonic_now();
     anjay->bootstrap.client_initiated_bootstrap_holdoff =

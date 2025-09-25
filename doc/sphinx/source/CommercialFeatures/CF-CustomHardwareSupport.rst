@@ -47,9 +47,6 @@ example applications for many popular SDKs and prototyping kits:
      - *contained in the app*
      - `Anjay-stm32-azurertos-client
        <https://github.com/AVSystem/Anjay-stm32-azurertos-client>`_
-   * - `ESP-IDF <https://github.com/espressif/esp-idf>`_
-     - `Anjay-esp-idf <https://github.com/AVSystem/Anjay-esp-idf>`_
-     - `Anjay-esp32-client <https://github.com/AVSystem/Anjay-esp32-client>`_
    * - `Raspberry Pi Pico SDK <https://github.com/raspberrypi/pico-sdk>`_
      - *contained in the app*
      - `Anjay-pico-client <https://github.com/AVSystem/Anjay-pico-client>`_

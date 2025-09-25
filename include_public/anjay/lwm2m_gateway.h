@@ -31,15 +31,15 @@ int anjay_lwm2m_gateway_install(anjay_t *anjay);
 
 /**
  * Register an End Device in LwM2M Gateway and assign the necessary Resources.
- * /0 Device ID Resource is set as @ref device_id parameter.
+ * /0 Device ID Resource is set as @p device_id parameter.
  * /1 Prefix Resource is assigned automatically as "dev<x>" where <x> is the
- * Device ID returned with @ref iid inout parameter.
+ * Device ID returned with @p inout_iid parameter.
  * /3 IoT Device Object Resource is generated as Corelnk format upon Read
  * Request according to the Data Model set with
  * @ref anjay_lwm2m_gateway_register_object calls
  *
- * Note: if @p *inout_iid is set to @ref ANJAY_ID_INVALID then the Instance id
- * is generated automatically, otherwise value of @p *inout_iid is used as a
+ * Note: if @p inout_iid is set to @ref ANJAY_ID_INVALID then the Instance id
+ * is generated automatically, otherwise value of @p inout_iid is used as a
  * new Gateway Instance ID.
  *
  * @param anjay      Anjay object to operate on
@@ -453,7 +453,7 @@ int anjay_lwm2m_gateway_notify_instances_changed(anjay_t *anjay,
  * until the next (|).
  */
 anjay_resource_observation_status_t
-anjay_lwm2m_gateway_resource_observation_status(anjay_t *anjay_locked,
+anjay_lwm2m_gateway_resource_observation_status(anjay_t *anjay,
                                                 anjay_iid_t end_dev,
                                                 anjay_oid_t oid,
                                                 anjay_iid_t iid,

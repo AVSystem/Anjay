@@ -10,7 +10,7 @@ on: [push]
 jobs:
   ubuntu2004-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:ubuntu-20.04-2.1
+    container: avsystemembedded/anjay-travis:ubuntu-20.04-2.2
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
@@ -41,7 +41,7 @@ jobs:
 
   ubuntu2204-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:ubuntu-22.04-2.1
+    container: avsystemembedded/anjay-travis:ubuntu-22.04-2.2
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
@@ -83,7 +83,7 @@ jobs:
 
   rockylinux9-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:rockylinux-9-2.1
+    container: avsystemembedded/anjay-travis:rockylinux-9-2.2
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
@@ -128,7 +128,16 @@ jobs:
       # NOTE: Some tests don't pass on mbedTLS 3.6.2 now, so we need to install an older version
       #       Homebrew only specifiers major version of mbedTLS, so let's pin the version to 3.6.0 manually
       - run: curl -f https://raw.githubusercontent.com/Homebrew/homebrew-core/219dabf6cab172fb8b62b4d8598e016e190c3c20/Formula/m/mbedtls.rb > /tmp/mbedtls.rb
-      - run: brew install --formula /tmp/mbedtls.rb
+      # HACK: New version of homebrew requires us to install a formulae from a tap, create a tap for our mbedTLS.
+      # The change in homebrew is intentional and won't be fixed, for more details see: https://github.com/orgs/Homebrew/discussions/6351
+      - run: brew tap-new embedded/mbedtls
+      - run: |
+          TAP_DIR="$(brew --repo embedded/mbedtls)"
+          mkdir -p "${TAP_DIR}/Formula"
+          cp /tmp/mbedtls.rb "${TAP_DIR}/Formula/mbedtls.rb"
+          git -C "${TAP_DIR}" add Formula/mbedtls.rb
+          git -C "${TAP_DIR}" -c user.name="CI" -c user.email="ci@example.com" commit -m "Add custom mbedtls formula"
+      - run: brew install embedded/mbedtls/mbedtls
       - run: brew pin mbedtls
       # NOTE: The above command may have installed a new version of Python, that's why we launch it weirdly
       - run: /usr/bin/env python3 -m pip install -r requirements.txt --break-system-packages
@@ -139,14 +148,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - CC: /opt/homebrew/opt/gcc/bin/gcc-14
-            CXX: /opt/homebrew/opt/gcc/bin/g++-14
+          - CC: /opt/homebrew/opt/gcc@14/bin/gcc-14
+            CXX: /opt/homebrew/opt/gcc@14/bin/g++-14
             COMPILER_VERSION: gcc@14
             MEM_CHECK_TOOL: --without-memcheck
-          - CC: /opt/homebrew/opt/llvm/bin/clang
-            CXX: /opt/homebrew/opt/llvm/bin/clang++
-            COMPILER_VERSION: llvm
-            MEM_CHECK_TOOL: --with-asan
+            # NOTE: llvm is temporarily disabled due to problem with header search paths
+            # - CC: /opt/homebrew/opt/llvm@20/bin/clang
+            #   CXX: /opt/homebrew/opt/llvm@20/bin/clang++
+            #   COMPILER_VERSION: llvm@20
+            #   MEM_CHECK_TOOL: --with-asan
           - CC: cc
             CXX: c++
             MEM_CHECK_TOOL: --with-asan

@@ -12,6 +12,9 @@
 #define AVS_UNIT_ENABLE_SHORT_ASSERTS
 #include <avsystem/commons/avs_unit_test.h>
 
+#define ANJAY_SERVERS_INTERNALS
+#include "src/core/servers/anjay_activate.h"
+#undef ANJAY_SERVERS_INTERNALS
 #include "src/core/servers/anjay_servers_internal.h"
 #include "tests/core/coap/utils.h"
 #include "tests/utils/dm.h"
@@ -967,4 +970,38 @@ AVS_UNIT_TEST(bootstrap_invalid, invalid) {
     expect_has_buffered_data_check(mocksocks[0], false);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(schedule_update, bootstrap_update_is_not_scheduled) {
+    anjay_t *anjay;
+    const anjay_configuration_t CONFIG = {
+        .endpoint_name = "anjay"
+    };
+
+    anjay = anjay_new(&CONFIG);
+    ASSERT_NOT_NULL(anjay);
+
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+
+    AVS_LIST(anjay_server_info_t) bs_server =
+            _anjay_servers_create_inactive(anjay_unlocked,
+                                           ANJAY_SSID_BOOTSTRAP);
+    ASSERT_NOT_NULL(bs_server);
+    _anjay_servers_add(&anjay_unlocked->servers, bs_server);
+
+    AVS_UNIT_ASSERT_NULL(bs_server->next_action_handle);
+    AVS_UNIT_ASSERT_EQUAL(bs_server->next_action,
+                          (anjay_server_next_action_t) 0);
+
+    int result =
+            _anjay_schedule_registration_update_unlocked(anjay_unlocked,
+                                                         ANJAY_SSID_BOOTSTRAP);
+    AVS_UNIT_ASSERT_EQUAL(result, 0);
+
+    AVS_UNIT_ASSERT_NULL(bs_server->next_action_handle);
+    AVS_UNIT_ASSERT_EQUAL(bs_server->next_action,
+                          (anjay_server_next_action_t) 0);
+
+    ANJAY_MUTEX_UNLOCK(anjay);
+    anjay_delete(anjay);
 }

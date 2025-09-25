@@ -14,8 +14,8 @@ Redirecting to Doxygen API docs...
 .. raw:: html
 
    <script>
-     window.open("../../doxygen/html/index.html", "_blank");
+     window.open("https://avsystem.github.io/Anjay-doc/api/", "_blank");
    </script>
 
 If you are not redirected automatically, click
-`here <../../doxygen/html/index.html>`_.
+`here <https://avsystem.github.io/Anjay-doc/api/>`_.

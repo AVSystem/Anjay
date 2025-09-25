@@ -17,9 +17,10 @@ from framework.lwm2m.coap.transport import Transport
 from framework.lwm2m_test import *
 from suites.default import bootstrap_client
 
+import pymbedtls
 
 class CertificatesTest:
-    class Test(test_suite.Lwm2mSingleServerTest):
+    class TestMixin:
         def _cert_file(self, filename):
             if os.path.isabs(filename):
                 return filename
@@ -50,6 +51,23 @@ class CertificatesTest:
                           server_crt_file=getattr(self, 'server_crt', None),
                           server_key_file=getattr(self, 'server_key', None),
                           extra_cmdline_args=extra_cmdline_args, *args, **kwargs)
+
+    class TestUDPMixin(TestMixin, test_suite.Lwm2mSingleServerTest):
+        pass
+
+    class TestTCPMixin(TestMixin, test_suite.Lwm2mSingleTcpServerTest):
+        def setUp(self, *args, **kwargs):
+
+            tls_version = 'TLSv1.2'
+            # pymbedtls.Context.mbedtls_version returns pymbedtls mbedtls version but we assume that
+            # Anjay uses the same
+            #
+            # Hybrid TLS 1.2 / 1.3 is not supported in Mbed TLS on server side until v3.5.0
+            if pymbedtls.Context.supports_TLS_1_3() and pymbedtls.Context.mbedtls_version() >= 0x03050000:
+                tls_version = 'TLSv1.3'
+
+            super().setUp(binding='T', tls_version=tls_version, *args, **kwargs)
+
 
     class PcapEnabledTestMixin:
         def read_certificate(self, file):
@@ -95,23 +113,73 @@ class CertificatesTest:
 
             for pkt in self.read_pcap():
                 if isinstance(pkt, dpkt.ip.IP) \
-                        and isinstance(pkt.data, dpkt.udp.UDP) \
+                        and isinstance(pkt.data, (dpkt.udp.UDP, dpkt.tcp.TCP)) \
                         and pkt.data.dport == self.serv.get_listen_port() \
                         and common_name in pkt.data.data:
                     return pkt.data.data
             return None
 
-    class PcapEnabledTest(test_suite.PcapEnabledTest, Test, PcapEnabledTestMixin):
+    class PcapEnabledTestUDP(test_suite.PcapEnabledTest, TestUDPMixin, PcapEnabledTestMixin):
+        pass
+
+    class PcapEnabledTestTCP(test_suite.PcapEnabledTest, TestTCPMixin, PcapEnabledTestMixin):
         pass
 
 
-
-class RegisterWithCertificates(CertificatesTest.Test):
+class RegisterWithCertificates(CertificatesTest.TestUDPMixin):
     def setUp(self):
         super().setUp(server_crt='server.crt', server_key='server.key')
 
+class RegisterTCPWithCertificates(CertificatesTest.TestTCPMixin):
+    def setUp(self):
+        super().setUp(server_crt='server.crt', server_key='server.key')
 
-class RegisterWithCertificateChainExternal(CertificatesTest.PcapEnabledTest):
+class RegisterTCPServerCertClientPSK(CertificatesTest.TestTCPMixin):
+    auto_deregister = False
+    def setUp(self):
+        extra_cmdline_args = ['--identity', str(binascii.hexlify(b'random'), 'ascii'),
+                              '--key',      str(binascii.hexlify(b'values'), 'ascii')]
+        super().setUp(server_crt='server.crt', server_key='server.key',
+                    extra_cmdline_args=extra_cmdline_args, forced_client_security_mode = 'psk',
+                    auto_register=False)
+
+    def runTest(self):
+        with self.assertRaises(RuntimeError):
+            self.assertTcpCsm(self.serv)
+            self.assertDemoRegisters(self.serv, binding='T')
+            self.auto_deregister = True
+        # -30592 == -0x7780 == MBEDTLS_ERR_SSL_FATAL_ALERT_MESSAGE
+        self.read_log_until_match(b'handshake failed: -30592', 1)
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=self.auto_deregister)
+
+# TODO For now DTLSv1.3 in not supported in Mbed TLS
+# class RegisterUDPServerCertClientPSK(CertificatesTest.TestUDPMixin):
+#     auto_deregister = False
+#     def setUp(self):
+#         extra_cmdline_args = ['--identity', str(binascii.hexlify(b'random'), 'ascii'),
+#                               '--key',      str(binascii.hexlify(b'values'), 'ascii')]
+#         super().setUp(server_crt='server.crt', server_key='server.key',
+#                     extra_cmdline_args=extra_cmdline_args, forced_client_security_mode = 'psk',
+#                     tls_version='TLSv1.3', auto_register=False)
+
+#     def runTest(self):
+#         with self.assertRaises(RuntimeError):
+#             self.assertDemoRegisters(self.serv)
+#             self.auto_deregister = True
+#         # -30592 == -0x7780 == MBEDTLS_ERR_SSL_FATAL_ALERT_MESSAGE
+#         self.read_log_until_match(b'handshake failed: -30592', 1)
+
+#     def tearDown(self):
+#         super().tearDown(auto_deregister=self.auto_deregister)
+
+class RegisterTCPWithPSK(CertificatesTest.TestTCPMixin):
+    def setUp(self):
+        super().setUp(psk_identity=b'random', psk_key=b'value')
+
+
+class RegisterWithCertificateChainExternalMixin:
     def setUp(self, extra_cmdline_args=[], **kwargs):
         extra_cmdline_args += ['--use-external-security-info']
         super().setUp(client_ca_file='root.crt', server_crt='server.crt', server_key='server.key',
@@ -132,10 +200,19 @@ class RegisterWithCertificateChainExternal(CertificatesTest.PcapEnabledTest):
         self.assertIn(self.read_public_key('client2_ca.crt.der'), certificate_packet)
         self.assertIn(self.read_public_key('root.crt.der'), certificate_packet)
 
+class RegisterUDPWithCertificateChainExternal(RegisterWithCertificateChainExternalMixin,
+                                              CertificatesTest.PcapEnabledTestUDP):
+    pass
 
-class RegisterWithCertificateChainRebuilt(CertificatesTest.PcapEnabledTest):
+@unittest.skipIf(pymbedtls.Context.supports_TLS_1_3(), "TLS 1.3 encrypts its handshake messages")
+class RegisterTCPWithCertificateChainExternal(RegisterWithCertificateChainExternalMixin,
+                                              CertificatesTest.PcapEnabledTestTCP):
+    pass
+
+class RegisterWithCertificateChainRebuiltMixin:
     def setUp(self):
-        super().setUp(client_ca_file='root.crt', server_crt='server.crt', server_key='server.key',
+        super().setUp(client_ca_file='root.crt', server_crt='server.crt',
+                      server_crt_file='server.crt.der', server_key='server.key',
                       client_crt_file='client2.crt.der', client_key_file='client2.key.der',
                       extra_cmdline_args=['--pkix-trust-store',
                                           self._cert_file('client2_ca-and-root.crt'),
@@ -155,8 +232,17 @@ class RegisterWithCertificateChainRebuilt(CertificatesTest.PcapEnabledTest):
         self.assertIn(self.read_public_key('client2_ca.crt.der'), certificate_packet)
         self.assertIn(self.read_public_key('root.crt.der'), certificate_packet)
 
+class RegisterUDPWithCertificateChainRebuilt(RegisterWithCertificateChainRebuiltMixin,
+                                              CertificatesTest.PcapEnabledTestUDP):
+    pass
 
-class RegisterWithCyclicCertificateChainRebuilt(CertificatesTest.PcapEnabledTest):
+@unittest.skipIf(pymbedtls.Context.supports_TLS_1_3(), "TLS 1.3 encrypts its handshake messages")
+class RegisterTCPWithCertificateChainRebuilt(RegisterWithCertificateChainRebuiltMixin,
+                                              CertificatesTest.PcapEnabledTestTCP):
+    pass
+
+
+class RegisterWithCyclicCertificateChainRebuiltMixin:
     def setUp(self):
         self._cleanup_list = test_suite.CleanupList()
 
@@ -209,6 +295,7 @@ class RegisterWithCyclicCertificateChainRebuilt(CertificatesTest.PcapEnabledTest
 
             super().setUp(client_ca_file=trust_store_file.name,
                           server_crt='self-signed/server.crt',
+                          server_crt_file='self-signed/server.crt.der',
                           server_key='self-signed/server.key',
                           client_crt_file=client_cert_file.name,
                           client_key_file=client_key_file.name,
@@ -239,8 +326,17 @@ class RegisterWithCyclicCertificateChainRebuilt(CertificatesTest.PcapEnabledTest
         finally:
             self._cleanup_list()
 
+class RegisterUDPWithCyclicCertificateChainRebuilt(RegisterWithCyclicCertificateChainRebuiltMixin,
+                                                    CertificatesTest.PcapEnabledTestUDP):
+    pass
 
-class RegisterWithCertificateChainExternalPersistence(RegisterWithCertificateChainExternal):
+@unittest.skipIf(pymbedtls.Context.supports_TLS_1_3(), "TLS 1.3 encrypts its handshake messages")
+class RegisterTCPWithCyclicCertificateChainRebuilt(RegisterWithCyclicCertificateChainRebuiltMixin,
+                                                    CertificatesTest.PcapEnabledTestTCP):
+    pass
+
+
+class RegisterWithCertificateChainExternalPersistenceMixin:
     def setUp(self):
         self._dm_persistence_file = tempfile.NamedTemporaryFile()
         super().setUp(extra_cmdline_args=['--dm-persistence-file', self._dm_persistence_file.name])
@@ -254,7 +350,11 @@ class RegisterWithCertificateChainExternalPersistence(RegisterWithCertificateCha
 
         self._start_demo(['--dm-persistence-file', self._dm_persistence_file.name]
                          + self.make_demo_args(DEMO_ENDPOINT_NAME, [], '1.0', '1.0', None))
-        self.assertDemoRegisters()
+        if self.serv.transport == Transport.TCP:
+            self.assertTcpCsm()
+            self.assertDemoRegisters(binding='T')
+        else:
+            self.assertDemoRegisters()
 
     def tearDown(self):
         try:
@@ -262,16 +362,36 @@ class RegisterWithCertificateChainExternalPersistence(RegisterWithCertificateCha
         finally:
             self._dm_persistence_file.close()
 
+class RegisterUDPWithCertificateChainExternalPersistence(RegisterWithCertificateChainExternalPersistenceMixin,
+                                                         RegisterWithCertificateChainExternalMixin,
+                                                         CertificatesTest.PcapEnabledTestUDP):
+    pass
 
-class RegisterWithSelfSignedCertificatesAndServerPublicKey(CertificatesTest.Test):
+@unittest.skipIf(pymbedtls.Context.supports_TLS_1_3(), "TLS 1.3 encrypts its handshake messages")
+class RegisterTCPWithCertificateChainExternalPersistence(RegisterWithCertificateChainExternalPersistenceMixin,
+                                                         RegisterWithCertificateChainExternalMixin,
+                                                         CertificatesTest.PcapEnabledTestTCP):
+    pass
+
+
+class RegisterWithSelfSignedCertificatesAndServerPublicKeyMixin:
     def setUp(self):
         super().setUp(server_crt='self-signed/server.crt', server_key='self-signed/server.key',
                       client_crt_file='self-signed/client.crt.der',
                       client_key_file='self-signed/client.key.der',
                       server_crt_file='self-signed/server.crt.der')
 
+class RegisterUDPWithSelfSignedCertificatesAndServerPublicKey(
+    RegisterWithSelfSignedCertificatesAndServerPublicKeyMixin, CertificatesTest.TestUDPMixin):
+    pass
 
-class RegisterWithMismatchedServerPublicKey(CertificatesTest.Test):
+class RegisterTCPWithSelfSignedCertificatesAndServerPublicKey(
+    RegisterWithSelfSignedCertificatesAndServerPublicKeyMixin, CertificatesTest.TestTCPMixin):
+    pass
+
+
+class RegisterWithMismatchedServerPublicKeyMixin:
+    auto_deregister = False
     def setUp(self):
         super().setUp(server_crt='self-signed/server.crt', server_key='self-signed/server.key',
                       client_crt_file='self-signed/client.crt.der',
@@ -282,19 +402,36 @@ class RegisterWithMismatchedServerPublicKey(CertificatesTest.Test):
     def runTest(self):
         with self.assertRaises((RuntimeError, socket.timeout)):
             self.assertDemoRegisters(self.serv)
+            self.auto_deregister = True
         # -9984 == -0x2700 == MBEDTLS_ERR_X509_CERT_VERIFY_FAILED
         self.read_log_until_match(b'handshake failed: -9984', 1)
 
     def tearDown(self):
-        super().tearDown(auto_deregister=False)
+        super().tearDown(auto_deregister=self.auto_deregister)
+
+class RegisterUDPWithMismatchedServerPublicKey(
+    RegisterWithMismatchedServerPublicKeyMixin, CertificatesTest.TestUDPMixin):
+    pass
+
+class RegisterTCPWithMismatchedServerPublicKey(
+    RegisterWithMismatchedServerPublicKeyMixin, CertificatesTest.TestTCPMixin):
+    pass
 
 
-@unittest.skip("TODO: broken due to T1083")
-class RegisterWithCertificatesAndServerPublicKey(CertificatesTest.Test):
+class RegisterWithCertificatesAndServerPublicKeyMixin:
     def setUp(self):
         super().setUp(server_crt='server.crt', server_key='server.key',
                       client_crt_file=None, client_key_file=None, server_crt_file='server.crt.der')
 
+@unittest.skip("TODO: broken due to T1083")
+class RegisterUDPWithCertificatesAndServerPublicKey(
+    RegisterWithCertificatesAndServerPublicKeyMixin, CertificatesTest.TestUDPMixin):
+    pass
+
+@unittest.skip("TODO: broken due to T1083")
+class RegisterTCPWithCertificatesAndServerPublicKey(
+    RegisterWithCertificatesAndServerPublicKeyMixin, CertificatesTest.TestTCPMixin):
+    pass
 
 class RegisterMixin:
     extra_objects = []

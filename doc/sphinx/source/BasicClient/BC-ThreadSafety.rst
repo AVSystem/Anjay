@@ -66,7 +66,7 @@ thread safety for your own code.
 For the purpose of this example, we will use the POSIX Threads API that is
 widely available on modern Unix-like systems such as Linux and macOS, as well as
 through compatibility layers on other systems, including Windows (e.g. MinGW's
-winpthreads), Zephyr and ESP-IDF. Anjay itself is agnostic with regards to the
+winpthreads) and Zephyr. Anjay itself is agnostic with regards to the
 underlying threading API (see also:
 :doc:`../PortingGuideForNonPOSIXPlatforms/ThreadingAPI`), so the same concepts
 shall apply on other platforms.
@@ -528,7 +528,7 @@ separate thread - the main one will then be free to call
     #endif // !defined(ANJAY_WITH_THREAD_SAFETY) ||
            // !defined(AVS_COMMONS_SCHED_THREAD_SAFE)
 
-    // Installs Security Object and adds and instance of it.
+    // Installs Security Object and adds an instance of it.
     // An instance of Security Object provides information needed to connect to
     // LwM2M server.
     static int setup_security_object(anjay_t *anjay) {
@@ -559,7 +559,7 @@ separate thread - the main one will then be free to call
         return 0;
     }
 
-    // Installs Server Object and adds and instance of it.
+    // Installs Server Object and adds an instance of it.
     // An instance of Server Object provides the data related to a LwM2M Server.
     static int setup_server_object(anjay_t *anjay) {
         if (anjay_server_object_install(anjay)) {

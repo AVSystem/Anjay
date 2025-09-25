@@ -182,6 +182,10 @@ static int reschedule_update_for_all_servers(anjay_unlocked_t *anjay) {
 
     AVS_LIST(anjay_server_info_t) it;
     AVS_LIST_FOREACH(it, anjay->servers) {
+        if (it->ssid == ANJAY_SSID_BOOTSTRAP) {
+            continue;
+        }
+
         if (_anjay_server_active(it)) {
             int partial = reschedule_update_for_server(it);
             if (!result) {
@@ -195,8 +199,11 @@ static int reschedule_update_for_all_servers(anjay_unlocked_t *anjay) {
 
 int _anjay_schedule_registration_update_unlocked(anjay_unlocked_t *anjay,
                                                  anjay_ssid_t ssid) {
-    int result = 0;
+    if (ssid == ANJAY_SSID_BOOTSTRAP) {
+        return 0;
+    }
 
+    int result = 0;
     if (ssid == ANJAY_SSID_ANY) {
         result = reschedule_update_for_all_servers(anjay);
     } else {

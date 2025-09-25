@@ -55,6 +55,14 @@ def discover_test_suites(test_config):
                     @staticmethod
                     def supports_connection_id():
                         return False
+                    
+                    @staticmethod
+                    def supports_TLS_1_3():
+                        return False
+                    
+                    @staticmethod
+                    def mbedtls_version():
+                        return 0x01000000
 
             sys.modules['pymbedtls'] = FakePymbedtlsModule
 

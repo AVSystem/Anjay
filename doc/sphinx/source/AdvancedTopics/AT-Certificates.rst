@@ -71,7 +71,7 @@ highlights the modified parts.
         return result;
     }
 
-    // Installs Security Object and adds and instance of it.
+    // Installs Security Object and adds an instance of it.
     // An instance of Security Object provides information needed to connect to
     // LwM2M server.
     static int setup_security_object(anjay_t *anjay) {
@@ -118,7 +118,7 @@ highlights the modified parts.
         return result;
     }
 
-    // Installs Server Object and adds and instance of it.
+    // Installs Server Object and adds an instance of it.
     // An instance of Server Object provides the data related to a LwM2M Server.
     static int setup_server_object(anjay_t *anjay) {
         if (anjay_server_object_install(anjay)) {

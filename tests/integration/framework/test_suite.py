@@ -440,7 +440,8 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                        afu_original_img_file_path=None,
                        sw_mgmt_persistence_file=None,
                        tls_version='TLSv1.2',
-                       ciphersuites=(0x1305, 0x1301, 0xC030, 0xC0A8, 0xC0AE)):
+                       ciphersuites=(0x1305, 0x1301, 0xC030, 0xC0A8, 0xC0AE),
+                       forced_client_security_mode=None):
         """
         Helper method for easy generation of demo executable arguments.
         """
@@ -460,12 +461,16 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         # 0xC0A8 = TLS_PSK_WITH_AES_128_CCM_8
         # 0xC0AE = TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8
 
-        security_modes = set(serv.security_mode() for serv in servers)
+        if forced_client_security_mode == None:
+            security_modes = set(serv.security_mode() for serv in servers)
 
-        self.assertLessEqual(len(security_modes), 1,
-                             'Attempted to mix security modes')
+            self.assertLessEqual(len(security_modes), 1,
+                                'Attempted to mix security modes')
 
-        security_mode = next(iter(security_modes), 'nosec')
+            security_mode = next(iter(security_modes), 'nosec')
+        else:
+            security_mode = forced_client_security_mode
+
         if security_mode == 'nosec':
             protocol = 'coap'
         else:
@@ -629,50 +634,54 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
     def dumpcap_available():
         return not os.getenv('NO_DUMPCAP') and shutil.which(Lwm2mTest.DUMPCAP_COMMAND) is not None
 
-    def _start_dumpcap(self, udp_ports):
+    def _start_dumpcap(self, servers):
         self.dumpcap_process = None
         if not self.dumpcap_available():
             return
 
-        udp_ports = list(udp_ports)
-
-        def _filter_expr():
+        def _filter_expr(servers):
             """
             Generates a pcap_compile()-compatible filter program so that dumpcap will only capture packets that are
             actually relevant to the current tests.
 
-            Captured packets will include:
-            - UDP datagrams sent or received on any of the udp_ports
-            - ICMP Port Unreachable messages generated in response to a UDP datagram sent or received on any of the
-              udp_ports
+            Captured packets will include (depending on protocol):
+            - UDP: datagrams sent or received on any of the given server ports, plus related ICMP Port Unreachable messages
+            - TCP: segments sent or received on any of the given server ports
             """
-            if len(udp_ports) == 0:
-                return ''
 
-            # filter expression for "source or destination UDP port is any of udp_ports"
-            udp_filter = ' or '.join('(udp port %s)' % (port,)
-                                     for port in udp_ports)
+            packet_filter=[]
+            for server in servers:
+                transport = server.get_transport()
+                port = server.get_listen_port()
 
-            # below is the generation of filter expression for the ICMP messages
-            #
-            # note that icmp[N] syntax accesses Nth byte since the beginning of ICMP header
-            # and icmp[N:M] syntax accesses M-byte value starting at icmp[N]
-            # - icmp[0] - ICMP types; 3 ~ Destination Unreachable
-            # - icmp[1] - ICMP code; for Destination Unreachable: 3 ~ Destination port unreachable
-            # - icmp[8] is the first byte of the IP header of copy of the packet that caused the error
-            #   - icmp[17] is the IP protocol number; 17 ~ UDP
-            #   - IPv4 header is normally 20 bytes long (we don't anticipate options), so UDP header starts at icmp[28]
-            #   - icmp[28:2] is the source UDP port of the original packet
-            #   - icmp[30:2] is the destination UDP port of the original packet
-            icmp_pu_filter = ' or '.join(
-                '(icmp[28:2] = 0x%04x) or (icmp[30:2] = 0x%04x)' % (port, port) for port in
-                udp_ports)
-            return '%s or ((icmp[0] = 3) and (icmp[1] = 3) and (icmp[17] = 17) and (%s))' % (
-                udp_filter, icmp_pu_filter)
+                if transport == Transport.UDP:
+                    # Filter expression for "source or destination UDP port is any of ports"
+                    udp_filter = f'(udp port {port})'
+
+                    # Below is the generation of filter expression for the ICMP messages.
+                    # Note that icmp[N] syntax accesses the Nth byte since the beginning of ICMP header
+                    # and icmp[N:M] syntax accesses an M-byte value starting at icmp[N]
+                    # - icmp[0] - ICMP type; 3 ~ Destination Unreachable
+                    # - icmp[1] - ICMP code; for Destination Unreachable: 3 ~ Destination port unreachable
+                    # - icmp[8] is the first byte of the IP header of a copy of the packet that caused the error
+                    #   - icmp[17] is the IP protocol number; 17 ~ UDP
+                    #   - IPv4 header is normally 20 bytes long (we don't anticipate options), so UDP header starts at icmp[28]
+                    #   - icmp[28:2] is the source UDP port of the original packet
+                    #   - icmp[30:2] is the destination UDP port of the original packet
+                    icmp_pu_filter = ('(icmp[28:2] = 0x%04x) or (icmp[30:2] = 0x%04x)' % (port, port))
+                    packet_filter.append(f'({udp_filter} or ((icmp[0] = 3) and (icmp[1] = 3) and (icmp[17] = 17) and ({icmp_pu_filter})))')
+                
+                elif transport == Transport.TCP:
+                    # Filter expression for "source or destination TCP port is any of ports"
+                    packet_filter.append(f'(tcp port {port})')
+                else:
+                    raise ValueError(f"Unknown transport: {transport}")
+
+            return ' or '.join(packet_filter)
 
         self.dumpcap_file_path = self.logs_path(LogType.Pcap)
         dumpcap_command = [self.DUMPCAP_COMMAND, '-w',
-                           self.dumpcap_file_path, '-i', 'lo', '-f', _filter_expr()]
+                           self.dumpcap_file_path, '-i', 'lo', '-f', _filter_expr(servers)]
         self.dumpcap_process = subprocess.Popen(dumpcap_command,
                                                 stdin=subprocess.DEVNULL,
                                                 stdout=subprocess.DEVNULL,
@@ -804,9 +813,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
 
         try:
             self.demo_process = None
-            self._start_dumpcap(server.get_listen_port()
-                                for server in all_servers)
-
+            self._start_dumpcap(all_servers)
             self._start_demo(demo_args)
 
             if auto_register:

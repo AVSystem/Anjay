@@ -350,6 +350,9 @@ class Server(object):
     def security_mode(self):
         return 'nosec'
 
+    def get_transport(self):
+        return self.transport
+
 
 class TlsServer(Server):
     def __init__(self, psk_identity=None, psk_key=None, ca_path=None, ca_file=None, crt_file=None,

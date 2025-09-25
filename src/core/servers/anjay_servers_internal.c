@@ -331,20 +331,20 @@ static void server_next_action_job(avs_sched_t *sched, const void *server_ptr) {
     switch (server->next_action) {
     case ANJAY_SERVER_NEXT_ACTION_COMMUNICATION_ERROR:
         _anjay_server_on_failure(server, "not reachable");
-        goto success;
+        break;
 
     case ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_TIMEOUT_FROM_DM:
         _anjay_disable_server_with_timeout_from_dm_sync(server);
-        goto success;
+        break;
 
     case ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_EXPLICIT_TIMEOUT:
         _anjay_disable_server_with_explicit_timeout_sync(server);
-        goto success;
+        break;
 
     case ANJAY_SERVER_NEXT_ACTION_SEND_UPDATE:
         server->registration_info.update_forced = true;
         _anjay_active_server_refresh(server);
-        goto success;
+        break;
 
     case ANJAY_SERVER_NEXT_ACTION_REFRESH:
         if (server->ssid != ANJAY_SSID_BOOTSTRAP
@@ -358,10 +358,11 @@ static void server_next_action_job(avs_sched_t *sched, const void *server_ptr) {
         } else {
             _anjay_active_server_refresh(server);
         }
-        goto success;
+        break;
+    default:
+        AVS_UNREACHABLE("Invalid next_action enum value");
     }
-    AVS_UNREACHABLE("Invalid next_action enum value");
-success:;
+
     ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 

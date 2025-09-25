@@ -13,7 +13,8 @@ FROM ubuntu:22.04
 RUN apt-get update && \
     env DEBIAN_FRONTEND=noninteractive \
     apt-get install -y python3-pip git libmbedtls-dev libssl-dev zlib1g-dev \
-        python3 libpython3-dev wget valgrind curl cmake build-essential tshark
+        python3 libpython3-dev wget valgrind curl cmake build-essential tshark \
+        file
 COPY requirements.txt requirements.txt
 RUN pip3 install -r requirements.txt
 # Solve issues with EPERM when running dumpcap

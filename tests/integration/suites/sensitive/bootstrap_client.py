@@ -59,7 +59,7 @@ class BootstrapIncorrectData(BootstrapTest.Test):
             with self.assertRaisesRegex(RuntimeError, 'handshake failed'):
                 self.serv.recv()
 
-            holdoff_s = min(max(2 * holdoff_s, 3), 120)
+            holdoff_s = min(max(2 * holdoff_s, 3), 20)
 
     def runTest(self):
         self.test_bootstrap_backoff(3)

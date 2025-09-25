@@ -673,6 +673,25 @@
  */
 /* #undef ANJAY_WITH_LWM2M_GATEWAY */
 
+/**
+ * Maximum holdoff time in seconds.
+ *
+ * This parameter defines an upper limit on the Hold Off Time as specified in
+ * the LwM2M Security Object (Object ID: 0, Resource ID: 11). The Hold Off Time
+ * is used by the LwM2M Client to delay initiating a Bootstrap process.
+ *
+ * Limiting the Hold Off Time is important in network environments where
+ * prolonged delays may cause NAT bindings to expire, potentially leading to
+ * failed connection attempts. This parameter ensures that the configured
+ * Hold Off Time does not exceed a safe threshold. If a DTLS binding with
+ * Connection ID is used this parameter can be increased safely.
+ *
+ * If editing this file manually, <c>20</c> shall be
+ * replaced with a positive integer literal representing the time in seconds.
+ * The default value defined in CMake build scripts is 20.
+ */
+#define ANJAY_MAX_HOLDOFF_TIME 20
+
 /**@}*/
 
 #endif // ANJAY_CONFIG_H

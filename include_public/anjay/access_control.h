@@ -125,7 +125,7 @@ int anjay_access_control_set_acl(anjay_t *anjay,
  *                          the Instance ID of the affected Access Control
  *                          Object Instance upon a successful return from this
  *                          function.
- *                      @li If non-</c>NULL</c> and <c>*inout_acl_iid !=
+ *                      @li If non-<c>NULL</c> and <c>*inout_acl_iid !=
  *                          ANJAY_ID_INVALID</c>, a new instance with that ID
  *                          will be created; an existing instance may also be
  *                          used, but only if the instance governing the given

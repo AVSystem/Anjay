@@ -79,6 +79,10 @@
 #    define MAX_PATH_STRING_SIZE MAX_PATH_STRING_SIZE_WO_PREFIX
 #endif // ANJAY_WITH_LWM2M_GATEWAY
 
+#ifdef AVS_COMMONS_NET_WITH_MBEDTLS_SSLKEYLOG
+#    define SSLKEYLOGFILE "/tmp/sslkey.log"
+#endif // AVS_COMMONS_NET_WITH_MBEDTLS_SSLKEYLOG
+
 static int security_object_reload(anjay_demo_t *demo) {
 #ifdef WITH_DEMO_USE_STANDALONE_OBJECTS
     standalone_security_object_purge(demo->security_obj_ptr);
@@ -154,6 +158,8 @@ static int security_object_reload(anjay_demo_t *demo) {
         instance.server_public_key_size = args->server_public_key_size;
 #ifdef ANJAY_WITH_LWM2M11
         instance.server_name_indication = server->sni;
+        instance.certificate_usage =
+                (const uint8_t *) &server->certificate_usage;
 #endif // ANJAY_WITH_LWM2M11
 
         anjay_iid_t iid = server->security_iid;
@@ -1060,7 +1066,11 @@ int main(int argc, char *argv[]) {
         close(fd);
     }
 #endif // WIN32
-
+#ifdef AVS_COMMONS_NET_WITH_MBEDTLS_SSLKEYLOG
+    avs_stream_t *ssl_key_log_file =
+            avs_stream_file_create(SSLKEYLOGFILE, AVS_STREAM_FILE_WRITE);
+    avs_mbedtls_set_sslkeylog_stream(ssl_key_log_file);
+#endif // AVS_COMMONS_NET_WITH_MBEDTLS_SSLKEYLOG
     /*
      * If, as a result of a single poll() more than a single line is read into
      * stdin buffer, we will end up handling just a single command and then
@@ -1156,5 +1166,8 @@ int main(int argc, char *argv[]) {
     demo_delete(demo);
     cmdline_args_cleanup(&cmdline_args);
     avs_log_reset();
+#ifdef AVS_COMMONS_NET_WITH_MBEDTLS_SSLKEYLOG
+    avs_stream_cleanup(&ssl_key_log_file);
+#endif // AVS_COMMONS_NET_WITH_MBEDTLS_SSLKEYLOG
     return 0;
 }

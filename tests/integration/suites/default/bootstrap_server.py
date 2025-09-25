@@ -11,33 +11,13 @@ import socket
 
 from framework.lwm2m.tlv import TLV
 from framework.lwm2m_test import *
+from . import bootstrap_holdoff as bsh
 
 
 class BootstrapServer:
-    class Test(test_suite.Lwm2mTest):
+    class Test(bsh.BootstrapHoldoff.Test):
         def setUp(self, **kwargs):
-            extra_args = ['--bootstrap-holdoff', '3']
-            self.setup_demo_with_servers(servers=0,
-                                         bootstrap_server=True,
-                                         extra_cmdline_args=extra_args,
-                                         **kwargs)
-
-        def tearDown(self):
-            self.teardown_demo_with_servers()
-
-        def get_demo_port(self, server_index=None):
-            # wait for sockets initialization
-            # scheduler-based socket initialization might delay socket setup a bit;
-            # this loop is here to ensure `communicate()` call below works as
-            # expected
-            for _ in range(10):
-                if self.get_socket_count() > 0:
-                    break
-            else:
-                self.fail("sockets not initialized in time")
-
-            # send Bootstrap messages without request
-            return super().get_demo_port(server_index)
+            super().setUp(holdoff_s=3, **kwargs)
 
 
 class BootstrapServerTest(BootstrapServer.Test):

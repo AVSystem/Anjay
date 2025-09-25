@@ -159,6 +159,10 @@ get_tlsa_settings(anjay_unlocked_t *anjay,
                 &MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
                                     ANJAY_DM_RID_SECURITY_CERTIFICATE_USAGE),
                 &tmp)) {
+
+        anjay_log(DEBUG, _("server ") "/%u/%u" _(": certificate usage = ") "%s",
+                  ANJAY_DM_OID_SECURITY, security_iid,
+                  AVS_UINT64_AS_STRING(tmp));
         switch (tmp) {
         case (uint64_t) AVS_NET_SOCKET_DANE_CA_CONSTRAINT:
         case (uint64_t) AVS_NET_SOCKET_DANE_SERVICE_CERTIFICATE_CONSTRAINT:
@@ -306,6 +310,8 @@ static avs_error_t init_cert_security(anjay_unlocked_t *anjay,
     const anjay_trust_store_t *trust_store =
             _anjay_get_trust_store(anjay, ssid, security_mode);
     if (trust_store) {
+        // Enforce validation of peer certificate chain
+        certificate_info.server_cert_validation = true;
         certificate_info.ignore_system_trust_store =
                 !trust_store->use_system_wide;
         certificate_info.trusted_certs =
@@ -316,8 +322,6 @@ static avs_error_t init_cert_security(anjay_unlocked_t *anjay,
         certificate_info.rebuild_client_cert_chain =
                 anjay->rebuild_client_cert_chain;
         if (trust_store != &anjay->initial_trust_store) {
-            // Enforce usage of non-initial trust store
-            certificate_info.server_cert_validation = true;
         }
     }
     if (dane_tlsa_record.certificate_usage == AVS_NET_SOCKET_DANE_CA_CONSTRAINT

@@ -57,13 +57,24 @@ PYBIND11_MODULE(pymbedtls, m) {
                  py::arg("security"),
                  py::arg("debug") = false,
                  py::arg("connection_id") = "")
-            .def_static("supports_connection_id", []() -> bool {
+            .def_static("supports_connection_id",
+                        []() -> bool {
 #if defined(MBEDTLS_SSL_DTLS_CONNECTION_ID)
-                return true;
+                            return true;
 #else
-                    return false;
+                            return false;
 #endif
-            });
+                        })
+            .def_static("supports_TLS_1_3",
+                        []() -> bool {
+#if defined(MBEDTLS_SSL_PROTO_TLS1_3)
+                            return true;
+#else
+                            return false;
+#endif
+                        })
+            .def_static("mbedtls_version",
+                        []() -> uint32_t { return MBEDTLS_VERSION_NUMBER; });
 
     py::class_<ServerSocket>(m, "ServerSocket")
             .def(py::init<shared_ptr<Context>, py::object>(),

@@ -8,7 +8,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(anjay C)
-set(ANJAY_VERSION "3.10.0" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "3.11.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -93,6 +93,9 @@ set(MAX_OBSERVATION_SERVERS_REPORTED_NUMBER 0 CACHE STRING
 
 set(ANJAY_DEFAULT_SEND_FORMAT AVS_COAP_FORMAT_NONE CACHE STRING
     "Default value of Content-Format used in Send messages. Value AVS_COAP_FORMAT_NONE(65535) means no default value.")
+
+set(MAX_HOLDOFF_TIME 20 CACHE STRING
+    "Upper limit for the Hold Off Time for the Bootstrap connection.")
 
 ################# FEATURES THAT REQUIRE LIBRARY CONFIGURATION ##################
 

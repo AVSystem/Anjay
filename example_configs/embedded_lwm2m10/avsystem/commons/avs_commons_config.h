@@ -645,6 +645,20 @@
 /* #undef AVS_COMMONS_NET_WITH_MBEDTLS_LOGS */
 
 /**
+ * Enables (Pre-)Master-Secret logs generation.
+ *
+ * These logs contain TLS session secrets that tools like Wireshark can use
+ * to decrypt captured TLS traffic.
+ *
+ * NOTE: This only works with Mbed TLS starting from v3.0.0. If you’re using
+ * Mbed TLS earlier than v3.1.0, you must enable MBEDTLS_SSL_EXPORT_KEYS.
+ *
+ * NOTE: The user must specify the stream to which the logs will be transferred
+ * using the avs_mbedtls_set_sslkeylog_stream function.
+ */
+/* #undef AVS_COMMONS_NET_WITH_MBEDTLS_SSLKEYLOG */
+
+/**
  * Enables the default implementation of avs_net TCP and UDP sockets.
  *
  * Requires either a UNIX-like operating environment, or a compatibility layer

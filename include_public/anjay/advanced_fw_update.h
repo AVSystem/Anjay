@@ -448,7 +448,7 @@ typedef int anjay_advanced_fw_update_perform_upgrade_t(
  * @param user_ptr            Opaque pointer to user data, as passed to
  *                            @ref anjay_advanced_fw_update_instance_add
  *
- * @param out_security_config Pointer in which the handler shall fill in
+ * @param out_security_info   Pointer in which the handler shall fill in
  *                            security configuration to use for download. Note
  *                            that leaving this value as empty without filling
  *                            it in will result in a configuration that is
@@ -607,7 +607,7 @@ typedef struct {
     anjay_advanced_fw_update_get_coap_tx_params_t *get_coap_tx_params;
 
     /** Queries request timeout to be used during firmware update over CoAP+TCP
-     * or HTTP; @ref anjay_advanced_fw_update_get_tcp_request_timeout */
+     * or HTTP; @ref anjay_advanced_fw_update_get_tcp_request_timeout_t */
     anjay_advanced_fw_update_get_tcp_request_timeout_t *get_tcp_request_timeout;
 } anjay_advanced_fw_update_handlers_t;
 
@@ -745,7 +745,7 @@ int anjay_advanced_fw_update_get_state(
  * @returns 0 on success, or a negative value in case of error.
  */
 int anjay_advanced_fw_update_get_result(
-        anjay_t *anjay_locked,
+        anjay_t *anjay,
         anjay_iid_t iid,
         anjay_advanced_fw_update_result_t *out_result);
 

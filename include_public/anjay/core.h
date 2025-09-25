@@ -715,7 +715,8 @@ typedef struct anjay_configuration {
      *
      * NOTE: Keep in mind that the behavior of this feature changes when the
      * same socket is used for both file downloads and other CoAP operations
-     * (which may happen if the @ref prefer_same_socket_downloads flag is set).
+     * (which may happen if the
+     * @ref anjay_download_config_t::prefer_same_socket_downloads flag is set).
      * A specific difference is how network errors (e.g., ICMP) are handled: if
      * a separate socket is used for downloads, Anjay will retry downloading;
      * however, if the same socket is used for other CoAP operations, Anjay will
@@ -1145,7 +1146,7 @@ int anjay_event_loop_run(anjay_t *anjay, avs_time_duration_t max_wait_time);
  *          @ref anjay_event_loop_interrupt, or a negative value in case of a
  *          fatal error.
  */
-int anjay_event_loop_run_with_error_handling(anjay_t *anjay_locked,
+int anjay_event_loop_run_with_error_handling(anjay_t *anjay,
                                              avs_time_duration_t max_wait_time);
 
 /**
@@ -1517,11 +1518,12 @@ int anjay_transport_schedule_reconnect(anjay_t *anjay,
  * happen if none of the configured servers could be reached.
  *
  * If this function returns <c>true</c>, it means that Anjay is in an
- * essentially non-operational state. @ref anjay_schedule_reconnect may be
- * called to reset the failure state and retry connecting to all configured
- * servers. @ref anjay_transport_schedule_reconnect will do the same, but only
- * for the specified transports. Alternatively, @ref anjay_enable_server may be
- * used to retry connection only to a specific server.
+ * essentially non-operational state. @ref anjay_transport_schedule_reconnect
+ * may be called to reset the failure state and retry connecting to all
+ * configured servers. @ref anjay_transport_schedule_reconnect will do the same,
+ * but only for the specified transports. Alternatively,
+ * @ref anjay_enable_server may be used to retry connection only to a specific
+ * server.
  *
  * @param anjay Anjay object to operate on.
  *
@@ -1583,7 +1585,7 @@ typedef enum {
  * applied at the time when next Register or Update message is scheduled to be
  * sent. If you wish to apply the queue mode state change immediately, you can
  * call either of @ref anjay_schedule_registration_update,
- * @ref anjay_schedule_reconnect, @ref anjay_transport_schedule_reconnect,
+ * @ref anjay_transport_schedule_reconnect,
  * @ref anjay_exit_offline, @ref anjay_transport_exit_offline or
  * @ref anjay_transport_set_online .
  *
@@ -2066,12 +2068,12 @@ anjay_update_transport_tx_params(anjay_t *anjay,
 /**
  * Changes the CoAP exchange update timeout for given transports.
  *
- * @param anjay                   Anjay object to operate on.
+ * @param anjay              Anjay object to operate on.
  *
- * @param transport_set           Set of transport for which the exchange update
- *                                timeout should be changed.
+ * @param transport_set      Set of transport for which the exchange update
+ *                           timeout should be changed.
  *
- * @param exchange_update_timeout New exchange update timeout.
+ * @param exchange_timeout   New exchange update timeout.
  *
  * @returns AVS_OK in case of success (update timeout has been changed for at
  *          least one transport), or an error code.

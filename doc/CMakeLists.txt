@@ -78,8 +78,28 @@ if(EXISTS "${ANJAY_SOURCE_DIR}/Doxyfile.in")
     set(EXAMPLE_CONFIG_PATH "${CMAKE_SOURCE_DIR}/example_configs/linux_lwm2m11/anjay/anjay_config.h")
     set(INCLUDE_PUBLIC_PATH "${CMAKE_SOURCE_DIR}/include_public")
     set(DOXYGEN_INPUT_PATHS "${CMAKE_BINARY_DIR}/output/doc/doxygen/config")
+    set(DOXYGEN_PREDEFINED_FILE "${CMAKE_CURRENT_BINARY_DIR}/doxygen/Doxyfile.defines")
 
-    # configure_file does not expand CMake generator expressions; file(GENERATE) does
+    # generate all-enabled config and extract the options to DOXYGEN_PREDEFINED_FILE
+    # see tools/generate_doxygen_config.sh script description
+    execute_process(
+        COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/generate_doxygen_config.py
+                all
+                "${EXAMPLE_CONFIG_PATH}"
+                "${INCLUDE_PUBLIC_PATH}"
+                "${DOXYGEN_INPUT_PATHS}"
+                "${DOXYGEN_PREDEFINED_FILE}"
+        RESULT_VARIABLE _gen_result
+    )
+    if(NOT _gen_result EQUAL 0)
+        message(FATAL_ERROR "Failed to generate config and predefined macros")
+    endif()
+
+    # read from DOXYGEN_PREDEFINED_FILE file and list all the options to DOXYFILE_PREDEFINED_MACROS
+    file(READ "${DOXYGEN_PREDEFINED_FILE}" DOXYFILE_PREDEFINED_MACROS)
+    string(STRIP "${DOXYFILE_PREDEFINED_MACROS}" DOXYFILE_PREDEFINED_MACROS)
+
+    # generatge Doxyfile basing on set variables and Doxyfile.in template
     configure_file(${ANJAY_SOURCE_DIR}/Doxyfile.in
                    ${CMAKE_CURRENT_BINARY_DIR}/doxygen/Doxyfile.with-cmake-generator-expressions
                    @ONLY)
@@ -87,13 +107,11 @@ if(EXISTS "${ANJAY_SOURCE_DIR}/Doxyfile.in")
          INPUT ${CMAKE_CURRENT_BINARY_DIR}/doxygen/Doxyfile.with-cmake-generator-expressions)
 
     add_custom_target(anjay_doc_doxygen
-                      COMMAND bash ${CMAKE_SOURCE_DIR}/tools/generate_doxygen_config.sh
-                                "${EXAMPLE_CONFIG_PATH}"
-                                "${INCLUDE_PUBLIC_PATH}"
-                                "${DOXYGEN_INPUT_PATHS}"
-                      COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/doxygen/Doxyfile
-                      WORKING_DIRECTORY ${ANJAY_SOURCE_DIR}
-                      DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/doxygen/Doxyfile)
+        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/doxygen/Doxyfile
+        WORKING_DIRECTORY ${ANJAY_SOURCE_DIR}
+        COMMENT "[CMake] Generating Doxygen documentation"
+        VERBATIM
+    )
 
     if(TARGET anjay_doc_sphinx)
         add_dependencies(anjay_doc_sphinx anjay_doc_doxygen)

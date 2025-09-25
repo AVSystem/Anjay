@@ -1,5 +1,32 @@
 # Changelog
 
+## 3.11.0 (September 26th, 2025)
+
+### BREAKING CHANGES
+
+- Default value of maximal holdoff time during Bootstrap limited from 120 sec.
+  to 20 sec. The limit can still be changed using ANJAY_MAX_HOLDOFF_TIME define.
+- If the Server certificate is missing from the Data Model, Anjay falls back to
+  PKIX verification, provided that a Trust Store is available, even when the
+  certificate usage is set to DANE-TA or DANE-EE.
+- avs_commons 5.5.0 that is used by Anjay 3.11.0 stoped passing the trust store
+  to Mbed TLS backend for Certificate Usage 2 or 3. For details on how Anjay
+  handles Certificate Usage resource refer to
+  Anjay Specification -> Advanced Topics -> Certificate Usage.
+
+### Bugfixes
+
+- Updated avs_commons to a version without a PSK-mode vulnerability in the Mbed
+  TLS backend where a client configured for PSK could connect to a server that
+  did not know the PSK, due to advertising non-PSK key exchange and skipping
+  certificate verification. This issue affected only TLS 1.3 connections with
+  Mbed TLS versions ≥ 3.6.1.
+  For details, see: https://github.com/AVSystem/avs_commons/releases/tag/5.5.0
+
+### Features
+- (commercial version only) Added support for configuring OSCORE Object for each
+  Security Object in Anjay Demo.
+
 ## 3.10.0 (May 28th, 2025)
 
 ### Features

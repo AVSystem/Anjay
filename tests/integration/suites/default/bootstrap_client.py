@@ -496,6 +496,60 @@ class BootstrapNoInteractionFromBootstrapServerAfterSomeExchanges(BootstrapTest.
                                         max_retransmit=self.MAX_RETRANSMIT).exchange_lifetime())
         self.wait_until_socket_count(0, timeout_s=5)
 
+# In LwM2M specification we can find:
+# 
+# If "Bootstrap-Request" operation is used in Step #0, the bootstrap procedure fails when the LwM2M Client does not
+# receive the "Bootstrap-Finish" operation after the EXCHANGE_LIFETIME time period expired. The EXCHANGE_LIFETIME
+# parameter is defined in [CoAP].
+# 
+# It can be interpreted in two ways - after sending a “Bootstrap-Request”, the procedure is considered to have failed
+# if:
+# - a "Bootstrap-Finish" operation is not received within the period defined by EXCHANGE_LIFETIME
+#   counted from the "Bootstrap-Request" operation.
+# - a "Bootstrap-Finish" operation is not received within the period defined by EXCHANGE_LIFETIME
+#   counted from the last Bootstrap-related operation (excluding Bootstrap-Pack-Request).
+# 
+# This test is for documentation purposes and shows that, in our library, we follow the second interpretation.
+class BootstrapNoInteractionFromBootstrapServerAfterSomeExchangesCheckFinishTimeout(BootstrapTest.Test):
+    ACK_TIMEOUT = 1
+    MAX_RETRANSMIT = 1
+
+    def setUp(self):
+        # Done to have a relatively short EXCHANGE_LIFETIME
+        super().setUp(extra_cmdline_args=['--ack-random-factor', '1',
+                                          '--ack-timeout', '%s' % self.ACK_TIMEOUT,
+                                          '--max-retransmit', '%s' % self.MAX_RETRANSMIT])
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+    def runTest(self):
+        # Some random bootstrap operation, the data won't be used anyway.
+        self.perform_typical_bootstrap(server_iid=1,
+                                       security_iid=2,
+                                       server_uri='coap://127.0.0.1:9123',
+                                       security_mode=SecurityMode.NoSec,
+                                       finish=False)
+
+        half_exchange_lifetime = TxParams(ack_timeout=self.ACK_TIMEOUT,
+                                        max_retransmit=self.MAX_RETRANSMIT).exchange_lifetime() / 2
+        self.advance_demo_time(half_exchange_lifetime)
+
+        # Bootstrap write operation after exchange_lifetime / 2
+        self.write_resource(self.bootstrap_server, oid=OID.Security, iid=2, rid=RID.Security.Mode,
+                                content=str(SecurityMode.PreSharedKey.value))
+        self.advance_demo_time(half_exchange_lifetime)
+        
+        # Some time for scheduled jobs
+        time.sleep(10)
+        # If there were no socket, that would mean the first interpretation is correct
+        self.assertEqual(1, self.get_socket_count())
+
+        self.advance_demo_time(half_exchange_lifetime - 11)
+        
+        self.assertEqual(1, self.get_socket_count())
+        self.wait_until_socket_count(0, timeout_s=5)
+
 
 class DtlsBootstrap:
     class Test(BootstrapTest.Test):

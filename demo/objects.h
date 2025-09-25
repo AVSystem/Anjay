@@ -68,6 +68,7 @@ typedef struct {
     uint32_t retry_timer;
     uint32_t sequence_retry_count;
     uint32_t sequence_delay_timer;
+    uint16_t certificate_usage;
 #endif // ANJAY_WITH_LWM2M11
 } server_entry_t;
 

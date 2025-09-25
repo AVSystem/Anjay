@@ -98,6 +98,7 @@ while [ $# -gt 0 ]; do
             EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DMAX_DOUBLE_STRING_SIZE=64"
             EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DMAX_URI_SEGMENT_SIZE=64"
             EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DMAX_URI_QUERY_SEGMENT_SIZE=64"
+            EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DMAX_HOLDOFF_TIME=20"
             ;;
         -DDTLS_BACKEND=*)
             DTLS_BACKEND="${1#-DDTLS_BACKEND=}"

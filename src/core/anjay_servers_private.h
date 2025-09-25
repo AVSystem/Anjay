@@ -47,7 +47,7 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 ///     - anjay_exit_offline()
 ///     - anjay_get_socket_entries()
 ///     - anjay_is_offline()
-///     - anjay_schedule_reconnect()
+///     - anjay_transport_schedule_reconnect()
 ///     - anjay_schedule_registration_update()
 ///
 /// As the documentation in public headers is written as a user's manual, the
@@ -331,7 +331,7 @@ int _anjay_servers_foreach_active(anjay_unlocked_t *anjay,
  *          the Bootstrap Server is not active when not in the Client-Initiated
  *          Bootstrap procedure.
  * 2.6.3. Prevent activate_server_job() from ever being called again, until
- *        anjay_schedule_reconnect() is manually called.
+ *        anjay_transport_schedule_reconnect() is manually called.
  *
  * Server deactivation is normally handled by deactivate_server(). The server
  * might also enter inactive state through enter_offline_job(), or in case of

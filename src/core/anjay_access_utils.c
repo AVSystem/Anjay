@@ -340,6 +340,7 @@ _anjay_instance_action_allowed_stateless(anjay_unlocked_t *anjay,
     assert(info->iid != ANJAY_ID_INVALID
            || info->action == ANJAY_ACTION_CREATE);
 #ifndef ANJAY_WITH_ACCESS_CONTROL
+    (void) anjay;
     return ANJAY_INSTANCE_ACTION_ALLOWED;
 #else
 
@@ -1088,6 +1089,7 @@ int _anjay_sync_access_control(anjay_unlocked_t *anjay,
                                anjay_notify_queue_t *notifications_queue) {
 #ifndef ANJAY_WITH_ACCESS_CONTROL
     (void) anjay;
+    (void) origin_ssid;
     (void) notifications_queue;
     return 0;
 #else // ANJAY_WITH_ACCESS_CONTROL

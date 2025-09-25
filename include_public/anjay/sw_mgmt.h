@@ -75,7 +75,7 @@ typedef enum {
      * is recommended to revert back to "Installed" Update State by initializing
      * the object instance with @ref
      * ANJAY_SW_MGMT_INITIAL_STATE_INSTALLED_DEACTIVATED or @ref
-     * ANJAY_SW_MGMT_INITIAL_STATE_INSTALED_ACTIVATED . Software Management
+     * ANJAY_SW_MGMT_INITIAL_STATE_INSTALLED_ACTIVATED . Software Management
      * Object in its current state is not able to differentiate these two
      * situations.
      */
@@ -583,7 +583,7 @@ anjay_sw_mgmt_deactivate_t(void *obj_ctx, anjay_iid_t iid, void *inst_ctx);
  * Queries security information that shall be used for an encrypted connection
  * with a PULL-mode download server.
  *
- * May be called before @ref anjay_sw_mgmt_stream_open if the download is to
+ * May be called before @ref anjay_sw_mgmt_stream_open_t if the download is to
  * be performed in PULL mode and the connection needs to use TLS or DTLS
  * encryption.
  *

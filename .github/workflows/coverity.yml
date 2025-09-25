@@ -12,7 +12,7 @@ on:
 jobs:
   coverity:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:ubuntu-22.04-1.1
+    container: avsystemembedded/anjay-travis:ubuntu-22.04-2.2
     env:
       # NOTE: These need to be configured in GitHub Actions GUI
       COVERITY_EMAIL: ${{ secrets.COVERITY_EMAIL }}

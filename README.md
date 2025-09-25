@@ -151,13 +151,16 @@ More details about OMA LwM2M: [Brief introduction to LwM2M](https://AVSystem.git
 
 ## Embedded operating systems ports
 
-If you want to use Anjay on Zephyr OS, FreeRTOS, Azure RTOS, ESP-IDF or RPI Pico W check our demo
+If you want to use Anjay on Zephyr OS, FreeRTOS, Azure RTOS, or RPI Pico W check our demo
 applications available in other repositories:
 - [Anjay-zephyr-client](https://github.com/AVSystem/Anjay-zephyr-client) (uses [Anjay-zephyr](https://github.com/AVSystem/Anjay-zephyr) integration layer)
 - [Anjay-freertos-client](https://github.com/AVSystem/Anjay-freertos-client)
-- [Anjay-stm32-azurertos-client](https://github.com/AVSystem/Anjay-stm32-azurertos-client)
-- [Anjay-esp32-client](https://github.com/AVSystem/Anjay-esp32-client) (uses [Anjay-esp-idf](https://github.com/AVSystem/Anjay-esp-idf) integration layer)
 - [Anjay-pico-client](https://github.com/AVSystem/Anjay-pico-client) (uses FreeRTOS Kernel)
+
+There are also archived, not actively maintained Anjay demos and integrations:
+- [Anjay-esp32-client](https://github.com/AVSystem/Anjay-esp32-client) (uses [Anjay-esp-idf](https://github.com/AVSystem/Anjay-esp-idf) integration layer)
+- [Anjay-mbedos-client](https://github.com/AVSystem/Anjay-mbedos-client) (uses [Anjay-mbedos](https://github.com/AVSystem/Anjay-mbedos) integration layer)
+- [Anjay-stm32-azurertos-client](https://github.com/AVSystem/Anjay-stm32-azurertos-client)
 
 ## Quickstart guide
 

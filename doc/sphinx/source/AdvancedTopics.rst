@@ -13,9 +13,11 @@ Advanced topics
    :glob:
    :titlesonly:
 
+   AdvancedTopics/AT-Bootstrap
    AdvancedTopics/AT-AccessControl
    AdvancedTopics/AT-AttributeStorage
    AdvancedTopics/AT-Certificates
+   AdvancedTopics/AT-CertificateUsage
    AdvancedTopics/AT-CustomObjects
    AdvancedTopics/AT-NetworkErrorHandling
    AdvancedTopics/AT-OtherFeatures

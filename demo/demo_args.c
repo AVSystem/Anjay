@@ -43,6 +43,7 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
             .retry_timer = 0,
             .sequence_retry_count = 1,
             .sequence_delay_timer = 0,
+            .certificate_usage = AVS_NET_SOCKET_DANE_DOMAIN_ISSUED_CERTIFICATE,
 #endif // ANJAY_WITH_LWM2M11
         },
 #ifdef ANJAY_WITH_BOOTSTRAP
@@ -606,8 +607,12 @@ static void print_help(const struct option *options) {
 #ifdef ANJAY_WITH_DOWNLOADER
         { 349, "RETRY COUNT", NULL, "Number of CoAP downloader retry" },
         { 350, "RETRY DELAY", NULL,
-          "Delay (in seconds) between CoAP downloader retry" }
+          "Delay (in seconds) between CoAP downloader retry" },
 #endif // ANJAY_WITH_DOWNLOADER
+#ifdef ANJAY_WITH_LWM2M11
+        { 351, "CERTIFICATE USAGE", "3",
+          "Certificate usage to set for the last configured server" },
+#endif // ANJAY_WITH_LWM2M11
     };
 
     const size_t screen_width = get_screen_width();
@@ -1016,6 +1021,9 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         {"coap-downloader-retry-count", required_argument, 0, 349},
         {"coap-downloader-retry-delay", required_argument, 0, 350},
 #endif // ANJAY_WITH_DOWNLOADER
+#ifdef ANJAY_WITH_LWM2M11
+        {"certificate-usage", required_argument, 0, 351},
+#endif // ANJAY_WITH_LWM2M11
         { 0, 0, 0, 0 }
         // clang-format on
     };
@@ -2052,6 +2060,21 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             break;
         }
 #endif // ANJAY_WITH_DOWNLOADER
+#ifdef ANJAY_WITH_LWM2M11
+        case 351: {
+            if (num_servers == 0) {
+                demo_log(ERROR, "Undefined server. Use --server-uri/-u first");
+                goto finish;
+            }
+            int idx = num_servers - 1;
+            if (parse_u16(optarg,
+                          &parsed_args->connection_args.servers[idx]
+                                   .certificate_usage)) {
+                goto finish;
+            }
+            break;
+        }
+#endif // ANJAY_WITH_LWM2M11
         case 0:
             goto process;
         }
