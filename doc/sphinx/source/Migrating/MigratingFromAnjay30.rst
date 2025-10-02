@@ -120,3 +120,10 @@ area.
 This feature has been removed. Instead, you can use an
 ``avs_stream_inbuf``/``avs_stream_outbuf`` pair, or an ``avs_stream_membuf``
 object.
+
+Python environment isolation
+----------------------------
+
+All Python-based tools (e.g. integration tests) must be executed within a
+Python virtual environment. See :doc:`/Tools/VirtualEnvironments` for more
+information.

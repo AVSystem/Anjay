@@ -12,7 +12,7 @@ on:
 jobs:
   coverity:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:ubuntu-22.04-2.2
+    container: avsystemembedded/anjay-travis:ubuntu-22.04-3.0
     env:
       # NOTE: These need to be configured in GitHub Actions GUI
       COVERITY_EMAIL: ${{ secrets.COVERITY_EMAIL }}
@@ -29,7 +29,7 @@ jobs:
           bash -c 'cd coverity_tool && \
               wget https://scan.coverity.com/download/linux64 --post-data "token=$COVERITY_SCAN_TOKEN&project=AVSystem%2FAnjay" -O coverity_tool.tgz && \
               tar xf coverity_tool.tgz'
-      - run: ./devconfig --without-analysis -DWITH_URL_CHECK=OFF -DWITH_NESTED_FUNCTION_MUTEX_LOCKS=OFF -DWITH_IPV6=OFF
+      - run: ./devconfig --without-analysis -DWITH_NESTED_FUNCTION_MUTEX_LOCKS=OFF -DWITH_IPV6=OFF
       - run: env LC_ALL=C.UTF-8 ./coverity_tool/cov-analysis*/bin/cov-build --dir cov-int make
       - run: tar zcf cov-int.tgz cov-int
       - run: |

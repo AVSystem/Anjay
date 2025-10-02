@@ -52,7 +52,6 @@ Table of contents:
     * [Ubuntu 20.04 LTS / Raspbian Buster or later](#ubuntu-2004-lts--raspbian-buster-or-later)
     * [CentOS 7 or later](#centos-7-or-later)
     * [macOS Sierra or later, with Homebrew](#macos-sierra-or-later-with-homebrew)
-    * [Python dependencies](#python-dependencies)
   * [Running the demo client](#running-the-demo-client)
   * [Detailed compilation guide](#detailed-compilation-guide)
     * [Building using CMake](#building-using-cmake)
@@ -60,6 +59,7 @@ Table of contents:
   * [Use a Dockerfile](#use-a-dockerfile)
 * [License](#license)
   * [Commercial support](#commercial-support)
+* [Feedback](#feedback)
 * [Contributing](#contributing)
 
 <!-- /toc -->
@@ -204,15 +204,6 @@ sudo yum install -y which git make cmake3 mbedtls-devel gcc gcc-c++ zlib-devel
 brew install cmake mbedtls openssl
 ```
 
-#### Python dependencies
-
-In order to run integration tests or `nsh_lwm2m` server, some additional Python
-modules are required. To install them, you can use `requirements.txt` file by
-running the following command:
-```sh
-pip3 install -U -r requirements.txt
-```
-
 ### Running the demo client
 
 For initial development and testing of LwM2M clients, we recommend using the [Coiote IoT Device Management](https://avsystem.com/coiote-iot-device-management-platform/) where you can use the basic LwM2M server functionality for free.
@@ -273,8 +264,8 @@ To start the demo client:
 # uses plain CoAP
 ./output/bin/demo --endpoint-name $(hostname) --server-uri coap://eu.iot.avsystem.cloud:5683
 
-# uses DTLS in PSK mode, with PSK identity "foo" and secret key "bar" (hex-encoded)
-./output/bin/demo --endpoint-name $(hostname) --server-uri coaps://eu.iot.avsystem.cloud:5684 --security-mode psk --identity 666f6f --key 626172
+# uses DTLS in PSK mode
+./output/bin/demo --endpoint-name $(hostname) --server-uri coaps://eu.iot.avsystem.cloud:5684 --security-mode psk --identity-as-string your_psk_identity --key-as-string your_psk_key
 ```
 
 **NOTE**: When establishing a DTLS connection, the URI MUST use "coaps://". In NoSec mode (default), the URI MUST use "<coap://>".
@@ -312,6 +303,10 @@ Anjay LwM2M library comes with the option of [full commercial support, provided 
 The list of features available commercially is [available here](https://AVSystem.github.io/Anjay-doc/CommercialFeatures.html).
 
 If you're interested in LwM2M Server, be sure to check out the [Coiote IoT Device Management](https://www.avsystem.com/products/coiote-iot-dm/) platform by AVSystem. It also includes the [interoperability test module](https://avsystem.com/coiote-iot-device-management-platform/lwm2m-interoperability-test/) that you can use to test your LwM2M client implementation. Our automated tests and testing scenarios enable you to quickly check how interoperable your device is with LwM2M.
+
+## Feedback
+
+Got a minute? Help improve **Anjay IoT SDK - [fill out this short form](https://docs.google.com/forms/d/e/1FAIpQLSegs_HTDEM-J3w0VeEvVdVTsjiB41YKxj_4w9dud0GQsUIQiA/viewform)**.
 
 ## Contributing
 

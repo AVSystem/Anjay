@@ -141,6 +141,32 @@
 /* #undef WITH_AVS_COAP_OSCORE_DRAFT_8 */
 
 /**
+ * Maximum size in bytes supported for the Master Secret.
+ *
+ * If editing this file manually, <c></c> shall be
+ * replaced with a positive integer literal.
+ *
+ * The default value defined in CMake build scripts is 32.
+ * 
+ * IMPORTANT: Only available with the OSCORE feature. Ignored in the open
+ * source version.
+ */
+#define AVS_COAP_OSCORE_MASTER_SECRET_SIZE 
+
+/**
+ * Maximum size in bytes supported for the Master Salt.
+ *
+ * If editing this file manually, <c></c> shall be
+ * replaced with a positive integer literal.
+ *
+ * The default value defined in CMake build scripts is 16.
+ * 
+ * IMPORTANT: Only available with the OSCORE feature. Ignored in the open
+ * source version.
+ */
+#define AVS_COAP_OSCORE_MASTER_SALT_SIZE 
+
+/**
  * Maximum number of notification tokens stored to match Reset responses to.
  *
  * Only meaningful if <c>WITH_AVS_COAP_OBSERVE</c> and <c>WITH_AVS_COAP_UDP</c>

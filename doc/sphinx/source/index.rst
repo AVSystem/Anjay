@@ -30,6 +30,7 @@ Contents:
    FirmwareUpdateTutorial
    LwM2MGateway
    Tools
+   KnownIssues
    API_description
    PortingGuideForNonPOSIXPlatforms
    Migrating

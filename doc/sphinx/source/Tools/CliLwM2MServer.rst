@@ -14,6 +14,11 @@ LwM2M. It is written in Python using `powercmd` library. You can find it in
 `tests/integration/framework/nsh-lwm2m <https://github.com/AVSystem/Anjay/tree/master/tests/integration/framework/nsh-lwm2m>`_
 directory in the Anjay repository.
 
+.. note::
+
+    It is recommended to use :doc:`VirtualEnvironments` when running Python
+    scripts.
+
 Running the server
 ~~~~~~~~~~~~~~~~~~
 

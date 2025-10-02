@@ -8,7 +8,10 @@
 cmake_minimum_required(VERSION 3.16)
 project(lwm2m_demo C)
 
+include(CMakeDependentOption)
+
 option(WITH_DEMO_USE_STANDALONE_OBJECTS "Use standalone versions of built-in objects in demo" OFF)
+cmake_dependent_option(WITH_DEMO_TRAFFIC_INTERCEPTOR "Turn on traffic interceptor usage in demo" ON WITH_TRAFFIC_INTERCEPTOR OFF)
 
 set(SOURCES
     demo.c
@@ -61,6 +64,10 @@ if (${ANJAY_WITH_LWM2M_GATEWAY})
                            )
 endif()
 
+if(${WITH_DEMO_TRAFFIC_INTERCEPTOR} AND NOT WIN32)
+    set(SOURCES ${SOURCES} net_traffic_interceptor.c)
+endif()
+
 if(NOT WIN32)
     set(SOURCES ${SOURCES} objects/ip_ping.c)
 endif()
@@ -103,10 +110,18 @@ target_link_libraries(demo PRIVATE anjay m ${CMAKE_THREAD_LIBS_INIT})
 if(WITH_DEMO_USE_STANDALONE_OBJECTS)
     target_compile_definitions(demo PRIVATE WITH_DEMO_USE_STANDALONE_OBJECTS)
 endif()
+if(WITH_DEMO_TRAFFIC_INTERCEPTOR)
+    target_compile_definitions(demo PRIVATE WITH_DEMO_TRAFFIC_INTERCEPTOR)
+endif()
 
+
+### FindPython3
+if(NOT TARGET Python3::Interpreter)
+    include(../cmake/requirePython3venv.cmake)
+endif()
 
 add_custom_target(demo_firmware
-                  COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tests/integration/framework/create_package.py
+                  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../tests/integration/framework/create_package.py
                           -i ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/demo
                           -o ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/demo.fw-pkg
                   DEPENDS demo)

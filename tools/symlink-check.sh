@@ -14,6 +14,7 @@ EXCEPTIONS=(
     "^\./examples/"
     "^\./test_ghactions"
     "/doc/sphinx/html/"
+    "^\./venv/"
 )
 
 cd "$(dirname "$(dirname "$0")")"

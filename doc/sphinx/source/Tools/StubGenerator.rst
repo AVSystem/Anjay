@@ -23,6 +23,11 @@ fill in actual object logic.
 
 .. note::
 
+    It is recommended to use :doc:`VirtualEnvironments` when running Python
+    scripts.
+
+.. note::
+
     You can use `./tools/lwm2m_object_registry.py` script to download the
     Object Definition XML from `OMA LwM2M Object and Resource Registry
     <https://technical.openmobilealliance.org/OMNA/LwM2M/LwM2MRegistry.html>`_.

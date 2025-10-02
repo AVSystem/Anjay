@@ -1,5 +1,29 @@
 # Changelog
 
+## X.Y.Z (Date)
+
+### BREAKING CHANGES
+
+- PEP 668 was adopted. Using Python based tools requires a virtual environment
+  and `devconfig` script ensures it's activated.
+
+### Bugfixes
+- Fixed crash in avs_coap when block transfers are disabled and outgoing
+  message does not fit into the external output buffer.
+- (commercial version only) Fixed a bug that made it impossible to set a Master
+  Secret which length was anything other than 16 bytes (OSCORE).
+
+### Features
+- Added traffic interceptor usage to demo application.
+- (commercial version only) Made it possible to set the maximum length of the
+  Master Secret and Master Salt using the AVS_COAP_OSCORE_MASTER_SECRET_SIZE
+  and AVS_COAP_OSCORE_MASTER_SALT_SIZE options, respectively.
+
+### Improvements
+- Reworked the help menu in Anjay Demo.
+- (commercial version only) Added support for running PKCS11 integration tests
+  with OpenSSL as (D)TLS backend.
+
 ## 3.11.0 (September 26th, 2025)
 
 ### BREAKING CHANGES

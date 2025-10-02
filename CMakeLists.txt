@@ -8,7 +8,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(anjay C)
-set(ANJAY_VERSION "3.11.0" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "3.11.0-76-gf047b46" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -21,6 +21,11 @@ set(CMAKE_USE_RELATIVE_PATHS TRUE)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(CheckFunctionExists)
+
+if(WITH_DEMO OR WITH_INTEGRATION_TESTS)
+    # ensure Python venv is active
+    include(cmake/requirePython3venv.cmake)
+endif()
 
 # On Linux, one needs to link libdl to use dlsym(). On BSD, it is not necessary,
 # and even harmful, since libdl does not exist.

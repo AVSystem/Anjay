@@ -13,8 +13,16 @@ FROM ubuntu:20.04
 RUN apt-get update && \
     env DEBIAN_FRONTEND=noninteractive \
     apt-get install -y python3-pip git libmbedtls-dev libssl-dev zlib1g-dev \
-        python3 libpython3-dev wget valgrind curl cmake build-essential tshark
+        python3 libpython3-dev wget valgrind curl cmake build-essential tshark \
+        python3-venv
+
+# set up Python3 venv
 COPY requirements.txt requirements.txt
-RUN pip3 install -r requirements.txt
+RUN python3 -m venv /venv
+RUN . /venv/bin/activate && \
+    pip install --upgrade pip && \
+    pip install -r requirements.txt
+ENTRYPOINT ["/bin/bash", "-c", ". /venv/bin/activate && exec \"$@\"", "--"]
+
 # Solve issues with EPERM when running dumpcap
 RUN setcap '' $(which dumpcap)

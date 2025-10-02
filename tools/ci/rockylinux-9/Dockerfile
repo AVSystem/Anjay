@@ -17,5 +17,11 @@ RUN dnf update -y && \
 RUN dnf config-manager --set-enabled crb && \
     dnf install -y epel-release && \
     dnf install -y mbedtls-devel
+
+# set up Python3 venv
 COPY requirements.txt requirements.txt
-RUN pip3 install -r requirements.txt
+RUN python3 -m venv /venv
+RUN . /venv/bin/activate && \
+    pip install --upgrade pip && \
+    pip install -r requirements.txt
+ENTRYPOINT ["/bin/bash", "-c", ". /venv/bin/activate && exec \"$@\"", "--"]

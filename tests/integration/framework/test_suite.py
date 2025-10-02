@@ -574,7 +574,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             sys.exit(-1)
 
         return demo_executable
-    
+
     def skipIfFeatureStatus(self, log, message):
         import subprocess
         import unittest

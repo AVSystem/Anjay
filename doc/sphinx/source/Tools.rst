@@ -13,5 +13,9 @@ Tools
    :glob:
    :titlesonly:
 
-   Tools/*
-
+   Tools/VirtualEnvironments
+   Tools/StubGenerator
+   Tools/CliLwM2MServer
+   Tools/StandaloneObjects
+   Tools/FactoryProvisioning
+   Tools/PackagesGenerator

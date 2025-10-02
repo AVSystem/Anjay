@@ -24,6 +24,8 @@
 
 #include <avsystem/commons/avs_memory.h>
 
+#include "net_traffic_interceptor.h"
+
 #define DEFAULT_PSK_IDENTITY "sesame"
 #define DEFAULT_PSK_KEY "password"
 
@@ -257,7 +259,202 @@ print_wrapped(const char *str, size_t padding, size_t screen_width) {
     } while (str < str_end);
 }
 
-static void print_help(const struct option *options) {
+static void
+format_wrapped(size_t padding, size_t screen, const char *fmt, ...) {
+    char buf[1024];
+    va_list ap;
+    va_start(ap, fmt);
+    (void) vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    print_wrapped(buf, padding, screen);
+}
+
+static bool stdout_supports_color(void) {
+#ifdef _WIN32
+    return false;
+#else  // _WIN32
+    if (!isatty(STDOUT_FILENO)) {
+        return false;
+    }
+    const char *no_color = getenv("NO_COLOR");
+    if (no_color && *no_color) {
+        return false;
+    }
+    const char *term = getenv("TERM");
+    if (!term || !*term || !strcmp(term, "dumb")) {
+        return false;
+    }
+    return true;
+#endif // _WIN32
+}
+
+static void print_help_short(const char *progname) {
+    size_t screen = get_screen_width();
+    bool ansi_on = stdout_supports_color();
+    const char *s_dim = ansi_on ? "\x1b[2m" : "";
+    const char *s_cyan = ansi_on ? "\x1b[36m" : "";
+    const char *s_reset = ansi_on ? "\x1b[0m" : "";
+    const char *s_bold_cyan = ansi_on ? "\x1b[1;36m" : "";
+
+    puts("Anjay Demo - quick help\n");
+
+    printf("%sSynopsis:%s\n", s_cyan, s_reset);
+    format_wrapped(2, screen,
+                   "  %s [OPTIONS] --endpoint-name <name> --server-uri "
+                   "<coap(s)://host:port> "
+                   "[--security-mode nosec|psk|cert|est] [...]",
+                   progname);
+    puts("");
+
+    printf("%sQuick examples:%s\n", s_cyan, s_reset);
+
+    printf("%s", s_dim);
+    format_wrapped(2, screen, "  # No security (management)");
+    printf("%s", s_reset);
+    format_wrapped(4, screen,
+                   "  %s --endpoint-name my-device "
+                   "--security-mode nosec "
+                   "--server-uri coap://eu.iot.avsystem.cloud:5683 "
+                   "--lifetime 60",
+                   progname);
+#ifdef ANJAY_WITH_BOOTSTRAP
+    printf("%s", s_dim);
+    format_wrapped(2, screen, "  # No security (bootstrap)");
+    printf("%s", s_reset);
+    format_wrapped(4, screen,
+                   "  %s --endpoint-name my-device "
+                   "--security-mode nosec "
+                   "--server-uri coap://eu.iot.avsystem.cloud:5693 "
+                   "--bootstrap --lifetime 60",
+                   progname);
+#endif // ANJAY_WITH_BOOTSTRAP
+    puts("");
+
+    printf("%s", s_dim);
+    format_wrapped(2, screen,
+                   "  # PSK (identity/key as ASCII strings, management)");
+    printf("%s", s_reset);
+    format_wrapped(4, screen,
+                   "  %s --endpoint-name my-device "
+                   "--security-mode psk "
+                   "--identity-as-string my-device "
+                   "--key-as-string 1234 "
+                   "--server-uri coaps://eu.iot.avsystem.cloud:5684 "
+                   "--lifetime 60",
+                   progname);
+
+    printf("%s", s_dim);
+    format_wrapped(2, screen, "  # PSK (identity/key as hex, management)");
+    printf("%s", s_reset);
+    format_wrapped(4, screen,
+                   "  %s --endpoint-name my-device "
+                   "--security-mode psk "
+                   "--identity 6d792d646576696365 "
+                   "--key 31323334 "
+                   "--server-uri coaps://eu.iot.avsystem.cloud:5684 "
+                   "--lifetime 60",
+                   progname);
+#ifdef ANJAY_WITH_BOOTSTRAP
+    printf("%s", s_dim);
+    format_wrapped(2, screen, "  # PSK (bootstrap)");
+    printf("%s", s_reset);
+    format_wrapped(4, screen,
+                   "  %s --endpoint-name my-device "
+                   "--security-mode psk "
+                   "--identity-as-string my-device "
+                   "--key-as-string 1234 "
+                   "--server-uri coaps://eu.iot.avsystem.cloud:5694 "
+                   "--bootstrap --lifetime 60",
+                   progname);
+#endif // ANJAY_WITH_BOOTSTRAP
+    puts("");
+
+    printf("%s", s_dim);
+    format_wrapped(2, screen, "  # Certificates (management)");
+    printf("%s", s_reset);
+    format_wrapped(4, screen,
+                   "  %s --endpoint-name my-device "
+                   "--security-mode cert "
+                   "--client-cert-file ./client.crt.der "
+                   "--key-file ./client.key.der "
+                   "--server-uri coaps://eu.iot.avsystem.cloud:5684 "
+                   "--lifetime 60",
+                   progname);
+#ifdef ANJAY_WITH_BOOTSTRAP
+    printf("%s", s_dim);
+    format_wrapped(2, screen, "  # Certificates (bootstrap)");
+    printf("%s", s_reset);
+    format_wrapped(4, screen,
+                   "  %s --endpoint-name my-device "
+                   "--security-mode cert "
+                   "--client-cert-file ./client.crt.der "
+                   "--key-file ./client.key.der "
+                   "--server-uri coaps://eu.iot.avsystem.cloud:5694 "
+                   "--bootstrap --lifetime 60",
+                   progname);
+#endif // ANJAY_WITH_BOOTSTRAP
+    puts("");
+
+    printf("%sCommonly used options:%s\n", s_cyan, s_reset);
+    format_wrapped(2, screen,
+                   "  -e, --endpoint-name <name>              Endpoint name.");
+    format_wrapped(2, screen,
+                   "  -u, --server-uri <URI>                  LwM2M server URI "
+                   "(coap:// | coaps:// | coaps+tcp://).");
+    format_wrapped(
+            2, screen,
+            "  -s, --security-mode <mode>              nosec | psk | cert"
+            ".");
+    format_wrapped(2, screen,
+                   "      --identity-as-string <s>            PSK identity as "
+                   "ASCII (psk).");
+    format_wrapped(2, screen,
+                   "      --key-as-string <s>                 PSK key as ASCII "
+                   "(psk).");
+    format_wrapped(2, screen,
+                   "  -i, --identity <hex>                    PSK identity in "
+                   "hex (psk).");
+    format_wrapped(
+            2, screen,
+            "  -k, --key <hex>                         PSK key in hex (psk).");
+    format_wrapped(2, screen,
+                   "  -C, --client-cert-file <file>           Client "
+                   "certificate (DER) (cert"
+                   ").");
+    format_wrapped(2, screen,
+                   "  -K, --key-file <file>                   Private key "
+                   "(DER/PKCS#8) (cert"
+                   ").");
+#ifdef ANJAY_WITH_BOOTSTRAP
+    format_wrapped(
+            2, screen,
+            "  -b, --bootstrap[=client-initiated-only] Use Bootstrap Server.");
+#endif // ANJAY_WITH_BOOTSTRAP
+    format_wrapped(2, screen,
+                   "  -l, --lifetime <s>                      Registration "
+                   "lifetime (default: 86400).");
+    format_wrapped(2, screen,
+                   "      --use-connection-id                 Enable DTLS "
+                   "connection_id.");
+    format_wrapped(2, screen,
+                   "      --ciphersuites <list>               Limit (D)TLS "
+                   "ciphersuites, e.g. 0xC02C[,0x..].");
+    format_wrapped(2, screen,
+                   "      --alternative-logger                Enable "
+                   "alternative logger output.");
+
+    puts("");
+
+    printf("%s", s_bold_cyan);
+    format_wrapped(
+            0, screen,
+            "For the complete list of options and detailed explanations, run:\n"
+            "  %s --help=full",
+            progname);
+    printf("%s\n", s_reset);
+}
+
+static void print_help_full(const struct option *options) {
     const struct {
         int opt_val;
         const char *args;
@@ -613,11 +810,18 @@ static void print_help(const struct option *options) {
         { 351, "CERTIFICATE USAGE", "3",
           "Certificate usage to set for the last configured server" },
 #endif // ANJAY_WITH_LWM2M11
+#ifdef WITH_DEMO_TRAFFIC_INTERCEPTOR
+        { 357, "INTERCEPTOR UNIX SOCKET PATH", NULL,
+          "Required by traffic interceptor. Path to a unix socket where "
+          "traffic data "
+          "is written to. Each packet contains json with intercepted "
+          "datagram." },
+#endif // WITH_DEMO_TRAFFIC_INTERCEPTOR
     };
 
     const size_t screen_width = get_screen_width();
 
-    puts("Available options:\n");
+    puts("Anjay Demo - full list of options:\n");
     for (size_t i = 0; options[i].name || options[i].val; ++i) {
         assert(i < AVS_ARRAY_SIZE(HELP_INFO));
         assert(HELP_INFO[i].opt_val == options[i].val);
@@ -876,7 +1080,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "bootstrap-timeout",             required_argument, 0, 'T' },
 #endif // ANJAY_WITH_BOOTSTRAP
         { "endpoint-name",                 required_argument, 0, 'e' },
-        { "help",                          no_argument,       0, 'h' },
+        { "help",                          optional_argument, 0, 'h' },
 #ifndef _WIN32
         { "disable-stdin",                 no_argument,       0, 't' },
 #endif // _WIN32
@@ -1024,6 +1228,9 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
 #ifdef ANJAY_WITH_LWM2M11
         {"certificate-usage", required_argument, 0, 351},
 #endif // ANJAY_WITH_LWM2M11
+#ifdef WITH_DEMO_TRAFFIC_INTERCEPTOR
+{ "traffic_interceptor_path", required_argument, 0, 357 },
+#endif// WITH_DEMO_TRAFFIC_INTERCEPTOR
         { 0, 0, 0, 0 }
         // clang-format on
     };
@@ -1130,9 +1337,21 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         case 'e':
             parsed_args->endpoint_name = optarg;
             break;
-        case 'h':
-            print_help(options);
+        case 'h': {
+            if (optarg && *optarg) {
+                if (strcmp(optarg, "full") == 0) {
+                    print_help_full(options);
+                } else {
+                    demo_log(ERROR,
+                             "Invalid help optional argument: \"%s\"; "
+                             "for full help run with --help=full",
+                             optarg);
+                }
+            } else {
+                print_help_short(argv[0]);
+            }
             goto finish;
+        }
 #ifndef _WIN32
         case 't':
             parsed_args->disable_stdin = true;
@@ -2075,11 +2294,21 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             break;
         }
 #endif // ANJAY_WITH_LWM2M11
+#ifdef WITH_DEMO_TRAFFIC_INTERCEPTOR
+        case 357: {
+            parsed_args->traffic_intercept_path = optarg;
+        }
+#endif // WITH_DEMO_TRAFFIC_INTERCEPTOR
         case 0:
             goto process;
         }
     }
 process:
+    if (argc <= 1) {
+        print_help_short(argv[0]);
+        goto finish;
+    }
+
     retval = 0;
     if (!parsed_args->endpoint_name) {
         demo_log(ERROR,

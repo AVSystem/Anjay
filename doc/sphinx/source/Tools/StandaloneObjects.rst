@@ -19,6 +19,11 @@ this reason, standalone versions of the Security and Server objects are provided
 in the ``standalone`` directory of the repository (or commercial distribution
 package).
 
+.. note::
+
+    It is recommended to use :doc:`VirtualEnvironments` when running Python
+    scripts.
+
 .. warning::
 
     Customizing the logic of Core Objects is likely to violate the LwM2M

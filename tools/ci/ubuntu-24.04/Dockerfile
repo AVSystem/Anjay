@@ -9,7 +9,7 @@
 # Docker Hub (for more information, check the help message of 
 # tools/ci/build-docker-images.sh script).
 
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 RUN apt-get update && \
     env DEBIAN_FRONTEND=noninteractive \
     apt-get install -y python3-pip git libmbedtls-dev libssl-dev zlib1g-dev \

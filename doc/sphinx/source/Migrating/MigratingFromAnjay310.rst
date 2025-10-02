@@ -46,3 +46,10 @@ certificate usage is set to DANE-TA or DANE-EE.
 For more information on how Anjay manages the Trust Store and the Certificate
 Usage resource, see
 :doc:`Certificate Usage <../AdvancedTopics/AT-CertificateUsage>`.
+
+Python environment isolation
+----------------------------
+
+All Python-based tools (e.g. integration tests) must be executed within a
+Python virtual environment. See :doc:`/Tools/VirtualEnvironments` for more
+information.

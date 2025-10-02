@@ -72,3 +72,6 @@ examples/*-build
 
 # Anjay persistence files
 *-persistence.dat
+
+# Python venv
+/venv/

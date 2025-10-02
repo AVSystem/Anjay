@@ -68,6 +68,8 @@
 #    include "lwm2m_gateway.h"
 #endif // ANJAY_WITH_LWM2M_GATEWAY
 
+#include "net_traffic_interceptor.h"
+
 #define MAX_PATH_STRING_SIZE_WO_PREFIX sizeof("/65535/65535/65535/65535")
 #ifdef ANJAY_WITH_LWM2M_GATEWAY
 // ANJAY_GATEWAY_MAX_PREFIX_LEN contains space for null-terminator, but since
@@ -328,6 +330,10 @@ static void demo_delete(anjay_demo_t *demo) {
 #endif // WITH_DEMO_USE_STANDALONE_OBJECTS
 
     AVS_LIST_CLEAR(&demo->allocated_buffers);
+
+#ifdef WITH_DEMO_TRAFFIC_INTERCEPTOR
+    (void) interceptor_deinit();
+#endif // WITH_DEMO_TRAFFIC_INTERCEPTOR
     avs_free(demo);
 }
 
@@ -965,6 +971,13 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
                                              ANJAY_TRANSPORT_SET_ALL)) {
         return -1;
     }
+
+#ifdef WITH_DEMO_TRAFFIC_INTERCEPTOR
+    if (cmdline_args->traffic_intercept_path
+            && interceptor_init(cmdline_args->traffic_intercept_path)) {
+        return -1;
+    }
+#endif // WITH_DEMO_TRAFFIC_INTERCEPTOR
 
     return 0;
 }

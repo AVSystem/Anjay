@@ -13,6 +13,11 @@ This section describes the ``create_package.py`` script used to generate test pa
 LwM2M objects implemented in the Anjay demo. These packages simulate firmware and software
 updates with configurable behaviors and error conditions.
 
+.. note::
+
+    It is recommended to use :doc:`VirtualEnvironments` when running Python
+    scripts.
+
 Overview
 --------
 

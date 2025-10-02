@@ -20,6 +20,11 @@ provisioning easier. The script supports:
 * Loading configuration to device (currently supports Nordic boards).
 * Automatic device onboarding in the Coiote server.
 
+.. note::
+
+    It is recommended to use :doc:`VirtualEnvironments` when running Python
+    scripts.
+
 Provisioning tool
 ^^^^^^^^^^^^^^^^^
 
