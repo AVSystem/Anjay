@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -17,11 +17,14 @@ import threading
 import unittest
 import zlib
 
-from framework.coap_file_server import CoapFileServerThread, CoapFileServer
-from framework.lwm2m_test import *
+from framework_tools.utils.coap_file_server import CoapFileServerThread, CoapFileServer
+from framework_tools.utils.lwm2m_test import *
+from framework.create_package import PackageForcedError, make_firmware_package
+
 from .access_control import AccessMask
 from .block_write import Block, equal_chunk_splitter
 from .connection_id import CoapServerWithProxy, disconnect_socket
+
 
 import pymbedtls
 

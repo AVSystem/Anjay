@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -104,6 +104,10 @@ static int return_with_moving_to_next_entry(anjay_unlocked_input_ctx_t *in_ctx,
     if (next_entry_result
             && (!result || result == ANJAY_ERR_NOT_FOUND
                 || result == ANJAY_ERR_NOT_IMPLEMENTED)) {
+        // LwM2M Core spec 1.2.2, paragraph 6.3.3 Write Operation
+        // In a "Write" operation targeting an Object Instance, any optional
+        // Resources that are not supported by, or unknown to, the LwM2M
+        // Client MUST NOT be interpreted as an error by the LwM2M Client.
         return next_entry_result;
     }
     return result;
@@ -316,6 +320,10 @@ write_instance_and_move_to_next_entry(anjay_unlocked_t *anjay,
         }
         if (result == ANJAY_ERR_NOT_FOUND
                 || result == ANJAY_ERR_NOT_IMPLEMENTED) {
+            // LwM2M Core spec 1.2.2, paragraph 6.3.3 Write Operation
+            // In a "Write" operation targeting an Object Instance, any optional
+            // Resources that are not supported by, or unknown to, the LwM2M
+            // Client MUST NOT be interpreted as an error by the LwM2M Client.
             result = 0;
         }
         if (!next_entry_called) {

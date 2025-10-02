@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -814,6 +814,7 @@ int _anjay_dm_call_resource_read(anjay_unlocked_t *anjay,
     anjay_uri_path_t path =
             MAKE_RESOURCE_INSTANCE_PATH(_anjay_dm_installed_object_oid(obj_ptr),
                                         iid, rid, riid);
+    (void) path;
 #ifdef ANJAY_WITH_LWM2M_GATEWAY
     if (obj_ptr->prefix) {
         strncpy(path.prefix, obj_ptr->prefix, sizeof(path.prefix));
@@ -833,6 +834,7 @@ int _anjay_dm_call_resource_write(anjay_unlocked_t *anjay,
     anjay_uri_path_t path =
             MAKE_RESOURCE_INSTANCE_PATH(_anjay_dm_installed_object_oid(obj_ptr),
                                         iid, rid, riid);
+    (void) path;
 #ifdef ANJAY_WITH_LWM2M_GATEWAY
     if (obj_ptr->prefix) {
         strncpy(path.prefix, obj_ptr->prefix, sizeof(path.prefix));

@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
@@ -18,6 +18,11 @@ have specific requirements that deviate from the default Anjay behavior. For
 this reason, standalone versions of the Security and Server objects are provided
 in the ``standalone`` directory of the repository (or commercial distribution
 package).
+
+.. note::
+
+    It is recommended to use :doc:`VirtualEnvironments` when running Python
+    scripts.
 
 .. warning::
 

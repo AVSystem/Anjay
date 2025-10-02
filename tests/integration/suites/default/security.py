@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -17,10 +17,10 @@ import cryptography.hazmat
 import cryptography.hazmat.backends
 import cryptography.x509
 
-from framework.lwm2m.coap.server import SecurityMode
-from framework.lwm2m.coap.transport import Transport
-from framework.lwm2m_test import *
-from framework.test_utils import DEMO_ENDPOINT_NAME, RID, OID
+from framework_tools.lwm2m.coap.server import SecurityMode
+from framework_tools.lwm2m.coap.transport import Transport
+from framework_tools.utils.lwm2m_test import *
+from framework_tools.utils.test_utils import DEMO_ENDPOINT_NAME, RID, OID
 from suites.default import bootstrap_client
 from suites.default import register
 from suites.default import retransmissions

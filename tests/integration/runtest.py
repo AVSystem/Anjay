@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -22,9 +22,9 @@ import textwrap
 import shutil
 import logging
 
-from framework.pretty_test_runner import PrettyTestRunner
-from framework.pretty_test_runner import COLOR_DEFAULT, COLOR_YELLOW, COLOR_GREEN, COLOR_RED
-from framework.test_suite import Lwm2mTest, ensure_dir, get_full_test_name, get_suite_name, \
+from framework_tools.utils.pretty_test_runner import PrettyTestRunner
+from framework_tools.utils.pretty_test_runner import COLOR_DEFAULT, COLOR_YELLOW, COLOR_GREEN, COLOR_RED
+from framework_tools.utils.test_suite import Lwm2mTest, ensure_dir, get_full_test_name, get_suite_name, \
     test_or_suite_matches_query_regex, LogType
 
 if sys.version_info[0] >= 3:
@@ -49,7 +49,7 @@ def discover_test_suites(test_config):
         try:
             import pymbedtls
         except ModuleNotFoundError:
-            # Fake pymbedtls module so that "runtest.py -l" works without setting PYTHONPATH
+            # Fake pymbedtls module so that "runtest.py -l" works without making pymbedtls target
             class FakePymbedtlsModule:
                 class Context:
                     @staticmethod

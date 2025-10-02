@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
 # Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
-import framework.test_suite
-from framework.lwm2m_test import *
+import framework_tools.utils.test_suite as test_suite
+from framework_tools.utils.lwm2m_test import *
 from . import access_control, retransmissions, firmware_update
 
 
@@ -100,7 +100,7 @@ class QueueModePreferenceIneffectiveForLwm2m10(QueueModeBehaviour):
         super().runTest()
 
 
-class ForceQueueMode(QueueMode.Test, framework.test_suite.Lwm2mSingleServerTest):
+class ForceQueueMode(QueueMode.Test, test_suite.Lwm2mSingleServerTest):
     def tearDown(self):
         auto_deregister = False
         auto_deregister = self.autoclose_disabled
@@ -128,7 +128,7 @@ class ForceQueueMode(QueueMode.Test, framework.test_suite.Lwm2mSingleServerTest)
 
 
 class ForceOnlineMode(retransmissions.RetransmissionTest.TestMixin,
-                      framework.test_suite.Lwm2mSingleServerTest):
+                      test_suite.Lwm2mSingleServerTest):
     def setUp(self):
         super().setUp(extra_cmdline_args=['--binding=UQ'], auto_register=False)
         self.assertDemoRegisters(self.serv, binding='UQ')
@@ -146,7 +146,7 @@ class ForceOnlineMode(retransmissions.RetransmissionTest.TestMixin,
 
 
 class Lwm2m11QueueMode(retransmissions.RetransmissionTest.TestMixin,
-                       framework.test_suite.Lwm2mDtlsSingleServerTest):
+                       test_suite.Lwm2mDtlsSingleServerTest):
     def setUp(self):
         self.skipIfFeatureStatus('ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE = ON',
                                  'Queue mode autoclose disabled')
@@ -200,7 +200,7 @@ class Lwm2m11QueueMode(retransmissions.RetransmissionTest.TestMixin,
         self.assertEqual(self.get_socket_count(), 1)
 
 
-class Lwm2m11UQBinding(QueueMode.Test, framework.test_suite.Lwm2mDtlsSingleServerTest):
+class Lwm2m11UQBinding(QueueMode.Test, test_suite.Lwm2mDtlsSingleServerTest):
     def setUp(self):
         # UQ binding is not LwM2M 1.1-compliant, but we support it anyway
         super().setUp(extra_cmdline_args=['--binding=UQ'], auto_register=False,
@@ -316,7 +316,7 @@ class QueueModeAfterTimedOutSend(QueueMode.Test, firmware_update.SameSocketDownl
         self.assertEqual(self.get_socket_count(), 0)
 
 
-class TlsQueueMode(framework.test_suite.Lwm2mSingleTcpServerTest):
+class TlsQueueMode(test_suite.Lwm2mSingleTcpServerTest):
     PSK_IDENTITY = b'test-identity'
     PSK_KEY = b'test-key'
 
@@ -342,7 +342,7 @@ class TlsQueueMode(framework.test_suite.Lwm2mSingleTcpServerTest):
         self.assertDemoUpdatesRegistration()
 
 
-class NosecTcpQueueMode(framework.test_suite.Lwm2mSingleTcpServerTest):
+class NosecTcpQueueMode(test_suite.Lwm2mSingleTcpServerTest):
     def setUp(self, *args, **kwargs):
         self.skipIfFeatureStatus('ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE = ON',
                                  'Queue mode autoclose disabled')

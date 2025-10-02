@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
@@ -24,7 +24,7 @@ Change to minimum CMake version
 -------------------------------
 
 Declared minimum CMake version necessary for CMake-based compilation, as well as
-for importing the installed library through ``find_package()``, is now 3.6. If
+for importing the installed library through ``find_package()``, is now 3.16. If
 you're using some Linux distribution that only has an older version in its
 repositories (notably, Ubuntu 16.04), we recommend using one of the following
 install methods instead:
@@ -839,3 +839,10 @@ area.
 This feature has been removed. Instead, you can use an
 ``avs_stream_inbuf``/``avs_stream_outbuf`` pair, or an ``avs_stream_membuf``
 object.
+
+Python environment isolation
+----------------------------
+
+All Python-based tools (e.g. integration tests) must be executed within a
+Python virtual environment. See :doc:`/Tools/VirtualEnvironments` for more
+information.

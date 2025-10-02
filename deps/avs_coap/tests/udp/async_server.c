@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
  * AVSystem CoAP library
  * All rights reserved.
  *
@@ -136,10 +136,12 @@ static void payload_writer_fail_case(bool cancel_exchange) {
     expect_request_handler_call(&env, AVS_COAP_SERVER_REQUEST_CLEANUP, NULL,
                                 NULL, NULL);
 
-    expect_has_buffered_data_check(&env, false);
     avs_error_t err = avs_coap_async_handle_incoming_packet(
             env.coap_ctx, test_accept_new_request, &env);
-    ASSERT_OK(err);
+    AVS_UNIT_ASSERT_EQUAL(err.category, AVS_COAP_ERR_CATEGORY);
+    AVS_UNIT_ASSERT_EQUAL(err.code,
+                          cancel_exchange ? AVS_COAP_ERR_EXCHANGE_CANCELED
+                                          : AVS_COAP_ERR_PAYLOAD_WRITER_FAILED);
 }
 
 AVS_UNIT_TEST(udp_async_server, incoming_request_payload_writer_fail) {

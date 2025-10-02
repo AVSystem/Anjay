@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
  * AVSystem CoAP library
  * All rights reserved.
  *
@@ -36,7 +36,8 @@ typedef struct header_serialize_test_struct {
     size_t options_length;
     uint8_t token_length;
     uint8_t code;
-    uint8_t data[_AVS_COAP_TCP_MAX_HEADER_LENGTH];
+    // +1 to not get unterminated-string-initialization warnings
+    uint8_t data[_AVS_COAP_TCP_MAX_HEADER_LENGTH + 1];
     size_t data_size;
 } header_test_data_t;
 

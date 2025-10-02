@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -11,7 +11,7 @@ import contextlib
 import socket
 import time
 
-from framework.lwm2m_test import *
+from framework_tools.utils.lwm2m_test import *
 
 
 class RandomPortRebind(test_suite.Lwm2mDtlsSingleServerTest, test_suite.Lwm2mDmOperations):

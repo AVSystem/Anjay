@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -9,7 +9,7 @@
 
 import unittest
 
-from framework.lwm2m_test import *
+from framework_tools.utils.lwm2m_test import *
 from .dm.utils import DataModel
 
 

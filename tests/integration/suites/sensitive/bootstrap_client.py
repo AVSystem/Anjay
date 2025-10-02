@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -8,9 +8,9 @@
 # See the attached LICENSE file for details.
 
 
-from framework.lwm2m.coap.server import SecurityMode
-from framework.lwm2m_test import *
-from framework import test_suite
+from framework_tools.lwm2m.coap.server import SecurityMode
+from framework_tools.utils.lwm2m_test import *
+from framework_tools.utils import test_suite
 
 from suites.default.bootstrap_client import BootstrapTest
 

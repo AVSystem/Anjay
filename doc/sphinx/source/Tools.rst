@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
@@ -13,5 +13,9 @@ Tools
    :glob:
    :titlesonly:
 
-   Tools/*
-
+   Tools/VirtualEnvironments
+   Tools/StubGenerator
+   Tools/CliLwM2MServer
+   Tools/StandaloneObjects
+   Tools/FactoryProvisioning
+   Tools/PackagesGenerator

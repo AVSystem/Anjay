@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -305,6 +305,16 @@ static inline void _anjay_log_feature_list(void) {
 #else // ANJAY_WITH_TRACE_LOGS
     _anjay_log(anjay, TRACE, "ANJAY_WITH_TRACE_LOGS = OFF");
 #endif // ANJAY_WITH_TRACE_LOGS
+#ifdef AVS_COAP_OSCORE_MASTER_SALT_SIZE
+    _anjay_log(anjay, TRACE, "AVS_COAP_OSCORE_MASTER_SALT_SIZE = " AVS_QUOTE_MACRO(AVS_COAP_OSCORE_MASTER_SALT_SIZE));
+#else // AVS_COAP_OSCORE_MASTER_SALT_SIZE
+    _anjay_log(anjay, TRACE, "AVS_COAP_OSCORE_MASTER_SALT_SIZE = OFF");
+#endif // AVS_COAP_OSCORE_MASTER_SALT_SIZE
+#ifdef AVS_COAP_OSCORE_MASTER_SECRET_SIZE
+    _anjay_log(anjay, TRACE, "AVS_COAP_OSCORE_MASTER_SECRET_SIZE = " AVS_QUOTE_MACRO(AVS_COAP_OSCORE_MASTER_SECRET_SIZE));
+#else // AVS_COAP_OSCORE_MASTER_SECRET_SIZE
+    _anjay_log(anjay, TRACE, "AVS_COAP_OSCORE_MASTER_SECRET_SIZE = OFF");
+#endif // AVS_COAP_OSCORE_MASTER_SECRET_SIZE
     _anjay_log(anjay, TRACE, "AVS_COAP_UDP_NOTIFY_CACHE_SIZE = " AVS_QUOTE_MACRO(AVS_COAP_UDP_NOTIFY_CACHE_SIZE));
 #ifdef AVS_COMMONS_BIG_ENDIAN
     _anjay_log(anjay, TRACE, "AVS_COMMONS_BIG_ENDIAN = ON");
@@ -696,6 +706,11 @@ static inline void _anjay_log_feature_list(void) {
 #else // AVS_COMMONS_WITH_TINYDTLS
     _anjay_log(anjay, TRACE, "AVS_COMMONS_WITH_TINYDTLS = OFF");
 #endif // AVS_COMMONS_WITH_TINYDTLS
+#ifdef AVS_COMMONS_WITH_TRAFFIC_INTERCEPTOR
+    _anjay_log(anjay, TRACE, "AVS_COMMONS_WITH_TRAFFIC_INTERCEPTOR = ON");
+#else // AVS_COMMONS_WITH_TRAFFIC_INTERCEPTOR
+    _anjay_log(anjay, TRACE, "AVS_COMMONS_WITH_TRAFFIC_INTERCEPTOR = OFF");
+#endif // AVS_COMMONS_WITH_TRAFFIC_INTERCEPTOR
 #ifdef WITH_AVS_COAP_BLOCK
     _anjay_log(anjay, TRACE, "WITH_AVS_COAP_BLOCK = ON");
 #else // WITH_AVS_COAP_BLOCK

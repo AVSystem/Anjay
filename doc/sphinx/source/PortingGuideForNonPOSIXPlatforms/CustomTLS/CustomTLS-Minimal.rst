@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
@@ -297,7 +297,7 @@ This means that the first thing is to add appropriate fields to the
 
     Different TLS libraries have different data lifetime contracts. For example,
     in contrast to the OpenSSL API, `mbedtls_ssl_conf_psk()
-    <https://tls.mbed.org/api/ssl_8h.html#a1e185199e3ff613bdd1c8231a19e24fc>`_
+    <https://mbed-tls.readthedocs.io/projects/api/en/development/api/file/ssl_8h/#ssl_8h_1a1e185199e3ff613bdd1c8231a19e24fc>`_
     in Mbed TLS copies the data passed as arguments into internal structures and
     thus it is not necessary to make explicit copies.
 

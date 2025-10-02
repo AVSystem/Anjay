@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -43,8 +43,16 @@ def _get_ignored_patterns():
     else:
         return []
 
+def _get_permanent_ignored_patterns():
+    patterns = os.environ.get('ANJAY_DOC_CHECK_PERMANENT_WHITELIST') or ''
+    if patterns == '':
+        return []
+
+    patterns = patterns.split(',')
+    return patterns
 
 IGNORED_PATTERNS = _get_ignored_patterns()
+PERMANENT_IGNORED_PATTERNS = _get_permanent_ignored_patterns()
 
 
 def explore(path):
@@ -74,6 +82,10 @@ class UrlChecker:
             return os.path.isfile(os.path.join(PROJECT_ROOT, url[len(PUBLIC_REPO_BLOB_PREFIX):]))
         elif url.startswith(PUBLIC_REPO_TREE_PREFIX):
             return os.path.isdir(os.path.join(PROJECT_ROOT, url[len(PUBLIC_REPO_TREE_PREFIX):]))
+        if any(pattern in url for pattern in PERMANENT_IGNORED_PATTERNS):
+            logging.warning(
+                'URL %s not checked due to ANJAY_DOC_CHECK_PERMANENT_WHITELIST' % (url,))
+            return True
         if any(pattern in url for pattern in IGNORED_PATTERNS):
             logging.warning(
                 'URL %s not checked due to ANJAY_DOC_CHECK_WHITELIST' % (url,))
@@ -142,6 +154,15 @@ class Wget2UrlChecker(UrlChecker):
         except subprocess.CalledProcessError as e:
             logging.warning(f"wget2 exit code: {e.returncode}")
             self.run_wget2(url, extra_args=['--ca-directory=/usr/local/share/ca-certificates/'])
+        except OSError as e:
+            if 'HTTP status: 403' in str(e):
+                self.run_wget2(url, extra_args=[
+                    '--header=\"Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\"',
+                    '--header=\"Accept-Language: en-US,en;q=0.9\"'
+                ])
+            else:
+                raise
+
 
 
 def find_invalid_urls(checker, urls):

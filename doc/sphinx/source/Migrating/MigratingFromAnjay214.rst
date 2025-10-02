@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
@@ -326,3 +326,10 @@ area.
 This feature has been removed. Instead, you can use an
 ``avs_stream_inbuf``/``avs_stream_outbuf`` pair, or an ``avs_stream_membuf``
 object.
+
+Python environment isolation
+----------------------------
+
+All Python-based tools (e.g. integration tests) must be executed within a
+Python virtual environment. See :doc:`/Tools/VirtualEnvironments` for more
+information.

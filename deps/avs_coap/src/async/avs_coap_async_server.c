@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
  * AVSystem CoAP library
  * All rights reserved.
  *
@@ -392,10 +392,12 @@ static avs_error_t server_exchange_send_next_chunk(
         if (err.category == AVS_COAP_ERR_CATEGORY
                 && (err.code == AVS_COAP_ERR_MESSAGE_TOO_BIG
                     || err.code == AVS_COAP_ERR_PAYLOAD_WRITER_FAILED)) {
-            err = send_ise(ctx, &token, handler, *exchange_ptr);
+            // err is already set, don't overwrite it
+            send_ise(ctx, &token, handler, *exchange_ptr);
         } else if (err.category == AVS_COAP_ERR_CATEGORY
                    && err.code == AVS_COAP_ERR_EXCHANGE_CANCELED) {
-            err = send_ise(ctx, &token, NULL, NULL);
+            // err is already set, don't overwrite it
+            send_ise(ctx, &token, NULL, NULL);
         } else {
             return err;
         }

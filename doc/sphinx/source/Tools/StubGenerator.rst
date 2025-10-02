@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
@@ -20,6 +20,11 @@ For easy implementation of custom objects, you can use the
 `./tools/anjay_codegen.py` script. It parses a LwM2M Object Definition XML
 and generates a skeleton of the LwM2M object code, requiring the user to only
 fill in actual object logic.
+
+.. note::
+
+    It is recommended to use :doc:`VirtualEnvironments` when running Python
+    scripts.
 
 .. note::
 

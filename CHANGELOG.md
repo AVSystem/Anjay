@@ -1,5 +1,37 @@
 # Changelog
 
+## 3.12.0 (January 30th, 2026)
+
+### BREAKING CHANGES
+
+- PEP 668 was adopted. Using Python based tools requires a virtual environment
+  and `devconfig` script ensures it's activated.
+- Most tools from `tests/integration/framework` were extracted 
+  into `tools/test-framework-tools` directory which is being installed 
+  in venv by `devconfig`
+
+### Bugfixes
+- Fixed crash in avs_coap when block transfers are disabled and outgoing
+  message does not fit into the external output buffer.
+- (commercial version only) Fixed a bug that made it impossible to set a Master
+  Secret which length was anything other than 16 bytes (OSCORE).
+- Fixed avs_coap tests for GCC 15
+
+### Features
+- Added traffic interceptor usage to demo application.
+- (commercial version only) Made it possible to set the maximum length of the
+  Master Secret and Master Salt using the AVS_COAP_OSCORE_MASTER_SECRET_SIZE
+  and AVS_COAP_OSCORE_MASTER_SALT_SIZE options, respectively.
+- Removed experimental tags from server connection status API, IPSO objects v2
+  API, Software Management object API, CoAP Download retry API and
+  Confirmable Notification status callback API.
+
+### Improvements
+- Reworked the help menu in Anjay Demo.
+- (commercial version only) Added support for running PKCS11 integration tests
+  with OpenSSL as (D)TLS backend.
+- Migrated pymbedtls build system to pyproject.toml.
+
 ## 3.11.0 (September 26th, 2025)
 
 ### BREAKING CHANGES

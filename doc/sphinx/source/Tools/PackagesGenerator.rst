@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
@@ -12,6 +12,11 @@ Package generator
 This section describes the ``create_package.py`` script used to generate test packages for
 LwM2M objects implemented in the Anjay demo. These packages simulate firmware and software
 updates with configurable behaviors and error conditions.
+
+.. note::
+
+    It is recommended to use :doc:`VirtualEnvironments` when running Python
+    scripts.
 
 Overview
 --------
@@ -26,13 +31,14 @@ These objects include:
 .. note::
 
    These objects are implemented primarily for testing purposes and are not production-ready. To
-   generate compatible update packages for testing, use the create_package.py script located in
-   the tests/integration/framework directory. If you need help implementing the required callbacks
-   for Objects /5 and /33629, refer to :doc:`Firmware Update tutorial <../FirmwareUpdateTutorial>`.
+   generate compatible update packages for testing, use the ``create_package.py`` script located in
+   the ``tests/integration/framework`` directory. 
+   If you need help implementing the required callbacks for Objects /5 and /33629, 
+   refer to :doc:`Firmware Update tutorial <../FirmwareUpdateTutorial>`.
 
 In order to use the objects, you need packages that contain the appropriate metadata. To generate
-these packages, run ``create_package.py`` script located in the ``tests/integration/framework``
-directory.
+these packages, run ``create_package.py`` script located in the 
+``tests/integration/framework`` directory.
 
 Example usage
 -------------

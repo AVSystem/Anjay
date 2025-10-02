@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -12,9 +12,9 @@ import os.path
 
 import requests
 from factory_prov.cert_gen import *
-from framework import serialize_senml_cbor as ssc
-from framework.lwm2m.coap.server import SecurityMode
-from framework.test_utils import *
+from framework_tools.utils import serialize_senml_cbor as ssc
+from framework_tools.lwm2m.coap.server import SecurityMode
+from framework_tools.utils.test_utils import *
 
 SupportedSecMode = [
     SecurityMode.PreSharedKey,

@@ -40,6 +40,7 @@ Testing/
 /examples/build
 /include_public/avsystem/coap/avs_coap_config.h
 /tools/__pycache__
+github_staging/
 
 # documentation
 /doc/doxygen
@@ -53,3 +54,10 @@ Testing/
 
 # gdb stuff
 .gdb_history
+
+# python
+__pycache__
+venv/
+build/
+dist/
+*.egg-info/

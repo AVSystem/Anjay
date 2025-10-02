@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -111,7 +111,9 @@ int _anjay_cbor_ll_encode_float(avs_stream_t *stream, float value) {
 }
 
 int _anjay_cbor_ll_encode_double(avs_stream_t *stream, double value) {
-    if (((float) value) == value) {
+    if ((double) ((float) value) == value) {
+        // cast to float and back to double did not change the value, which
+        // menas it fits in the size and precision of float type
         return _anjay_cbor_ll_encode_float(stream, (float) value);
     }
 

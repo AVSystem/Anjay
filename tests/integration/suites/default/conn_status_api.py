@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
 # Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
-from framework.lwm2m_test import *
+from framework_tools.utils.lwm2m_test import *
 from .access_control import AccessMask
 from .bootstrap_client import BootstrapTest
 from .register import RegisterUdp
@@ -39,7 +39,7 @@ class ConnStatusAPI:
 
     class TestMixin:
         STATUS_CHANGE_REGEX = re.compile(
-            rb'Current status of the server with SSID (\d+) is: (.+)')
+            rb'Current status of the server with SSID (\d+) is: (.+)\n')
 
         # we need this to ensure that other commands which search through
         # logs will not accidentally consume statements we're interested in

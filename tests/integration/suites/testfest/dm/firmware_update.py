@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -15,7 +15,9 @@ import socket
 import threading
 import time
 
-from framework.lwm2m_test import *
+from framework_tools.utils.lwm2m_test import *
+from framework.create_package import PackageForcedError, make_firmware_package
+
 from .utils import DataModel, ValueValidator as VV
 
 
@@ -57,7 +59,7 @@ class FirmwareUpdate:
         def setUp(self, coap_server=None, extra_cmdline_args=[]):
             super().setUp(extra_cmdline_args=extra_cmdline_args)
 
-            from framework.coap_file_server import CoapFileServerThread
+            from framework_tools.utils.coap_file_server import CoapFileServerThread
             self.server_thread = CoapFileServerThread(coap_server=coap_server)
             self.server_thread.start()
 

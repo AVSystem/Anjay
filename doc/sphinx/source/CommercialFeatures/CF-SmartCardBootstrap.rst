@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
@@ -152,8 +152,8 @@ The input file shall specify a dictionary according to Python syntax where:
     second one shall be the value of a primitive type
 
 The constants from the ``OID`` and ``RID`` objects, as defined in the
-`tests/integration/framework/test_utils.py
-<https://github.com/AVSystem/Anjay/blob/master/tests/integration/framework/test_utils.py>`_
+`tools/test-framework-tools/tools/framework_tools/utils/test_utils.py
+<https://github.com/AVSystem/Anjay/blob/master/tools/test-framework-tools/tools/framework_tools/utils/test_utils.py>`_
 file, may be used to make the keys more descriptive, as in the example input
 file (``bootstrap/configs/basic``):
 

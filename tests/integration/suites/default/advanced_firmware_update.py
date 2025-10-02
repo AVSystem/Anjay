@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -18,11 +18,12 @@ import unittest
 
 from .firmware_update import FirmwareUpdate, UpdateState
 from .firmware_update import UpdateResult as FU_UpdateResult
-from framework.coap_file_server import CoapFileServer
-from framework.lwm2m_test import *
+from framework_tools.utils.coap_file_server import CoapFileServer
+from framework_tools.utils.lwm2m_test import *
+from framework.create_package import PackageForcedError, make_firmware_package, make_multiple_firmware_package
+
 from .access_control import AccessMask
 from .block_write import Block, equal_chunk_splitter, msg_id_generator
-
 
 class UpdateSeverity:
     CRITICAL = 0

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -669,6 +669,9 @@
 #define AVS_COMMONS_NET_WITH_POSIX_AVS_SOCKET
 
 /**
+ * @deprecated This is deprecated API. This API can be removed in future
+ * releases, without any notice.
+ *
  * Enables support for logging socket communication to file.
  *
  * If this option is enabled, avs_net_socket_debug() can be used to enable
@@ -676,6 +679,18 @@
  * avs_net_socket_debug() will always return an error.
  */
 /* #undef AVS_COMMONS_NET_WITH_SOCKET_LOG */
+
+/**
+ * @experimental This is experimental API. This API can change in the future
+ * versions without any notice.
+ *
+ * Enables support for custom net traffic interceptor.
+ *
+ * If this option is enabled, the user needs to provide their own implementation
+ * of avs_net_create_traffic_interceptor() function which can wrap and extend
+ * an underlying socket.
+ */
+/* #undef AVS_COMMONS_WITH_TRAFFIC_INTERCEPTOR */
 
 /**
  * If the TLS backend is either mbed TLS or OpenSSL, enables support for (D)TLS

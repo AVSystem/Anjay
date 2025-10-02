@@ -1,4 +1,4 @@
-# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -6,7 +6,7 @@
 # See the attached LICENSE file for details.
 
 
-FROM ubuntu:20.04
+FROM ubuntu:24.04
 
 WORKDIR /Anjay
 

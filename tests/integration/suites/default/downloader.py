@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -15,8 +15,8 @@ import socket
 import threading
 import time
 
-from framework.coap_file_server import CoapFileServerThread
-from framework.lwm2m_test import *
+from framework_tools.utils.coap_file_server import CoapFileServerThread
+from framework_tools.utils.lwm2m_test import *
 
 DUMMY_PAYLOAD = os.urandom(16 * 1024)
 

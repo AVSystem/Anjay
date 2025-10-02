@@ -1,0 +1,36 @@
+# Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
+#
+# Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
+# See the attached LICENSE file for details.
+
+[project]
+name = "pymbedtls"
+version = "0.6.0"
+description = "MbedTLS wrapper for Python"
+license = "Commercial"
+authors = [
+  {name = "AVSystem", email = "avsystem@avsystem.com"}
+]
+
+[build-system]
+requires = [
+  "py-build-cmake~=0.5.0",
+  "pybind11==2.10.1"
+]
+build-backend = "py_build_cmake.build"
+
+[tool.py-build-cmake.sdist]
+include = [
+  "CMakeLists.txt",
+  "cmake/*.cmake",
+  "src/*.cpp",
+  "src/*.hpp",
+  "pymbedtls/__init__.py"
+]
+
+[tool.py-build-cmake.cmake]
+minimum_version = "3.22"
+build_type = "Debug"
+build_args = ["-j"]

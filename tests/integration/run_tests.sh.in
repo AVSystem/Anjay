@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -11,7 +11,7 @@
 COMMAND="@CMAKE_CTEST_COMMAND@";
 RERUNS=@TEST_RERUNS@;
 
-CREATE_XLSX_REPORTS="python3 @CMAKE_SOURCE_DIR@/tests/integration/framework/create_xlsx_test_report.py \
+CREATE_XLSX_REPORTS="python3 @CMAKE_SOURCE_DIR@/tools/test-framework-tools/tools/framework_tools/utils/create_xlsx_test_report.py \
                                 -d @CMAKE_BINARY_DIR@/output/test/integration/log/test/"
 
 if [ "$1" == "-h" ]; then

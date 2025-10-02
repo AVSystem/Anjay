@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
@@ -11,13 +11,18 @@ LwM2M testing shell
 
 For the purpose of early testing of Anjay-based clients, we provide a simple CLI implementation of
 LwM2M. It is written in Python using `powercmd` library. You can find it in
-`tests/integration/framework/nsh-lwm2m <https://github.com/AVSystem/Anjay/tree/master/tests/integration/framework/nsh-lwm2m>`_
+`tools/test-framework-tools/nsh-lwm2m <https://github.com/AVSystem/Anjay/tree/master/tools/test-framework-tools/nsh-lwm2m>`_
 directory in the Anjay repository.
+
+.. note::
+
+    It is recommended to use :doc:`VirtualEnvironments` when running Python
+    scripts.
 
 Running the server
 ~~~~~~~~~~~~~~~~~~
 
-You can start the server (from the main Anjay directory) by running `./tests/integration/framework/nsh-lwm2m/nsh_lwm2m.py`
+You can start the server (from the main Anjay directory) by running `./tools/test-framework-tools/nsh-lwm2m/nsh_lwm2m.py`
 with the following optional arguments:
 
 --help, -h            Show help.
@@ -41,7 +46,7 @@ first for setting up the server:
 
 .. code-block:: bash
 
-   ./bootstrap/framework/nsh-lwm2m/nsh_lwm2m.py -l 9000
+   ./tools/test-framework-tools/nsh-lwm2m/nsh_lwm2m.py -l 9000
 
 and the second for setting up the client:
 
@@ -609,14 +614,14 @@ To show how we can use Nsh for bootstrapping, we set up the bootstrap server:
 
 .. code-block:: text
 
-   ./bootstrap/framework/nsh-lwm2m/nsh_lwm2m.py -l 9000
+   ./tools/test-framework-tools/nsh-lwm2m/nsh_lwm2m.py -l 9000
 
 and the second one (in some other terminal), this time on a different port and using some id and password
 (for the sake of simplicity the id=`user`and password=`password`):
 
 .. code-block:: text
 
-   ./bootstrap/framework/nsh-lwm2m/nsh_lwm2m.py -l 9500 --psk-identity user --psk-key password
+   ./tools/test-framework-tools/nsh-lwm2m/nsh_lwm2m.py -l 9500 --psk-identity user --psk-key password
 
 Then we run the client (important note: ``--bootstrap`` option is necessary):
 
@@ -649,7 +654,7 @@ To see how we can use Nsh for serving files, first start it without arguments:
 
 .. code-block:: text
 
-   ./bootstrap/framework/nsh-lwm2m/nsh_lwm2m.py
+   ./tools/test-framework-tools/nsh-lwm2m/nsh_lwm2m.py
 
 and then start serving files from Anjay directory:
 

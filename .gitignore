@@ -36,7 +36,6 @@ anjay-*.cmake
 Doxyfile
 /doc/sphinx/source/conf.py
 tests/integration/run_tests.sh
-tests/integration/framework/nsh-lwm2m/pymbedtls/build/
 
 # other
 Makefile
@@ -57,7 +56,6 @@ __pycache__/
 *.egg-info
 *.pyc
 *.cache
-/tests/integration/framework/nsh-lwm2m/coap/pymbedtls*
 compile_commands.json
 
 /avs_commons/install
@@ -72,3 +70,12 @@ examples/*-build
 
 # Anjay persistence files
 *-persistence.dat
+
+# Python venv
+/venv/
+build/
+dist/
+*.egg-info/
+
+# py-build-cmake cache
+.py-build-cmake_cache

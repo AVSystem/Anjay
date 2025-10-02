@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -141,9 +141,6 @@ typedef struct {
 } anjay_uri_path_t;
 
 /**
- * @experimental This is experimental callback for confirmable notifications.
- * This API can change in future versions without any notice.
- *
  * A handler called if acknowledgement for confirmable notification is received
  * from the Server or some error has occurred.
  *
@@ -192,9 +189,6 @@ typedef void anjay_confirmable_notification_status_cb_t(
 
 #ifdef ANJAY_WITH_CONN_STATUS_API
 /**
- * @experimental This is experimental server connection status API. This API can
- *               change in future versions without any notice.
- *
  * This enum represents the possible states of a server connection.
  */
 typedef enum anjay_server_conn_status {
@@ -287,9 +281,6 @@ typedef enum anjay_server_conn_status {
 } anjay_server_conn_status_t;
 
 /**
- * @experimental This is experimental server connection status API. This API can
- *               change in future versions without any notice.
- *
  * Callback called each time there is a transition of a server connection status
  * (as listed in @ref anjay_server_conn_status_t ).
  *
@@ -310,9 +301,6 @@ anjay_server_connection_status_cb_t(void *arg,
                                     anjay_server_conn_status_t status);
 
 /**
- * @experimental This is experimental server connection status API. This API can
- *               change in future versions without any notice.
- *
  * This function returns the server connection status. Possible statuses are
  * given in the @ref anjay_server_conn_status_t. Statuses for a LwM2M Bootstrap
  * Server are different from the statuses for a regular LwM2M Server.
@@ -665,9 +653,6 @@ typedef struct anjay_configuration {
 #endif // ANJAY_WITH_LWM2M11
 
     /**
-     * @experimental This is experimental callback for confirmable
-     * notifications. This API can change in future versions without any notice.
-     *
      * A handler called if acknowledgement for confirmable notification is
      * received from the Server or some error has occurred.
      */
@@ -676,18 +661,12 @@ typedef struct anjay_configuration {
 
 #ifdef ANJAY_WITH_CONN_STATUS_API
     /**
-     * @experimental This is experimental server connection status API. This API
-     *               can change in future versions without any notice.
-     *
      * Function called each time there is a transition of a server connection
      * status (as listed in @ref anjay_server_conn_status_t ).
      */
     anjay_server_connection_status_cb_t *server_connection_status_cb;
 
     /**
-     * @experimental This is experimental server connection status API. This API
-     *               can change in future versions without any notice.
-     *
      * Opaque argument that will be passed to the function configured in the
      * <c>server_connection_status_cb</c> field.
      *
@@ -697,9 +676,6 @@ typedef struct anjay_configuration {
 #endif // ANJAY_WITH_CONN_STATUS_API
 #ifdef ANJAY_WITH_COAP_DOWNLOAD
     /**
-     * @experimental This is experimental feature of CoAP downloader. This API
-     * can change in future versions without any notice.
-     *
      * If set, defines the number of additional CoAP download attempts that will
      * be made in case of failure. Can be useful for large files (Firmware
      * Update) and poor network quality. If the resumption of the transfer
@@ -726,9 +702,6 @@ typedef struct anjay_configuration {
     size_t coap_downloader_retry_count;
 
     /**
-     * @experimental This is experimental feature of CoAP downloader. This API
-     * can change in future versions without any notice.
-     *
      * If set, defines the delay between CoAP download attempts in case of
      * failure. If not set, next attempt will be made immediately. Related to
      * @ref coap_downloader_retry_count.

@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
@@ -30,6 +30,7 @@ Contents:
    FirmwareUpdateTutorial
    LwM2MGateway
    Tools
+   KnownIssues
    API_description
    PortingGuideForNonPOSIXPlatforms
    Migrating

@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
@@ -16,7 +16,7 @@ Introduction
 
 ``avs_crypto`` and ``avs_net`` include full-featured, ready-to-use integrations
 with the TLS and DTLS protocols, using either
-`OpenSSL <https://www.openssl.org/>`_ or `Mbed TLS <https://tls.mbed.org/>`_,
+`OpenSSL <https://www.openssl.org/>`_ or `Mbed TLS <https://www.trustedfirmware.org/projects/mbed-tls/>`_,
 as well as a basic implementation that supports the PSK mode only, using
 `tinydtls <https://projects.eclipse.org/projects/iot.tinydtls>`_.
 

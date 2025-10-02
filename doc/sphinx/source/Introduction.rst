@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
@@ -85,7 +85,7 @@ Some optional features require C11's ``stdatomic.h`` header to be available
 Its only external dependency is the open source
 `AVSystem Commons Library <https://github.com/AVSystem/avs_commons>`_. That
 library in turn may additionally depend either on
-`OpenSSL <https://www.openssl.org/>`_ or `Mbed TLS <https://tls.mbed.org/>`_
+`OpenSSL <https://www.openssl.org/>`_ or `Mbed TLS <https://www.trustedfirmware.org/projects/mbed-tls/>`_
 or `TinyDTLS <https://projects.eclipse.org/projects/iot.tinydtls>`_ for DTLS
 support.
 

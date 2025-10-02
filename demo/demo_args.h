@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -27,6 +27,7 @@
 #endif // ANJAY_WITH_MODULE_SW_MGMT
 
 #include "demo_utils.h"
+#include "net_traffic_interceptor.h"
 #include "objects.h"
 
 typedef struct access_entry {
@@ -194,6 +195,9 @@ typedef struct cmdline_args {
 #ifdef ANJAY_WITH_LWM2M_GATEWAY
     bool lwm2m_gateway_enabled;
 #endif // ANJAY_WITH_LWM2M_GAYEWAY
+#ifdef WITH_DEMO_TRAFFIC_INTERCEPTOR
+    const char *traffic_intercept_path;
+#endif // WITH_DEMO_TRAFFIC_INTERCEPTOR
 } cmdline_args_t;
 
 int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char **argv);

@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
 # Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
-from framework.lwm2m.tlv import TLVType
-from framework.lwm2m_test import *
+from framework_tools.lwm2m.tlv import TLVType
+from framework_tools.utils.lwm2m_test import *
 
 from . import bootstrap_server
 

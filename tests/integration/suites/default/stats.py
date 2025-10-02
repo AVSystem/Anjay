@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
 # Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
-from framework.lwm2m import messages
-from framework.lwm2m_test import test_suite
-from framework.lwm2m.coap import Type
-from framework.test_utils import OID, RID
+from framework_tools.lwm2m import messages
+from framework_tools.utils.lwm2m_test import test_suite
+from framework_tools.lwm2m.coap import Type
+from framework_tools.utils.test_utils import OID, RID
 
 
 class StatsTest:

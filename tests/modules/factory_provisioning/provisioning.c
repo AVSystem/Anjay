@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -16,7 +16,8 @@
 
 #include "tests/utils/dm.h"
 
-// NOTE: Success case is tested by tests/integration/factory_provisioning.py
+// NOTE: Success case is tested by
+// tests/integration/suites/defaultfactory_provisioning.py
 
 AVS_UNIT_TEST(factory_provisioning, fail_rollback) {
     DM_TEST_INIT_WITH_OBJECTS(&OBJ_WITH_TRANSACTION, &FAKE_SECURITY,

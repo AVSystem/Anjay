@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
@@ -19,6 +19,11 @@ provisioning easier. The script supports:
 * Creation of self-signed certificates.
 * Loading configuration to device (currently supports Nordic boards).
 * Automatic device onboarding in the Coiote server.
+
+.. note::
+
+    It is recommended to use :doc:`VirtualEnvironments` when running Python
+    scripts.
 
 Provisioning tool
 ^^^^^^^^^^^^^^^^^
@@ -42,7 +47,7 @@ Let's take a closer look:
   following:
 
   .. highlight:: python
-  .. snippet-source:: tests/integration/framework/test_utils.py
+  .. snippet-source:: tools/test-framework-tools/tools/framework_tools/utils/test_utils.py
 
       class Objlink:
           def __init__(self, ObjID, ObjInstID):

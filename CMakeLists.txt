@@ -1,4 +1,4 @@
-# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -8,7 +8,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(anjay C)
-set(ANJAY_VERSION "3.11.0" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "3.12.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -21,6 +21,11 @@ set(CMAKE_USE_RELATIVE_PATHS TRUE)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(CheckFunctionExists)
+
+if(WITH_DEMO OR WITH_INTEGRATION_TESTS)
+    # ensure Python venv is active
+    include(cmake/requirePython3venv.cmake)
+endif()
 
 # On Linux, one needs to link libdl to use dlsym(). On BSD, it is not necessary,
 # and even harmful, since libdl does not exist.
@@ -617,7 +622,7 @@ if(WITH_TEST)
     add_custom_target(check)
     add_custom_target(anjay_unit_check)
     add_dependencies(check anjay_unit_check)
-    
+
     # anjay_test
     add_executable(anjay_test EXCLUDE_FROM_ALL
                    $<TARGET_PROPERTY:anjay,SOURCES>
@@ -737,15 +742,6 @@ if(WITH_TEST)
                      toc_check
                      config_log_check)
 
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
-        option(WITH_LICENSE_TEST "Enable checking if all files have the license boilerplate" OFF)
-        if(WITH_LICENSE_TEST)
-            add_custom_target(anjay_license_check
-                              COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tools/license_headers.py"
-                              WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
-            add_dependencies(anjay_unit_check anjay_license_check)
-        endif()
-    endif()
 
     # Symbol validation
     add_custom_target(symbols_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_.*_symbols$$'" --output-on-failure)

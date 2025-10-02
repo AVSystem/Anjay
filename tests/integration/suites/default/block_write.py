@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -11,7 +11,8 @@ import os
 import unittest
 
 from collections import namedtuple
-from framework.lwm2m_test import *
+from framework_tools.utils.lwm2m_test import *
+from framework.create_package import make_firmware_package
 
 msg_id_generator = SequentialMsgIdGenerator(42)
 

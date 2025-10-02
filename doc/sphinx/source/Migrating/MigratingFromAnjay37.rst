@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
    AVSystem Anjay LwM2M SDK
    All rights reserved.
 
@@ -26,3 +26,10 @@ If an attempt to deliver a confirmable notification times out, CoAP observation
 is not cancelled by default anymore. It can be adjusted by
 ``WITH_AVS_COAP_OBSERVE_CANCEL_ON_TIMEOUT``.
 The LwM2M Observe/Notify implementation in Anjay has been updated accordingly.
+
+Python environment isolation
+----------------------------
+
+All Python-based tools (e.g. integration tests) must be executed within a
+Python virtual environment. See :doc:`/Tools/VirtualEnvironments` for more
+information.

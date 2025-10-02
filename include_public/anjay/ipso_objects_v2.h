@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -16,9 +16,6 @@ extern "C" {
 #endif
 
 /**
- * @experimental This is experimental IPSO object v2 API. This API can change
- *               in future versions without any notice.
- *
  * IPSO basic sensor object instance metadata.
  */
 typedef struct anjay_ipso_v2_basic_sensor_meta_struct {
@@ -57,9 +54,6 @@ typedef struct anjay_ipso_v2_basic_sensor_meta_struct {
 } anjay_ipso_v2_basic_sensor_meta_t;
 
 /**
- * @experimental This is experimental IPSO object v2 API. This API can change
- *               in future versions without any notice.
- *
  * IPSO three-axis sensor object instance metadata.
  */
 typedef struct anjay_ipso_v2_3d_sensor_meta_struct {
@@ -111,9 +105,6 @@ typedef struct anjay_ipso_v2_3d_sensor_meta_struct {
 } anjay_ipso_v2_3d_sensor_meta_t;
 
 /**
- * @experimental This is experimental IPSO object v2 API. This API can change
- *               in future versions without any notice.
- *
  * Value of IPSO three-axis sensor object.
  */
 typedef struct anjay_ipso_v2_3d_sensor_value_struct {
@@ -134,9 +125,6 @@ typedef struct anjay_ipso_v2_3d_sensor_value_struct {
 } anjay_ipso_v2_3d_sensor_value_t;
 
 /**
- * @experimental This is experimental IPSO object v2 API. This API can change
- *               in future versions without any notice.
- *
  * Installs a basic IPSO object.
  *
  * @param anjay          Anjay object for which the object is installed.
@@ -156,9 +144,6 @@ int anjay_ipso_v2_basic_sensor_install(anjay_t *anjay,
                                        size_t instance_count);
 
 /**
- * @experimental This is experimental IPSO object v2 API. This API can change
- *               in future versions without any notice.
- *
  * Adds an instance of basic IPSO object. Requires the object to be installed
  * first with @ref anjay_ipso_v2_basic_sensor_install .
  *
@@ -180,9 +165,6 @@ int anjay_ipso_v2_basic_sensor_instance_add(
         const anjay_ipso_v2_basic_sensor_meta_t *meta);
 
 /**
- * @experimental This is experimental IPSO object v2 API. This API can change
- *               in future versions without any notice.
- *
  * Updates sensor value of basic IPSO object, and also minimum and maximum
  * measured values.
  *
@@ -206,9 +188,6 @@ int anjay_ipso_v2_basic_sensor_value_update(anjay_t *anjay,
                                             double value);
 
 /**
- * @experimental This is experimental IPSO object v2 API. This API can change
- *               in future versions without any notice.
- *
  * Removes an instance of basic IPSO object.
  *
  * @param anjay Anjay object with an installed basic IPSO object.
@@ -222,9 +201,6 @@ int anjay_ipso_v2_basic_sensor_instance_remove(anjay_t *anjay,
                                                anjay_iid_t iid);
 
 /**
- * @experimental This is experimental IPSO object v2 API. This API can change
- *               in future versions without any notice.
- *
  * Installs a three-axis IPSO object.
  *
  * @param anjay          Anjay object for which the object is installed.
@@ -244,9 +220,6 @@ int anjay_ipso_v2_3d_sensor_install(anjay_t *anjay,
                                     size_t instance_count);
 
 /**
- * @experimental This is experimental IPSO object v2 API. This API can change
- *               in future versions without any notice.
- *
  * Adds an instance of three-axis IPSO object. Requires the object to be
  * installed first with @ref anjay_ipso_v2_3d_sensor_install .
  *
@@ -268,9 +241,6 @@ int anjay_ipso_v2_3d_sensor_instance_add(
         const anjay_ipso_v2_3d_sensor_meta_t *meta);
 
 /**
- * @experimental This is experimental IPSO object v2 API. This API can change
- *               in future versions without any notice.
- *
  * Updates sensor value of three-axis IPSO object.
  *
  * This method should be called frequently if user needs LwM2M observations to
@@ -294,9 +264,6 @@ int anjay_ipso_v2_3d_sensor_value_update(
         const anjay_ipso_v2_3d_sensor_value_t *value);
 
 /**
- * @experimental This is experimental IPSO object v2 API. This API can change
- *               in future versions without any notice.
- *
  * Removes an instance of three-axis IPSO object.
  *
  * @param anjay Anjay object with an installed three-axis IPSO object.

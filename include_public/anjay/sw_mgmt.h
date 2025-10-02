@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
  * AVSystem Anjay LwM2M SDK
  * All rights reserved.
  *
@@ -58,9 +58,6 @@ typedef enum {
 /** @} */
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Possible values that control Update State, Update Result and Activation State
  * resources at the time of initialization of the Software Management object.
  */
@@ -122,9 +119,6 @@ typedef enum {
 } anjay_sw_mgmt_initial_state_t;
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Information about the state to initialize the Software Management object
  * instance.
  */
@@ -149,9 +143,6 @@ typedef struct {
 } anjay_sw_mgmt_instance_initializer_t;
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Opens the stream that will be used to write the software package to.
  *
  * The intended way of implementing this handler is to open a temporary file
@@ -181,9 +172,6 @@ typedef int
 anjay_sw_mgmt_stream_open_t(void *obj_ctx, anjay_iid_t iid, void *inst_ctx);
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Writes data to the download stream.
  *
  * May be called multiple times after @ref anjay_sw_mgmt_stream_open_t, once
@@ -217,9 +205,6 @@ typedef int anjay_sw_mgmt_stream_write_t(void *obj_ctx,
                                          size_t length);
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Closes the download stream.
  *
  * Will be called after a series of @ref anjay_sw_mgmt_stream_write_t calls
@@ -256,9 +241,6 @@ typedef int
 anjay_sw_mgmt_stream_finish_t(void *obj_ctx, anjay_iid_t iid, void *inst_ctx);
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Conducts integrity check of downloaded package.
  *
  * If this handler is not implemented at all (with the corresponding field set
@@ -285,9 +267,6 @@ typedef int
 anjay_sw_mgmt_check_integrity_t(void *obj_ctx, anjay_iid_t iid, void *inst_ctx);
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Resets the software installation state and performs any applicable cleanup of
  * temporary storage if necessary.
  *
@@ -311,9 +290,6 @@ typedef void
 anjay_sw_mgmt_reset_t(void *obj_ctx, anjay_iid_t iid, void *inst_ctx);
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Returns the name of downloaded software package.
  *
  * The name will be exposed in the data model as the PkgName Resource. If this
@@ -347,9 +323,6 @@ typedef const char *
 anjay_sw_mgmt_get_name_t(void *obj_ctx, anjay_iid_t iid, void *inst_ctx);
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Returns the version of downloaded software package.
  *
  * The version will be exposed in the data model as the PkgVersion Resource. If
@@ -383,9 +356,6 @@ typedef const char *
 anjay_sw_mgmt_get_version_t(void *obj_ctx, anjay_iid_t iid, void *inst_ctx);
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Performs the actual installation of previously downloaded software package.
  *
  * Will be called at the request of the server, after a package has been
@@ -432,9 +402,6 @@ typedef int
 anjay_sw_mgmt_pkg_install_t(void *obj_ctx, anjay_iid_t iid, void *inst_ctx);
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Uninstalls software package.
  *
  * This callback will be called only in <em>Installed</em> state, if the
@@ -467,9 +434,6 @@ typedef int
 anjay_sw_mgmt_pkg_uninstall_t(void *obj_ctx, anjay_iid_t iid, void *inst_ctx);
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Prepares software package for update.
  *
  * This callback will be called only in <em>Installed</em> state, if the
@@ -501,9 +465,6 @@ typedef int anjay_sw_mgmt_prepare_for_update_t(void *obj_ctx,
                                                void *inst_ctx);
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Activates software package.
  *
  * This callback will be called only in <em>Installed</em> state. The activation
@@ -538,9 +499,6 @@ typedef int
 anjay_sw_mgmt_activate_t(void *obj_ctx, anjay_iid_t iid, void *inst_ctx);
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Deactivates software package.
  *
  * This callback will be called only in <em>Installed</em> state. The activation
@@ -577,9 +535,6 @@ anjay_sw_mgmt_deactivate_t(void *obj_ctx, anjay_iid_t iid, void *inst_ctx);
 #ifdef ANJAY_WITH_DOWNLOADER
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Queries security information that shall be used for an encrypted connection
  * with a PULL-mode download server.
  *
@@ -664,9 +619,6 @@ anjay_sw_mgmt_get_security_config_t(void *obj_ctx,
                                     anjay_security_config_t *out_security_info);
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Returns tx_params used to override default ones.
  *
  * If this handler is not implemented at all (with the corresponding field set
@@ -693,9 +645,6 @@ anjay_sw_mgmt_get_coap_tx_params_t(void *obj_ctx,
                                    const char *download_uri);
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Returns request timeout to be used during software download over CoAP+TCP or
  * HTTP.
  *
@@ -726,9 +675,6 @@ anjay_sw_mgmt_get_tcp_request_timeout_t(void *obj_ctx,
                                         const char *download_uri);
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Suspends the operation of PULL-mode downloads in the Software Management
  * module.
  *
@@ -749,9 +695,6 @@ anjay_sw_mgmt_get_tcp_request_timeout_t(void *obj_ctx,
 void anjay_sw_mgmt_pull_suspend(anjay_t *anjay);
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Reconnects any ongoing PULL-mode downloads in the Software Management module.
  * Which could be disconnected due to connection loss or deliberate suspend.
  * In the latter case, when PULL-mode downloads are suspended (see
@@ -772,9 +715,6 @@ int anjay_sw_mgmt_pull_reconnect(anjay_t *anjay);
 #endif // ANJAY_WITH_DOWNLOADER
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Handles server's request to create new instance of Software Management
  * object.
  *
@@ -806,9 +746,6 @@ typedef int anjay_sw_mgmt_add_handler_t(void *obj_ctx,
                                         void **out_inst_ctx);
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Handles server's request to remove an instance of Software Management object.
  *
  * This callback allows the user to clean up user-specific data or to reject
@@ -836,10 +773,6 @@ typedef int anjay_sw_mgmt_add_handler_t(void *obj_ctx,
 typedef int
 anjay_sw_mgmt_remove_handler_t(void *obj_ctx, anjay_iid_t iid, void *inst_ctx);
 
-/**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- */
 typedef struct {
     /** Opens the stream that will be used to write the software package to;
      * @ref anjay_sw_mgmt_stream_open_t */
@@ -911,9 +844,6 @@ typedef struct {
 } anjay_sw_mgmt_handlers_t;
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Settings of the Software Management module, global for all instances
  * installed.
  */
@@ -943,9 +873,6 @@ typedef struct {
 } anjay_sw_mgmt_settings_t;
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Installs the Software Management object in an Anjay object.
  *
  * The Software Management module does not require explicit cleanup; all
@@ -970,9 +897,6 @@ int anjay_sw_mgmt_install(anjay_t *anjay,
                           const anjay_sw_mgmt_settings_t *settings);
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Checks if the instance state is <em>Installed</em> and return the activation
  * state via \p out_state argument. Can be used in @ref anjay_sw_mgmt_activate_t
  * or @ref anjay_sw_mgmt_deactivate_t to check if we want to proceed with
@@ -995,9 +919,6 @@ int anjay_sw_mgmt_get_activation_state(anjay_t *anjay,
                                        bool *out_state);
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Possible values that control package state after installation.
  */
 typedef enum {
@@ -1024,9 +945,6 @@ typedef enum {
 } anjay_sw_mgmt_finish_pkg_install_result_t;
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Marks delivered software package as installed and optionally activated,
  * making transition to <em>Installed</em> state or reports installation error.
  *
@@ -1063,9 +981,6 @@ int anjay_sw_mgmt_finish_pkg_install(
         anjay_sw_mgmt_finish_pkg_install_result_t pkg_install_result);
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Adds an instance of Software Management object.
  *
  * This method will not cause @ref anjay_sw_mgmt_add_handler_t to be called,
@@ -1084,9 +999,6 @@ int anjay_sw_mgmt_add_instance(
         const anjay_sw_mgmt_instance_initializer_t *instance_initializer);
 
 /**
- * @experimental This is experimental Software Management object API. This API
- * can change in future versions without any notice.
- *
  * Remove an instance of Software Management object.
  *
  * This method will not cause @ref anjay_sw_mgmt_remove_handler_t to be called,

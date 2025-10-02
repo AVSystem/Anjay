@@ -1,9 +1,12 @@
-# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
 # Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
+
+cmake_minimum_required(VERSION 3.16)
+project(TestScripts LANGUAGES NONE) # silence the warning
 
 if(WITH_VALGRIND)
     if(NOT VALGRIND)
@@ -20,8 +23,12 @@ else()
     endmacro()
 endif()
 
+### FindPython3
+if(NOT TARGET Python3::Interpreter)
+    include(../../cmake/requirePython3venv.cmake)
+endif()
+
 set(INTEGRATION_TEST_PREFIX "test_demo_")
-set(PYMBEDTLS_MODULE_DIR ${ANJAY_BUILD_OUTPUT_DIR}/pymbedtls)
 
 if(TEST_KEEP_SUCCESS_LOGS)
     set(ADDITIONAL_RUNTEST_ARGS "--keep-success-logs")
@@ -48,9 +55,6 @@ foreach(TEST_CASE_ENTRY IN LISTS RUNTEST_LIST_OUTPUT)
                                                         --client=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/demo
                                                         ${ADDITIONAL_RUNTEST_ARGS})
 
-        # Tell python tests where to look for pymbedtls*.so
-        set_property(TEST ${INTEGRATION_TEST_PREFIX}${TEST_CASE_ENTRY}
-                     APPEND PROPERTY ENVIRONMENT "PYTHONPATH=${PYMBEDTLS_MODULE_DIR}")
         # The longest test is 5 minutes, so set the timeout to 6 minutes
         set_property(TEST ${INTEGRATION_TEST_PREFIX}${TEST_CASE_ENTRY} PROPERTY TIMEOUT 360)
 
@@ -58,35 +62,15 @@ foreach(TEST_CASE_ENTRY IN LISTS RUNTEST_LIST_OUTPUT)
     endif()
 endforeach()
 
-set(NSH_LWM2M_DIR "${CMAKE_CURRENT_SOURCE_DIR}/framework/nsh-lwm2m")
-
 if(NOT MBEDTLS_LIBRARY)
     message(FATAL_ERROR "mbed TLS is required for integration tests")
 endif()
 
-set(_MISSING_PYTHON_MSG "If you have it installed on your system, but your cmake version is outdated you could try to restart the process that lead to this error message with: -DPython_ADDITIONAL_VERSIONS=3.x")
-
-if(Python_ADDITIONAL_VERSIONS)
-    find_package(PythonInterp)
-else()
-    find_package(PythonInterp 3)
-endif()
-if(NOT PYTHONINTERP_FOUND
-        OR PYTHON_VERSION_MAJOR LESS 3
-        OR (PYTHON_VERSION_MAJOR EQUAL 3 AND PYTHON_VERSION_MINOR LESS 5))
-    message(FATAL_ERROR
-            "Python >=3.5 is required for integration tests. ${_MISSING_PYTHON_MSG}")
-endif()
-find_package(PythonLibs "${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}")
-if(NOT PYTHONLIBS_FOUND)
-    message(FATAL_ERROR
-            "libpython ${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR} is required for integration tests.")
-endif()
-unset(_MISSING_PYTHON_MSG)
+set(PYMBEDTLS_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../tools/test-framework-tools/pymbedtls")
 
 add_custom_target(pymbedtls COMMAND
                   env "MBEDTLS_ROOT_DIR=${MBEDTLS_ROOT_DIR}"
-                  python3 -m pip install --target ${PYMBEDTLS_MODULE_DIR} "${NSH_LWM2M_DIR}/pymbedtls")
+                  python3 -m pip install "${PYMBEDTLS_SRC_DIR}")
 
 set(WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 configure_file("run_tests.sh.in" "run_tests.sh")
