@@ -6,6 +6,7 @@
 # See the attached LICENSE file for details.
 
 include_guard(GLOBAL)
+set(Python_FIND_FRAMEWORK LAST)
 set(Python3_FIND_VIRTUALENV ONLY)
 find_package(Python3 3.5 REQUIRED COMPONENTS Interpreter)
 

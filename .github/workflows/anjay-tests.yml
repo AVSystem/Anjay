@@ -1,4 +1,4 @@
-# Copyright 2017-2025 AVSystem <avsystem@avsystem.com>
+# Copyright ##year## AVSystem <avsystem@avsystem.com>
 # AVSystem Anjay LwM2M SDK
 # All rights reserved.
 #
@@ -24,8 +24,12 @@ jobs:
       - run: apt-get update
       - run: apt-get -y install $CC $CXX
       - run: ./devconfig --with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_IPV6=OFF
-      - run: env CC=gcc LC_ALL=C.UTF-8 make -j
-      - run: env CC=gcc LC_ALL=C.UTF-8 make check
+      - run: |
+          . /venv/bin/activate
+          env CC=gcc LC_ALL=C.UTF-8 make -j
+      - run: |
+          . /venv/bin/activate
+          env CC=gcc LC_ALL=C.UTF-8 make check
     strategy:
       fail-fast: false
       matrix:
@@ -56,8 +60,12 @@ jobs:
       - run: apt-get update
       - run: apt-get -y install $CC $CXX
       - run: ./devconfig $MEM_CHECK_TOOL --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_IPV6=OFF
-      - run: env CC=gcc LC_ALL=C.UTF-8 make -j
-      - run: env CC=gcc LC_ALL=C.UTF-8 make check
+      - run: |
+          . /venv/bin/activate
+          env CC=gcc LC_ALL=C.UTF-8 make -j
+      - run: |
+          . /venv/bin/activate
+          env CC=gcc LC_ALL=C.UTF-8 make check
     strategy:
       fail-fast: false
       matrix:
@@ -98,8 +106,12 @@ jobs:
       - run: apt-get update
       - run: apt-get -y install $CC $CXX
       - run: ./devconfig $MEM_CHECK_TOOL --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_IPV6=OFF
-      - run: env CC=gcc LC_ALL=C.UTF-8 make -j
-      - run: env CC=gcc LC_ALL=C.UTF-8 make check
+      - run: |
+          . /venv/bin/activate
+          env CC=gcc LC_ALL=C.UTF-8 make -j
+      - run: |
+          . /venv/bin/activate
+          env CC=gcc LC_ALL=C.UTF-8 make check
     strategy:
       fail-fast: false
       matrix:
@@ -141,8 +153,12 @@ jobs:
       # Solve issues with EPERM when running dumpcap
       - run: setcap '' $(which dumpcap)
       - run: ./devconfig --with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_IPV6=OFF
-      - run: env CC=gcc LC_ALL=C.UTF-8 make -j
-      - run: env CC=gcc LC_ALL=C.UTF-8 make check
+      - run: |
+          . /venv/bin/activate
+          env CC=gcc LC_ALL=C.UTF-8 make -j
+      - run: |
+          . /venv/bin/activate
+          env CC=gcc LC_ALL=C.UTF-8 make check
     strategy:
       fail-fast: false
       matrix:
@@ -177,10 +193,15 @@ jobs:
       - run: brew install embedded/mbedtls/mbedtls
       - run: brew pin mbedtls
       # NOTE: The above command may have installed a new version of Python, that's why we launch it weirdly
-      - run: /usr/bin/env python3 -m pip install -r requirements.txt --break-system-packages
+      # NOTE: We manualy create env since devconfig does not use /usr/bin/env python3
+      - run: /usr/bin/env python3 -m venv venv
       - run: env JAVA_HOME="$JAVA_HOME_17_X64" ./devconfig --with-asan --without-analysis --no-examples -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_IPV6=OFF -DMBEDTLS_ROOT_DIR=/opt/homebrew/opt/mbedtls
-      - run: LC_ALL=en_US.UTF-8 make -j
-      - run: LC_ALL=en_US.UTF-8 make check
+      - run: |
+          . venv/bin/activate
+          LC_ALL=en_US.UTF-8 make -j
+      - run: |
+          . venv/bin/activate
+          LC_ALL=en_US.UTF-8 make check
     strategy:
       fail-fast: false
       matrix:
