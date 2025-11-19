@@ -5,7 +5,7 @@ ce13c0449f326312673663488c32a272  deps/avs_coap/include_public/avsystem/coap/udp
 a4e05d95cef2897e8c0bd9380b4bbf87  deps/avs_commons/include_public/avsystem/commons/avs_crypto_common.h
 e18dd8b8298d3972421126c8970a24e0  deps/avs_commons/include_public/avsystem/commons/avs_crypto_pki.h
 977b5dbc2bf3c2177ac2335904aae1de  deps/avs_commons/include_public/avsystem/commons/avs_crypto_psk.h
-55d9df8c3ecdcfd13bda758bd45b55e4  deps/avs_commons/include_public/avsystem/commons/avs_socket.h
+0dd58a74be01ed634937cc9c5bb5e433  deps/avs_commons/include_public/avsystem/commons/avs_socket.h
 ffac8588f8a4e1db2cf851d9ac9f6df2  deps/avs_commons/include_public/avsystem/commons/avs_socket_v_table.h
 0bf3baff8d24c572b6e76fb346e97580  deps/avs_commons/include_public/avsystem/commons/avs_utils.h
 994b330e2338ea271122e0471dae581c  deps/avs_commons/src/net/avs_net_global.h
