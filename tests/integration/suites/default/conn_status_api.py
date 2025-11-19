@@ -39,7 +39,7 @@ class ConnStatusAPI:
 
     class TestMixin:
         STATUS_CHANGE_REGEX = re.compile(
-            rb'Current status of the server with SSID (\d+) is: (.+)')
+            rb'Current status of the server with SSID (\d+) is: (.+)\n')
 
         # we need this to ensure that other commands which search through
         # logs will not accidentally consume statements we're interested in
