@@ -1,0 +1,117 @@
+/*
+ * Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
+ *
+ * Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
+ * See the attached LICENSE file for details.
+ */
+
+/**
+ * See: http://rackerlabs.github.io/docs-rackspace/tools/rtd-tables.html
+ */
+
+/* override table width restrictions */
+@media screen and (min-width: 767px) {
+
+   .wy-table-responsive table td {
+      /* !important prevents the common CSS stylesheets from overriding
+         this as on RTD they are loaded after this stylesheet */
+      white-space: normal !important;
+   }
+
+   .wy-table-responsive {
+      overflow: visible !important;
+   }
+
+   /* https://stackoverflow.com/questions/23211695/modifying-content-width-of-the-sphinx-theme-read-the-docs */
+   .wy-nav-content {
+        max-width: 960px !important;
+    }
+}
+
+/* AVSystem color scheme */
+.wy-side-nav-search>a {
+    color: #000 !important;
+}
+
+.wy-side-nav-search>a:after {
+    content: "Anjay";
+}
+
+.wy-side-nav-search>div.version {
+    color: #000;
+}
+
+.wy-side-nav-search input[type=text] {
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.wy-menu-vertical a:active {
+    background-color: #ffd500;
+    color: #000;
+}
+
+a {
+    color: #000;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+}
+
+.wy-nav-content a:visited,
+.wy-nav-content a:hover {
+    color: #8a8a8a;
+}
+
+nav a {
+    text-decoration: none !important;
+}
+
+.highlight {
+    background: #ffffff;
+}
+
+.highlight .hll {
+    background: #f3f6f6;
+}
+
+code.small-literal {
+    font-size: 65%;
+}
+
+/* --- Doxygen/Breathe API Styling Overrides --- */
+
+/* Use this extremely specific selector to ensure we override 
+ * the default sphinx_rtd_theme styles regardless of the CSS loading order.
+ */
+html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(.footnote):not(.citation):not(.glossary):not(.simple) > dt {
+
+    /* BACKGROUND: Light yellow instead of the default blue */
+    background: #fffdf0 !important; 
+
+    /* BORDER: Yellow accent line on top */
+    border-top: 3px solid #ffd500 !important; 
+    
+    /* TEXT: Dark text for better contrast */
+    color: #333333 !important;
+    
+    /* Optional: cosmetic adjustments */
+    margin-top: 12px;
+    padding: 8px;
+}
+
+/* --- Inner definitions (Parameters, Returns) --- */
+
+/* Reset styles for nested elements (e.g. parameter lists)
+ * so they DO NOT inherit the yellow background or top border.
+ */
+html.writer-html5 .rst-content dl:not(.docutils) dl dt {
+    background-color: transparent !important;
+    border: none !important;
+    color: #333333 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    font-weight: bold;
+}

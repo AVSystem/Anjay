@@ -730,6 +730,10 @@ void _anjay_server_update_last_ssl_alert_code(const anjay_server_info_t *info,
         return;
     }
 
+    anjay_log(DEBUG,
+              _("last SSL alert code for server with SSID ") "%u" _(":") " %u",
+              (unsigned) info->ssid, (unsigned) description);
+
     anjay_uri_path_t path =
             MAKE_RESOURCE_PATH(ANJAY_DM_OID_SERVER, server_iid,
                                ANJAY_DM_RID_SERVER_TLS_DTLS_ALERT_CODE);

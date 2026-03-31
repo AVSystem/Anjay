@@ -15,8 +15,8 @@ import socket
 import threading
 import time
 
-from framework_tools.utils.coap_file_server import CoapFileServerThread
-from framework_tools.utils.lwm2m_test import *
+from framework_tools.coap_file_server import CoapFileServerThread
+from framework.lwm2m_test import *
 
 DUMMY_PAYLOAD = os.urandom(16 * 1024)
 

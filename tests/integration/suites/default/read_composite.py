@@ -7,8 +7,8 @@
 # Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
-from framework_tools.utils.lwm2m_test import *
-from framework_tools.utils.test_utils import *
+from framework.lwm2m_test import *
+from framework.test_utils import *
 from . import block_write as bw
 
 
@@ -32,6 +32,7 @@ class ReadCompositeSupportedFormats(Test.ReadComposite):
         SUPPORTED_FORMATS = [
             coap.ContentFormat.APPLICATION_LWM2M_SENML_CBOR,
             coap.ContentFormat.APPLICATION_LWM2M_SENML_JSON,
+            coap.ContentFormat.APPLICATION_LWM2M_CBOR,
         ]
         for fmt in SUPPORTED_FORMATS:
             self.read_composite(self.serv, [ResPath.Device.Manufacturer], accept=fmt)

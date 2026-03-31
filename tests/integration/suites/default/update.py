@@ -7,7 +7,7 @@
 # Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
-from framework_tools.utils.lwm2m_test import *
+from framework.lwm2m_test import *
 
 
 class UpdateTest(test_suite.Lwm2mSingleServerTest):

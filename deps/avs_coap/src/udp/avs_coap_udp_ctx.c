@@ -1153,7 +1153,7 @@ static avs_error_t handle_response(avs_coap_udp_ctx_t *ctx,
         break;
 
     case AVS_COAP_UDP_TYPE_RESET:
-        // this should be detected at packet validation
+        // this is detected at packet validation
         AVS_UNREACHABLE("According to RFC7252 Reset MUST be empty");
         return _avs_coap_err(AVS_COAP_ERR_ASSERT_FAILED);
     }

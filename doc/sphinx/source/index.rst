@@ -31,10 +31,14 @@ Contents:
    LwM2MGateway
    Tools
    KnownIssues
-   API_description
    PortingGuideForNonPOSIXPlatforms
    Migrating
    CommercialFeatures
+
+.. toctree::
+   :titlesonly:
+
+   APIReference
 
 Links
 -----

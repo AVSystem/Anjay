@@ -37,6 +37,15 @@ typedef enum {
     ANJAY_DM_CON_ATTR_CON = 1
 } anjay_dm_con_attr_t;
 
+#ifdef ANJAY_WITH_LWM2M12
+/** Values for the edge attribute. */
+typedef enum {
+    ANJAY_DM_EDGE_ATTR_NONE = -1,
+    ANJAY_DM_EDGE_ATTR_FALLING = 0,
+    ANJAY_DM_EDGE_ATTR_RISING = 1
+} anjay_dm_edge_attr_t;
+#endif // ANJAY_WITH_LWM2M12
+
 /** Object/Object Instance Attributes */
 typedef struct {
     /** Minimum Period as defined by LwM2M spec */
@@ -51,6 +60,10 @@ typedef struct {
     /** Confirmable Notification as defined by LwM2M spec */
     anjay_dm_con_attr_t con;
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+    /** Maximum Historical Queue as defined by LwM2M spec */
+    int32_t hqmax;
+#endif // ANJAY_WITH_LWM2M12
 } anjay_dm_oi_attributes_t;
 
 /** Resource attributes. */
@@ -63,6 +76,10 @@ typedef struct {
     double less_than;
     /** Step attribute as defined by LwM2M spec */
     double step;
+#ifdef ANJAY_WITH_LWM2M12
+    /** Edge attribute as defined by LwM2M spec */
+    anjay_dm_edge_attr_t edge;
+#endif // ANJAY_WITH_LWM2M12
 } anjay_dm_r_attributes_t;
 
 /** A value indicating that the Min/Max Period or Maximum Historical Queue
@@ -619,6 +636,42 @@ typedef int anjay_dm_resource_instance_write_attrs_t(
         const anjay_dm_r_attributes_t *attrs);
 
 /**
+ * A handler that removes a Resource Instance from a Multiple Resource.
+ *
+ * This handler will only be called if the Resource is PRESENT, is of the
+ * @ref ANJAY_DM_RES_WM or @ref ANJAY_DM_RES_RWM kinds (as returned by
+ * @ref anjay_dm_list_resources_t), and the Resource Instance is PRESENT as well
+ * (has recently been returned via @ref anjay_dm_list_resource_instances_t).
+ *
+ * Note: if this handler is not implemented, then the Delete operation on the
+ * Resource Instance (@p riid) will not succeed.
+ *
+ * NOTE: This operation is new to the LwM2M 1.2 standard. It will never be
+ * called when communicating using protocol version 1.0 or 1.1. If you do
+ * not aim for LwM2M 1.2 compliance, this handler can be left unimplemented.
+ *
+ * @param anjay   Anjay object to operate on.
+ * @param obj_ptr Object definition pointer, as passed to
+ *                @ref anjay_register_object .
+ * @param iid     Object Instance ID.
+ * @param rid     Resource ID.
+ * @param riid    Resource Instance ID to remove.
+ *
+ * @returns This handler should return:
+ * - 0 on success,
+ * - a negative value in case of error. If it returns one of ANJAY_ERR_
+ *   constants, the response message will have an appropriate CoAP response
+ *   code. Otherwise, the device will respond with an unspecified (but valid)
+ *   error code.
+ */
+typedef int
+anjay_dm_resource_instance_remove_t(anjay_t *anjay,
+                                    const anjay_dm_object_def_t *const *obj_ptr,
+                                    anjay_iid_t iid,
+                                    anjay_rid_t rid,
+                                    anjay_riid_t riid);
+
+/**
  * A handler that is called when there is a request that might modify an Object
  * and fail. Such situation often requires to rollback changes, and this handler
  * shall implement logic that prepares for possible failure in the future.
@@ -962,6 +1015,23 @@ typedef struct {
      * *Attribute Storage* logic.
      */
     anjay_dm_resource_instance_write_attrs_t *resource_instance_write_attrs;
+
+#ifdef ANJAY_WITH_LWM2M12
+    /**
+     * Delete a Resource Instance from a Multiple Resource,
+     * @ref anjay_dm_resource_instance_remove_t
+     *
+     * Required for handling *LwM2M Delete* operation performed on Resource
+     * Instances.
+     *
+     * Can be NULL if the object does not contain multiple writable resources.
+     *
+     * NOTE: This operation is new to the LwM2M 1.2 standard. It will never be
+     * called when communicating using protocol version 1.0 or 1.1. If you do
+     * not aim for LwM2M 1.2 compliance, it can also be NULL.
+     */
+    anjay_dm_resource_instance_remove_t *resource_instance_remove;
+#endif // ANJAY_WITH_LWM2M12
 } anjay_dm_handlers_t;
 
 /** A struct defining a LwM2M Object. */

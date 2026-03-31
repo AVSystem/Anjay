@@ -138,6 +138,10 @@ struct
     anjay_server_connection_status_cb_t *server_connection_status_cb;
     void *server_connection_status_cb_arg;
 #endif // ANJAY_WITH_CONN_STATUS_API
+#ifdef ANJAY_WITH_SSL_ERROR_API
+    anjay_ssl_error_cb_t *ssl_error_cb;
+    void *ssl_error_cb_arg;
+#endif // ANJAY_WITH_SSL_ERROR_API
 
 #ifdef ANJAY_WITH_SEND
     anjay_sender_t sender;

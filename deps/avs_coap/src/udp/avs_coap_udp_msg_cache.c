@@ -33,7 +33,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 typedef struct endpoint {
-    uint16_t refcount;
+    size_t refcount;
     char addr[AVS_ADDRSTRLEN];
     char port[sizeof("65535")];
 } endpoint_t;
@@ -97,6 +97,10 @@ static endpoint_t *cache_endpoint_add_ref(avs_coap_udp_response_cache_t *cache,
     AVS_LIST_FOREACH_PTR(ep_ptr, &cache->endpoints) {
         if (!strcmp(remote_addr, (*ep_ptr)->addr)
                 && !strcmp(remote_port, (*ep_ptr)->port)) {
+            if ((*ep_ptr)->refcount == SIZE_MAX) {
+                LOG(WARNING, _("msg_cache: endpoint refcount overflow"));
+                return NULL;
+            }
             ++(*ep_ptr)->refcount;
             return *ep_ptr;
         }
@@ -131,6 +135,7 @@ static endpoint_t *cache_endpoint_add_ref(avs_coap_udp_response_cache_t *cache,
 
 static void cache_endpoint_del_ref(avs_coap_udp_response_cache_t *cache,
                                    endpoint_t *endpoint) {
+    assert(endpoint->refcount > 0);
     if (--endpoint->refcount == 0) {
         AVS_LIST(endpoint_t) *ep_ptr =
                 (AVS_LIST(endpoint_t) *) AVS_LIST_FIND_PTR(&cache->endpoints,

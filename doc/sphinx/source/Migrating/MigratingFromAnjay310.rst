@@ -19,6 +19,9 @@ Introduction
 Starting from Anjay 3.11.0, the behavior regarding the maximum Hold Off Time for
 bootstrap connections has changed.
 
+LwM2M TS 1.2 introduced possibility to delete a Resource Instance, so
+one additional data model handler had to be added.
+
 Limiting the maximum Hold Off Time for Bootstrap
 ------------------------------------------------
 
@@ -46,6 +49,21 @@ certificate usage is set to DANE-TA or DANE-EE.
 For more information on how Anjay manages the Trust Store and the Certificate
 Usage resource, see
 :doc:`Certificate Usage <../AdvancedTopics/AT-CertificateUsage>`.
+
+Addition of resource_instance_remove handler
+--------------------------------------------
+
+LwM2M TS 1.2 introduced possibility to delete a Resource Instance, so
+one additional data model handler had to be added.
+
+New ``resource_instance_remove`` handler (and its associated
+``anjay_dm_resource_instance_remove_t`` function type) has been introduced. It
+is analogous to the ``instance_remove`` handler; its job is to remove a specific
+Resource Instance from a multiple-instance Resource.
+
+Its implementation is required in objects that include at least one writeable
+multiple-instance Resource, if the client application aims for compliance with
+LwM2M 1.2.
 
 Python environment isolation
 ----------------------------

@@ -587,6 +587,11 @@ Specifically, the following topics were not covered:
   <https://github.com/AVSystem/avs_commons/blob/master/src/net/mbedtls/avs_mbedtls_socket.c>`__
   file in avs_commons to see how it can be implemented using Mbed TLS.
 
+* **Support for the SSL error API is not implemented.** This API requires
+  the ``connect()`` function to return ``avs_error_t`` objects created using
+  ``avs_net_ssl_lib_error()`` or ``avs_net_ssl_alert()`` defined in
+  ``deps/avs_commons/include_public/avsystem/commons/avs_socket.h``.
+
 * **Socket file descriptor is used directly instead of wrapping** ``avs_net``
   **APIs, and the** ``decorate`` **function is not implemented.** The secure SMS
   mode will thus not work in versions that include the SMS commercial feature.

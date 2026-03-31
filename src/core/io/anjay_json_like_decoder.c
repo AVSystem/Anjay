@@ -49,6 +49,14 @@ int _anjay_json_like_decoder_current_value_type(
     return ctx->vtable->current_value_type(ctx, out_type);
 }
 
+#    ifdef ANJAY_WITH_LWM2M12
+int _anjay_json_like_decoder_null(anjay_json_like_decoder_t *ctx) {
+    assert(ctx && ctx->vtable);
+    assert(ctx->vtable->read_null);
+    return ctx->vtable->read_null(ctx);
+}
+#    endif // ANJAY_WITH_LWM2M12
+
 int _anjay_json_like_decoder_bool(anjay_json_like_decoder_t *ctx,
                                   bool *out_value) {
     assert(ctx && ctx->vtable);

@@ -34,6 +34,8 @@ typedef enum {
     ANJAY_FW_UPDATE_RESULT_INVALID_URI = 7,
     ANJAY_FW_UPDATE_RESULT_FAILED = 8,
     ANJAY_FW_UPDATE_RESULT_UNSUPPORTED_PROTOCOL = 9,
+    ANJAY_FW_UPDATE_RESULT_UPDATE_CANCELLED = 10,
+    ANJAY_FW_UPDATE_RESULT_DEFERRED = 11,
 } anjay_fw_update_result_t;
 
 /** @name Firmware update result codes
@@ -55,6 +57,10 @@ typedef enum {
     (-(int) ANJAY_FW_UPDATE_RESULT_INTEGRITY_FAILURE)
 #define ANJAY_FW_UPDATE_ERR_UNSUPPORTED_PACKAGE_TYPE \
     (-(int) ANJAY_FW_UPDATE_RESULT_UNSUPPORTED_PACKAGE_TYPE)
+#ifdef ANJAY_WITH_LWM2M11
+#    define ANJAY_FW_UPDATE_ERR_DEFERRED \
+        (-(int) ANJAY_FW_UPDATE_RESULT_DEFERRED)
+#endif // ANJAY_WITH_LWM2M11
 
 /** @} */
 
@@ -116,6 +122,16 @@ typedef enum {
      */
     ANJAY_FW_UPDATE_INITIAL_FAILED = 8
 } anjay_fw_update_initial_result_t;
+
+/**
+ * Numeric values of the Firmware Update Severity resource. See LwM2M
+ * specification for details.
+ */
+typedef enum {
+    ANJAY_FW_UPDATE_SEVERITY_CRITICAL = 0,
+    ANJAY_FW_UPDATE_SEVERITY_MANDATORY,
+    ANJAY_FW_UPDATE_SEVERITY_OPTIONAL
+} anjay_fw_update_severity_t;
 
 /**
  * Information about the state to initialize the Firmware Update object in.
@@ -188,6 +204,25 @@ typedef struct {
     bool use_lwm2m_send;
 #endif // ANJAY_WITH_SEND
 
+#if defined(ANJAY_WITH_LWM2M11) \
+        && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
+    /**
+     * Value to initialize the Severity resource with.
+     */
+    anjay_fw_update_severity_t persisted_severity;
+
+    /**
+     * Value to initialize the Last State Change Time resource with.
+     */
+    avs_time_real_t persisted_last_state_change_time;
+
+    /**
+     * Update deadline based on Maximum Defer Period resource value and time of
+     * executing Update resource.
+     */
+    avs_time_real_t persisted_update_deadline;
+#endif /* defined(ANJAY_WITH_LWM2M11) && \
+          defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
 } anjay_fw_update_initial_state_t;
 
 /**
@@ -430,25 +465,25 @@ typedef int anjay_fw_update_perform_upgrade_t(void *user_ptr);
  * (@ref anjay_security_config_from_dm, @ref anjay_security_config_pkix) in
  * your callback, for example as a fallback mechanism.
  *
- * @param user_ptr            Opaque pointer to user data, as passed to
- *                            @ref anjay_fw_update_install
+ * @param user_ptr          Opaque pointer to user data, as passed to
+ *                          @ref anjay_fw_update_install
  *
- * @param out_security_config Pointer in which the handler shall fill in
- *                            security configuration to use for download. Note
- *                            that leaving this value as empty without filling
- *                            it in will result in a configuration that is
- *                            <strong>valid, but very insecure</strong>: it will
- *                            cause any server certificate to be accepted
- *                            without validation. Any pointers used within the
- *                            supplied structure shall remain valid until either
- *                            a call to @ref anjay_fw_update_reset_t, or exit to
- *                            the event loop (from either @ref anjay_serve,
- *                            @ref anjay_sched_run or
- *                            @ref anjay_fw_update_install), whichever happens
- *                            first. Anjay will <strong>not</strong> attempt to
- *                            deallocate anything automatically.
+ * @param out_security_info Pointer in which the handler shall fill in
+ *                          security configuration to use for download. Note
+ *                          that leaving this value as empty without filling
+ *                          it in will result in a configuration that is
+ *                          <strong>valid, but very insecure</strong>: it will
+ *                          cause any server certificate to be accepted
+ *                          without validation. Any pointers used within the
+ *                          supplied structure shall remain valid until either
+ *                          a call to @ref anjay_fw_update_reset_t, or exit to
+ *                          the event loop (from either @ref anjay_serve,
+ *                          @ref anjay_sched_run or
+ *                          @ref anjay_fw_update_install), whichever happens
+ *                          first. Anjay will <strong>not</strong> attempt to
+ *                          deallocate anything automatically.
  *
- * @param download_uri        Target firmware URI.
+ * @param download_uri      Target firmware URI.
  *
  * @returns The callback shall return 0 if successful or a negative value in
  *          case of error. If one of the <c>ANJAY_FW_UPDATE_ERR_*</c> value is
@@ -692,6 +727,41 @@ void anjay_fw_update_pull_suspend(anjay_t *anjay);
  */
 int anjay_fw_update_pull_reconnect(anjay_t *anjay);
 #endif // ANJAY_WITH_DOWNLOADER
+
+#if defined(ANJAY_WITH_LWM2M11) \
+        && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
+/**
+ * Gets the update deadline based on Maximum Defer Period resource value and
+ * time of downloading full firmware.
+ *
+ * @param anjay Anjay object to operate on.
+ *
+ * @returns Real time of the update deadline. In case of not deferring
+ * update returns @c AVS_TIME_REAL_INVALID.
+ */
+avs_time_real_t anjay_fw_update_get_deadline(anjay_t *anjay);
+
+/**
+ * Gets the update severity.
+ *
+ * @param anjay Anjay object to operate on.
+ *
+ * @returns Severity resource value present in Firmware Update object on
+ * success, or @ref ANJAY_FW_UPDATE_SEVERITY_MANDATORY on error.
+ */
+anjay_fw_update_severity_t anjay_fw_update_get_severity(anjay_t *anjay);
+
+/**
+ * Gets the value of Last State Change Time resource.
+ *
+ * @param anjay Anjay object to operate on.
+ *
+ * @returns Real time of last State resource change, or @ref
+ * AVS_TIME_REAL_INVALID on error.
+ */
+avs_time_real_t anjay_fw_update_get_last_state_change_time(anjay_t *anjay);
+#endif /* defined(ANJAY_WITH_LWM2M11) && \
+          defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
 
 #ifdef __cplusplus
 }

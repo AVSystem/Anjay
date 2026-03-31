@@ -157,13 +157,33 @@ void _anjay_sec_key_or_data_cleanup(sec_key_or_data_t *value,
     if (!value->prev_ref && !value->next_ref) {
         switch (value->type) {
         case SEC_KEY_AS_DATA:
+#    if defined(AVS_COMMONS_WITH_AVS_CRYPTO)
+            avs_crypto_clear_buffer(value->value.data.data,
+                                    value->value.data.capacity);
+#    else
             memset(value->value.data.data, 0, value->value.data.capacity);
+#    endif // defined(AVS_COMMONS_WITH_AVS_CRYPTO)
+
             _anjay_raw_buffer_clear(&value->value.data);
             break;
 #    if defined(ANJAY_WITH_SECURITY_STRUCTURED)
         case SEC_KEY_AS_KEY_OWNED:
             // fall-through
         case SEC_KEY_AS_KEY_EXTERNAL:
+            if ((value->value.key.info.type == AVS_CRYPTO_SECURITY_INFO_PSK_KEY
+                 || value->value.key.info.type
+                            == AVS_CRYPTO_SECURITY_INFO_PRIVATE_KEY)
+                    && value->value.key.info.source
+                                   == AVS_CRYPTO_DATA_SOURCE_BUFFER) {
+                size_t heap_buf_size =
+                        value->value.key.info.info.buffer.buffer_size;
+#        if defined(AVS_COMMONS_WITH_AVS_CRYPTO)
+                avs_crypto_clear_buffer(value->value.key.heap_buf,
+                                        heap_buf_size);
+#        else
+                memset(value->value.key.heap_buf, 0, heap_buf_size);
+#        endif // defined(AVS_COMMONS_WITH_AVS_CRYPTO)
+            }
             avs_free(value->value.key.heap_buf);
             break;
 #    endif /* defined(ANJAY_WITH_SECURITY_STRUCTURED) || \

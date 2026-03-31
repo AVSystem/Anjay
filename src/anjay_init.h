@@ -22,6 +22,15 @@
 #    endif // ANJAY_WITH_LWM2M11
 #endif     // ANJAY_WITH_LWM2M_GATEWAY
 
+#if defined(ANJAY_WITH_SSL_ERROR_API) && defined(AVS_COMMONS_WITH_OPENSSL)
+#    error "ANJAY_WITH_SSL_ERROR_API is not implemented for the OpenSSL backend"
+#endif // defined(ANJAY_WITH_SSL_ERROR_API) && defined(AVS_COMMONS_WITH_OPENSSL)
+
+#if defined(ANJAY_WITH_SSL_ERROR_API) && defined(AVS_COMMONS_WITH_TINYDTLS)
+#    error "ANJAY_WITH_SSL_ERROR_API is not implemented for the TinyDTLS backend"
+#endif // defined(ANJAY_WITH_SSL_ERROR_API) &&
+       // defined(AVS_COMMONS_WITH_TINYDTLS)
+
 #if defined(AVS_COMMONS_HAVE_VISIBILITY) && !defined(ANJAY_TEST)
 /* set default visibility for external symbols */
 #    pragma GCC visibility push(default)

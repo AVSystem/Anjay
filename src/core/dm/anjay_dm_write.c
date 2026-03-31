@@ -465,6 +465,34 @@ int _anjay_dm_write_composite(anjay_unlocked_t *anjay,
                         _anjay_dm_write_type_from_request_action(
                                 request->action));
             } else {
+#    ifdef ANJAY_WITH_LWM2M12
+                if (!_anjay_input_get_null(in_ctx)) {
+                    // Delete Resource Instance
+                    if (presence != ANJAY_DM_RES_ABSENT) {
+                        (void) ((result =
+                                         _anjay_dm_verify_resource_instance_present(
+                                                 anjay, obj,
+                                                 path.ids[ANJAY_ID_IID],
+                                                 path.ids[ANJAY_ID_RID],
+                                                 path.ids[ANJAY_ID_RIID]))
+                                || (result =
+                                            _anjay_dm_call_resource_instance_remove(
+                                                    anjay, obj,
+                                                    path.ids[ANJAY_ID_IID],
+                                                    path.ids[ANJAY_ID_RID],
+                                                    path.ids[ANJAY_ID_RIID])));
+                    }
+                    if (presence == ANJAY_DM_RES_ABSENT
+                            || result == ANJAY_ERR_NOT_FOUND) {
+                        // Entity did not exist, so technically removing
+                        // succeeded
+                        result = 0;
+                    } else if (!result) {
+                        result = _anjay_notify_queue_resource_change(
+                                &notify_queue, &path);
+                    }
+                } else
+#    endif // ANJAY_WITH_LWM2M12
                 {
                     result = write_resource_instance(anjay, obj, &path,
                                                      presence, in_ctx,

@@ -30,8 +30,12 @@
 #define DEFAULT_PSK_KEY "password"
 
 #ifdef ANJAY_WITH_LWM2M11
-#    define DEFAULT_MAX_LWM2M_VER "1.1"
-#endif // ANJAY_WITH_LWM2M11
+#    ifdef ANJAY_WITH_LWM2M12
+#        define DEFAULT_MAX_LWM2M_VER "1.2"
+#    else // ANJAY_WITH_LWM2M12
+#        define DEFAULT_MAX_LWM2M_VER "1.1"
+#    endif // ANJAY_WITH_LWM2M12
+#endif     // ANJAY_WITH_LWM2M11
 
 static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
     .connection_args = {
@@ -128,7 +132,12 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
 #ifdef ANJAY_WITH_LWM2M11
     .lwm2m_version_config = {
         .minimum_version = ANJAY_LWM2M_VERSION_1_0,
-        .maximum_version = ANJAY_LWM2M_VERSION_1_1
+        .maximum_version =
+#    ifdef ANJAY_WITH_LWM2M12
+                ANJAY_LWM2M_VERSION_1_2
+#    else  // ANJAY_WITH_LWM2M12
+                ANJAY_LWM2M_VERSION_1_1
+#    endif // ANJAY_WITH_LWM2M12
     },
 #endif // ANJAY_WITH_LWM2M11
     .prefer_hierarchical_formats = false,
@@ -1057,7 +1066,14 @@ static int parse_lwm2m_version(const char *str,
     } else if (strcmp(str, "1.1") == 0) {
         *out_version = ANJAY_LWM2M_VERSION_1_1;
         return 0;
-    } else {
+    }
+#    ifdef ANJAY_WITH_LWM2M12
+    else if (strcmp(str, "1.2") == 0) {
+        *out_version = ANJAY_LWM2M_VERSION_1_2;
+        return 0;
+    }
+#    endif // ANJAY_WITH_LWM2M12
+    else {
         demo_log(ERROR, "Invalid LwM2M version: %s", str);
         return -1;
     }

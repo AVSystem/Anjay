@@ -450,6 +450,10 @@ register_object_unlocked(anjay_unlocked_t *anjay,
         return -1;
     }
 
+#    ifdef ANJAY_WITH_LWM2M12
+    _anjay_dm_check_implemented_handlers(anjay, new_elem);
+#    endif // ANJAY_WITH_LWM2M12
+
     // no need to call _anjay_notify_instances_changed_unlocked() or
     // _anjay_schedule_registration_update_unlocked() as the
     // End Devices DM's contents are not reported in Register and Update

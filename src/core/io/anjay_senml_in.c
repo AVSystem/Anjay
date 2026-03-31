@@ -278,6 +278,21 @@ static int senml_get_objlnk(anjay_unlocked_input_ctx_t *ctx,
     return 0;
 }
 
+#    ifdef ANJAY_WITH_LWM2M12
+static int senml_get_null(anjay_unlocked_input_ctx_t *ctx) {
+    senml_in_t *in = (senml_in_t *) ctx;
+
+    if (!can_return_value(in)) {
+        return -1;
+    }
+    if (in->entry->type != ANJAY_JSON_LIKE_VALUE_NULL) {
+        return ANJAY_ERR_BAD_REQUEST;
+    }
+    in->value_read = true;
+    return 0;
+}
+#    endif // ANJAY_WITH_LWM2M12
+
 static int parse_id(uint16_t *out_id, const char **id_begin) {
     errno = 0;
     char *endptr = NULL;
@@ -440,6 +455,13 @@ parse_senml_value(senml_in_t *in, bool *has_value, senml_label_t label) {
         return in->deserialization_vtable->parse_opaque_value(in);
     }
     switch (in->entry->type) {
+#    ifdef ANJAY_WITH_LWM2M12
+    case ANJAY_JSON_LIKE_VALUE_NULL:
+        if (label != SENML_LABEL_VALUE) {
+            return ANJAY_ERR_BAD_REQUEST;
+        }
+        return _anjay_json_like_decoder_null(in->ctx);
+#    endif // ANJAY_WITH_LWM2M12
     case ANJAY_JSON_LIKE_VALUE_BYTE_STRING:
         return ANJAY_ERR_BAD_REQUEST;
     case ANJAY_JSON_LIKE_VALUE_TEXT_STRING:
@@ -589,6 +611,9 @@ static const anjay_input_ctx_vtable_t SENML_IN_VTABLE = {
     .floating = senml_get_double,
     .boolean = senml_get_bool,
     .objlnk = senml_get_objlnk,
+#    ifdef ANJAY_WITH_LWM2M12
+    .null = senml_get_null,
+#    endif // ANJAY_WITH_LWM2M12
     .get_path = senml_get_path,
     .next_entry = senml_next_entry,
     .close = senml_close

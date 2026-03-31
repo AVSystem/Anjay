@@ -14,7 +14,7 @@ import unittest
 
 from framework_tools.lwm2m.coap.server import SecurityMode
 from framework_tools.lwm2m.coap.transport import Transport
-from framework_tools.utils.lwm2m_test import *
+from framework.lwm2m_test import *
 from suites.default import bootstrap_client
 
 import pymbedtls

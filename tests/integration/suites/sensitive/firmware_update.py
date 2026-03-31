@@ -12,8 +12,8 @@ import re
 import socket
 
 from framework_tools.lwm2m.coap.server import SecurityMode
-from framework_tools.utils.lwm2m_test import *
-from framework_tools.utils import test_suite
+from framework.lwm2m_test import *
+from framework import test_suite
 from framework.create_package import PackageForcedError
 
 from suites.default.block_write import Block, equal_chunk_splitter

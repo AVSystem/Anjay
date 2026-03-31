@@ -8,8 +8,8 @@
 # See the attached LICENSE file for details.
 import json
 import base64
-from framework_tools.utils.lwm2m_test import *
-from framework_tools.utils.test_utils import *
+from framework.lwm2m_test import *
+from framework.test_utils import *
 
 from . import plaintext_base64 as pb64
 

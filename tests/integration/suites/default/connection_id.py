@@ -15,7 +15,7 @@ import unittest
 
 import pymbedtls
 
-from framework_tools.utils.lwm2m_test import *
+from framework.lwm2m_test import *
 from suites.default.retransmissions import RetransmissionTest
 
 

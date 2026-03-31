@@ -71,6 +71,10 @@ static int print_oi_attrs(avs_stream_t *stream,
                                             attrs->min_eval_period))
             || (result = print_integer_attr(stream, ANJAY_ATTR_EPMAX,
                                             attrs->max_eval_period))
+#    ifdef ANJAY_WITH_LWM2M12
+            || (result = print_integer_attr(stream, ANJAY_ATTR_HQMAX,
+                                            attrs->hqmax))
+#    endif // ANJAY_WITH_LWM2M12
             || (result = print_con_attr(stream, attrs->con)));
     return result;
 }
@@ -93,8 +97,12 @@ static int print_r_attrs(avs_stream_t *stream,
                                            attrs->greater_than))
             || (result = print_double_attr(stream, ANJAY_ATTR_LT,
                                            attrs->less_than))
-            || (result =
-                        print_double_attr(stream, ANJAY_ATTR_ST, attrs->step)));
+            || (result = print_double_attr(stream, ANJAY_ATTR_ST, attrs->step))
+#    ifdef ANJAY_WITH_LWM2M12
+            || (result = print_integer_attr(stream, ANJAY_ATTR_EDGE,
+                                            attrs->edge))
+#    endif // ANJAY_WITH_LWM2M12
+    );
     return result;
 }
 
@@ -202,7 +210,11 @@ static int read_attrs(anjay_unlocked_t *anjay,
         return _anjay_dm_call_object_read_default_attrs(anjay, obj, ssid,
                                                         &out->common);
     }
-    if (root_path_type == ANJAY_ID_OID) {
+    if (root_path_type == ANJAY_ID_OID
+#    ifdef ANJAY_WITH_LWM2M12
+            && lwm2m_version <= ANJAY_LWM2M_VERSION_1_1
+#    endif // ANJAY_WITH_LWM2M12
+    ) {
         // When Discover is issued on an Object,
         // attributes from lower levels are not reported in LwM2M <=1.1
         return 0;
@@ -299,7 +311,12 @@ static int discover_resource(anjay_unlocked_t *anjay,
     int32_t resource_dim = -1;
     int result = 0;
 
-    if (_anjay_dm_res_kind_multiple(kind) && (root_path_type != ANJAY_ID_OID)
+    if (_anjay_dm_res_kind_multiple(kind)
+            && (root_path_type != ANJAY_ID_OID
+#    ifdef ANJAY_WITH_LWM2M12
+                || lwm2m_version >= ANJAY_LWM2M_VERSION_1_2
+#    endif // ANJAY_WITH_LWM2M12
+                )
             && (result = read_resource_dim(anjay, obj, iid, rid,
                                            &resource_dim))) {
         return result;

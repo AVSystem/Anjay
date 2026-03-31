@@ -21,9 +21,15 @@ static as_resource_attrs_t *test_resource_attrs(anjay_ssid_t ssid,
                                                 int32_t max_period,
                                                 int32_t min_eval_period,
                                                 int32_t max_eval_period,
+#ifdef ANJAY_WITH_LWM2M12
+                                                int32_t hqmax,
+#endif // ANJAY_WITH_LWM2M12
                                                 double greater_than,
                                                 double less_than,
                                                 double step,
+#ifdef ANJAY_WITH_LWM2M12
+                                                anjay_dm_edge_attr_t edge,
+#endif // ANJAY_WITH_LWM2M12
                                                 anjay_dm_con_attr_t con) {
     as_resource_attrs_t *attrs = AVS_LIST_NEW_ELEMENT(as_resource_attrs_t);
     AVS_UNIT_ASSERT_NOT_NULL(attrs);
@@ -34,10 +40,18 @@ static as_resource_attrs_t *test_resource_attrs(anjay_ssid_t ssid,
             .max_period = max_period,
             .min_eval_period = min_eval_period,
             .max_eval_period = max_eval_period
+#ifdef ANJAY_WITH_LWM2M12
+            ,
+            .hqmax = hqmax
+#endif // ANJAY_WITH_LWM2M12
         },
         .greater_than = greater_than,
         .less_than = less_than,
         .step = step
+#ifdef ANJAY_WITH_LWM2M12
+        ,
+        .edge = edge
+#endif // ANJAY_WITH_LWM2M12
     };
 #ifdef ANJAY_WITH_CON_ATTR
     attrs->attrs.common.con = con;
@@ -67,6 +81,9 @@ static as_default_attrs_t *test_default_attrs(anjay_ssid_t ssid,
                                               int32_t max_period,
                                               int32_t min_eval_period,
                                               int32_t max_eval_period,
+#ifdef ANJAY_WITH_LWM2M12
+                                              int32_t hqmax,
+#endif // ANJAY_WITH_LWM2M12
                                               anjay_dm_con_attr_t con) {
     as_default_attrs_t *attrs = AVS_LIST_NEW_ELEMENT(as_default_attrs_t);
     AVS_UNIT_ASSERT_NOT_NULL(attrs);
@@ -76,6 +93,9 @@ static as_default_attrs_t *test_default_attrs(anjay_ssid_t ssid,
         .max_period = max_period,
         .min_eval_period = min_eval_period,
         .max_eval_period = max_eval_period,
+#ifdef ANJAY_WITH_LWM2M12
+        .hqmax = hqmax
+#endif // ANJAY_WITH_LWM2M12
     };
 #ifdef ANJAY_WITH_CON_ATTR
     attrs->attrs.con = con;
@@ -136,6 +156,9 @@ static void assert_attrs_equal(const anjay_dm_oi_attributes_t *actual,
     AVS_UNIT_ASSERT_EQUAL(actual->max_period, expected->max_period);
     AVS_UNIT_ASSERT_EQUAL(actual->min_eval_period, expected->min_eval_period);
     AVS_UNIT_ASSERT_EQUAL(actual->max_eval_period, expected->max_eval_period);
+#ifdef ANJAY_WITH_LWM2M12
+    AVS_UNIT_ASSERT_EQUAL(actual->hqmax, expected->hqmax);
+#endif // ANJAY_WITH_LWM2M12
 }
 
 static void assert_res_attrs_equal(const anjay_dm_r_attributes_t *actual,
@@ -144,6 +167,9 @@ static void assert_res_attrs_equal(const anjay_dm_r_attributes_t *actual,
     AVS_UNIT_ASSERT_EQUAL(actual->greater_than, expected->greater_than);
     AVS_UNIT_ASSERT_EQUAL(actual->less_than, expected->less_than);
     AVS_UNIT_ASSERT_EQUAL(actual->step, expected->step);
+#ifdef ANJAY_WITH_LWM2M12
+    AVS_UNIT_ASSERT_EQUAL(actual->edge, expected->edge);
+#endif // ANJAY_WITH_LWM2M12
 }
 
 static void assert_as_default_attrs_equal(as_default_attrs_t *actual,

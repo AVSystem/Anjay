@@ -27,6 +27,12 @@ typedef enum {
     ANJAY_BOOTSTRAP_ACTION_REQUEST,
 } anjay_bootstrap_action_t;
 
+#if defined(ANJAY_WITH_BOOTSTRAP_PACK)   \
+        && (!defined(ANJAY_WITH_LWM2M12) \
+            || (!defined(ANJAY_WITH_SENML_JSON) && !defined(ANJAY_WITH_CBOR)))
+#    error "ANJAY_WITH_LWM2M12 and either ANJAY_WITH_SENML_JSON or ANJAY_WITH_CBOR are required for ANJAY_WITH_BOOTSTRAP_PACK"
+#endif
+
 #ifdef ANJAY_WITH_BOOTSTRAP
 
 typedef struct {
@@ -41,6 +47,9 @@ typedef struct {
     avs_sched_handle_t finish_timeout_handle;
     avs_time_monotonic_t client_initiated_bootstrap_last_attempt;
     avs_time_duration_t client_initiated_bootstrap_holdoff;
+#    ifdef ANJAY_WITH_BOOTSTRAP_PACK
+    avs_stream_t *pack_membuf;
+#    endif // ANJAY_WITH_BOOTSTRAP_PACK
 } anjay_bootstrap_t;
 
 int _anjay_bootstrap_notify_regular_connection_available(

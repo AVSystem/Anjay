@@ -20,3 +20,15 @@ if(NOT _is_venv STREQUAL "True")
     "Python3_EXECUTABLE=${Python3_EXECUTABLE} is not from a virtualenv.\n"
     "Activate your .venv or pass -DPython3_EXECUTABLE=/path/to/.venv/bin/python")
 endif()
+
+function(get_venv_check_command OUT_CMD)
+    set(PYTHON_SCRIPT 
+        "import sys; \
+        in_venv = (sys.prefix != sys.base_prefix); \
+        print(f'Venv check: {sys.prefix}') if in_venv else print('\\nFATAL: Run make command inside python venv!\\n'); \
+        sys.exit(not in_venv)"
+    )
+
+    # python3 is called instead of Python3_EXECUTABLE to allow entering venv after calling cmake
+    set(${OUT_CMD} python3 -c "${PYTHON_SCRIPT}" PARENT_SCOPE)
+endfunction()

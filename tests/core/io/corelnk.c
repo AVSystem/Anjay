@@ -86,6 +86,19 @@ AVS_UNIT_TEST(io_corelnk, test_corelnk_output) {
     buf = NULL;
 #endif // ANJAY_WITH_LWM2M11
 
+#ifdef ANJAY_WITH_LWM2M12
+    PREPARE_DM();
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_corelnk_query_dm(anjay_unlocked, &anjay_unlocked->dm,
+                                    ANJAY_LWM2M_VERSION_1_2, &buf));
+    ANJAY_MUTEX_UNLOCK(anjay);
+    AVS_UNIT_ASSERT_EQUAL_STRING(
+            buf,
+            "</1>;ver=1.1,</1/14>,</1/42>,</1/69>,</25>,</42/14>,</"
+            "69>;ver=21.37,</69/"
+            "14>,</69/42>,</69/69>,</128/14>,</128/42>,</128/69>");
+#endif // ANJAY_WITH_LWM2M12
     DM_TEST_FINISH;
     avs_free(buf);
 }

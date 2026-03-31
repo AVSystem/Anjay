@@ -283,7 +283,22 @@ AVS_UNIT_TEST(json_decoder, null) {
     anjay_json_like_value_type_t type;
     ASSERT_OK(_anjay_json_like_decoder_current_value_type(DECODER, &type));
     ASSERT_EQ(type, ANJAY_JSON_LIKE_VALUE_NULL);
+#ifdef ANJAY_WITH_LWM2M12
+    ASSERT_OK(_anjay_json_like_decoder_null(DECODER));
+    ASSERT_EQ(_anjay_json_like_decoder_state(DECODER),
+              ANJAY_JSON_LIKE_DECODER_STATE_FINISHED);
+#endif // ANJAY_WITH_LWM2M12
 }
+
+#ifdef ANJAY_WITH_LWM2M12
+AVS_UNIT_TEST(json_decoder, null_wrong) {
+    static const char data[] = "nUll";
+    SCOPED_TEST_ENV(data, strlen(data));
+    ASSERT_FAIL(_anjay_json_like_decoder_null(DECODER));
+    ASSERT_EQ(_anjay_json_like_decoder_state(DECODER),
+              ANJAY_JSON_LIKE_DECODER_STATE_ERROR);
+}
+#endif // ANJAY_WITH_LWM2M12
 
 AVS_UNIT_TEST(json_decoder, only_one_value) {
     static const char data[] = "true false";

@@ -254,6 +254,23 @@ which holds:
          * *Attribute Storage* logic.
          */
         anjay_dm_resource_instance_write_attrs_t *resource_instance_write_attrs;
+
+    #ifdef ANJAY_WITH_LWM2M12
+        /**
+         * Delete a Resource Instance from a Multiple Resource,
+         * @ref anjay_dm_resource_instance_remove_t
+         *
+         * Required for handling *LwM2M Delete* operation performed on Resource
+         * Instances.
+         *
+         * Can be NULL if the object does not contain multiple writable resources.
+         *
+         * NOTE: This operation is new to the LwM2M 1.2 standard. It will never be
+         * called when communicating using protocol version 1.0 or 1.1. If you do
+         * not aim for LwM2M 1.2 compliance, it can also be NULL.
+         */
+        anjay_dm_resource_instance_remove_t *resource_instance_remove;
+    #endif // ANJAY_WITH_LWM2M12
     } anjay_dm_handlers_t;
 
     /** A struct defining a LwM2M Object. */

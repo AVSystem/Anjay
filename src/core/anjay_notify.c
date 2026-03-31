@@ -263,7 +263,7 @@ int _anjay_notify_queue_instance_created(anjay_notify_queue_t *out_queue,
                                          const anjay_uri_path_t *path) {
     AVS_LIST(anjay_notify_queue_object_entry_t) *entry_ptr =
             find_or_create_object_entry(out_queue, path);
-    if (!entry_ptr) {
+    if (!entry_ptr || !*entry_ptr) {
         _anjay_log_oom();
         return -1;
     }
@@ -282,7 +282,7 @@ int _anjay_notify_queue_instance_removed(anjay_notify_queue_t *out_queue,
                                          const anjay_uri_path_t *path) {
     AVS_LIST(anjay_notify_queue_object_entry_t) *entry_ptr =
             find_or_create_object_entry(out_queue, path);
-    if (!entry_ptr) {
+    if (!entry_ptr || !*entry_ptr) {
         _anjay_log_oom();
         return -1;
     }
@@ -297,7 +297,7 @@ int _anjay_notify_queue_instance_set_unknown_change(
         anjay_notify_queue_t *out_queue, const anjay_uri_path_t *path) {
     AVS_LIST(anjay_notify_queue_object_entry_t) *entry_ptr =
             find_or_create_object_entry(out_queue, path);
-    if (!entry_ptr) {
+    if (!entry_ptr || !*entry_ptr) {
         _anjay_log_oom();
         return -1;
     }

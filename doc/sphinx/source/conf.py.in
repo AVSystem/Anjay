@@ -12,6 +12,7 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
+import datetime
 import packaging
 import packaging.version
 import sys
@@ -31,16 +32,19 @@ sys.path.insert(0, '@ANJAY_SOURCE_DIR@/doc/sphinx/extensions')
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['snippet_source',
+extensions = ['sphinx_copybutton',
+              'snippet_source',
               'builders.snippet_source_linter',
               'builders.snippet_source_list_references',
+              'sphinx_design',
               'sphinx_rtd_theme',
               'linuxdoc.rstFlatTable',
               'small_literal',
-              'sphinx_tabs.tabs']
+              'sphinx_tabs.tabs',
+              'sphinx_sitemap']
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+templates_path = ['@CURRENT_TEMPLATES_DIR@']
 
 # The suffix of source filenames.
 source_suffix = '.rst'
@@ -52,8 +56,9 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'Anjay'
-copyright = u'2017-2026, AVSystem'
+project = 'Anjay'
+copyright = f'{datetime.datetime.now().year}, AVSystem'
+author = 'AVSystem'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -132,7 +137,7 @@ html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-html_logo = '@ANJAY_SPHINX_DOC_ROOT_DIR@/avsystem_header.png'
+html_logo = '@ANJAY_DOC_SOURCE_MAIN@/avsystem_header.png'
 
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
@@ -276,3 +281,7 @@ texinfo_documents = [
 
 # If true, do not generate a @detailmenu in the "Top" node's menu.
 #texinfo_no_detailmenu = False
+
+# sitemap required url
+html_baseurl = 'https://docs.avsystem.com/hubfs/Anjay_Docs/'
+sitemap_url_scheme = "{link}"

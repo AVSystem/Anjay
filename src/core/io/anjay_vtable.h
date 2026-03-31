@@ -100,6 +100,9 @@ typedef int (*anjay_input_ctx_boolean_t)(anjay_unlocked_input_ctx_t *, bool *);
 typedef int (*anjay_input_ctx_objlnk_t)(anjay_unlocked_input_ctx_t *,
                                         anjay_oid_t *,
                                         anjay_iid_t *);
+#ifdef ANJAY_WITH_LWM2M12
+typedef int (*anjay_input_ctx_null_t)(anjay_unlocked_input_ctx_t *);
+#endif // ANJAY_WITH_LWM2M12
 typedef int (*anjay_input_ctx_next_entry_t)(anjay_unlocked_input_ctx_t *);
 typedef int (*anjay_input_ctx_close_t)(anjay_unlocked_input_ctx_t *);
 
@@ -119,6 +122,9 @@ struct anjay_input_ctx_vtable_struct {
     anjay_input_ctx_floating_t floating;
     anjay_input_ctx_boolean_t boolean;
     anjay_input_ctx_objlnk_t objlnk;
+#ifdef ANJAY_WITH_LWM2M12
+    anjay_input_ctx_null_t null;
+#endif // ANJAY_WITH_LWM2M12
     anjay_input_ctx_get_path_t get_path;
     anjay_input_ctx_next_entry_t next_entry;
     anjay_input_ctx_update_root_path_t update_root_path;

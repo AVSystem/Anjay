@@ -32,13 +32,13 @@ These objects include:
 
    These objects are implemented primarily for testing purposes and are not production-ready. To
    generate compatible update packages for testing, use the ``create_package.py`` script located in
-   the ``tests/integration/framework`` directory. 
+   the ``tests/integration/framework/framework`` directory. 
    If you need help implementing the required callbacks for Objects /5 and /33629, 
    refer to :doc:`Firmware Update tutorial <../FirmwareUpdateTutorial>`.
 
 In order to use the objects, you need packages that contain the appropriate metadata. To generate
 these packages, run ``create_package.py`` script located in the 
-``tests/integration/framework`` directory.
+``tests/integration/framework/framework`` directory.
 
 Example usage
 -------------
@@ -53,7 +53,7 @@ To generate an example package:
 
       .. code-block:: bash
 
-         python ./tests/integration/framework/create_package.py -o ./package -m ANJAY_FW
+         python ./tests/integration/framework/framework/create_package.py -o ./package -m ANJAY_FW
 
       .. note::
 
@@ -65,31 +65,31 @@ To generate an example package:
 
       .. code-block:: bash
 
-         python ./tests/integration/framework/create_package.py -o ./package -m ANJAY_SW 
+         python ./tests/integration/framework/framework/create_package.py -o ./package -m ANJAY_SW
 
    .. tab:: Package for the object 9 that will fail during validation
 
       .. code-block:: bash
 
-         python ./tests/integration/framework/create_package.py -o ./package -m ANJAY_SW -c 1234
+         python ./tests/integration/framework/framework/create_package.py -o ./package -m ANJAY_SW -c 1234
 
    .. tab:: Package for the object 9 that will fail during installation
 
       .. code-block:: bash
 
-         python ./tests/integration/framework/create_package.py -o ./package -m ANJAY_SW -e FailedInstall
+         python ./tests/integration/framework/framework/create_package.py -o ./package -m ANJAY_SW -e FailedInstall
 
    .. tab:: Package for the object 9 that will fail during activation
 
       .. code-block:: bash
 
-         python ./tests/integration/framework/create_package.py -o ./package -m ANJAY_SW -e FailureInPerformActivate
+         python ./tests/integration/framework/framework/create_package.py -o ./package -m ANJAY_SW -e FailureInPerformActivate
 
    .. tab:: Package for the zero instance of object 33629 that will be executed during update
 
       .. code-block:: bash
 
-            python ./tests/integration/framework/create_package.py -o ./package -m ANJAY_APP
+            python ./tests/integration/framework/framework/create_package.py -o ./package -m ANJAY_APP
 
       .. note::
 
@@ -123,7 +123,7 @@ the following command:
 
 .. code-block:: bash
 
-    python tests/integration/framework/create_package.py --help
+    python tests/integration/framework/framework/create_package.py --help
 
 Manipulating the behavior of objects
 ------------------------------------
@@ -149,7 +149,7 @@ Firmware Update and Advanced Firmware Update errors
 | Error name                 | Behavior                                                      |
 +============================+===============================================================+
 | NoError                    | The demo will replace the current process with a new one by   |
-|                            | executing the downloaded package during update                | 
+|                            | executing the downloaded package during update                |
 |                            | (``perform_upgrade`` callback). It will pass along the        |
 |                            | arguments specified when running the demo itself.             |
 +----------------------------+---------------------------------------------------------------+

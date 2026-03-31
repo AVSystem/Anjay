@@ -158,11 +158,17 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_1) {
                                             0, 2, 514,
                                             ANJAY_ATTRIB_INTEGER_NONE,
                                             ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            3,
+#endif // ANJAY_WITH_LWM2M12
                                             ANJAY_DM_CON_ATTR_NONE),
                                     test_default_attrs(
                                             4, 1, ANJAY_ATTRIB_INTEGER_NONE,
                                             ANJAY_ATTRIB_INTEGER_NONE,
                                             ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
                                             ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             test_resource_entry(
@@ -171,8 +177,15 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_1) {
                                             1, ANJAY_ATTRIB_INTEGER_NONE,
                                             ANJAY_ATTRIB_INTEGER_NONE,
                                             ANJAY_ATTRIB_INTEGER_NONE,
-                                            ANJAY_ATTRIB_INTEGER_NONE, 42.0,
-                                            14.0, 3.0, ANJAY_DM_CON_ATTR_NONE),
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            42.0, 14.0, 3.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_FALLING,
+#endif // ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             test_resource_entry(7, NULL),
                             NULL),
@@ -183,11 +196,17 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_1) {
                                             0, 42, 44,
                                             ANJAY_ATTRIB_INTEGER_NONE,
                                             ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
                                             ANJAY_DM_CON_ATTR_NONE),
                                     test_default_attrs(
                                             7, 33, 888,
                                             ANJAY_ATTRIB_INTEGER_NONE,
                                             ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
                                             ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             test_resource_entry(2, NULL),
@@ -195,8 +214,15 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_1) {
                                     4,
                                     test_resource_attrs(
                                             4, 1, 2, ANJAY_ATTRIB_INTEGER_NONE,
-                                            ANJAY_ATTRIB_INTEGER_NONE, 3.0, 4.0,
-                                            5.0, ANJAY_DM_CON_ATTR_NONE),
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            3.0, 4.0, 5.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_FALLING,
+#endif // ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             NULL),
                     test_instance_entry(4, NULL, NULL),
@@ -207,6 +233,9 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_1) {
                                     test_default_attrs(
                                             0, 0, 0, ANJAY_ATTRIB_INTEGER_NONE,
                                             ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
                                             ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             test_resource_entry(3, NULL),
@@ -223,6 +252,9 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_1) {
                                                       4, 2, 514,
                                                       ANJAY_ATTRIB_INTEGER_NONE,
                                                       ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                                      ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
                                                       ANJAY_DM_CON_ATTR_NONE),
                                               NULL),
                                       NULL),
@@ -324,14 +356,24 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_1) {
                                             7, 33, 888,
                                             ANJAY_ATTRIB_INTEGER_NONE,
                                             ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
                                             ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             test_resource_entry(
                                     4,
                                     test_resource_attrs(
                                             4, 1, 2, ANJAY_ATTRIB_INTEGER_NONE,
-                                            ANJAY_ATTRIB_INTEGER_NONE, 3.0, 4.0,
-                                            5.0, ANJAY_DM_CON_ATTR_NONE),
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            3.0, 4.0, 5.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_FALLING,
+#endif // ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             NULL),
                     NULL));
@@ -369,6 +411,9 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_2) {
                             test_default_attrs(2, 5, 6,
                                                ANJAY_ATTRIB_INTEGER_NONE,
                                                ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                               ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
                                                ANJAY_DM_CON_ATTR_NONE),
                             NULL),
                     test_instance_entry(
@@ -378,14 +423,24 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_2) {
                                             514, 3, 4,
                                             ANJAY_ATTRIB_INTEGER_NONE,
                                             ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
                                             ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             test_resource_entry(
                                     1,
                                     test_resource_attrs(
                                             3, 9, 10, ANJAY_ATTRIB_INTEGER_NONE,
-                                            ANJAY_ATTRIB_INTEGER_NONE, -1.0,
-                                            -2.0, -3.0, ANJAY_DM_CON_ATTR_NONE),
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            -1.0, -2.0, -3.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             NULL),
                     test_instance_entry(
@@ -395,22 +450,43 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_2) {
                                     1,
                                     test_resource_attrs(
                                             2, 1, 2, ANJAY_ATTRIB_INTEGER_NONE,
-                                            ANJAY_ATTRIB_INTEGER_NONE, 3.0, 4.0,
-                                            5.0, ANJAY_DM_CON_ATTR_NONE),
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            3.0, 4.0, 5.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             test_resource_entry(
                                     3,
                                     test_resource_attrs(
                                             2, 1, 2, ANJAY_ATTRIB_INTEGER_NONE,
-                                            ANJAY_ATTRIB_INTEGER_NONE, 3.0, 4.0,
-                                            5.0, ANJAY_DM_CON_ATTR_NONE),
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            3.0, 4.0, 5.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             test_resource_entry(
                                     6,
                                     test_resource_attrs(
                                             2, 1, 2, ANJAY_ATTRIB_INTEGER_NONE,
-                                            ANJAY_ATTRIB_INTEGER_NONE, 3.0, 4.0,
-                                            5.0, ANJAY_DM_CON_ATTR_NONE),
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            3.0, 4.0, 5.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             NULL),
                     test_instance_entry(
@@ -420,15 +496,29 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_2) {
                                     11,
                                     test_resource_attrs(
                                             2, 1, 2, ANJAY_ATTRIB_INTEGER_NONE,
-                                            ANJAY_ATTRIB_INTEGER_NONE, 3.0, 4.0,
-                                            5.0, ANJAY_DM_CON_ATTR_NONE),
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            3.0, 4.0, 5.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             test_resource_entry(
                                     42,
                                     test_resource_attrs(
                                             2, 1, 2, ANJAY_ATTRIB_INTEGER_NONE,
-                                            ANJAY_ATTRIB_INTEGER_NONE, 3.0, 4.0,
-                                            5.0, ANJAY_DM_CON_ATTR_NONE),
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            3.0, 4.0, 5.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             NULL),
                     test_instance_entry(
@@ -438,15 +528,29 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_2) {
                                     22,
                                     test_resource_attrs(
                                             2, 1, 2, ANJAY_ATTRIB_INTEGER_NONE,
-                                            ANJAY_ATTRIB_INTEGER_NONE, 3.0, 4.0,
-                                            5.0, ANJAY_DM_CON_ATTR_NONE),
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            3.0, 4.0, 5.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_FALLING,
+#endif // ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             test_resource_entry(
                                     33,
                                     test_resource_attrs(
                                             2, 1, 2, ANJAY_ATTRIB_INTEGER_NONE,
-                                            ANJAY_ATTRIB_INTEGER_NONE, 3.0, 4.0,
-                                            5.0, ANJAY_DM_CON_ATTR_NONE),
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            3.0, 4.0, 5.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_FALLING,
+#endif // ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             NULL),
                     test_instance_entry(
@@ -456,15 +560,29 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_2) {
                                     17,
                                     test_resource_attrs(
                                             2, 1, 2, ANJAY_ATTRIB_INTEGER_NONE,
-                                            ANJAY_ATTRIB_INTEGER_NONE, 3.0, 4.0,
-                                            5.0, ANJAY_DM_CON_ATTR_NONE),
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            3.0, 4.0, 5.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_FALLING,
+#endif // ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             test_resource_entry(
                                     69,
                                     test_resource_attrs(
                                             2, 1, 2, ANJAY_ATTRIB_INTEGER_NONE,
-                                            ANJAY_ATTRIB_INTEGER_NONE, 3.0, 4.0,
-                                            5.0, ANJAY_DM_CON_ATTR_NONE),
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            3.0, 4.0, 5.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_RISING,
+#endif // ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             NULL),
                     NULL));
@@ -592,6 +710,9 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_2) {
                             test_default_attrs(2, 5, 6,
                                                ANJAY_ATTRIB_INTEGER_NONE,
                                                ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                               ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
                                                ANJAY_DM_CON_ATTR_NONE),
                             NULL),
                     test_instance_entry(
@@ -601,6 +722,9 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_2) {
                                             514, 3, 4,
                                             ANJAY_ATTRIB_INTEGER_NONE,
                                             ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
                                             ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             NULL),
@@ -611,15 +735,29 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_2) {
                                     1,
                                     test_resource_attrs(
                                             2, 1, 2, ANJAY_ATTRIB_INTEGER_NONE,
-                                            ANJAY_ATTRIB_INTEGER_NONE, 3.0, 4.0,
-                                            5.0, ANJAY_DM_CON_ATTR_NONE),
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            3.0, 4.0, 5.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             test_resource_entry(
                                     6,
                                     test_resource_attrs(
                                             2, 1, 2, ANJAY_ATTRIB_INTEGER_NONE,
-                                            ANJAY_ATTRIB_INTEGER_NONE, 3.0, 4.0,
-                                            5.0, ANJAY_DM_CON_ATTR_NONE),
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            3.0, 4.0, 5.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             NULL),
                     test_instance_entry(
@@ -629,15 +767,29 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_2) {
                                     22,
                                     test_resource_attrs(
                                             2, 1, 2, ANJAY_ATTRIB_INTEGER_NONE,
-                                            ANJAY_ATTRIB_INTEGER_NONE, 3.0, 4.0,
-                                            5.0, ANJAY_DM_CON_ATTR_NONE),
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            3.0, 4.0, 5.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_FALLING,
+#endif // ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             test_resource_entry(
                                     33,
                                     test_resource_attrs(
                                             2, 1, 2, ANJAY_ATTRIB_INTEGER_NONE,
-                                            ANJAY_ATTRIB_INTEGER_NONE, 3.0, 4.0,
-                                            5.0, ANJAY_DM_CON_ATTR_NONE),
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            3.0, 4.0, 5.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_FALLING,
+#endif // ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             NULL),
                     test_instance_entry(
@@ -647,15 +799,29 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_2) {
                                     17,
                                     test_resource_attrs(
                                             2, 1, 2, ANJAY_ATTRIB_INTEGER_NONE,
-                                            ANJAY_ATTRIB_INTEGER_NONE, 3.0, 4.0,
-                                            5.0, ANJAY_DM_CON_ATTR_NONE),
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            3.0, 4.0, 5.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_FALLING,
+#endif // ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             test_resource_entry(
                                     69,
                                     test_resource_attrs(
                                             2, 1, 2, ANJAY_ATTRIB_INTEGER_NONE,
-                                            ANJAY_ATTRIB_INTEGER_NONE, 3.0, 4.0,
-                                            5.0, ANJAY_DM_CON_ATTR_NONE),
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            3.0, 4.0, 5.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_RISING,
+#endif // ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             NULL),
                     NULL));
@@ -812,6 +978,10 @@ AVS_UNIT_TEST(attr_storage, object_default_attrs) {
                 ,
                 .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             }));
     AVS_UNIT_ASSERT_TRUE(anjay_unlocked->attr_storage.modified_since_persist);
     anjay_unlocked->attr_storage.modified_since_persist = false;
@@ -826,6 +996,10 @@ AVS_UNIT_TEST(attr_storage, object_default_attrs) {
                 ,
                 .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             }));
     AVS_UNIT_ASSERT_TRUE(anjay_unlocked->attr_storage.modified_since_persist);
     anjay_unlocked->attr_storage.modified_since_persist = false;
@@ -845,6 +1019,10 @@ AVS_UNIT_TEST(attr_storage, object_default_attrs) {
                 ,
                 .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             }));
     AVS_UNIT_ASSERT_TRUE(anjay_unlocked->attr_storage.modified_since_persist);
     anjay_unlocked->attr_storage.modified_since_persist = false;
@@ -867,11 +1045,17 @@ AVS_UNIT_TEST(attr_storage, object_default_attrs) {
                             test_default_attrs(7, ANJAY_ATTRIB_INTEGER_NONE, 77,
                                                ANJAY_ATTRIB_INTEGER_NONE,
                                                ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                               ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
                                                ANJAY_DM_CON_ATTR_NONE),
                             test_default_attrs(42, 43,
                                                ANJAY_ATTRIB_INTEGER_NONE,
                                                ANJAY_ATTRIB_INTEGER_NONE,
                                                ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                               ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
                                                ANJAY_DM_CON_ATTR_NONE),
                             NULL),
                     NULL));
@@ -892,6 +1076,10 @@ AVS_UNIT_TEST(attr_storage, object_default_attrs) {
                            ,
                            .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                           ,
+                           .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
                        });
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_object_read_default_attrs(
             anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 7, &attrs));
@@ -905,6 +1093,10 @@ AVS_UNIT_TEST(attr_storage, object_default_attrs) {
                            ,
                            .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                           ,
+                           .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
                        });
     AVS_UNIT_ASSERT_FALSE(anjay_unlocked->attr_storage.modified_since_persist);
     DM_ATTR_STORAGE_TEST_FINISH;
@@ -934,6 +1126,10 @@ AVS_UNIT_TEST(attr_storage, read_instance_default_attrs_proxy) {
                 .max_period = 77,
                 .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
                 .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             });
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_read_default_attrs(
             anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 7, 4, &attrs));
@@ -943,6 +1139,10 @@ AVS_UNIT_TEST(attr_storage, read_instance_default_attrs_proxy) {
                            .max_period = 77,
                            .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
                            .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                           ,
+                           .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
                        });
     AVS_UNIT_ASSERT_FALSE(anjay_unlocked->attr_storage.modified_since_persist);
     DM_ATTR_STORAGE_TEST_FINISH;
@@ -958,6 +1158,10 @@ AVS_UNIT_TEST(attr_storage, write_instance_default_attrs_proxy) {
                 .max_period = ANJAY_ATTRIB_INTEGER_NONE,
                 .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
                 .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             },
             0);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_write_default_attrs(
@@ -967,6 +1171,10 @@ AVS_UNIT_TEST(attr_storage, write_instance_default_attrs_proxy) {
                 .max_period = ANJAY_ATTRIB_INTEGER_NONE,
                 .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
                 .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             }));
 
     _anjay_mock_dm_expect_instance_write_default_attrs(
@@ -976,6 +1184,10 @@ AVS_UNIT_TEST(attr_storage, write_instance_default_attrs_proxy) {
                 .max_period = 77,
                 .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
                 .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             },
             0);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_write_default_attrs(
@@ -985,6 +1197,10 @@ AVS_UNIT_TEST(attr_storage, write_instance_default_attrs_proxy) {
                 .max_period = 77,
                 .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
                 .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             }));
 
     _anjay_mock_dm_expect_instance_write_default_attrs(
@@ -994,6 +1210,10 @@ AVS_UNIT_TEST(attr_storage, write_instance_default_attrs_proxy) {
                 .max_period = 888,
                 .min_eval_period = 8888,
                 .max_eval_period = 88888
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = 888888
+#endif // ANJAY_WITH_LWM2M12
             },
             -8888);
     AVS_UNIT_ASSERT_EQUAL(_anjay_dm_call_instance_write_default_attrs(
@@ -1003,6 +1223,10 @@ AVS_UNIT_TEST(attr_storage, write_instance_default_attrs_proxy) {
                                       .max_period = 888,
                                       .min_eval_period = 8888,
                                       .max_eval_period = 88888
+#ifdef ANJAY_WITH_LWM2M12
+                                      ,
+                                      .hqmax = 888888
+#endif // ANJAY_WITH_LWM2M12
                                   }),
                           -8888);
 
@@ -1013,6 +1237,10 @@ AVS_UNIT_TEST(attr_storage, write_instance_default_attrs_proxy) {
                 .max_period = 99,
                 .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
                 .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             },
             0);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_write_default_attrs(
@@ -1022,6 +1250,10 @@ AVS_UNIT_TEST(attr_storage, write_instance_default_attrs_proxy) {
                 .max_period = 99,
                 .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
                 .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             }));
 
     _anjay_mock_dm_expect_instance_write_default_attrs(
@@ -1063,6 +1295,10 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
                 ,
                 .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             }));
     AVS_UNIT_ASSERT_TRUE(anjay_unlocked->attr_storage.modified_since_persist);
     anjay_unlocked->attr_storage.modified_since_persist = false;
@@ -1077,6 +1313,10 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
                 ,
                 .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             }));
     AVS_UNIT_ASSERT_TRUE(anjay_unlocked->attr_storage.modified_since_persist);
     anjay_unlocked->attr_storage.modified_since_persist = false;
@@ -1091,6 +1331,10 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
                 ,
                 .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             }));
     AVS_UNIT_ASSERT_TRUE(anjay_unlocked->attr_storage.modified_since_persist);
     anjay_unlocked->attr_storage.modified_since_persist = false;
@@ -1105,6 +1349,10 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
                 ,
                 .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             }));
     AVS_UNIT_ASSERT_TRUE(anjay_unlocked->attr_storage.modified_since_persist);
     anjay_unlocked->attr_storage.modified_since_persist = false;
@@ -1126,10 +1374,16 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
                                     test_default_attrs(
                                             2, 4, 9, ANJAY_ATTRIB_INTEGER_NONE,
                                             ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
                                             ANJAY_DM_CON_ATTR_NONE),
                                     test_default_attrs(
                                             5, 7, 15, ANJAY_ATTRIB_INTEGER_NONE,
                                             ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
                                             ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             NULL),
@@ -1140,6 +1394,9 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
                                             5, ANJAY_ATTRIB_INTEGER_NONE, 10,
                                             ANJAY_ATTRIB_INTEGER_NONE,
                                             ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
                                             ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             NULL),
@@ -1161,6 +1418,10 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
                            ,
                            .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                           ,
+                           .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
                        });
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_read_default_attrs(
             anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 3, 5, &attrs));
@@ -1174,6 +1435,10 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
                            ,
                            .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                           ,
+                           .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
                        });
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_read_default_attrs(
             anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 9, 5, &attrs));
@@ -1190,6 +1455,10 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
                            ,
                            .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                           ,
+                           .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
                        });
 
     AVS_UNIT_ASSERT_FALSE(anjay_unlocked->attr_storage.modified_since_persist);
@@ -1221,6 +1490,10 @@ AVS_UNIT_TEST(attr_storage, read_resource_attrs_proxy) {
                     .max_period = 77,
                     .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
                     .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                    ,
+                    .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
                 },
                 .greater_than = 44.0,
                 .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
@@ -1235,6 +1508,10 @@ AVS_UNIT_TEST(attr_storage, read_resource_attrs_proxy) {
                                    .max_period = 77,
                                    .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
                                    .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                                   ,
+                                   .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
                                },
                                .greater_than = 44.0,
                                .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
@@ -1255,6 +1532,10 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs_proxy) {
                     .max_period = ANJAY_ATTRIB_INTEGER_NONE,
                     .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
                     .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                    ,
+                    .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
                 },
                 .greater_than = 13.0,
                 .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
@@ -1269,6 +1550,10 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs_proxy) {
                     .max_period = ANJAY_ATTRIB_INTEGER_NONE,
                     .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
                     .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                    ,
+                    .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
                 },
                 .greater_than = 13.0,
                 .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
@@ -1283,6 +1568,10 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs_proxy) {
                     .max_period = 77,
                     .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
                     .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                    ,
+                    .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
                 },
                 .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
                 .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
@@ -1297,6 +1586,10 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs_proxy) {
                     .max_period = 77,
                     .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
                     .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                    ,
+                    .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
                 },
                 .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
                 .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
@@ -1311,6 +1604,10 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs_proxy) {
                     .max_period = ANJAY_ATTRIB_INTEGER_NONE,
                     .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
                     .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                    ,
+                    .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
                 },
                 .greater_than = 0.8,
                 .less_than = 8.8,
@@ -1326,6 +1623,10 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs_proxy) {
                             .max_period = ANJAY_ATTRIB_INTEGER_NONE,
                             .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
                             .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                            ,
+                            .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
                         },
                         .greater_than = 0.8,
                         .less_than = 8.8,
@@ -1341,6 +1642,10 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs_proxy) {
                     .max_period = ANJAY_ATTRIB_INTEGER_NONE,
                     .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
                     .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                    ,
+                    .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
                 },
                 .greater_than = 99.0,
                 .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
@@ -1355,6 +1660,10 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs_proxy) {
                     .max_period = ANJAY_ATTRIB_INTEGER_NONE,
                     .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
                     .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                    ,
+                    .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
                 },
                 .greater_than = 99.0,
                 .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
@@ -1382,20 +1691,26 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs_proxy) {
 AVS_UNIT_TEST(attr_storage, read_resource_attrs) {
     DM_ATTR_STORAGE_TEST_INIT;
 
-    AVS_LIST_APPEND(
-            &anjay_unlocked->attr_storage.objects,
-            test_object_entry(
-                    69, NULL,
-                    test_instance_entry(
-                            3, NULL,
-                            test_resource_entry(
-                                    1,
-                                    test_resource_attrs(42, 1, 2, 6, 7, 3.0,
-                                                        4.0, 5.0,
-                                                        ANJAY_DM_CON_ATTR_NONE),
+    AVS_LIST_APPEND(&anjay_unlocked->attr_storage.objects,
+                    test_object_entry(
+                            69, NULL,
+                            test_instance_entry(
+                                    3, NULL,
+                                    test_resource_entry(
+                                            1,
+                                            test_resource_attrs(
+                                                    42, 1, 2, 6, 7,
+#ifdef ANJAY_WITH_LWM2M12
+                                                    14,
+#endif // ANJAY_WITH_LWM2M12
+                                                    3.0, 4.0, 5.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                                    ANJAY_DM_EDGE_ATTR_FALLING,
+#endif // ANJAY_WITH_LWM2M12
+                                                    ANJAY_DM_CON_ATTR_NONE),
+                                            NULL),
                                     NULL),
-                            NULL),
-                    NULL));
+                            NULL));
 
     anjay_dm_r_attributes_t attrs;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_read_attrs(
@@ -1411,10 +1726,18 @@ AVS_UNIT_TEST(attr_storage, read_resource_attrs) {
                                    ,
                                    .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                                   ,
+                                   .hqmax = 14
+#endif // ANJAY_WITH_LWM2M12
                                },
                                .greater_than = 3.0,
                                .less_than = 4.0,
                                .step = 5.0
+#ifdef ANJAY_WITH_LWM2M12
+                               ,
+                               .edge = ANJAY_DM_EDGE_ATTR_FALLING
+#endif // ANJAY_WITH_LWM2M12
                            });
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_read_attrs(
             anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 3, 1, 4, &attrs));
@@ -1452,10 +1775,18 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
                     ,
                     .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                    ,
+                    .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
                 },
                 .greater_than = 34.0,
                 .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
                 .step = ANJAY_ATTRIB_DOUBLE_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                ANJAY_DM_EDGE_ATTR_RISING
+#endif // ANJAY_WITH_LWM2M12
             }));
     AVS_UNIT_ASSERT_TRUE(anjay_unlocked->attr_storage.modified_since_persist);
     anjay_unlocked->attr_storage.modified_since_persist = false;
@@ -1474,9 +1805,15 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
                                     test_resource_attrs(
                                             1, 1, ANJAY_ATTRIB_INTEGER_NONE,
                                             ANJAY_ATTRIB_INTEGER_NONE,
-                                            ANJAY_ATTRIB_INTEGER_NONE, 34.0,
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            34.0, ANJAY_ATTRIB_DOUBLE_NONE,
                                             ANJAY_ATTRIB_DOUBLE_NONE,
-                                            ANJAY_ATTRIB_DOUBLE_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_RISING,
+#endif // ANJAY_WITH_LWM2M12
                                             ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             NULL),
@@ -1494,10 +1831,18 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
                     ,
                     .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                    ,
+                    .hqmax = 33
+#endif // ANJAY_WITH_LWM2M12
                 },
                 .greater_than = 6.0,
                 .less_than = 7.0,
                 .step = 8.0
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                ANJAY_DM_EDGE_ATTR_RISING
+#endif // ANJAY_WITH_LWM2M12
             }));
     AVS_UNIT_ASSERT_TRUE(anjay_unlocked->attr_storage.modified_since_persist);
     anjay_unlocked->attr_storage.modified_since_persist = false;
@@ -1513,10 +1858,18 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
                     ,
                     .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                    ,
+                    .hqmax = 12
+#endif // ANJAY_WITH_LWM2M12
                 },
                 .greater_than = 11.0,
                 .less_than = 22.0,
                 .step = 33.0
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                ANJAY_DM_EDGE_ATTR_FALLING
+#endif // ANJAY_WITH_LWM2M12
             }));
     AVS_UNIT_ASSERT_TRUE(anjay_unlocked->attr_storage.modified_since_persist);
     anjay_unlocked->attr_storage.modified_since_persist = false;
@@ -1535,20 +1888,40 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
                                     test_resource_attrs(
                                             1, 1, ANJAY_ATTRIB_INTEGER_NONE,
                                             ANJAY_ATTRIB_INTEGER_NONE,
-                                            ANJAY_ATTRIB_INTEGER_NONE, 34.0,
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
+                                            34.0, ANJAY_ATTRIB_DOUBLE_NONE,
                                             ANJAY_ATTRIB_DOUBLE_NONE,
-                                            ANJAY_ATTRIB_DOUBLE_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_RISING,
+#endif // ANJAY_WITH_LWM2M12
                                             ANJAY_DM_CON_ATTR_NONE),
                                     test_resource_attrs(
                                             5, 9, 10, ANJAY_ATTRIB_INTEGER_NONE,
-                                            ANJAY_ATTRIB_INTEGER_NONE, 11.0,
-                                            22.0, 33.0, ANJAY_DM_CON_ATTR_NONE),
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            12,
+#endif // ANJAY_WITH_LWM2M12
+                                            11.0, 22.0, 33.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_FALLING,
+#endif // ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             test_resource_entry(
                                     5,
-                                    test_resource_attrs(3, 4, 5, 99, 100, 6.0,
-                                                        7.0, 8.0,
-                                                        ANJAY_DM_CON_ATTR_NONE),
+                                    test_resource_attrs(
+                                            3, 4, 5, 99, 100,
+#ifdef ANJAY_WITH_LWM2M12
+                                            33,
+#endif // ANJAY_WITH_LWM2M12
+                                            6.0, 7.0, 8.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_RISING,
+#endif // ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             NULL),
                     NULL));
@@ -1564,6 +1937,10 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
                 ,
                 .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             }));
     AVS_UNIT_ASSERT_TRUE(anjay_unlocked->attr_storage.modified_since_persist);
     anjay_unlocked->attr_storage.modified_since_persist = false;
@@ -1591,13 +1968,23 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
                                             4, 4, ANJAY_ATTRIB_INTEGER_NONE,
                                             ANJAY_ATTRIB_INTEGER_NONE,
                                             ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
                                             ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             test_resource_entry(
                                     5,
-                                    test_resource_attrs(3, 4, 5, 99, 100, 6.0,
-                                                        7.0, 8.0,
-                                                        ANJAY_DM_CON_ATTR_NONE),
+                                    test_resource_attrs(
+                                            3, 4, 5, 99, 100,
+#ifdef ANJAY_WITH_LWM2M12
+                                            33,
+#endif // ANJAY_WITH_LWM2M12
+                                            6.0, 7.0, 8.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_EDGE_ATTR_RISING,
+#endif // ANJAY_WITH_LWM2M12
+                                            ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             NULL),
                     NULL));
@@ -1621,6 +2008,9 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
                                             4, 4, ANJAY_ATTRIB_INTEGER_NONE,
                                             ANJAY_ATTRIB_INTEGER_NONE,
                                             ANJAY_ATTRIB_INTEGER_NONE,
+#ifdef ANJAY_WITH_LWM2M12
+                                            ANJAY_ATTRIB_INTEGER_NONE,
+#endif // ANJAY_WITH_LWM2M12
                                             ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             NULL),
@@ -1638,10 +2028,18 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
                     ,
                     .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                    ,
+                    .hqmax = 19
+#endif // ANJAY_WITH_LWM2M12
                 },
                 .greater_than = 11.0,
                 .less_than = 22.0,
                 .step = 33.0
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                0
+#endif // ANJAY_WITH_LWM2M12
             }));
     AVS_UNIT_ASSERT_TRUE(anjay_unlocked->attr_storage.modified_since_persist);
     anjay_unlocked->attr_storage.modified_since_persist = false;
@@ -1662,8 +2060,14 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
                             NULL,
                             test_resource_entry(
                                     3,
-                                    test_resource_attrs(5, 9, 10, 11, 12, 11.0,
-                                                        22.0, 33.0,
+                                    test_resource_attrs(5, 9, 10, 11, 12,
+#ifdef ANJAY_WITH_LWM2M12
+                                                        19,
+#endif // ANJAY_WITH_LWM2M12
+                                                        11.0, 22.0, 33.0,
+#ifdef ANJAY_WITH_LWM2M12
+                                                        0,
+#endif // ANJAY_WITH_LWM2M12
                                                         ANJAY_DM_CON_ATTR_NONE),
                                     NULL),
                             NULL),

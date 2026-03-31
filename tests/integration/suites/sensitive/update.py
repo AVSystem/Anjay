@@ -11,8 +11,8 @@ import os
 import socket
 
 from framework_tools.lwm2m.coap.server import SecurityMode
-from framework_tools.utils.lwm2m_test import *
-from framework_tools.utils import test_suite
+from framework.lwm2m_test import *
+from framework import test_suite
 
 
 class ReconnectBootstrapTest(test_suite.Lwm2mSingleServerTest):

@@ -8,9 +8,9 @@
 # See the attached LICENSE file for details.
 
 from framework_tools.lwm2m import messages
-from framework_tools.utils.lwm2m_test import test_suite
+from framework.lwm2m_test import test_suite
 from framework_tools.lwm2m.coap import Type
-from framework_tools.utils.test_utils import OID, RID
+from framework.test_utils import OID, RID
 
 
 class StatsTest:

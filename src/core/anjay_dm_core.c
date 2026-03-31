@@ -144,12 +144,36 @@ int _anjay_dm_register_object(
     return 0;
 }
 
+#ifdef ANJAY_WITH_LWM2M12
+void _anjay_dm_check_implemented_handlers(
+        anjay_unlocked_t *anjay, const anjay_dm_installed_object_t *obj) {
+    if (anjay->lwm2m_version_config.maximum_version >= ANJAY_LWM2M_VERSION_1_2
+            && _anjay_dm_handler_implemented(obj,
+                                             ANJAY_DM_HANDLER_resource_reset)
+            && _anjay_dm_handler_implemented(
+                       obj, ANJAY_DM_HANDLER_list_resource_instances)
+            && !_anjay_dm_handler_implemented(
+                       obj, ANJAY_DM_HANDLER_resource_instance_remove)) {
+        dm_log(WARNING,
+               _("object ") "/%u" _(" implements resource_reset but not "
+                                    "resource_instance_remove, and LwM2M 1.2 "
+                                    "support is enabled; DELETE on Resource "
+                                    "Instances may not work properly"),
+               _anjay_dm_installed_object_oid(obj));
+    }
+}
+#endif // ANJAY_WITH_LWM2M12
+
 int _anjay_register_object_unlocked(
         anjay_unlocked_t *anjay,
         AVS_LIST(anjay_dm_installed_object_t) *elem_ptr_move) {
     if (_anjay_dm_register_object(&anjay->dm, elem_ptr_move)) {
         return -1;
     }
+
+#ifdef ANJAY_WITH_LWM2M12
+    _anjay_dm_check_implemented_handlers(anjay, *elem_ptr_move);
+#endif // ANJAY_WITH_LWM2M12
 
 #ifdef ANJAY_WITH_LWM2M_GATEWAY
     (*elem_ptr_move)->prefix = NULL;
@@ -575,7 +599,22 @@ static int dm_discover(anjay_connection_ref_t connection,
     }
 
     uint8_t depth = 1;
-    if (_anjay_uri_path_leaf_is(&request->uri, ANJAY_ID_OID)) {
+#    ifdef ANJAY_WITH_LWM2M12
+    if (request->depth >= 0
+            && _anjay_server_registration_info(connection.server)->lwm2m_version
+                           >= ANJAY_LWM2M_VERSION_1_2) {
+        // According to OMA-TS-LightweightM2M_Core-V1_2-20201110-A:
+        // > If the LwM2M Client does not support the "Depth" parameter, it MUST
+        // > ignore it and use the default value from Table: 6.3.2.-2 Depth
+        // > Modifier.
+        // That's why we treat the "depth" parameter as non-fatal for LwM2M 1.1
+        // and below, but ignore it. We could just support it, but attribute
+        // reporting semantics are different for 1.1 and 1.2, so let's better
+        // not mix things up.
+        depth = (uint8_t) request->depth;
+    } else
+#    endif // ANJAY_WITH_LWM2M12
+            if (_anjay_uri_path_leaf_is(&request->uri, ANJAY_ID_OID)) {
         depth = 2;
     }
 
@@ -681,12 +720,52 @@ static int dm_delete_object_instance(anjay_unlocked_t *anjay,
     return retval;
 }
 
+#ifdef ANJAY_WITH_LWM2M12
+static int dm_delete_resource_instance(anjay_unlocked_t *anjay,
+                                       const anjay_dm_installed_object_t *obj,
+                                       const anjay_request_t *request,
+                                       anjay_ssid_t ssid) {
+    assert(_anjay_uri_path_leaf_is(&request->uri, ANJAY_ID_RIID));
+    anjay_dm_path_info_t path_info;
+    int retval = _anjay_dm_path_info(anjay, obj, &request->uri, &path_info);
+    if (retval) {
+        return retval;
+    }
+    if (!path_info.is_present) {
+        return ANJAY_ERR_NOT_FOUND;
+    }
+    if (!_anjay_instance_action_allowed(anjay, &REQUEST_TO_ACTION_INFO(request,
+                                                                       ssid))) {
+        return ANJAY_ERR_UNAUTHORIZED;
+    }
+    if (!_anjay_dm_res_kind_writable(path_info.kind)) {
+        dm_log(DEBUG, "/%s" _(" is not writable"),
+               ANJAY_DEBUG_MAKE_PATH(&request->uri));
+        return ANJAY_ERR_METHOD_NOT_ALLOWED;
+    }
+    anjay_notify_queue_t notify_queue = NULL;
+    (void) ((retval = _anjay_dm_call_resource_instance_remove(
+                     anjay, obj, request->uri.ids[ANJAY_ID_IID],
+                     request->uri.ids[ANJAY_ID_RID],
+                     request->uri.ids[ANJAY_ID_RIID]))
+            || (retval = _anjay_notify_queue_resource_change(&notify_queue,
+                                                             &request->uri))
+            || (retval = _anjay_notify_flush(anjay, ssid, &notify_queue)));
+    return retval;
+}
+#endif // ANJAY_WITH_LWM2M12
+
 static int dm_delete(anjay_unlocked_t *anjay,
                      const anjay_dm_installed_object_t *obj,
                      const anjay_request_t *request,
                      anjay_ssid_t ssid) {
     dm_log(LAZY_DEBUG, _("Delete ") "%s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
-    if (_anjay_uri_path_leaf_is(&request->uri, ANJAY_ID_IID)) {
+#ifdef ANJAY_WITH_LWM2M12
+    if (_anjay_uri_path_leaf_is(&request->uri, ANJAY_ID_RIID)) {
+        return dm_delete_resource_instance(anjay, obj, request, ssid);
+    } else
+#endif // ANJAY_WITH_LWM2M12
+            if (_anjay_uri_path_leaf_is(&request->uri, ANJAY_ID_IID)) {
         return dm_delete_object_instance(anjay, obj, request, ssid);
     } else {
         return ANJAY_ERR_METHOD_NOT_ALLOWED;

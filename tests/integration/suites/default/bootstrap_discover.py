@@ -7,7 +7,7 @@
 # Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
-from framework_tools.utils.lwm2m_test import *
+from framework.lwm2m_test import *
 
 from . import bootstrap_client
 from . import bootstrap_server as bs
@@ -193,3 +193,14 @@ class BootstrapDiscoverAfterEmptyInstancesWrite(bs.BootstrapServer.Test,
             str(discover_result, 'ascii'))
 
 
+class BootstrapDiscoverDepthInvalid(bs.BootstrapServer.Test, test_suite.Lwm2mDmOperations):
+    def setUp(self):
+        super().setUp(minimum_version='1.2', maximum_version='1.2')
+
+    def runTest(self):
+        self.assertDemoRequestsBootstrapPack(endpoint=DEMO_ENDPOINT_NAME,
+                                             respond_with_error_code=coap.Code.RES_NOT_FOUND)
+        self.assertDemoRequestsBootstrap(endpoint=DEMO_ENDPOINT_NAME,
+                                         preferred_content_format=coap.ContentFormat.APPLICATION_LWM2M_SENML_CBOR)
+        self.discover(self.bootstrap_server, oid=OID.Test, depth=1,
+                      expect_error_code=coap.Code.RES_BAD_REQUEST)

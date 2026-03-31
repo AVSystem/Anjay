@@ -152,8 +152,8 @@ The input file shall specify a dictionary according to Python syntax where:
     second one shall be the value of a primitive type
 
 The constants from the ``OID`` and ``RID`` objects, as defined in the
-`tools/test-framework-tools/tools/framework_tools/utils/test_utils.py
-<https://github.com/AVSystem/Anjay/blob/master/tools/test-framework-tools/tools/framework_tools/utils/test_utils.py>`_
+`tests/integration/framework/framework/test_utils.py
+<https://github.com/AVSystem/Anjay/blob/master/tests/integration/framework/framework/test_utils.py>`_
 file, may be used to make the keys more descriptive, as in the example input
 file (``bootstrap/configs/basic``):
 

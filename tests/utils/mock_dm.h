@@ -184,6 +184,9 @@ anjay_dm_resource_instance_read_attrs_t
 anjay_dm_resource_instance_write_attrs_t
         _anjay_mock_dm_resource_instance_write_attrs;
 #endif // ANJAY_WITH_LWM2M11
+#ifdef ANJAY_WITH_LWM2M12
+anjay_dm_resource_instance_remove_t _anjay_mock_dm_resource_instance_remove;
+#endif // ANJAY_WITH_LWM2M12
 
 #define ANJAY_MOCK_DM_HANDLERS_BASIC                     \
     .list_instances = _anjay_mock_dm_list_instances,     \
@@ -196,7 +199,23 @@ anjay_dm_resource_instance_write_attrs_t
     .resource_reset = _anjay_mock_dm_resource_reset,     \
     .list_resource_instances = _anjay_mock_dm_list_resource_instances
 
-#if defined(ANJAY_WITH_LWM2M11)
+#if defined(ANJAY_WITH_LWM2M12)
+#    define ANJAY_MOCK_DM_HANDLERS_REST                                        \
+        .object_read_default_attrs = _anjay_mock_dm_object_read_default_attrs, \
+        .object_write_default_attrs =                                          \
+                _anjay_mock_dm_object_write_default_attrs,                     \
+        .instance_read_default_attrs =                                         \
+                _anjay_mock_dm_instance_read_default_attrs,                    \
+        .instance_write_default_attrs =                                        \
+                _anjay_mock_dm_instance_write_default_attrs,                   \
+        .resource_read_attrs = _anjay_mock_dm_resource_read_attrs,             \
+        .resource_write_attrs = _anjay_mock_dm_resource_write_attrs,           \
+        .resource_instance_read_attrs =                                        \
+                _anjay_mock_dm_resource_instance_read_attrs,                   \
+        .resource_instance_write_attrs =                                       \
+                _anjay_mock_dm_resource_instance_write_attrs,                  \
+        .resource_instance_remove = _anjay_mock_dm_resource_instance_remove
+#elif defined(ANJAY_WITH_LWM2M11)
 #    define ANJAY_MOCK_DM_HANDLERS_REST                                        \
         .object_read_default_attrs = _anjay_mock_dm_object_read_default_attrs, \
         .object_write_default_attrs =                                          \
@@ -378,6 +397,15 @@ void _anjay_mock_dm_expect_transaction_rollback(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         int retval);
+#ifdef ANJAY_WITH_LWM2M12
+void _anjay_mock_dm_expect_resource_instance_remove(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid,
+        int retval);
+#endif // ANJAY_WITH_LWM2M12
 void _anjay_mock_dm_expect_clean(void);
 void _anjay_mock_dm_expected_commands_clear(void);
 

@@ -103,6 +103,9 @@ static void delete_value(anjay_unlocked_t *anjay,
             }
         }
     }
+#    ifdef ANJAY_WITH_LWM2M12
+    (*value_ptr)->ref->notifications_count--;
+#    endif // ANJAY_WITH_LWM2M12
     AVS_LIST_DELETE(value_ptr);
 }
 
@@ -535,6 +538,73 @@ static void drop_oldest_queued_notification(anjay_unlocked_t *anjay,
     delete_value(anjay, &entry);
 }
 
+#    ifdef ANJAY_WITH_LWM2M12
+static bool is_historical_queue_full(const anjay_observation_t *observation) {
+    if (observation->historical_queue_size < 1) {
+        return false;
+    }
+
+    anjay_log(TRACE, "%u/%u" _(" notifications in historical queue"),
+              (unsigned) observation->notifications_count,
+              (unsigned) observation->historical_queue_size);
+
+    return observation->notifications_count
+           >= (size_t) observation->historical_queue_size;
+}
+
+static AVS_LIST(anjay_observation_value_t) *
+find_oldest_queued_notification_from_observation(
+        anjay_observe_connection_entry_t *conn,
+        anjay_observation_t *observation) {
+    AVS_LIST(anjay_observation_value_t) *unsent_value;
+    AVS_LIST_FOREACH_PTR(unsent_value, &conn->unsent) {
+        if (unsent_value && *unsent_value
+                && (*unsent_value)->ref == observation) {
+            return unsent_value;
+        }
+    }
+
+    return NULL;
+}
+
+static anjay_observation_value_t *detach_first_unsent_value_from_observation(
+        AVS_LIST(anjay_observation_value_t) *value,
+        anjay_observe_connection_entry_t *conn_state,
+        anjay_observation_t *observation) {
+    assert(conn_state->unsent);
+    if (observation->last_unsent == *value) {
+        observation->last_unsent = NULL;
+    }
+
+    anjay_observation_value_t *result = AVS_LIST_DETACH(value);
+
+    if (conn_state->unsent_last == result) {
+        assert(!conn_state->unsent);
+        conn_state->unsent_last = NULL;
+    }
+
+    return result;
+}
+
+static void drop_oldest_queued_notification_from_observation(
+        anjay_observe_connection_entry_t *conn_state,
+        anjay_observation_t *observation) {
+    anjay_unlocked_t *anjay = _anjay_from_server(conn_state->conn_ref.server);
+    AVS_LIST(anjay_observation_value_t) *oldest_value =
+            find_oldest_queued_notification_from_observation(conn_state,
+                                                             observation);
+
+    AVS_ASSERT(oldest_value,
+               "function is not supposed to be called when there are "
+               "no notifications in historical queue");
+
+    anjay_observation_value_t *entry =
+            detach_first_unsent_value_from_observation(oldest_value, conn_state,
+                                                       observation);
+    delete_value(anjay, &entry);
+}
+#    endif // ANJAY_WITH_LWM2M12
+
 static int insert_new_value(anjay_observe_connection_entry_t *conn_state,
                             anjay_observation_t *observation,
                             avs_coap_notify_reliability_hint_t reliability_hint,
@@ -543,7 +613,13 @@ static int insert_new_value(anjay_observe_connection_entry_t *conn_state,
                             const anjay_batch_t *const *values) {
     anjay_unlocked_t *anjay = _anjay_from_server(conn_state->conn_ref.server);
     anjay_observe_state_t *observe = &anjay->observe;
-    if (is_observe_queue_full(observe)) {
+#    ifdef ANJAY_WITH_LWM2M12
+    if (is_historical_queue_full(observation)) {
+        drop_oldest_queued_notification_from_observation(conn_state,
+                                                         observation);
+    } else
+#    endif // ANJAY_WITH_LWM2M12
+            if (is_observe_queue_full(observe)) {
         switch (observe->notify_queue_limit_mode) {
         case NOTIFY_QUEUE_UNLIMITED:
             AVS_UNREACHABLE("is_observe_queue_full broken");
@@ -564,6 +640,9 @@ static int insert_new_value(anjay_observe_connection_entry_t *conn_state,
     }
 
     AVS_LIST_APPEND(&conn_state->unsent_last, res_value);
+#    ifdef ANJAY_WITH_LWM2M12
+    observation->notifications_count++;
+#    endif // ANJAY_WITH_LWM2M12
     conn_state->unsent_last = res_value;
     if (!conn_state->unsent) {
         conn_state->unsent = res_value;
@@ -672,21 +751,43 @@ int _anjay_observe_schedule_pmax_trigger(
         anjay_observation_t *observation) {
     int32_t pmax = -1;
 
-    for (size_t i = 0; i < observation->paths_count; ++i) {
-        anjay_dm_r_attributes_t attrs;
-        int result = get_effective_attrs(
-                _anjay_from_server(conn_state->conn_ref.server), &attrs,
-                &observation->paths[i],
-                _anjay_server_ssid(conn_state->conn_ref.server));
-        if (result) {
-            anjay_log(DEBUG,
-                      _("Could not get observe attributes, result: ") "%d",
-                      result);
-            return result;
+#    ifdef ANJAY_WITH_OBSERVATION_ATTRIBUTES
+    if (!_anjay_dm_resource_attributes_empty(&observation->attrs)) {
+        pmax = observation->attrs.common.max_period;
+        if (pmax < 0) {
+            int result;
+            anjay_iid_t server_iid;
+            anjay_unlocked_t *anjay =
+                    _anjay_from_server(conn_state->conn_ref.server);
+            if ((result = _anjay_find_server_iid(
+                         anjay, _anjay_server_ssid(conn_state->conn_ref.server),
+                         &server_iid))
+                    || (result = _anjay_read_period(
+                                anjay, server_iid,
+                                ANJAY_DM_RID_SERVER_DEFAULT_PMAX, &pmax))) {
+                return result;
+            }
         }
+    } else {
+#    endif // ANJAY_WITH_OBSERVATION_ATTRIBUTES
+        for (size_t i = 0; i < observation->paths_count; ++i) {
+            anjay_dm_r_attributes_t attrs;
+            int result = get_effective_attrs(
+                    _anjay_from_server(conn_state->conn_ref.server), &attrs,
+                    &observation->paths[i],
+                    _anjay_server_ssid(conn_state->conn_ref.server));
+            if (result) {
+                anjay_log(DEBUG,
+                          _("Could not get observe attributes, result: ") "%d",
+                          result);
+                return result;
+            }
 
-        update_batch_pmax(&pmax, &attrs);
+            update_batch_pmax(&pmax, &attrs);
+        }
+#    ifdef ANJAY_WITH_OBSERVATION_ATTRIBUTES
     }
+#    endif // ANJAY_WITH_OBSERVATION_ATTRIBUTES
 
     if (pmax >= 0) {
         return schedule_trigger(conn_state, observation, pmax,
@@ -729,7 +830,12 @@ typedef struct {
 static AVS_SORTED_SET_ELEM(anjay_observation_t)
 create_detached_observation(const avs_coap_token_t *token,
                             const anjay_request_t *request,
-                            const paths_arg_t *paths) {
+                            const paths_arg_t *paths
+#    ifdef ANJAY_WITH_OBSERVATION_ATTRIBUTES
+                            ,
+                            const anjay_dm_r_attributes_t *attributes
+#    endif // ANJAY_WITH_OBSERVATION_ATTRIBUTES
+) {
     AVS_SORTED_SET_ELEM(anjay_observation_t) new_observation =
             (AVS_SORTED_SET_ELEM(anjay_observation_t))
                     AVS_SORTED_SET_ELEM_NEW_BUFFER(
@@ -760,6 +866,13 @@ create_detached_observation(const avs_coap_token_t *token,
                paths->paths, sizeof(*paths->paths));
     }
     new_observation->next_pmax_trigger = AVS_TIME_REAL_INVALID;
+#    ifdef ANJAY_WITH_LWM2M12
+    new_observation->historical_queue_size = -1;
+#    endif // ANJAY_WITH_LWM2M12
+#    ifdef ANJAY_WITH_OBSERVATION_ATTRIBUTES
+    memcpy((void *) (intptr_t) (const void *) &new_observation->attrs,
+           attributes, sizeof(new_observation->attrs));
+#    endif // ANJAY_WITH_OBSERVATION_ATTRIBUTES
     return new_observation;
 }
 
@@ -957,10 +1070,19 @@ attach_new_observation(anjay_observe_connection_entry_t *conn_state,
 static AVS_SORTED_SET_ELEM(anjay_observation_t)
 put_entry_into_connection_state(const anjay_request_t *request,
                                 anjay_observe_connection_entry_t *conn_state,
-                                const paths_arg_t *paths) {
+                                const paths_arg_t *paths
+#    ifdef ANJAY_WITH_OBSERVATION_ATTRIBUTES
+                                ,
+                                const anjay_dm_r_attributes_t *attributes
+#    endif // ANJAY_WITH_OBSERVATION_ATTRIBUTES
+) {
     AVS_SORTED_SET_ELEM(anjay_observation_t) observation =
-            create_detached_observation(&request->observe->token, request,
-                                        paths);
+            create_detached_observation(&request->observe->token, request, paths
+#    ifdef ANJAY_WITH_OBSERVATION_ATTRIBUTES
+                                        ,
+                                        attributes
+#    endif // ANJAY_WITH_OBSERVATION_ATTRIBUTES
+            );
     if (!observation) {
         return NULL;
     }
@@ -1304,6 +1426,26 @@ static int read_observation_values(anjay_unlocked_t *anjay,
 static int observe_handle(anjay_connection_ref_t ref,
                           const paths_arg_t *paths,
                           const anjay_request_t *request) {
+#    ifdef ANJAY_WITH_OBSERVATION_ATTRIBUTES
+    anjay_dm_r_attributes_t attributes = ANJAY_DM_R_ATTRIBUTES_EMPTY;
+#    endif // ANJAY_WITH_OBSERVATION_ATTRIBUTES
+
+    if (!_anjay_dm_request_attrs_empty(&request->attributes)) {
+#    ifdef ANJAY_WITH_OBSERVATION_ATTRIBUTES
+        if (_anjay_server_registration_info(ref.server)->lwm2m_version
+                < ANJAY_LWM2M_VERSION_1_2) {
+            return ANJAY_ERR_BAD_REQUEST;
+        }
+
+        _anjay_update_r_attrs(&attributes, &request->attributes);
+        if (!_anjay_r_attrs_valid(&attributes)) {
+            return ANJAY_ERR_BAD_REQUEST;
+        }
+#    else  // ANJAY_WITH_OBSERVATION_ATTRIBUTES
+        return ANJAY_ERR_BAD_REQUEST;
+#    endif // ANJAY_WITH_OBSERVATION_ATTRIBUTES
+    }
+
     AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr =
             find_or_create_connection_state(ref);
     if (!conn_ptr) {
@@ -1330,7 +1472,12 @@ static int observe_handle(anjay_connection_ref_t ref,
             cast_to_const_batch_array(batches));
 
     if (!(observation =
-                  put_entry_into_connection_state(request, *conn_ptr, paths))
+                  put_entry_into_connection_state(request, *conn_ptr, paths
+#    ifdef ANJAY_WITH_OBSERVATION_ATTRIBUTES
+                                                  ,
+                                                  &attributes
+#    endif // ANJAY_WITH_OBSERVATION_ATTRIBUTES
+                                                  ))
             || insert_initial_value(*conn_ptr, observation, &response_details,
                                     &timestamp,
                                     cast_to_const_batch_array(batches))
@@ -1362,6 +1509,13 @@ static int observe_handle(anjay_connection_ref_t ref,
 int _anjay_observe_handle(anjay_connection_ref_t ref,
                           const anjay_request_t *request) {
     assert(request->action == ANJAY_ACTION_READ);
+#    ifdef ANJAY_WITH_OBSERVATION_ATTRIBUTES
+    if (!_anjay_uri_path_has(&request->uri, ANJAY_ID_RID)
+            && !_anjay_dm_resource_specific_request_attrs_empty(
+                       &request->attributes)) {
+        return ANJAY_ERR_BAD_REQUEST;
+    }
+#    endif // ANJAY_WITH_OBSERVATION_ATTRIBUTES
     return observe_handle(ref,
                           &(const paths_arg_t) {
                               .type = PATHS_POINTER_ARRAY,
@@ -1377,6 +1531,12 @@ int _anjay_observe_composite_handle(anjay_connection_ref_t ref,
                                     AVS_LIST(anjay_uri_path_t) paths,
                                     const anjay_request_t *request) {
     assert(request->action == ANJAY_ACTION_READ_COMPOSITE);
+#        ifdef ANJAY_WITH_OBSERVATION_ATTRIBUTES
+    if (!_anjay_dm_resource_specific_request_attrs_empty(
+                &request->attributes)) {
+        return ANJAY_ERR_BAD_REQUEST;
+    }
+#        endif // ANJAY_WITH_OBSERVATION_ATTRIBUTES
     return observe_handle(ref,
                           &(const paths_arg_t) {
                               .type = PATHS_POINTER_LIST,
@@ -1445,6 +1605,25 @@ process_ltgt(double threshold, double previous_value, double new_value) {
                || (previous_value >= threshold && new_value < threshold));
 }
 
+#    ifdef ANJAY_WITH_LWM2M12
+static bool process_edge(anjay_dm_edge_attr_t edge,
+                         bool new_value,
+                         bool is_previous_value_boolean,
+                         bool is_new_value_boolean) {
+    if (!is_previous_value_boolean || !is_new_value_boolean) {
+        return false;
+    }
+    switch (edge) {
+    case ANJAY_DM_EDGE_ATTR_FALLING:
+        return !new_value;
+    case ANJAY_DM_EDGE_ATTR_RISING:
+        return new_value;
+    default:
+        return false;
+    }
+}
+#    endif // ANJAY_WITH_LWM2M12
+
 static bool should_update(const anjay_uri_path_t *path,
                           const anjay_dm_r_attributes_t *attrs,
                           const anjay_batch_t *previous_value,
@@ -1471,7 +1650,11 @@ static bool should_update(const anjay_uri_path_t *path,
     if ((isnan(new_numeric) && !is_new_value_boolean)
             || (isnan(previous_numeric) && !is_previous_value_boolean)
             || (isnan(attrs->greater_than) && isnan(attrs->less_than)
-                && isnan(attrs->step))) {
+                && isnan(attrs->step)
+#    ifdef ANJAY_WITH_LWM2M12
+                && attrs->edge == ANJAY_DM_EDGE_ATTR_NONE
+#    endif // ANJAY_WITH_LWM2M12
+                )) {
         // either previous or current value is not numeric/boolean, or none of
         // lt/gt/st/edge attributes are set - notifying each value change
         return true;
@@ -1479,7 +1662,12 @@ static bool should_update(const anjay_uri_path_t *path,
 
     return process_step(attrs, previous_numeric, new_numeric)
            || process_ltgt(attrs->less_than, previous_numeric, new_numeric)
-           || process_ltgt(attrs->greater_than, previous_numeric, new_numeric);
+           || process_ltgt(attrs->greater_than, previous_numeric, new_numeric)
+#    ifdef ANJAY_WITH_LWM2M12
+           || process_edge(attrs->edge, new_boolean, is_previous_value_boolean,
+                           is_new_value_boolean)
+#    endif // ANJAY_WITH_LWM2M12
+            ;
 }
 
 static bool confirmable_required(const anjay_observe_connection_entry_t *conn) {
@@ -1531,6 +1719,26 @@ static void remove_all_unsent_values(anjay_observe_connection_entry_t *conn) {
         delete_value(anjay, &value);
     }
 }
+
+#    ifdef ANJAY_WITH_LWM2M12
+static void remove_last_unsent_value_from_observation(
+        anjay_observe_connection_entry_t *conn,
+        anjay_observation_t *observation) {
+    anjay_unlocked_t *anjay = _anjay_from_server(conn->conn_ref.server);
+    AVS_ASSERT(observation->historical_queue_size == 0 && conn->unsent_last,
+               "function is supposed to be called if there is a stored "
+               "notification which must be dropped");
+    AVS_LIST(anjay_observation_value_t) *value_to_drop =
+            find_oldest_queued_notification_from_observation(conn, observation);
+    AVS_ASSERT(
+            *value_to_drop == conn->unsent_last,
+            "there must be only one notification referencing the observation");
+    AVS_LIST(anjay_observation_value_t) detached_value =
+            detach_first_unsent_value_from_observation(value_to_drop, conn,
+                                                       observation);
+    delete_value(anjay, &detached_value);
+}
+#    endif // ANJAY_WITH_LWM2M12
 
 static bool connection_exists(anjay_unlocked_t *anjay,
                               anjay_observe_connection_entry_t *conn) {
@@ -1815,6 +2023,9 @@ update_notification_value(anjay_observe_connection_entry_t *conn_state,
     bool should_update_batch = false;
     int32_t pmax = -1;
     anjay_dm_con_attr_t con = ANJAY_DM_CON_ATTR_NONE;
+#    ifdef ANJAY_WITH_LWM2M12
+    int32_t hqmax = -1;
+#    endif // ANJAY_WITH_LWM2M12
 
     if (observation->paths_count
             && !(batches = (anjay_batch_t **) avs_calloc(
@@ -1828,12 +2039,32 @@ update_notification_value(anjay_observe_connection_entry_t *conn_state,
     int result = 0;
     for (size_t i = 0; i < observation->paths_count; ++i) {
         anjay_dm_r_attributes_t attrs;
-        if ((result = get_effective_attrs(anjay, &attrs, &observation->paths[i],
-                                          ssid))) {
+#    ifdef ANJAY_WITH_OBSERVATION_ATTRIBUTES
+        if (observation->action != ANJAY_ACTION_READ_COMPOSITE
+                && !_anjay_dm_resource_attributes_empty(&observation->attrs)) {
+            attrs = observation->attrs;
+            // pmin and pmax values should be set to default if not defined
+            _anjay_dm_read_combined_server_attrs(anjay, ssid, &attrs.common);
+        } else
+#    endif // ANJAY_WITH_OBSERVATION_ATTRIBUTES
+                if ((result = get_effective_attrs(
+                             anjay, &attrs, &observation->paths[i], ssid))) {
             anjay_log(ERROR, _("Could not get attributes of path ") "%s",
                       ANJAY_DEBUG_MAKE_PATH(&observation->paths[i]));
             goto finish;
         }
+#    ifdef ANJAY_WITH_LWM2M12
+        hqmax = AVS_MAX(hqmax, attrs.common.hqmax);
+#    endif // ANJAY_WITH_LWM2M12
+#    ifdef ANJAY_WITH_OBSERVATION_ATTRIBUTES
+        if (observation->action == ANJAY_ACTION_READ_COMPOSITE
+                && !_anjay_dm_resource_attributes_empty(&observation->attrs)) {
+            attrs.common = observation->attrs.common;
+            // pmin and pmax values should be set to default if not defined
+            _anjay_dm_read_combined_server_attrs(anjay, ssid, &attrs.common);
+        }
+
+#    endif // ANJAY_WITH_OBSERVATION_ATTRIBUTES
 
         if (has_epmin_expired(newest_value(observation)->values[i],
                               &attrs.common)) {
@@ -1872,6 +2103,13 @@ update_notification_value(anjay_observe_connection_entry_t *conn_state,
         con = AVS_MAX(con, attrs.common.con);
 #    endif // ANJAY_WITH_CON_ATTR
     }
+
+#    ifdef ANJAY_WITH_LWM2M12
+    if (observation->historical_queue_size != hqmax
+            && hqmax != ANJAY_ATTRIB_INTEGER_NONE) {
+        observation->historical_queue_size = hqmax;
+    }
+#    endif // ANJAY_WITH_LWM2M12
 
     if (should_update_batch) {
         if (con < 0 && anjay->observe.confirmable_notifications) {
@@ -1945,6 +2183,14 @@ static void trigger_observe(avs_sched_t *sched, const void *args_) {
                     remove_all_unsent_values(args->conn_state);
                 }
             }
+#    ifdef ANJAY_WITH_LWM2M12
+            else if (args->observation->historical_queue_size == 0
+                     && notification_storing_enabled(
+                                args->conn_state->conn_ref)) {
+                remove_last_unsent_value_from_observation(args->conn_state,
+                                                          args->observation);
+            }
+#    endif // ANJAY_WITH_LWM2M12
         }
     }
     ANJAY_MUTEX_UNLOCK(anjay_locked);
@@ -1973,6 +2219,28 @@ static int notify_path_changed(anjay_observe_connection_entry_t *connection,
         assert(ref);
         assert(*ref);
         int observation_period = period;
+#    ifdef ANJAY_WITH_OBSERVATION_ATTRIBUTES
+        if (!_anjay_dm_resource_attributes_empty(&(*ref)->attrs)) {
+            observation_period = (*ref)->attrs.common.min_period;
+            if (observation_period < 0) {
+                anjay_iid_t server_iid;
+                if (_anjay_find_server_iid(
+                            _anjay_from_server(connection->conn_ref.server),
+                            _anjay_server_ssid(connection->conn_ref.server),
+                            &server_iid)) {
+                    return -1;
+                }
+
+                _anjay_read_period(_anjay_from_server(
+                                           connection->conn_ref.server),
+                                   server_iid, ANJAY_DM_RID_SERVER_DEFAULT_PMIN,
+                                   &observation_period);
+                if (observation_period < 0) {
+                    observation_period = ANJAY_DM_DEFAULT_PMIN_VALUE;
+                }
+            }
+        }
+#    endif // ANJAY_WITH_OBSERVATION_ATTRIBUTES
         _anjay_update_ret((int *) result_ptr,
                           schedule_trigger(connection, *ref, observation_period,
                                            SCHEDULE_PERIOD_MIN));

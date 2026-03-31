@@ -3,6 +3,7 @@
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 
+#include <avsystem/commons/avs_crypto_common.h>
 #include <avsystem/commons/avs_socket_v_table.h>
 #include <avsystem/commons/avs_utils.h>
 
@@ -27,6 +28,10 @@ avs_error_t _avs_net_initialize_global_ssl_state(void) {
 }
 
 void _avs_net_cleanup_global_ssl_state(void) {}
+
+void avs_crypto_clear_buffer(void *buf, size_t size) {
+    OPENSSL_cleanse(buf, size);
+}
 
 typedef struct {
     const avs_net_socket_v_table_t *operations;

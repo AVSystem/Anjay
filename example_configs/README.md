@@ -4,7 +4,12 @@ Each of the subdirectories here contains a complete configuration that can be us
 
 You can use them by copying the contents of one of the directories to some location used as an include path by your compiler (e.g. `-I...` argument on most command-line compilers), or specify it as an include path directly (e.g. `-I$ANJAY_DIR/example_configs/linux_lwm2m11`, provided that Anjay has been downloaded into `$ANJAY_DIR`).
 
-## LwM2M 1.1 configurations
+## LwM2M 1.2 configurations
+
+* `linux_lwm2m12` - equivalent to `linux_lwm2m11` configuration, but with LwM2M 1.2-specific features enabled.
+* `embedded_lwm2m12` - equivalent to `embedded_lwm2m11` configuration, but with LwM2M 1.2-specific features enabled.
+
+## LwM2M 1.1 configurations (recommended starting point)
 
 * `linux_lwm2m11` - equivalent to the default configuration of CMake (i.e., running `cmake .`) on a typical modern desktop Linux system.
   * As-is, it should be usable on most Linux-based systems for 32- and 64-bit little-endian architectures, with GCC as the compiler.
@@ -21,4 +26,3 @@ You can use them by copying the contents of one of the directories to some locat
 
 * `linux_lwm2m10` - equivalent to `linux_lwm2m11` configuration, but with LwM2M 1.1-specific features disabled.
 * `embedded_lwm2m10` - equivalent to `embedded_lwm2m11` configuration, but with LwM2M 1.1-specific features disabled.
-

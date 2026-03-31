@@ -135,6 +135,20 @@ function can be left empty:
 
     void _avs_net_cleanup_global_ssl_state(void) {}
 
+In addition to the custom network layer, we also need to provide an implementation
+of the ``avs_crypto_clear_buffer()`` function. This function should securely
+clear a given buffer and must be written in a way that guarantees the compiler
+will not optimize it out. For integrating with OpenSSL we can use
+``OPENSSL_cleanse()`` function as an actual implementation but other crypto
+backends might require a different approach.
+
+.. highlight:: c
+.. snippet-source:: examples/custom-tls/stub/src/tls_impl.c
+
+    void avs_crypto_clear_buffer(void *buf, size_t size) {
+        OPENSSL_cleanse(buf, size);
+    }
+
 TLS socket structure stub
 -------------------------
 

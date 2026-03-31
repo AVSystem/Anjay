@@ -39,6 +39,14 @@ VISIBILITY_SOURCE_BEGIN
 
 #ifdef ANJAY_WITH_BOOTSTRAP
 
+#    ifdef ANJAY_WITH_BOOTSTRAP_PACK
+#        ifdef ANJAY_WITH_CBOR
+#            define BOOTSTRAP_PACK_ACCEPT_FORMAT AVS_COAP_FORMAT_SENML_CBOR
+#        else // ANJAY_WITH_CBOR
+#            define BOOTSTRAP_PACK_ACCEPT_FORMAT AVS_COAP_FORMAT_SENML_JSON
+#        endif // ANJAY_WITH_CBOR
+#    endif     // ANJAY_WITH_BOOTSTRAP_PACK
+
 static void cancel_client_initiated_bootstrap(anjay_unlocked_t *anjay) {
     avs_sched_del(&anjay->bootstrap.client_initiated_bootstrap_handle);
 }
@@ -588,7 +596,11 @@ static int bootstrap_delete(anjay_connection_ref_t bootstrap_connection,
 static int bootstrap_discover(anjay_connection_ref_t bootstrap_connection,
                               const anjay_request_t *request) {
 #    ifdef ANJAY_WITH_DISCOVER
-    if (_anjay_uri_path_has(&request->uri, ANJAY_ID_IID)) {
+    if (
+#        ifdef ANJAY_WITH_LWM2M12
+                request->depth >= 0 ||
+#        endif // ANJAY_WITH_LWM2M12
+                    _anjay_uri_path_has(&request->uri, ANJAY_ID_IID)) {
         return ANJAY_ERR_BAD_REQUEST;
     }
 
@@ -1058,7 +1070,12 @@ int _anjay_bootstrap_perform_action(anjay_connection_ref_t bootstrap_connection,
 }
 
 static void send_request_bootstrap(anjay_unlocked_t *anjay,
-                                   anjay_connection_ref_t connection);
+                                   anjay_connection_ref_t connection
+#    ifdef ANJAY_WITH_BOOTSTRAP_PACK
+                                   ,
+                                   bool bootstrap_pack
+#    endif // ANJAY_WITH_BOOTSTRAP_PACK
+);
 
 static void bootstrap_request_response_handler(
         avs_coap_ctx_t *ctx,
@@ -1105,7 +1122,12 @@ static void bootstrap_request_response_handler(
                 _anjay_server_update_registration_info(connection.server, NULL,
                                                        ANJAY_LWM2M_VERSION_1_0,
                                                        false, NULL);
-                send_request_bootstrap(anjay, connection);
+                send_request_bootstrap(anjay, connection
+#        ifdef ANJAY_WITH_BOOTSTRAP_PACK
+                                       ,
+                                       false
+#        endif // ANJAY_WITH_BOOTSTRAP_PACK
+                );
                 return;
             }
 #    endif // ANJAY_WITH_LWM2M11
@@ -1151,6 +1173,182 @@ static void bootstrap_request_response_handler(
     }
 }
 
+#    ifdef ANJAY_WITH_BOOTSTRAP_PACK
+static int write_bootstrap_pack(anjay_unlocked_t *anjay,
+                                anjay_unlocked_input_ctx_t *in_ctx) {
+    int retval;
+    delete_object_arg_t delete_args = {
+        .skip_bootstrap = true,
+        .retval = 0
+    };
+
+    do {
+        anjay_uri_path_t path;
+        if ((retval = _anjay_input_get_path(in_ctx, &path, NULL))) {
+            if (retval == ANJAY_GET_PATH_END) {
+                retval = 0;
+            }
+            break;
+        }
+        if (path.ids[ANJAY_ID_OID] == ANJAY_ID_INVALID) {
+            retval = ANJAY_ERR_BAD_REQUEST;
+            break;
+        }
+
+        const anjay_dm_installed_object_t *obj =
+                _anjay_dm_find_object_by_oid(&anjay->dm,
+                                             path.ids[ANJAY_ID_OID]);
+        if (!_anjay_dm_transaction_object_included(anjay, obj)) {
+            delete_object(anjay, obj, &delete_args);
+        }
+        retval = write_object_and_move_to_next_entry(anjay, obj, in_ctx);
+    } while (!retval);
+
+    return retval;
+}
+
+static void bootstrap_pack_request_response_handler(
+        avs_coap_ctx_t *ctx,
+        avs_coap_exchange_id_t exchange_id,
+        avs_coap_client_request_state_t result,
+        const avs_coap_client_async_response_t *response,
+        avs_error_t err,
+        void *anjay_) {
+    (void) ctx;
+    (void) exchange_id;
+    anjay_unlocked_t *anjay = (anjay_unlocked_t *) anjay_;
+    if (result != AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT) {
+        anjay->bootstrap.outgoing_request_exchange_id =
+                AVS_COAP_EXCHANGE_ID_INVALID;
+    }
+    if (result != AVS_COAP_CLIENT_REQUEST_CANCEL) {
+        anjay->bootstrap.bootstrap_trigger = false;
+    }
+
+    const anjay_connection_ref_t connection =
+            _anjay_servers_find_active_primary_connection(anjay,
+                                                          ANJAY_SSID_BOOTSTRAP);
+    assert(connection.server || result == AVS_COAP_CLIENT_REQUEST_CANCEL);
+    bool destroy_membuf = true;
+    switch (result) {
+    case AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT:
+    case AVS_COAP_CLIENT_REQUEST_OK:
+        assert(connection.conn_type != ANJAY_CONNECTION_UNSET);
+        if (response->header.code != AVS_COAP_CODE_CONTENT) {
+            anjay_log(WARNING,
+                      _("server responded with ") "%s" _(" (expected ") "%s" _(
+                              ")"),
+                      AVS_COAP_CODE_STRING(response->header.code),
+                      AVS_COAP_CODE_STRING(AVS_COAP_CODE_CONTENT));
+            anjay_log(WARNING, _("Bootstrap-pack failed - attempting to fall "
+                                 "back to casual bootstrap"));
+            send_request_bootstrap(anjay, connection, false);
+        } else {
+            if (avs_is_err((err = start_bootstrap_if_not_already_started(
+                                    anjay, connection, false)))) {
+                _anjay_server_on_server_communication_error(connection.server,
+                                                            err);
+                break;
+            }
+
+            uint16_t content_format;
+            if (avs_coap_options_get_content_format(&response->header.options,
+                                                    &content_format)) {
+                anjay_log(WARNING,
+                          _("Could not read Bootstrap-Pack Content format, "
+                            "falling back to casual bootstrap"));
+                send_request_bootstrap(anjay, connection, false);
+                break;
+            }
+
+            avs_off_t expected_offset = 0;
+            if (!anjay->bootstrap.pack_membuf
+                    || avs_is_err(avs_stream_offset(
+                               anjay->bootstrap.pack_membuf, &expected_offset))
+                    || expected_offset < 0) {
+                expected_offset = 0;
+            }
+            if (response->payload_offset != (size_t) expected_offset) {
+                anjay_log(ERROR, _("bootstrap_pack_request_response_handler() "
+                                   "called in invalid state"));
+                send_request_bootstrap(anjay, connection, false);
+                break;
+            }
+            if (expected_offset == 0) {
+                anjay_log(INFO, _("Bootstrap-pack successfully received"));
+            }
+            if ((!anjay->bootstrap.pack_membuf
+                 && !(anjay->bootstrap.pack_membuf =
+                              avs_stream_membuf_create()))
+                    || avs_is_err(avs_stream_write(anjay->bootstrap.pack_membuf,
+                                                   response->payload,
+                                                   response->payload_size))) {
+                _anjay_log_oom();
+                send_request_bootstrap(anjay, connection, false);
+            } else if (result == AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT) {
+                destroy_membuf = false;
+            } else {
+                anjay_unlocked_input_ctx_t *input_ctx;
+                anjay_uri_path_t uri = MAKE_ROOT_PATH();
+                if (_anjay_input_dynamic_construct_raw(
+                            &input_ctx, anjay->bootstrap.pack_membuf,
+                            content_format, ANJAY_ACTION_WRITE_COMPOSITE,
+                            &uri)) {
+                    anjay_log(WARNING,
+                              _("Creating Bootstrap-Pack input context failed, "
+                                "falling back to casual bootstrap"));
+                    send_request_bootstrap(anjay, connection, false);
+                    break;
+                }
+
+                if (write_bootstrap_pack(anjay, input_ctx)) {
+                    anjay_log(WARNING,
+                              _("Reading Bootstrap-Pack Content failed, "
+                                "falling back to casual bootstrap"));
+                    send_request_bootstrap(anjay, connection, false);
+                } else {
+                    anjay_log(INFO, _("Bootstrap-Pack successfuly read"));
+                    if (bootstrap_finish(connection)) {
+                        anjay_log(INFO, _("Cannot connect to the server using "
+                                          "Bootstrap-Pack data, falling back "
+                                          "to casual bootstrap"));
+                        send_request_bootstrap(anjay, connection, false);
+                    }
+                }
+
+                (void) _anjay_input_ctx_destroy(&input_ctx);
+            }
+        }
+        break;
+    case AVS_COAP_CLIENT_REQUEST_FAIL: {
+        if (avs_is_err(err)) {
+            if (err.category == AVS_COAP_ERR_CATEGORY
+                    && err.code == AVS_COAP_ERR_TIMEOUT) {
+                anjay_log(WARNING,
+                          _("could not request Bootstrap-Pack: timeout"));
+                _anjay_server_on_server_communication_timeout(
+                        connection.server);
+            } else {
+                anjay_log(WARNING,
+                          _("could not send Bootstrap-Pack Request: ") "%s",
+                          AVS_COAP_STRERROR(err));
+                _anjay_server_on_server_communication_error(connection.server,
+                                                            err);
+            }
+        }
+        break;
+    }
+
+    case AVS_COAP_CLIENT_REQUEST_CANCEL:
+        break;
+    }
+
+    if (destroy_membuf) {
+        avs_stream_cleanup(&anjay->bootstrap.pack_membuf);
+    }
+}
+#    endif // ANJAY_WITH_BOOTSTRAP_PACK
+
 #    ifdef ANJAY_WITH_LWM2M11
 static inline avs_error_t
 add_pct_option_if_required(avs_coap_options_t *options,
@@ -1172,13 +1370,25 @@ add_pct_option_if_required(avs_coap_options_t *options,
 #    endif // ANJAY_WITH_LWM2M11
 
 static void send_request_bootstrap(anjay_unlocked_t *anjay,
-                                   anjay_connection_ref_t connection) {
+                                   anjay_connection_ref_t connection
+#    ifdef ANJAY_WITH_BOOTSTRAP_PACK
+                                   ,
+                                   bool bootstrap_pack
+#    endif // ANJAY_WITH_BOOTSTRAP_PACK
+) {
     const anjay_url_t *const connection_uri = _anjay_connection_uri(connection);
     avs_coap_request_header_t request = {
         .code = AVS_COAP_CODE_POST
     };
 
     const char *prefix = "bs";
+
+#    ifdef ANJAY_WITH_BOOTSTRAP_PACK
+    if (bootstrap_pack) {
+        request.code = AVS_COAP_CODE_GET;
+        prefix = "bspack";
+    }
+#    endif // ANJAY_WITH_BOOTSTRAP_PACK
 
     avs_coap_ctx_t *coap = _anjay_connection_get_coap(connection);
     assert(coap);
@@ -1200,7 +1410,16 @@ static void send_request_bootstrap(anjay_unlocked_t *anjay,
                                    &request.options, NULL, anjay->endpoint_name,
                                    NULL, NULL, false, NULL)))
 #    ifdef ANJAY_WITH_LWM2M11
-            || (avs_is_err(add_pct_option_if_required(&request.options,
+            || (
+#        ifdef ANJAY_WITH_BOOTSTRAP_PACK
+                       bootstrap_pack
+                       && (avs_is_err((err = avs_coap_options_add_u16(
+                                               &request.options,
+                                               AVS_COAP_OPTION_ACCEPT,
+                                               BOOTSTRAP_PACK_ACCEPT_FORMAT)))))
+            || (!bootstrap_pack &&
+#        endif // ANJAY_WITH_BOOTSTRAP_PACK
+                avs_is_err(add_pct_option_if_required(&request.options,
                                                       connection)))
 #    endif // ANJAY_WITH_LWM2M11
     ) {
@@ -1213,6 +1432,13 @@ static void send_request_bootstrap(anjay_unlocked_t *anjay,
         const char *msg_name = "Bootstrap Request:";
         avs_coap_client_async_response_handler_t *response_handler =
                 bootstrap_request_response_handler;
+
+#    ifdef ANJAY_WITH_BOOTSTRAP_PACK
+        if (bootstrap_pack) {
+            msg_name = "Bootstrap-Pack Request:";
+            response_handler = bootstrap_pack_request_response_handler;
+        }
+#    endif // ANJAY_WITH_BOOTSTRAP_PACK
 
         if (avs_is_err(
                     (err = avs_coap_client_send_async_request(
@@ -1319,7 +1545,10 @@ static void request_bootstrap_job(avs_sched_t *sched, const void *dummy) {
     // Preferred Content Type is sent in the Request Bootstrap message.
     _anjay_server_update_registration_info(
             connection.server, NULL,
-#    if defined(ANJAY_WITH_LWM2M11)
+#    ifdef ANJAY_WITH_LWM2M12
+            AVS_MIN(anjay->lwm2m_version_config.maximum_version,
+                    ANJAY_LWM2M_VERSION_1_2),
+#    elif defined(ANJAY_WITH_LWM2M11)
             AVS_MIN(anjay->lwm2m_version_config.maximum_version,
                     ANJAY_LWM2M_VERSION_1_1),
 #    else  // ANJAY_WITH_LWM2M11
@@ -1327,7 +1556,15 @@ static void request_bootstrap_job(avs_sched_t *sched, const void *dummy) {
 #    endif // ANJAY_WITH_LWM2M11
             false, NULL);
 
-    send_request_bootstrap(anjay, connection);
+    send_request_bootstrap(anjay, connection
+#    ifdef ANJAY_WITH_BOOTSTRAP_PACK
+                           ,
+                           /* bootstrap-pack */ _anjay_server_registration_info(
+                                   connection.server)
+                                           ->lwm2m_version
+                                   >= ANJAY_LWM2M_VERSION_1_2
+#    endif // ANJAY_WITH_BOOTSTRAP_PACK
+    );
     goto finish;
 error:
     anjay->bootstrap.bootstrap_trigger = false;
@@ -1408,6 +1645,9 @@ void _anjay_bootstrap_init(anjay_unlocked_t *anjay,
 void _anjay_bootstrap_cleanup(anjay_unlocked_t *anjay) {
     assert(!avs_coap_exchange_id_valid(
             anjay->bootstrap.outgoing_request_exchange_id));
+#    ifdef ANJAY_WITH_BOOTSTRAP_PACK
+    assert(!anjay->bootstrap.pack_membuf);
+#    endif // ANJAY_WITH_BOOTSTRAP_PACK
     cancel_client_initiated_bootstrap(anjay);
     cancel_est_sren(anjay);
     reset_client_initiated_bootstrap_backoff(&anjay->bootstrap);

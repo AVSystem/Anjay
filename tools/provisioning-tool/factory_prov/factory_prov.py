@@ -12,9 +12,9 @@ import os.path
 
 import requests
 from factory_prov.cert_gen import *
-from framework_tools.utils import serialize_senml_cbor as ssc
+from framework import serialize_senml_cbor as ssc
 from framework_tools.lwm2m.coap.server import SecurityMode
-from framework_tools.utils.test_utils import *
+from framework.test_utils import *
 
 SupportedSecMode = [
     SecurityMode.PreSharedKey,

@@ -267,6 +267,103 @@ class Lwm2mBootstrapFinish(Lwm2mMsg):
                                              self.content_summary()))
 
 
+class EstCoapsSimpleEnroll(Lwm2mMsg):
+    @staticmethod
+    def _pkt_matches(pkt: coap.Packet):
+        """Checks if the PKT is an EST-coaps Simple Enroll message."""
+        return (pkt.type in (None, coap.Type.CONFIRMABLE)
+                and pkt.code == coap.Code.REQ_POST
+                and pkt.get_full_uri().endswith('/est/sen'))
+
+    def __init__(self,
+                 msg_id: int = ANY,
+                 token: EscapedBytes = ANY,
+                 uri_path: str = '',
+                 uri_query: List[str] = None,
+                 options: List[coap.Option] = ANY,
+                 content: EscapedBytes = ANY):
+        if not uri_query:
+            uri_query = []
+        super().__init__(type=coap.Type.CONFIRMABLE,
+                         code=coap.Code.REQ_POST,
+                         msg_id=msg_id,
+                         token=token,
+                         options=concat_if_not_any(
+                             CoapPath(uri_path + '/est/sen').to_uri_options(),
+                             [coap.Option.URI_QUERY(query)
+                              for query in uri_query],
+                             options),
+                         content=content)
+
+    def summary(self):
+        return ('EST-coaps Simple Enroll %s: %s' % (self.get_full_uri(),
+                                                    self.content_summary()))
+
+
+class EstCoapsSimpleReenroll(Lwm2mMsg):
+    @staticmethod
+    def _pkt_matches(pkt: coap.Packet):
+        """Checks if the PKT is an EST-coaps Simple Re-enroll message."""
+        return (pkt.type in (None, coap.Type.CONFIRMABLE)
+                and pkt.code == coap.Code.REQ_POST
+                and pkt.get_full_uri().endswith('/est/sren'))
+
+    def __init__(self,
+                 msg_id: int = ANY,
+                 token: EscapedBytes = ANY,
+                 uri_path: str = '',
+                 uri_query: List[str] = None,
+                 options: List[coap.Option] = ANY,
+                 content: EscapedBytes = ANY):
+        if not uri_query:
+            uri_query = []
+        super().__init__(type=coap.Type.CONFIRMABLE,
+                         code=coap.Code.REQ_POST,
+                         msg_id=msg_id,
+                         token=token,
+                         options=concat_if_not_any(
+                             CoapPath(uri_path + '/est/sren').to_uri_options(),
+                             [coap.Option.URI_QUERY(query)
+                              for query in uri_query],
+                             options),
+                         content=content)
+
+    def summary(self):
+        return ('EST-coaps Simple Re-enroll %s: %s' % (self.get_full_uri(),
+                                                       self.content_summary()))
+
+
+class EstCoapsCaCerts(Lwm2mMsg):
+    @staticmethod
+    def _pkt_matches(pkt: coap.Packet):
+        """Checks if the PKT is an EST-coaps CA Certs message."""
+        return (pkt.type in (None, coap.Type.CONFIRMABLE)
+                and pkt.code == coap.Code.REQ_GET
+                and pkt.get_full_uri().endswith('/est/crts'))
+
+    def __init__(self,
+                 msg_id: int = ANY,
+                 token: EscapedBytes = ANY,
+                 uri_path: str = '',
+                 uri_query: List[str] = None,
+                 options: List[coap.Option] = ANY,
+                 content: EscapedBytes = ANY):
+        if not uri_query:
+            uri_query = []
+        super().__init__(type=coap.Type.CONFIRMABLE,
+                         code=coap.Code.REQ_GET,
+                         msg_id=msg_id,
+                         token=token,
+                         options=concat_if_not_any(
+                             CoapPath(uri_path + '/est/crts').to_uri_options(),
+                             [coap.Option.URI_QUERY(query)
+                              for query in uri_query],
+                             options),
+                         content=content)
+
+    def summary(self):
+        return ('EST-coaps CA Certs %s: %s' % (self.get_full_uri(),
+                                               self.content_summary()))
 
 
 def _split_string_path(path: str,
@@ -569,6 +666,48 @@ class CoapGet(Lwm2mMsg):
         return text
 
 
+class Lwm2mBootstrapPackRequest(CoapGet):
+    @staticmethod
+    def _pkt_matches(pkt: coap.Packet):
+        """Checks if the PKT is LWM2M Bootstrap-Pack-Request message."""
+        return (pkt.type in (None, coap.Type.CONFIRMABLE)
+                and pkt.code == coap.Code.REQ_GET
+                and '/bspack?' in pkt.get_full_uri())
+
+    def endpoint_name_matches(self, endpoint_name: str):
+        return self.endpoint_name == endpoint_name
+
+    def __init__(self,
+                 endpoint_name: str,
+                 accept: coap.AcceptOption = None,
+                 msg_id: int = ANY,
+                 token: EscapedBytes = ANY,
+                 uri_path: str = '',
+                 uri_query: List[str] = None,
+                 options: List[coap.Option] = ANY):
+        if not uri_query:
+            uri_query = []
+        uri_query = uri_query + ['ep=' + endpoint_name]
+
+        super().__init__(path=CoapPath(uri_path + '/bspack'),
+                         accept=accept,
+                         options=concat_if_not_any(
+                             [coap.Option.URI_QUERY(query)
+                              for query in uri_query],
+                             options),
+                         msg_id=msg_id,
+                         token=token)
+
+    def summary(self):
+        text = 'Bootstrap-Pack-Request %s: %s' % (self.get_full_uri(),
+                                                  self.content_summary())
+        accept = self.get_options(coap.Option.ACCEPT)
+        if accept:
+            accept_vals = [x.content_to_int() for x in accept]
+            text += ': accept ' + \
+                ', '.join(map(coap.ContentFormat.to_str, accept_vals))
+        return text
+
 
 class Lwm2mRead(CoapGet):
     @staticmethod
@@ -611,6 +750,14 @@ class Lwm2mObserve(Lwm2mRead):
                  path: str or Lwm2mNonemptyPath,
                  observe: int = 0,
                  accept: coap.AcceptOption = None,
+                 lt: float = None,
+                 gt: float = None,
+                 st: float = None,
+                 pmin: int = None,
+                 pmax: int = None,
+                 epmin: int = None,
+                 epmax: int = None,
+                 hqmax: int = None,
                  msg_id: int = ANY,
                  token: EscapedBytes = ANY,
                  options: List[coap.Option] = ANY):
@@ -620,6 +767,7 @@ class Lwm2mObserve(Lwm2mRead):
         if isinstance(accept, int):
             accept = coap.Option.ACCEPT(accept)
 
+        query = add_attributes_to_query([], lt, gt, st, pmin, pmax, epmin, epmax, hqmax)
 
         super().__init__(path=path,
                          accept=accept,
@@ -627,6 +775,7 @@ class Lwm2mObserve(Lwm2mRead):
                          token=token,
                          options=concat_if_not_any(
                              [coap.Option.OBSERVE(observe)],
+                             [coap.Option.URI_QUERY(x) for x in query],
                              options))
 
     def summary(self):
@@ -777,13 +926,14 @@ class Lwm2mWriteAttributes(Lwm2mMsg):
                  pmax: int = None,
                  epmin: int = None,
                  epmax: int = None,
+                 hqmax: int = None,
                  query: List[str] = None,
                  msg_id: int = ANY,
                  token: EscapedBytes = ANY,
                  options: List[coap.Option] = ANY):
         path, query = _split_string_path(path, query)
 
-        query = add_attributes_to_query(query, lt, gt, st, pmin, pmax, epmin, epmax)
+        query = add_attributes_to_query(query, lt, gt, st, pmin, pmax, epmin, epmax, hqmax)
 
         super().__init__(type=coap.Type.CONFIRMABLE,
                          code=coap.Code.REQ_PUT,

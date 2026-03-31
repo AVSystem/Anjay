@@ -731,10 +731,18 @@ static void notify_max_period_test(const char *con_notify_ack,
             .max_period = 10,
             .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
             .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+            ,
+            .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
         },
         .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
         .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
         .step = ANJAY_ATTRIB_DOUBLE_NONE
+#ifdef ANJAY_WITH_LWM2M12
+        ,
+        .edge = ANJAY_DM_EDGE_ATTR_NONE
+#endif // ANJAY_WITH_LWM2M12
     };
 
     ////// INITIALIZATION //////
@@ -870,10 +878,18 @@ AVS_UNIT_TEST(notify, min_period) {
             .max_period = 365 * 24 * 60 * 60 /* a year */,
             .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
             .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+            ,
+            .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
         },
         .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
         .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
         .step = ANJAY_ATTRIB_DOUBLE_NONE
+#ifdef ANJAY_WITH_LWM2M12
+        ,
+        .edge = ANJAY_DM_EDGE_ATTR_NONE
+#endif // ANJAY_WITH_LWM2M12
     };
 
     ////// INITIALIZATION //////
@@ -935,10 +951,18 @@ AVS_UNIT_TEST(notify, epmin_greater_than_pmax) {
             .max_period = 5,
             .min_eval_period = 8,
             .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+            ,
+            .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
         },
         .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
         .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
         .step = ANJAY_ATTRIB_DOUBLE_NONE
+#ifdef ANJAY_WITH_LWM2M12
+        ,
+        .edge = ANJAY_DM_EDGE_ATTR_NONE
+#endif // ANJAY_WITH_LWM2M12
     };
 
     ////// INITIALIZATION //////
@@ -988,10 +1012,18 @@ AVS_UNIT_TEST(notify, epmin_less_than_pmax) {
             .max_period = 365 * 24 * 60 * 60 /* a year */,
             .min_eval_period = 15,
             .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+            ,
+            .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
         },
         .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
         .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
         .step = ANJAY_ATTRIB_DOUBLE_NONE
+#ifdef ANJAY_WITH_LWM2M12
+        ,
+        .edge = ANJAY_DM_EDGE_ATTR_NONE
+#endif // ANJAY_WITH_LWM2M12
     };
 
     ////// INITIALIZATION //////
@@ -1097,10 +1129,18 @@ AVS_UNIT_TEST(notify, extremes) {
             .max_period = 365 * 24 * 60 * 60 /* a year */,
             .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
             .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+            ,
+            .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
         },
         .greater_than = 777.0,
         .less_than = 69.0,
         .step = ANJAY_ATTRIB_DOUBLE_NONE
+#ifdef ANJAY_WITH_LWM2M12
+        ,
+        .edge = ANJAY_DM_EDGE_ATTR_NONE
+#endif // ANJAY_WITH_LWM2M12
     };
 
     ////// INITIALIZATION //////
@@ -1252,10 +1292,18 @@ AVS_UNIT_TEST(notify, greater_only) {
             .max_period = 365 * 24 * 60 * 60 /* a year */,
             .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
             .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+            ,
+            .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
         },
         .greater_than = 69.0,
         .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
         .step = ANJAY_ATTRIB_DOUBLE_NONE
+#ifdef ANJAY_WITH_LWM2M12
+        ,
+        .edge = ANJAY_DM_EDGE_ATTR_NONE
+#endif // ANJAY_WITH_LWM2M12
     };
 
     ////// INITIALIZATION (GREATER) //////
@@ -1337,10 +1385,18 @@ AVS_UNIT_TEST(notify, less_only) {
             .max_period = 365 * 24 * 60 * 60 /* a year */,
             .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
             .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+            ,
+            .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
         },
         .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
         .less_than = 777.0,
         .step = ANJAY_ATTRIB_DOUBLE_NONE
+#ifdef ANJAY_WITH_LWM2M12
+        ,
+        .edge = ANJAY_DM_EDGE_ATTR_NONE
+#endif // ANJAY_WITH_LWM2M12
     };
 
     ////// INITIALIZATION (GREATER) //////
@@ -1442,10 +1498,18 @@ AVS_UNIT_TEST(notify, step) {
             .max_period = 365 * 24 * 60 * 60 /* a year */,
             .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
             .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+            ,
+            .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
         },
         .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
         .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
         .step = 10.0
+#ifdef ANJAY_WITH_LWM2M12
+        ,
+        .edge = ANJAY_DM_EDGE_ATTR_NONE
+#endif // ANJAY_WITH_LWM2M12
     };
 
     ////// INITIALIZATION //////
@@ -1641,10 +1705,18 @@ AVS_UNIT_TEST(notify, multiple_formats) {
             .max_period = 10,
             .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
             .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#ifdef ANJAY_WITH_LWM2M12
+            ,
+            .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
         },
         .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
         .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
         .step = ANJAY_ATTRIB_DOUBLE_NONE
+#ifdef ANJAY_WITH_LWM2M12
+        ,
+        .edge = ANJAY_DM_EDGE_ATTR_NONE
+#endif // ANJAY_WITH_LWM2M12
     };
 
     ////// INITIALIZATION //////
@@ -2308,10 +2380,18 @@ AVS_UNIT_TEST(observe_status, observed_path) {
             .max_period = 365 * 24 * 60 * 60 /* a year */,
             .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
             .max_eval_period = 360
+#    ifdef ANJAY_WITH_LWM2M12
+            ,
+            .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#    endif // ANJAY_WITH_LWM2M12
         },
         .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
         .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
         .step = ANJAY_ATTRIB_DOUBLE_NONE
+#    ifdef ANJAY_WITH_LWM2M12
+        ,
+        .edge = ANJAY_DM_EDGE_ATTR_NONE
+#    endif // ANJAY_WITH_LWM2M12
     };
 
     ////// INITIALIZATION //////

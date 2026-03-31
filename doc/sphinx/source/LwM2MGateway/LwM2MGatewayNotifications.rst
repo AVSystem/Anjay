@@ -89,7 +89,7 @@ Example
 
 .. note::
    Complete code of this example can be found in
-   ``examples/commercial-features/CF-LwM2M-Gateway`` subdirectory of the
+   ``examples/tutorial/LwM2M-Gateway`` subdirectory of the
    main Anjay project repository.
 
 Cache mechanism

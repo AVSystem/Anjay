@@ -383,6 +383,30 @@ The source of the example object looks like this:
         }
     }
 
+    static int resource_instance_remove(anjay_t *anjay,
+                                        const anjay_dm_object_def_t *const *obj_ptr,
+                                        anjay_iid_t iid,
+                                        anjay_rid_t rid,
+                                        anjay_riid_t riid) {
+        // NOTE: This handler can be removed if the client application
+        // does not need to support LwM2M 1.2.
+
+        (void) anjay;
+
+        some_object_name_object_t *obj = get_obj(obj_ptr);
+        some_object_name_instance_t *inst = find_instance(obj, iid);
+        assert(inst);
+
+        switch (rid) {
+        case RID_SOME_BOOLEAN_MULTIPLE_RESOURCE:
+            // TODO: extract and remove Resource Instance
+            return ANJAY_ERR_NOT_IMPLEMENTED;
+
+        default:
+            return ANJAY_ERR_METHOD_NOT_ALLOWED;
+        }
+    }
+
     static int list_resource_instances(anjay_t *anjay,
                                        const anjay_dm_object_def_t *const *obj_ptr,
                                        anjay_iid_t iid,
@@ -423,6 +447,8 @@ The source of the example object looks like this:
             .transaction_validate = anjay_dm_transaction_NOOP,
             .transaction_commit = anjay_dm_transaction_NOOP,
             .transaction_rollback = anjay_dm_transaction_NOOP,
+
+            .resource_instance_remove = resource_instance_remove
         }
     };
 

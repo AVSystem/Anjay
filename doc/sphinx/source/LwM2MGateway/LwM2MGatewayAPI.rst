@@ -28,7 +28,7 @@ the ``anjay_lwm2m_gateway_install()`` function.
 
 .. note::
    Complete code of this example can be found in
-   ``examples/commercial-features/CF-LwM2M-Gateway`` subdirectory of the main
+   ``examples/tutorial/LwM2M-Gateway`` subdirectory of the main
    Anjay project repository.
 
 .. highlight:: c
@@ -66,7 +66,7 @@ Communication with End Devices
 
 Since different End Devices may have unique requirements, the communication
 method varies. The example provided in the next section includes a Python script
-``examples/commercial-features/CF-LwM2M-Gateway/end_device.py``. This script
+``examples/tutorial/LwM2M-Gateway/end_device.py``. This script
 communicates with the Anjay example code using **UNIX sockets**. However, it is
 the user’s responsibility to implement the appropriate communication mechanism
 for their specific End Devices.

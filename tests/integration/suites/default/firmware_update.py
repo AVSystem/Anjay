@@ -17,8 +17,8 @@ import threading
 import unittest
 import zlib
 
-from framework_tools.utils.coap_file_server import CoapFileServerThread, CoapFileServer
-from framework_tools.utils.lwm2m_test import *
+from framework_tools.coap_file_server import CoapFileServerThread, CoapFileServer
+from framework.lwm2m_test import *
 from framework.create_package import PackageForcedError, make_firmware_package
 
 from .access_control import AccessMask
@@ -3502,6 +3502,8 @@ class FirmwareDownloadSameSocketResumptionDownloadAbortInduceByOtherOperation(
         test_suite.PcapEnabledTest,
         FirmwareUpdate.CoapDownloaderRetryMixIn,
         SameSocketDownload.Test):
+    ACK_TIMEOUT = 1.5
+
     def setUp(self):
         super().setUp(extra_cmdline_args=['--max-retransmit', '1'])
 
@@ -3535,8 +3537,9 @@ class FirmwareDownloadSameSocketResumptionDownloadAbortInduceByOtherOperation(
         self.serv.close()
         self.communicate('send-update')
 
-        # Wait for ICMP port unreachable.
-        self.wait_until_icmp_unreachable_count(1, timeout_s=10)
+        # Wait for ICMP port unreachable. One second timeout is enough as we
+        # should get the ICMP response right after we try to send a update.
+        self.wait_until_icmp_unreachable_count(1, timeout_s=1)
 
         time.sleep(self.coap_downloader_retry_delay * 2)
         # Ensure that no more retransmissions occurred.
@@ -3555,6 +3558,8 @@ class FirmwareDownloadSameSocketResumptionCloseSocket(
         test_suite.PcapEnabledTest,
         FirmwareUpdate.CoapDownloaderRetryMixIn,
         SameSocketDownload.Test):
+    ACK_TIMEOUT = 1.5
+
     def setUp(self):
         super().setUp(extra_cmdline_args=['--max-retransmit', '1'])
 
@@ -3575,7 +3580,11 @@ class FirmwareDownloadSameSocketResumptionCloseSocket(
         self.serv.close()
 
         # Wait for ICMP port unreachable.
-        self.wait_until_icmp_unreachable_count(1, timeout_s=10)
+        # Anjay will send a message to the server after ACK_TIMEOUT has passed
+        # so we add +1 sec. to prevent race conditions. After Anjay sends
+        # the re-transmission it will recieve a ICMP response because the server
+        # already closed.
+        self.wait_until_icmp_unreachable_count(1, timeout_s=(self.ACK_TIMEOUT + 1))
 
         time.sleep(self.coap_downloader_retry_delay * 2)
         # Ensure that no more retransmissions occurred.

@@ -233,7 +233,7 @@ with SMS gateway configured, you need to think about a couple of matters:
 
 Otherwise, to run the example, you can use the ``vmodem.py`` script instead,
 which acts as a virtual AT modem, translating SMS messages to UDP packets and
-vice-versa. You can find it in ``tests/integration/framework/sms`` directory.
+vice-versa. You can find it in ``tests/integration/framework/framework/sms`` directory.
 
 Example run follows:
 
@@ -241,7 +241,7 @@ Example run follows:
 
 ::
 
-    $ tests/integration/framework/sms/vmodem.py --host eu.iot.avsystem.cloud --port 5683
+    $ tests/integration/framework/framework/sms/vmodem.py --host eu.iot.avsystem.cloud --port 5683
     2022-03-03 12:41:49 user root[19173] INFO Modem PTY: /dev/pts/5
 
 The scripts informs us that it has opened a virtual terminal at ``/dev/pts/5``.

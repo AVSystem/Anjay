@@ -10,7 +10,7 @@
 import socket
 import unittest
 
-from framework_tools.utils.lwm2m_test import *
+from framework.lwm2m_test import *
 
 class SeparateResponseTest(test_suite.Lwm2mSingleServerTest):
     def setUp(self):

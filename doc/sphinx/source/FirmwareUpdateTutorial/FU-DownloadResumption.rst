@@ -100,6 +100,25 @@ Let's have a look at the ``anjay_fw_update_initial_state_t``:
         bool use_lwm2m_send;
     #endif // ANJAY_WITH_SEND
 
+    #if defined(ANJAY_WITH_LWM2M11) \
+            && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
+        /**
+         * Value to initialize the Severity resource with.
+         */
+        anjay_fw_update_severity_t persisted_severity;
+
+        /**
+         * Value to initialize the Last State Change Time resource with.
+         */
+        avs_time_real_t persisted_last_state_change_time;
+
+        /**
+         * Update deadline based on Maximum Defer Period resource value and time of
+         * executing Update resource.
+         */
+        avs_time_real_t persisted_update_deadline;
+    #endif /* defined(ANJAY_WITH_LWM2M11) && \
+              defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
     } anjay_fw_update_initial_state_t;
 
 

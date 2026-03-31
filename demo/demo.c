@@ -544,6 +544,20 @@ server_connection_status_change_callback(void *demo_,
 }
 #endif // ANJAY_WITH_CONN_STATUS_API
 
+#ifdef ANJAY_WITH_SSL_ERROR_API
+static void ssl_error_callback(void *demo_,
+                               anjay_t *anjay,
+                               anjay_ssid_t ssid,
+                               avs_error_t err) {
+    (void) demo_;
+    (void) anjay;
+    demo_log(ERROR,
+             "SSL error from server with SSID=%" PRIu16 ": category=%" PRIu16
+             ", code=%" PRIu16,
+             ssid, err.category, err.code);
+}
+#endif // ANJAY_WITH_SSL_ERROR_API
+
 static void confirmable_notification_status_callback(
         anjay_t *anjay,
         anjay_ssid_t ssid,
@@ -671,6 +685,10 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         .server_connection_status_cb = server_connection_status_change_callback,
         .server_connection_status_cb_arg = demo,
 #endif // ANJAY_WITH_CONN_STATUS_API
+#ifdef ANJAY_WITH_SSL_ERROR_API
+        .ssl_error_cb = ssl_error_callback,
+        .ssl_error_cb_arg = demo,
+#endif // ANJAY_WITH_SSL_ERROR_API
 #ifdef ANJAY_WITH_DOWNLOADER
         .coap_downloader_retry_count =
                 cmdline_args->coap_downloader_retry_count,

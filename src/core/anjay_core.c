@@ -50,13 +50,18 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "3.12.0"
+#    define ANJAY_VERSION "3.13.0"
 #endif // ANJAY_VERSION
 
 #ifdef ANJAY_WITH_LWM2M11
 static anjay_lwm2m_version_config_t ALL_VERSIONS = {
     .minimum_version = ANJAY_LWM2M_VERSION_1_0,
-    .maximum_version = ANJAY_LWM2M_VERSION_1_1
+    .maximum_version =
+#    ifdef ANJAY_WITH_LWM2M12
+            ANJAY_LWM2M_VERSION_1_2
+#    else  // ANJAY_WITH_LWM2M12
+            ANJAY_LWM2M_VERSION_1_1
+#    endif // ANJAY_WITH_LWM2M12
 };
 #endif // ANJAY_WITH_LWM2M11
 
@@ -141,6 +146,13 @@ static int init_anjay(anjay_unlocked_t *anjay,
                 config->server_connection_status_cb_arg;
     }
 #endif // ANJAY_WITH_CONN_STATUS_API
+#ifdef ANJAY_WITH_SSL_ERROR_API
+    anjay->ssl_error_cb = config->ssl_error_cb;
+
+    if (anjay->ssl_error_cb) {
+        anjay->ssl_error_cb_arg = config->ssl_error_cb_arg;
+    }
+#endif // ANJAY_WITH_SSL_ERROR_API
 
     anjay->socket_config = config->socket_config;
     anjay->udp_listen_port = config->udp_listen_port;
@@ -548,7 +560,50 @@ static int parse_con(const char *value,
 }
 #endif // ANJAY_WITH_CON_ATTR
 
+#ifdef ANJAY_WITH_LWM2M12
+static int parse_edge(const char *value,
+                      bool *out_present,
+                      anjay_dm_edge_attr_t *out_value) {
+    if (*out_present) {
+        anjay_log(WARNING, _("Duplicated attribute in query string: edge"));
+        return -1;
+    } else if (!value) {
+        *out_present = true;
+        *out_value = ANJAY_DM_EDGE_ATTR_NONE;
+        return 0;
+    } else if (strcmp(value, "0") == 0) {
+        *out_present = true;
+        *out_value = ANJAY_DM_EDGE_ATTR_FALLING;
+        return 0;
+    } else if (strcmp(value, "1") == 0) {
+        *out_present = true;
+        *out_value = ANJAY_DM_EDGE_ATTR_RISING;
+        return 0;
+    } else {
+        anjay_log(WARNING, _("Invalid edge attribute value: ") "%s", value);
+        return -1;
+    }
+}
+
+static int parse_depth(const char *value, int8_t *out_depth) {
+    long long llvalue;
+    if (*out_depth >= 0) {
+        anjay_log(WARNING, _("Duplicated query string entry: depth"));
+        return -1;
+    } else if (_anjay_safe_strtoll(value, &llvalue) || llvalue < 0
+               || llvalue > 3) {
+        return -1;
+    } else {
+        *out_depth = (int8_t) llvalue;
+        return 0;
+    }
+}
+#endif // ANJAY_WITH_LWM2M12
+
 static int parse_query(anjay_request_attributes_t *out_attrs,
+#ifdef ANJAY_WITH_LWM2M12
+                       int8_t *out_depth,
+#endif // ANJAY_WITH_LWM2M12
                        const char *key,
                        const char *value) {
     if (!strcmp(key, ANJAY_ATTR_PMIN)) {
@@ -565,6 +620,11 @@ static int parse_query(anjay_request_attributes_t *out_attrs,
         return parse_nullable_integer(
                 key, value, &out_attrs->has_max_eval_period,
                 &out_attrs->values.common.max_eval_period);
+#ifdef ANJAY_WITH_LWM2M12
+    } else if (!strcmp(key, ANJAY_ATTR_HQMAX)) {
+        return parse_nullable_integer(key, value, &out_attrs->has_hqmax,
+                                      &out_attrs->values.common.hqmax);
+#endif // ANJAY_WITH_LWM2M12
     } else if (!strcmp(key, ANJAY_ATTR_GT)) {
         return parse_nullable_double(key, value, &out_attrs->has_greater_than,
                                      &out_attrs->values.greater_than);
@@ -574,11 +634,19 @@ static int parse_query(anjay_request_attributes_t *out_attrs,
     } else if (!strcmp(key, ANJAY_ATTR_ST)) {
         return parse_nullable_double(key, value, &out_attrs->has_step,
                                      &out_attrs->values.step);
+#ifdef ANJAY_WITH_LWM2M12
+    } else if (!strcmp(key, ANJAY_ATTR_EDGE)) {
+        return parse_edge(value, &out_attrs->has_edge, &out_attrs->values.edge);
+#endif // ANJAY_WITH_LWM2M12
 #ifdef ANJAY_WITH_CON_ATTR
     } else if (!strcmp(key, ANJAY_CUSTOM_ATTR_CON)) {
         return parse_con(value, &out_attrs->has_con,
                          &out_attrs->values.common.con);
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+    } else if (!strcmp(key, "depth")) {
+        return parse_depth(value, out_depth);
+#endif // ANJAY_WITH_LWM2M12
     } else {
         anjay_log(DEBUG, _("unrecognized query string: ") "%s" _(" = ") "%s",
                   key, value ? value : "(null)");
@@ -587,9 +655,18 @@ static int parse_query(anjay_request_attributes_t *out_attrs,
 }
 
 static int parse_queries(const avs_coap_request_header_t *hdr,
-                         anjay_request_attributes_t *out_attrs) {
+                         anjay_request_attributes_t *out_attrs
+#ifdef ANJAY_WITH_LWM2M12
+                         ,
+                         int8_t *out_depth
+#endif // ANJAY_WITH_LWM2M12
+) {
     memset(out_attrs, 0, sizeof(*out_attrs));
     out_attrs->values = ANJAY_DM_R_ATTRIBUTES_EMPTY;
+
+#ifdef ANJAY_WITH_LWM2M12
+    *out_depth = -1;
+#endif // ANJAY_WITH_LWM2M12
 
     char buffer[ANJAY_MAX_URI_QUERY_SEGMENT_SIZE];
     size_t attr_size;
@@ -607,7 +684,11 @@ static int parse_queries(const avs_coap_request_header_t *hdr,
         split_query_string(buffer, &key, &value);
         assert(key != NULL);
 
-        if (parse_query(out_attrs, key, value)) {
+        if (parse_query(out_attrs,
+#ifdef ANJAY_WITH_LWM2M12
+                        out_depth,
+#endif // ANJAY_WITH_LWM2M12
+                        key, value)) {
             anjay_log(DEBUG, _("invalid query string: ") "%s" _(" = ") "%s",
                       key, value ? value : "(null)");
             return -1;
@@ -853,20 +934,46 @@ static int parse_request(const avs_coap_request_header_t *hdr,
     memset(out_request, 0, sizeof(*out_request));
     out_request->request_code = hdr->code;
     if (parse_request_uri(hdr, &out_request->is_bs_uri, &out_request->uri)
-            || parse_queries(hdr, &out_request->attributes)
+            || parse_queries(hdr, &out_request->attributes
+#ifdef ANJAY_WITH_LWM2M12
+                             ,
+                             &out_request->depth
+#endif // ANJAY_WITH_LWM2M12
+                             )
             || avs_coap_options_get_content_format(&hdr->options,
                                                    &out_request->content_format)
             || parse_action(hdr, out_request)) {
         return -1;
     }
     if (out_request->action != ANJAY_ACTION_WRITE_ATTRIBUTES
+#ifdef ANJAY_WITH_OBSERVATION_ATTRIBUTES
+            && !(out_request->action == ANJAY_ACTION_READ && observe_id != NULL)
+            && !(out_request->action == ANJAY_ACTION_READ_COMPOSITE
+                 && observe_id != NULL)
+#endif // ANJAY_WITH_OBSERVATION_ATTRIBUTES
             && !_anjay_dm_request_attrs_empty(&out_request->attributes)) {
+#ifdef ANJAY_WITH_OBSERVATION_ATTRIBUTES
+        anjay_log(WARNING,
+                  _("NOTIFICATION-class attributes present in request "
+                    "other than Write-Attributes, Observe or "
+                    "Observe-Composite"));
+#else  // ANJAY_WITH_OBSERVATION_ATTRIBUTES
         (void) observe_id;
         anjay_log(WARNING,
                   _("NOTIFICATION-class attributes present in request "
                     "other than Write-Attributes"));
+#endif // ANJAY_WITH_OBSERVATION_ATTRIBUTES
         return -1;
     }
+#ifdef ANJAY_WITH_LWM2M12
+    if (out_request->action != ANJAY_ACTION_DISCOVER
+            && out_request->depth >= 0) {
+        anjay_log(
+                WARNING,
+                _("depth query string present in request other than Discover"));
+        return -1;
+    }
+#endif // ANJAY_WITH_LWM2M12
     return 0;
 }
 
@@ -1328,9 +1435,17 @@ static avs_error_t persistence_dm_oi_attributes(avs_persistence_context_t *ctx,
         attrs->min_eval_period = ANJAY_ATTRIB_INTEGER_NONE;
         attrs->max_eval_period = ANJAY_ATTRIB_INTEGER_NONE;
     }
+#    ifdef ANJAY_WITH_LWM2M12
+    if (bitmask & ANJAY_PERSIST_HQMAX_ATTR) {
+        err = avs_persistence_i32(ctx, &attrs->hqmax);
+    } else if (avs_persistence_direction(ctx) == AVS_PERSISTENCE_RESTORE) {
+        attrs->hqmax = ANJAY_ATTRIB_INTEGER_NONE;
+    }
+#    else  // ANJAY_WITH_LWM2M12
     if (bitmask & ANJAY_PERSIST_HQMAX_ATTR) {
         err = avs_persistence_i32(ctx, &(int32_t) { -1 });
     }
+#    endif // ANJAY_WITH_LWM2M12
     return err;
 }
 
@@ -1347,9 +1462,19 @@ static avs_error_t persistence_dm_r_attributes(avs_persistence_context_t *ctx,
             || avs_is_err((err = avs_persistence_double(ctx, &attrs->step)))) {
         return err;
     }
+#    ifdef ANJAY_WITH_LWM2M12
+    if (bitmask & ANJAY_PERSIST_EDGE_ATTR) {
+        int8_t edge = (int8_t) attrs->edge;
+        err = avs_persistence_bytes(ctx, (uint8_t *) &edge, 1);
+        attrs->edge = (anjay_dm_edge_attr_t) edge;
+    } else if (avs_persistence_direction(ctx) == AVS_PERSISTENCE_RESTORE) {
+        attrs->edge = ANJAY_DM_EDGE_ATTR_NONE;
+    }
+#    else  // ANJAY_WITH_LWM2M12
     if (bitmask & ANJAY_PERSIST_EDGE_ATTR) {
         err = avs_persistence_bytes(ctx, &(int8_t) { -1 }, 1);
     }
+#    endif // ANJAY_WITH_LWM2M12
     return err;
 }
 

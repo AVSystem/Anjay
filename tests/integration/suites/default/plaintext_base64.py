@@ -11,8 +11,8 @@ import base64
 import itertools
 import unittest
 
-from framework_tools.utils.lwm2m_test import *
-from framework_tools.utils.test_utils import *
+from framework.lwm2m_test import *
+from framework.test_utils import *
 
 from . import block_response as br
 

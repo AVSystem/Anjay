@@ -46,6 +46,12 @@ int _anjay_cbor_ll_definite_map_begin(avs_stream_t *stream, size_t items_count);
 int _anjay_cbor_ll_definite_array_begin(avs_stream_t *stream,
                                         size_t items_count);
 
+#ifdef ANJAY_WITH_LWM2M12
+int _anjay_cbor_ll_indefinite_map_begin(avs_stream_t *stream);
+
+int _anjay_cbor_ll_indefinite_map_end(avs_stream_t *stream);
+#endif // ANJAY_WITH_LWM2M12
+
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif // ANJAY_IO_CBOR_ENCODER_LL_H

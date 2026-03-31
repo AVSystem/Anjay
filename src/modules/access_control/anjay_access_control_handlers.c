@@ -316,6 +316,42 @@ static int ac_resource_reset(anjay_unlocked_t *anjay,
     return 0;
 }
 
+#    ifdef ANJAY_WITH_LWM2M12
+static int
+ac_resource_instance_remove(anjay_unlocked_t *anjay,
+                            const anjay_dm_installed_object_t obj_ptr,
+                            anjay_iid_t iid,
+                            anjay_rid_t rid,
+                            anjay_riid_t riid) {
+    (void) anjay;
+    access_control_t *access_control =
+            _anjay_access_control_from_obj_ptr(obj_ptr);
+    access_control_instance_t *inst = find_instance(access_control, iid);
+    if (!inst) {
+        return ANJAY_ERR_NOT_FOUND;
+    }
+
+    assert(rid == ANJAY_DM_RID_ACCESS_CONTROL_ACL);
+    (void) rid;
+
+    AVS_LIST(acl_entry_t) *it;
+    AVS_LIST_FOREACH_PTR(it, &inst->acl) {
+        if ((*it)->ssid >= riid) {
+            break;
+        }
+    }
+    if (!it || !*it || (*it)->ssid != riid) {
+        AVS_UNREACHABLE("Attempted to remove a non-existent Resource Instance");
+        return ANJAY_ERR_NOT_FOUND;
+    }
+    AVS_LIST_DELETE(it);
+    inst->has_acl = true;
+    access_control->needs_validation = true;
+    _anjay_access_control_mark_modified(access_control);
+    return 0;
+}
+#    endif // ANJAY_WITH_LWM2M12
+
 static int ac_list_resource_instances(anjay_unlocked_t *anjay,
                                       obj_ptr_t obj_ptr,
                                       anjay_iid_t iid,
@@ -526,6 +562,10 @@ static const anjay_unlocked_dm_object_def_t ACCESS_CONTROL = {
         .transaction_validate = ac_transaction_validate,
         .transaction_commit = ac_transaction_commit,
         .transaction_rollback = ac_transaction_rollback
+#    ifdef ANJAY_WITH_LWM2M12
+        ,
+        .resource_instance_remove = ac_resource_instance_remove
+#    endif // ANJAY_WITH_LWM2M12
     }
 };
 

@@ -10,7 +10,7 @@ import json
 import time
 
 from framework_tools.lwm2m.tlv import TLVType
-from framework_tools.utils.lwm2m_test import *
+from framework.lwm2m_test import *
 
 
 class TestObject:

@@ -328,6 +328,40 @@ static int resource_reset(anjay_t *anjay,
     }
 }
 
+#ifdef ANJAY_WITH_LWM2M12
+static int resource_instance_remove(anjay_t *anjay,
+                                    const anjay_dm_object_def_t *const *obj_ptr,
+                                    anjay_iid_t iid,
+                                    anjay_rid_t rid,
+                                    anjay_riid_t riid) {
+    (void) anjay;
+
+    binary_app_data_container_t *obj = get_obj(obj_ptr);
+    binary_app_data_container_instance_t *inst = find_instance(obj, iid);
+    assert(inst);
+
+    switch (rid) {
+    case RID_DATA: {
+        AVS_LIST(data_resource_instance_t) *it;
+        AVS_LIST_FOREACH_PTR(it, &inst->data_list) {
+            if ((*it)->riid == riid) {
+                break;
+            }
+        }
+        if (!it || !*it) {
+            AVS_UNREACHABLE(
+                    "Attempted to remove a non-existent Resource Instance");
+            return ANJAY_ERR_NOT_FOUND;
+        }
+        AVS_LIST_DELETE(it);
+        return 0;
+    }
+    default:
+        return ANJAY_ERR_METHOD_NOT_ALLOWED;
+    }
+}
+#endif // ANJAY_WITH_LWM2M12
+
 static int list_resource_instances(anjay_t *anjay,
                                    const anjay_dm_object_def_t *const *obj_ptr,
                                    anjay_iid_t iid,
@@ -437,6 +471,10 @@ static const anjay_dm_object_def_t OBJ_DEF = {
         .transaction_validate = anjay_dm_transaction_NOOP,
         .transaction_commit = transaction_commit,
         .transaction_rollback = transaction_rollback
+#ifdef ANJAY_WITH_LWM2M12
+        ,
+        .resource_instance_remove = resource_instance_remove
+#endif // ANJAY_WITH_LWM2M12
     }
 };
 

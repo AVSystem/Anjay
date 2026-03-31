@@ -23,7 +23,6 @@ Additionally, the upgrade to ``avs_commons`` 5.0 includes refactoring of the
 APIs related to (D)TLS PSK credentials and further refinements in the network
 integration layer.
 
-
 You may also need to adjust your code if you maintain your own socket
 integration, or if it accesses the ``avs_net_security_info_t`` structure
 directly. The latter is especially likely if you maintain your own
@@ -142,6 +141,22 @@ When using CMake, this flag is controlled with the ``WITH_SECURITY_STRUCTURED``
 option and enabled by default if available. Otherwise, it might need to be
 enabled by defining ``ANJAY_WITH_SECURITY_STRUCTURED`` in ``anjay_config.h``.
 
+
+
+Addition of resource_instance_remove handler
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+LwM2M TS 1.2 introduced possibility to delete a Resource Instance, so
+one additional data model handler had to be added.
+
+New ``resource_instance_remove`` handler (and its associated
+``anjay_dm_resource_instance_remove_t`` function type) has been introduced. It
+is analogous to the ``instance_remove`` handler; its job is to remove a specific
+Resource Instance from a multiple-instance Resource.
+
+Its implementation is required in objects that include at least one writeable
+multiple-instance Resource, if the client application aims for compliance with
+LwM2M 1.2.
 
 Changes in avs_coap
 -------------------

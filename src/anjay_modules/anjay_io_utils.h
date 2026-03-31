@@ -40,7 +40,10 @@ anjay_input_ctx_constructor_t _anjay_input_cbor_create;
 anjay_input_ctx_constructor_t _anjay_input_senml_cbor_create;
 anjay_input_ctx_constructor_t _anjay_input_senml_cbor_composite_read_create;
 
-#endif // ANJAY_WITH_CBOR
+#    ifdef ANJAY_WITH_LWM2M12
+anjay_input_ctx_constructor_t _anjay_input_lwm2m_cbor_create;
+#    endif // ANJAY_WITH_LWM2M12
+#endif     // ANJAY_WITH_CBOR
 
 #ifdef ANJAY_WITH_SENML_JSON
 anjay_input_ctx_constructor_t _anjay_input_json_create;

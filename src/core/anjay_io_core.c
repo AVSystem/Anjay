@@ -691,6 +691,15 @@ int anjay_get_objlnk(anjay_input_ctx_t *ctx,
     return result;
 }
 
+#ifdef ANJAY_WITH_LWM2M12
+int _anjay_input_get_null(anjay_unlocked_input_ctx_t *ctx) {
+    if (!ctx->vtable->null) {
+        return -1;
+    }
+    return ctx->vtable->null(ctx);
+}
+#endif // ANJAY_WITH_LWM2M12
+
 int _anjay_input_get_path(anjay_unlocked_input_ctx_t *ctx,
                           anjay_uri_path_t *out_path,
                           bool *out_is_array) {

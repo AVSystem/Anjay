@@ -454,6 +454,12 @@ static void what_changed(anjay_ssid_t origin_ssid,
     *out_might_have_removes = false;
     AVS_LIST(anjay_notify_queue_object_entry_t) it;
     AVS_LIST_FOREACH(it, notifications_already_queued) {
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+        // EID's DMs are not guarded by AC
+        if (it->prefix[0] != '\0') {
+            continue;
+        }
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
         if (!it->instance_set_changes.instance_set_changed) {
             continue;
         }
@@ -724,6 +730,11 @@ static int remove_referred_instance(anjay_unlocked_t *anjay,
  *   possible,
  * - if not, removes the Access Control instance, and the object instance
  *   referred to by it (see LwM2M TS 1.0.2, E.1.3 Unbootstrapping).
+ *
+ * This function does not check LwM2M Gateway related prefix in
+ * new_notifications_queue because it only removes existing AC entries and adds
+ * them to the queue, and End IoT Devices DMs are not added to AC in the first
+ * place, so they won't be removed as well.
  */
 static int
 remove_orphaned_instances(anjay_unlocked_t *anjay,
@@ -880,6 +891,11 @@ enumerate_instances_to_remove_clb(anjay_unlocked_t *anjay,
 /**
  * Removes Access Control instances that do not refer to any valid object
  * instance.
+ *
+ * This function does not check LwM2M Gateway related prefix in
+ * new_notifications_queue because it only removes existing AC entries and adds
+ * them to the queue, and End IoT Devices DMs are not added to AC in the first
+ * place, so they won't be removed as well.
  */
 static int perform_removes(anjay_unlocked_t *anjay,
                            const anjay_dm_installed_object_t *ac_obj,
@@ -988,6 +1004,12 @@ static int perform_adds(anjay_unlocked_t *anjay,
                         anjay_notify_queue_t *notifications_queue) {
     AVS_LIST(anjay_notify_queue_object_entry_t) it;
     AVS_LIST_FOREACH(it, *notifications_queue) {
+#    ifdef ANJAY_WITH_LWM2M_GATEWAY
+        // EID's DMs are not guarded by AC
+        if (it->prefix[0] != '\0') {
+            continue;
+        }
+#    endif // ANJAY_WITH_LWM2M_GATEWAY
         if (it->oid == ANJAY_DM_OID_SECURITY
                 || it->oid == ANJAY_DM_OID_ACCESS_CONTROL) {
             continue;
@@ -1051,6 +1073,12 @@ get_ac_notif_entry(anjay_notify_queue_t queue) {
     return NULL;
 }
 
+/**
+ * This function does not check LwM2M Gateway related prefix in
+ * new_notifications_queue because it only processes entries with
+ * OID==Access Control Object, and there are no Access Control Object Instances
+ * related to LwM2M Gateway.
+ */
 static int generate_apparent_instance_set_change_notifications(
         anjay_unlocked_t *anjay, anjay_notify_queue_t *notifications_queue) {
     const anjay_notify_queue_object_entry_t *ac_notif =
@@ -1092,12 +1120,7 @@ int _anjay_sync_access_control(anjay_unlocked_t *anjay,
     (void) origin_ssid;
     (void) notifications_queue;
     return 0;
-#else // ANJAY_WITH_ACCESS_CONTROL
-#    ifdef ANJAY_WITH_LWM2M_GATEWAY
-    if ((*notifications_queue)->prefix[0] != '\0') {
-        return 0;
-    }
-#    endif // ANJAY_WITH_LWM2M_GATEWAY
+#else  // ANJAY_WITH_ACCESS_CONTROL
     const anjay_dm_installed_object_t *ac_obj = get_access_control(anjay);
     if (!ac_obj) {
         return 0;
@@ -1126,5 +1149,9 @@ int _anjay_sync_access_control(anjay_unlocked_t *anjay,
                 anjay, notifications_queue);
     }
     return _anjay_dm_transaction_finish(anjay, result);
-#endif     // ANJAY_WITH_ACCESS_CONTROL
+#endif // ANJAY_WITH_ACCESS_CONTROL
 }
+
+#ifdef ANJAY_TEST
+#    include "tests/core/access_utils.c"
+#endif // ANJAY_TEST

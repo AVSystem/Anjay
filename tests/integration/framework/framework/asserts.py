@@ -208,6 +208,20 @@ class Lwm2mAsserts:
             self.bootstrap_server.send(Lwm2mErrorResponse.matching(
                 pkt)(code=respond_with_error_code))
 
+    def assertDemoRequestsBootstrapPack(self, uri_path='', uri_query=None, respond_with_error_code=None,
+                                        endpoint=DEMO_ENDPOINT_NAME, timeout_s=-1, ):
+        pkt = self.bootstrap_server.recv(timeout_s=timeout_s)
+        assert (isinstance(pkt, Lwm2mBootstrapPackRequest))
+
+        self.assertEqual([coap.Option.ACCEPT(coap.ContentFormat.APPLICATION_LWM2M_SENML_CBOR)],
+                         pkt.get_options(coap.Option.ACCEPT))
+
+        if respond_with_error_code is not None:
+            self.bootstrap_server.send(Lwm2mErrorResponse.matching(
+                pkt)(code=respond_with_error_code))
+        else:
+            return pkt
+
     def assertDtlsReconnect(self, server=None, timeout_s=-1, deadline=None, expected_error='0x6780'):
         serv = server or self.serv
 

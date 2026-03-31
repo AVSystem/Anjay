@@ -31,6 +31,11 @@ static void update_oi_attrs(anjay_dm_oi_attributes_t *attrs_ptr,
         attrs_ptr->max_eval_period =
                 request_attrs->values.common.max_eval_period;
     }
+#ifdef ANJAY_WITH_LWM2M12
+    if (request_attrs->has_hqmax) {
+        attrs_ptr->hqmax = request_attrs->values.common.hqmax;
+    }
+#endif // ANJAY_WITH_LWM2M12
 #ifdef ANJAY_WITH_CON_ATTR
     if (request_attrs->has_con) {
         attrs_ptr->con = request_attrs->values.common.con;
@@ -50,6 +55,11 @@ void _anjay_update_r_attrs(anjay_dm_r_attributes_t *attrs_ptr,
     if (request_attrs->has_step) {
         attrs_ptr->step = request_attrs->values.step;
     }
+#ifdef ANJAY_WITH_LWM2M12
+    if (request_attrs->has_edge) {
+        attrs_ptr->edge = request_attrs->values.edge;
+    }
+#endif // ANJAY_WITH_LWM2M12
 }
 
 static bool oi_attrs_valid(const anjay_dm_oi_attributes_t *attrs) {
@@ -86,13 +96,19 @@ bool _anjay_r_attrs_valid(const anjay_dm_r_attributes_t *attrs) {
 
 bool _anjay_dm_resource_specific_request_attrs_empty(
         const anjay_request_attributes_t *attrs) {
-    return !attrs->has_greater_than && !attrs->has_less_than
-           && !attrs->has_step;
+    return !attrs->has_greater_than && !attrs->has_less_than && !attrs->has_step
+#ifdef ANJAY_WITH_LWM2M12
+           && !attrs->has_edge
+#endif // ANJAY_WITH_LWM2M12
+            ;
 }
 
 bool _anjay_dm_request_attrs_empty(const anjay_request_attributes_t *attrs) {
     return !attrs->has_min_period && !attrs->has_max_period
            && !attrs->has_min_eval_period && !attrs->has_max_eval_period
+#ifdef ANJAY_WITH_LWM2M12
+           && !attrs->has_hqmax
+#endif // ANJAY_WITH_LWM2M12
 #ifdef ANJAY_WITH_CON_ATTR
            && !attrs->has_con
 #endif

@@ -153,4 +153,18 @@ int _anjay_cbor_ll_definite_array_begin(avs_stream_t *stream,
     return encode_type_and_number(stream, CBOR_MAJOR_TYPE_ARRAY, items_count);
 }
 
+#    ifdef ANJAY_WITH_LWM2M12
+int _anjay_cbor_ll_indefinite_map_begin(avs_stream_t *stream) {
+    return write_cbor_header(stream, CBOR_MAJOR_TYPE_MAP,
+                             CBOR_EXT_LENGTH_INDEFINITE);
+}
+
+int _anjay_cbor_ll_indefinite_map_end(avs_stream_t *stream) {
+    const unsigned char break_char = CBOR_INDEFINITE_STRUCTURE_BREAK;
+    return avs_is_ok(avs_stream_write(stream, &break_char, sizeof(break_char)))
+                   ? 0
+                   : -1;
+}
+#    endif // ANJAY_WITH_LWM2M12
+
 #endif // ANJAY_WITH_CBOR

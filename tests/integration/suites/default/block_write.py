@@ -11,7 +11,7 @@ import os
 import unittest
 
 from collections import namedtuple
-from framework_tools.utils.lwm2m_test import *
+from framework.lwm2m_test import *
 from framework.create_package import make_firmware_package
 
 msg_id_generator = SequentialMsgIdGenerator(42)

@@ -22,9 +22,9 @@ import textwrap
 import shutil
 import logging
 
-from framework_tools.utils.pretty_test_runner import PrettyTestRunner
-from framework_tools.utils.pretty_test_runner import COLOR_DEFAULT, COLOR_YELLOW, COLOR_GREEN, COLOR_RED
-from framework_tools.utils.test_suite import Lwm2mTest, ensure_dir, get_full_test_name, get_suite_name, \
+from framework.pretty_test_runner import PrettyTestRunner
+from framework.pretty_test_runner import COLOR_DEFAULT, COLOR_YELLOW, COLOR_GREEN, COLOR_RED
+from framework.test_suite import Lwm2mTest, ensure_dir, get_full_test_name, get_suite_name, \
     test_or_suite_matches_query_regex, LogType
 
 if sys.version_info[0] >= 3:

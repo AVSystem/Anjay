@@ -14,7 +14,7 @@ import time
 import zlib
 from typing import NamedTuple
 
-from framework_tools.lwm2m.messages import *
+from .lwm2m.messages import *
 
 
 class CoapFileServer:
@@ -49,6 +49,8 @@ class CoapFileServer:
         else:
             raise TypeError('unexpected server type')
 
+        if self.binding == 'N':
+            return '%s+nidd://%s' % (proto, path)
 
         return '%s://127.0.0.1:%d%s' % (proto, self._server.get_listen_port(), path)
 

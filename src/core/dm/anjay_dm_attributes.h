@@ -17,9 +17,15 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 #define ANJAY_ATTR_PMAX "pmax"
 #define ANJAY_ATTR_EPMIN "epmin"
 #define ANJAY_ATTR_EPMAX "epmax"
+#ifdef ANJAY_WITH_LWM2M12
+#    define ANJAY_ATTR_HQMAX "hqmax"
+#endif // ANJAY_WITH_LWM2M12
 #define ANJAY_ATTR_GT "gt"
 #define ANJAY_ATTR_LT "lt"
 #define ANJAY_ATTR_ST "st"
+#ifdef ANJAY_WITH_LWM2M12
+#    define ANJAY_ATTR_EDGE "edge"
+#endif // ANJAY_WITH_LWM2M12
 #define ANJAY_ATTR_SSID "ssid"
 
 #define ANJAY_CUSTOM_ATTR_CON "con"

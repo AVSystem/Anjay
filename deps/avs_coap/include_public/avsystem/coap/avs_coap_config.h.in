@@ -143,8 +143,7 @@
 /**
  * Maximum size in bytes supported for the Master Secret.
  *
- * If editing this file manually, <c>@AVS_COAP_OSCORE_MASTER_SECRET_SIZE@</c>
- * shall be replaced with a positive integer literal.
+ * If editing this file manually, set it to a positive integer literal.
  *
  * The default value defined in CMake build scripts is 32.
  *
@@ -156,8 +155,7 @@
 /**
  * Maximum size in bytes supported for the Master Salt.
  *
- * If editing this file manually, <c>@AVS_COAP_OSCORE_MASTER_SALT_SIZE@</c>
- * shall be replaced with a positive integer literal.
+ * If editing this file manually, set it to a positive integer literal.
  *
  * The default value defined in CMake build scripts is 16.
  *

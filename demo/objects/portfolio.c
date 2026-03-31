@@ -269,6 +269,27 @@ static int resource_reset(anjay_t *anjay,
     return 0;
 }
 
+#ifdef ANJAY_WITH_LWM2M12
+static int resource_instance_remove(anjay_t *anjay,
+                                    const anjay_dm_object_def_t *const *obj_ptr,
+                                    anjay_iid_t iid,
+                                    anjay_rid_t rid,
+                                    anjay_riid_t riid) {
+    (void) anjay;
+    (void) rid;
+
+    portfolio_t *obj = get_obj(obj_ptr);
+    portfolio_instance_t *inst = find_instance(obj, iid);
+    assert(inst);
+
+    assert(rid == RID_IDENTITY);
+    assert(riid < _MAX_IDENTITY_TYPE);
+    assert(inst->has_identity[riid]);
+    inst->has_identity[riid] = false;
+    return 0;
+}
+#endif // ANJAY_WITH_LWM2M12
+
 static int list_resource_instances(anjay_t *anjay,
                                    const anjay_dm_object_def_t *const *obj_ptr,
                                    anjay_iid_t iid,
@@ -344,6 +365,10 @@ static const anjay_dm_object_def_t OBJ_DEF = {
         .transaction_validate = anjay_dm_transaction_NOOP,
         .transaction_commit = transaction_commit,
         .transaction_rollback = transaction_rollback
+#ifdef ANJAY_WITH_LWM2M12
+        ,
+        .resource_instance_remove = resource_instance_remove
+#endif // ANJAY_WITH_LWM2M12
     }
 };
 

@@ -649,6 +649,18 @@ static int decode_double(anjay_cbor_decoder_t *ctx, double *out_value) {
     return result;
 }
 
+#    ifdef ANJAY_WITH_LWM2M12
+static int cbor_decoder_null(anjay_json_like_decoder_t *ctx_) {
+    anjay_cbor_decoder_t *ctx = (anjay_cbor_decoder_t *) ctx_;
+    if (ctx->state != ANJAY_JSON_LIKE_DECODER_STATE_OK
+            || ctx->current_item.value_type != ANJAY_JSON_LIKE_VALUE_NULL) {
+        return -1;
+    }
+    preprocess_next_value(ctx);
+    return 0;
+}
+#    endif // ANJAY_WITH_LWM2M12
+
 static int cbor_decoder_bool(anjay_json_like_decoder_t *ctx_, bool *out_value) {
     anjay_cbor_decoder_t *ctx = (anjay_cbor_decoder_t *) ctx_;
     if (ctx->state != ANJAY_JSON_LIKE_DECODER_STATE_OK
@@ -780,6 +792,9 @@ cbor_decoder_state(const anjay_json_like_decoder_t *ctx) {
 static const anjay_json_like_decoder_vtable_t VTABLE = {
     .state = cbor_decoder_state,
     .current_value_type = cbor_decoder_current_value_type,
+#    ifdef ANJAY_WITH_LWM2M12
+    .read_null = cbor_decoder_null,
+#    endif // ANJAY_WITH_LWM2M12
     .read_bool = cbor_decoder_bool,
     .number = cbor_decoder_number,
     .bytes = cbor_decoder_bytes,

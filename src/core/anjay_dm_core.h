@@ -48,6 +48,10 @@ typedef struct {
 #ifdef ANJAY_WITH_CON_ATTR
     bool has_con;
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+    bool has_edge;
+    bool has_hqmax;
+#endif // ANJAY_WITH_LWM2M12
     anjay_dm_r_attributes_t values;
 } anjay_request_attributes_t;
 
@@ -67,6 +71,9 @@ typedef struct {
     const avs_coap_observe_id_t *observe;
 
     anjay_request_attributes_t attributes;
+#ifdef ANJAY_WITH_LWM2M12
+    int8_t depth;
+#endif // ANJAY_WITH_LWM2M12
 } anjay_request_t;
 
 #ifdef ANJAY_WITH_LWM2M_GATEWAY

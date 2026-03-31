@@ -7,8 +7,8 @@
 # Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
-import framework_tools.utils.test_suite as test_suite
-from framework_tools.utils.lwm2m_test import *
+import framework.test_suite as test_suite
+from framework.lwm2m_test import *
 from . import access_control, retransmissions, firmware_update
 
 

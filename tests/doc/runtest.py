@@ -32,6 +32,8 @@ PUBLIC_REPO_TREE_PREFIX = 'https://github.com/AVSystem/Anjay/tree/master/'
 DEFAULT_DOC_PATH = os.path.join(PROJECT_ROOT, 'doc/sphinx/source')
 # User-Agent taken from Stack Overflow, some websites need it
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+BOT_PROTECTION_STATUS_CODES = {403, 429}
+BOT_PROTECTION_SERVER_HINTS = ('cloudflare', 'akamai', 'incapsula', 'imperva', 'sucuri')
 
 
 def _get_ignored_patterns():
@@ -73,9 +75,31 @@ def find_urls(rst_content):
 
 
 class UrlChecker:
-    def __init__(self, max_attempts=5):
+    def __init__(self, max_attempts=5, strict=False):
         super().__init__()
         self.max_attempts = max_attempts
+        self.strict = strict
+
+    def _is_probably_bot_protected(self, url):
+        try:
+            response = requests.get(url, allow_redirects=True, timeout=10,
+                                    headers={"User-Agent": USER_AGENT})
+        except Exception:
+            return False
+
+        if response.status_code not in BOT_PROTECTION_STATUS_CODES:
+            return False
+
+        headers = {k.lower(): v.lower() for k, v in response.headers.items()}
+        server = headers.get('server', '')
+        if any(hint in server for hint in BOT_PROTECTION_SERVER_HINTS):
+            return True
+
+        bot_headers = ('cf-ray', 'cf-cache-status', 'x-sucuri-id', 'x-iinfo',
+                    'x-akamai-session-info', 'x-akamai-transformed')
+        if any(header in headers for header in bot_headers):
+            return True
+        return False
 
     def is_url_valid(self, url, attempt=1):
         if url.startswith(PUBLIC_REPO_BLOB_PREFIX):
@@ -103,7 +127,11 @@ class UrlChecker:
 
         try:
             self.perform_request(url)
-        except:
+        except Exception as err:
+            if not self.strict and self._is_probably_bot_protected(url):
+                logging.warning('URL %s is protected by anti-bot rules and was marked as unverifiable.'
+                                % (url,))
+                return True
             logging.warning('URL %s could not be reached (%d/%d): %s'
                             % (url, attempt, self.max_attempts, sys.exc_info()[0]))
             return self.is_url_valid(url, attempt + 1)
@@ -157,8 +185,15 @@ class Wget2UrlChecker(UrlChecker):
         except OSError as e:
             if 'HTTP status: 403' in str(e):
                 self.run_wget2(url, extra_args=[
-                    '--header=\"Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\"',
-                    '--header=\"Accept-Language: en-US,en;q=0.9\"'
+                    '--header=Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                    '--header=Accept-Language: en-US,en;q=0.9',
+                    '--header=Cache-Control: no-cache',
+                    '--header=Pragma: no-cache',
+                    '--header=Upgrade-Insecure-Requests: 1',
+                    '--header=Sec-Fetch-Dest: document',
+                    '--header=Sec-Fetch-Mode: navigate',
+                    '--header=Sec-Fetch-Site: none',
+                    '--header=Sec-Fetch-User: ?1'
                 ])
             else:
                 raise
@@ -179,11 +214,11 @@ def find_invalid_urls(checker, urls):
     return invalid_urls
 
 
-def report(path):
+def report(path, strict):
     try:
-        checker = Wget2UrlChecker()
+        checker = Wget2UrlChecker(strict=strict)
     except:
-        checker = RequestsUrlChecker()
+        checker = RequestsUrlChecker(strict=strict)
 
     urls = defaultdict(list)
     for file_path, content in explore(path):
@@ -211,5 +246,8 @@ if __name__ == "__main__":
     parser.add_argument('doc_path',
                         type=str, default=DEFAULT_DOC_PATH, nargs='?',
                         help='path to the doc folder')
+    parser.add_argument('--strict',
+                        action='store_true', default=False,
+                        help='do not treat anti-bot-protected URLs as unverifiable')
     cmdline_args = parser.parse_args()
-    report(cmdline_args.doc_path)
+    report(cmdline_args.doc_path, strict=cmdline_args.strict)

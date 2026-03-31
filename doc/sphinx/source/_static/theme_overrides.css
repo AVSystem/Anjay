@@ -80,3 +80,38 @@ nav a {
 code.small-literal {
     font-size: 65%;
 }
+
+/* --- Doxygen/Breathe API Styling Overrides --- */
+
+/* Use this extremely specific selector to ensure we override 
+ * the default sphinx_rtd_theme styles regardless of the CSS loading order.
+ */
+html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(.footnote):not(.citation):not(.glossary):not(.simple) > dt {
+    
+    /* BACKGROUND: Light yellow instead of the default blue */
+    background: #fffdf0 !important; 
+    
+    /* BORDER: Yellow accent line on top */
+    border-top: 3px solid #ffd500 !important; 
+    
+    /* TEXT: Dark text for better contrast */
+    color: #333333 !important;
+    
+    /* Optional: cosmetic adjustments */
+    margin-top: 12px;
+    padding: 8px;
+}
+
+/* --- Inner definitions (Parameters, Returns) --- */
+
+/* Reset styles for nested elements (e.g. parameter lists)
+ * so they DO NOT inherit the yellow background or top border.
+ */
+html.writer-html5 .rst-content dl:not(.docutils) dl dt {
+    background-color: transparent !important;
+    border: none !important;
+    color: #333333 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    font-weight: bold;
+}

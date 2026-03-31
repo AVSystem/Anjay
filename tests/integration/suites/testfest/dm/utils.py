@@ -13,7 +13,7 @@ import enum
 from typing import List, Optional, Mapping, Tuple
 
 from framework_tools.lwm2m.tlv import *
-from framework_tools.utils.lwm2m_test import *
+from framework.lwm2m_test import *
 
 
 class ValueValidator:

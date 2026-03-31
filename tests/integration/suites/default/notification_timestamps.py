@@ -10,7 +10,7 @@
 import json
 import time
 
-from framework_tools.utils.lwm2m_test import *
+from framework.lwm2m_test import *
 
 
 def as_json(pkt):

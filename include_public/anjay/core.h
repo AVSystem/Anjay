@@ -88,6 +88,15 @@ typedef enum {
      * (OMA-TS-LightweightM2M_Transport-V1_1_1-20190617-A).
      */
     ANJAY_LWM2M_VERSION_1_1
+#    ifdef ANJAY_WITH_LWM2M12
+    ,
+    /**
+     * Lightweight Machine to Machine Technical Specification, Approved Version
+     * 1.2 - 2020-11-10; Core (OMA-TS-LightweightM2M_Core-V1_2-20201110-A) and
+     * Transport Bindings (OMA-TS-LightweightM2M_Transport-V1_2-20201110-A).
+     */
+    ANJAY_LWM2M_VERSION_1_2
+#    endif // ANJAY_WITH_LWM2M12
 } anjay_lwm2m_version_t;
 
 typedef struct {
@@ -126,7 +135,7 @@ typedef enum {
  * value are undefined and shall not be used. They are NOT required to be set to
  * @ref ANJAY_ID_INVALID. Paths object that numerically differ only in values
  * past the terminating invalid ID shall be treated as equal (and this is how
- * @ref _anjay_uri_path_equal is implemented).
+ * _anjay_uri_path_equal is implemented).
  *
  * The <c>ids</c> array is designed to be safely and meaningfully indexed by
  * @ref anjay_id_type_t values.
@@ -315,6 +324,38 @@ anjay_server_connection_status_cb_t(void *arg,
 anjay_server_conn_status_t
 anjay_get_server_connection_status(anjay_t *anjay, anjay_ssid_t ssid);
 #endif // ANJAY_WITH_CONN_STATUS_API
+
+#ifdef ANJAY_WITH_SSL_ERROR_API
+/**
+ * @experimental This is experimental SSL error callback API. This API
+ *               can change in future versions without any notice.
+ *
+ * Callback called each time a (D)TLS error is reported.
+ *
+ * @param arg    Opaque argument as set through the
+ *               @ref anjay_configuration_t::ssl_error_cb_arg
+ *
+ * @param anjay  Anjay object that calls this callback
+ *
+ * @param ssid   Short Server ID of the server for which the error is reported
+ *
+ * @param error  SSL error encoded as `avs_error_t`. It includes in particular:
+ *                 - SSL alert received from the peer:
+ *                   - `.category` is `AVS_NET_SSL_ALERT_CATEGORY`
+ *                   - `.code` is SSL alert code as defined in TLS specification
+ *                 - SSL error from the crypto library
+ *                   - `.category` is `AVS_SSL_LIB_ERR_CATEGORY`
+ *                   - `.code` is SSL error code as defined in the library
+ *                      documentation mapped to `uint16_t`. Example MbedTLS
+ *                      mapping: `map_mbedtls_error_to_uint16()` in
+ *                      `deps/avs_commons/src/net/mbedtls/avs_mbedtls_socket.c`
+ */
+typedef void anjay_ssl_error_cb_t(void *arg,
+                                  anjay_t *anjay,
+                                  anjay_ssid_t ssid,
+                                  avs_error_t error);
+
+#endif // ANJAY_WITH_SSL_ERROR_API
 
 typedef struct anjay_configuration {
     /**
@@ -674,6 +715,26 @@ typedef struct anjay_configuration {
      */
     void *server_connection_status_cb_arg;
 #endif // ANJAY_WITH_CONN_STATUS_API
+#ifdef ANJAY_WITH_SSL_ERROR_API
+    /**
+     * @experimental This is experimental SSL error callback API. This
+     *               API can change in future versions without any notice.
+     *
+     * Function called each time a (D)TLS error is reported.
+     */
+    anjay_ssl_error_cb_t *ssl_error_cb;
+
+    /**
+     * @experimental This is experimental SSL error callback API. This
+     *               API can change in future versions without any notice.
+     *
+     * Opaque argument that will be passed to the function configured in the
+     * <c>ssl_error_cb</c> field.
+     *
+     * If <c>ssl_error_cb</c> is NULL, this field is ignored.
+     */
+    void *ssl_error_cb_arg;
+#endif // ANJAY_WITH_SSL_ERROR_API
 #ifdef ANJAY_WITH_COAP_DOWNLOAD
     /**
      * If set, defines the number of additional CoAP download attempts that will
@@ -1558,8 +1619,7 @@ typedef enum {
  * applied at the time when next Register or Update message is scheduled to be
  * sent. If you wish to apply the queue mode state change immediately, you can
  * call either of @ref anjay_schedule_registration_update,
- * @ref anjay_transport_schedule_reconnect,
- * @ref anjay_exit_offline, @ref anjay_transport_exit_offline or
+ * @ref anjay_transport_schedule_reconnect, @ref anjay_transport_exit_offline or
  * @ref anjay_transport_set_online .
  *
  *

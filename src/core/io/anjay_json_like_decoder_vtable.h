@@ -21,6 +21,10 @@ typedef int
 json_like_decoder_current_value_type_t(anjay_json_like_decoder_t *ctx,
                                        anjay_json_like_value_type_t *out_type);
 
+#ifdef ANJAY_WITH_LWM2M12
+typedef int json_like_decoder_null_t(anjay_json_like_decoder_t *ctx);
+#endif // ANJAY_WITH_LWM2M12
+
 typedef int json_like_decoder_bool_t(anjay_json_like_decoder_t *ctx,
                                      bool *out_value);
 
@@ -42,6 +46,9 @@ typedef void json_like_decoder_cleanup_t(anjay_json_like_decoder_t **ctx);
 typedef struct {
     json_like_decoder_state_t *state;
     json_like_decoder_current_value_type_t *current_value_type;
+#ifdef ANJAY_WITH_LWM2M12
+    json_like_decoder_null_t *read_null;
+#endif // ANJAY_WITH_LWM2M12
     json_like_decoder_bool_t *read_bool;
     json_like_decoder_number_t *number;
     json_like_decoder_bytes_t *bytes;

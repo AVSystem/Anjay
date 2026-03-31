@@ -8,7 +8,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(anjay C)
-set(ANJAY_VERSION "3.12.0" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "3.13.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -111,6 +111,7 @@ option(WITHOUT_TLV "Disable support for TLV content format" OFF)
 option(WITH_DOWNLOADER "Enable support for downloader API" ON)
 cmake_dependent_option(WITH_HTTP_DOWNLOAD "Enable support for HTTP(S) downloads" OFF "WITH_DOWNLOADER" OFF)
 option(WITH_LWM2M11 "Enable support for LwM2M 1.1" ON)
+cmake_dependent_option(WITH_LWM2M12 "Enable support for LwM2M 1.2 features" ON "WITH_LWM2M11" OFF)
 # NOTE: WITH_EST is moved below due to dependencies
 
 set(THREAD_SAFETY_DEFAULT OFF)
@@ -206,10 +207,17 @@ else()
     endif()
 
     message(STATUS "DTLS backend: ${_DTLS_BACKEND_LOWERCASE}")
+
+    if(WITH_MBEDTLS OR WITH_CUSTOM_TLS)
+        set(SSL_ERROR_API_DEFAULT ON)
+    else()
+        set(SSL_ERROR_API_DEFAULT OFF)
+    endif()
 endif()
 
 option(WITH_AVS_COAP_TCP "Enable CoAP over TCP support" "${WITH_LWM2M11}")
 option(WITH_CONN_STATUS_API "Enable support for the experimental anjay_get_server_connection_status() API and related callback." ON)
+option(WITH_SSL_ERROR_API "Enable support for the experimental server SSL error callback." "${SSL_ERROR_API_DEFAULT}")
 
 
 
@@ -272,7 +280,9 @@ option(WITHOUT_COMPOSITE_OPERATIONS "Disable composite operations" OFF)
 cmake_dependent_option(WITH_SENML_JSON "Enable support for SenML JSON content format" ON WITH_LWM2M11 OFF)
 cmake_dependent_option(WITH_CBOR "Enable support for CBOR and SenML CBOR content formats" ON WITH_LWM2M11 OFF)
 cmake_dependent_option(WITH_LWM2M_GATEWAY "Enable support /25 LwM2M Gateway Object" OFF "WITH_LWM2M11;NOT WITH_CORE_PERSISTENCE" OFF)
+cmake_dependent_option(WITH_BOOTSTRAP_PACK "Enable LwM2M Bootstrap-Pack support" ON "WITH_LWM2M12;WITH_BOOTSTRAP;WITH_CBOR OR WITH_SENML_JSON" OFF)
 cmake_dependent_option(WITH_SEND "Enable support for LwM2M 1.1 Send operation" ON "WITH_CBOR OR WITH_SENML_JSON" OFF)
+cmake_dependent_option(WITH_OBSERVATION_ATTRIBUTES "Enable support for Observation Attributes" ON "WITH_OBSERVE;WITH_LWM2M12" OFF)
 option(WITHOUT_QUEUE_MODE_AUTOCLOSE "Disable automatic closing of server connection sockets after MAX_TRANSMIT_WAIT of inactivity" OFF)
 
 cmake_dependent_option(WITH_OBSERVATION_STATUS "Enable support for anjay_resource_observation_status() API" ON "WITH_OBSERVE" OFF)
@@ -333,6 +343,9 @@ option(WITH_MODULE_fw_update "Firmware Update object module" ON)
 cmake_dependent_option(WITHOUT_MODULE_fw_update_PUSH_MODE
                        "Disable support for PUSH mode Firmware Update"
                        OFF "WITH_MODULE_fw_update;WITH_DOWNLOADER" OFF)
+cmake_dependent_option(WITH_MODULE_fw_update_v11_resources
+                       "Enable support for optional resources in Firmware Update object that were added in LwM2M 1.1"
+                       OFF "WITH_LWM2M11" OFF)
 cmake_dependent_option(WITH_MODULE_factory_provisioning "Factory provisioning module" ON "WITH_BOOTSTRAP;WITH_CBOR" OFF)
 option(WITH_MODULE_advanced_fw_update "Advanced Firmware Update object module" OFF)
 option(WITH_MODULE_sw_mgmt "Software Management object module" OFF)
@@ -442,6 +455,8 @@ add_library(anjay
             src/core/io/anjay_json_like_decoder.c
             src/core/io/anjay_json_like_decoder.h
             src/core/io/anjay_json_like_decoder_vtable.h
+            src/core/io/anjay_lwm2m_cbor_in.c
+            src/core/io/anjay_lwm2m_cbor_out.c
             src/core/io/anjay_opaque.c
             src/core/io/anjay_output_buf.c
             src/core/io/anjay_senml_in.c
@@ -525,6 +540,7 @@ set_property(TARGET anjay APPEND PROPERTY COMPILE_DEFINITIONS "ANJAY_VERSION=\"$
 set(ANJAY_WITH_ACCESS_CONTROL "${WITH_ACCESS_CONTROL}")
 set(ANJAY_WITH_ATTR_STORAGE "${WITH_ATTR_STORAGE}")
 set(ANJAY_WITH_BOOTSTRAP "${WITH_BOOTSTRAP}")
+set(ANJAY_WITH_BOOTSTRAP_PACK "${WITH_BOOTSTRAP_PACK}")
 set(ANJAY_WITH_COAP_DOWNLOAD "${WITH_COAP_DOWNLOAD}")
 set(ANJAY_WITH_CON_ATTR "${WITH_CON_ATTR}")
 set(ANJAY_WITH_DISCOVER "${WITH_DISCOVER}")
@@ -542,6 +558,7 @@ set(ANJAY_WITH_MODULE_ACCESS_CONTROL "${WITH_MODULE_access_control}")
 set(ANJAY_WITH_MODULE_IPSO_OBJECTS "${WITH_MODULE_ipso_objects}")
 set(ANJAY_WITH_MODULE_IPSO_OBJECTS_V2 "${WITH_MODULE_ipso_objects_v2}")
 set(ANJAY_WITH_MODULE_FW_UPDATE "${WITH_MODULE_fw_update}")
+set(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES "${WITH_MODULE_fw_update_v11_resources}")
 set(ANJAY_WITH_MODULE_ADVANCED_FW_UPDATE "${WITH_MODULE_advanced_fw_update}")
 set(ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE "${WITHOUT_MODULE_fw_update_PUSH_MODE}")
 set(ANJAY_WITH_MODULE_SECURITY "${WITH_MODULE_security}")
@@ -558,11 +575,14 @@ set(ANJAY_WITH_MODULE_FACTORY_PROVISIONING "${WITH_MODULE_factory_provisioning}"
 
 set(ANJAY_WITH_CBOR "${WITH_CBOR}")
 set(ANJAY_WITH_LWM2M11 "${WITH_LWM2M11}")
+set(ANJAY_WITH_LWM2M12 "${WITH_LWM2M12}")
+set(ANJAY_WITH_OBSERVATION_ATTRIBUTES "${WITH_OBSERVATION_ATTRIBUTES}")
 set(ANJAY_WITH_SECURITY_STRUCTURED "${WITH_SECURITY_STRUCTURED}")
 set(ANJAY_WITH_SEND "${WITH_SEND}")
 set(ANJAY_WITH_SENML_JSON "${WITH_SENML_JSON}")
 set(ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE "${WITHOUT_QUEUE_MODE_AUTOCLOSE}")
 set(ANJAY_WITH_CONN_STATUS_API "${WITH_CONN_STATUS_API}")
+set(ANJAY_WITH_SSL_ERROR_API "${WITH_SSL_ERROR_API}")
 set(ANJAY_WITH_LWM2M_GATEWAY "${WITH_LWM2M_GATEWAY}")
 
 configure_file(include_public/anjay/anjay_config.h.in
@@ -789,7 +809,10 @@ endif(WITH_TEST)
 ################# FUZZ TESTING #################################################
 
 add_subdirectory(tests/fuzz)
-add_subdirectory(doc)
+
+if(WITH_DOCS)
+    add_subdirectory(doc)
+endif()
 
 ################# STATIC ANALYSIS ##############################################
 

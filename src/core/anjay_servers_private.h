@@ -43,10 +43,10 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 ///     - anjay_disable_server()
 ///     - anjay_disable_server_with_timeout()
 ///     - anjay_enable_server()
-///     - anjay_enter_offline()
-///     - anjay_exit_offline()
+///     - anjay_transport_enter_offline()
+///     - anjay_transport_exit_offline()
 ///     - anjay_get_socket_entries()
-///     - anjay_is_offline()
+///     - anjay_transport_is_offline()
 ///     - anjay_transport_schedule_reconnect()
 ///     - anjay_schedule_registration_update()
 ///

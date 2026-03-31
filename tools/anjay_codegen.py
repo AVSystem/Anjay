@@ -342,6 +342,41 @@ static int resource_reset(anjay_t *anjay,
     }
 }
 
+static int resource_instance_remove(anjay_t *anjay,
+                                    const anjay_dm_object_def_t *const *obj_ptr,
+                                    anjay_iid_t iid,
+                                    anjay_rid_t rid,
+                                    anjay_riid_t riid) {
+    // NOTE: This handler can be removed if the client application
+    // does not need to support LwM2M 1.2.
+
+    (void) anjay;
+{% if not obj.multiple %}
+    (void) iid;
+{% endif %}
+
+    {{ obj_repr_type }} *obj = get_obj(obj_ptr);
+{% if obj.multiple %}
+    {{ obj_inst_type }} *inst = find_instance(obj, iid);
+    assert(inst);
+{% else %}
+    assert(iid == 0);
+{% endif %}
+
+    switch (rid) {
+{% for res in obj.resources %}
+{% if res.multiple and 'W' in res.operations %}
+    case {{ res.name_upper }}:
+        // TODO: extract and remove Resource Instance
+        return ANJAY_ERR_NOT_IMPLEMENTED;
+
+{% endif %}
+{% endfor %}
+    default:
+        return ANJAY_ERR_METHOD_NOT_ALLOWED;
+    }
+}
+
 {% endif %}
 {% if obj.has_any_multiple_resources %}
 static int list_resource_instances(anjay_t *anjay,
@@ -646,6 +681,41 @@ static int resource_reset(anjay_t *anjay,
 {% if res.multiple and 'W' in res.operations %}
     case {{ res.name_upper }}:
         return ANJAY_ERR_NOT_IMPLEMENTED; // TODO: remove all Resource Instances
+
+{% endif %}
+{% endfor %}
+    default:
+        return ANJAY_ERR_METHOD_NOT_ALLOWED;
+    }
+}
+
+static int resource_instance_remove(anjay_t *anjay,
+                                    const anjay_dm_object_def_t *const *obj_ptr,
+                                    anjay_iid_t iid,
+                                    anjay_rid_t rid,
+                                    anjay_riid_t riid) {
+    // NOTE: This handler can be removed if the client application
+    // does not need to support LwM2M 1.2.
+
+    (void) anjay;
+{% if not obj.multiple %}
+    (void) iid;
+{% endif %}
+
+    {{ obj_repr_type }} *obj = get_obj(obj_ptr);
+{% if obj.multiple %}
+    assert(iid < AVS_ARRAY_SIZE(obj->instances));
+    {{ obj_inst_type }} *inst = &obj->instances[iid];
+{% else %}
+    assert(iid == 0);
+{% endif %}
+
+    switch (rid) {
+{% for res in obj.resources %}
+{% if res.multiple and 'W' in res.operations %}
+    case {{ res.name_upper }}:
+        // TODO: extract and remove Resource Instance
+        return ANJAY_ERR_NOT_IMPLEMENTED;
 
 {% endif %}
 {% endfor %}
@@ -1022,6 +1092,39 @@ int resource_reset(anjay_t *,
     }
 }
 
+int resource_instance_remove(anjay_t *,
+                             const anjay_dm_object_def_t *const *obj_ptr,
+                             anjay_iid_t iid,
+                             anjay_rid_t rid,
+                             anjay_riid_t riid) {
+    // NOTE: This handler can be removed if the client application
+    // does not need to support LwM2M 1.2.
+{% if not obj.multiple %}
+    (void) iid;
+{% endif %}
+
+    {{ obj_cxx_type }} *obj = get_obj(obj_ptr);
+{% if obj.multiple %}
+    {{ obj_inst_cxx_type }} *inst = find_instance(obj, iid);
+    assert(inst);
+{% else %}
+    assert(iid == 0);
+{% endif %}
+
+    switch (rid) {
+{% for res in obj.resources %}
+{% if res.multiple and 'W' in res.operations %}
+    case {{ res.name_upper }}:
+        // TODO: extract and remove Resource Instance
+        return ANJAY_ERR_NOT_IMPLEMENTED;
+
+{% endif %}
+{% endfor %}
+    default:
+        return ANJAY_ERR_METHOD_NOT_ALLOWED;
+    }
+}
+
 {% endif %}
 {% if obj.has_any_multiple_resources %}
 int list_resource_instances(anjay_t *,
@@ -1324,6 +1427,39 @@ int resource_reset(anjay_t *,
 {% if res.multiple and 'W' in res.operations %}
     case {{ res.name_upper }}:
         return ANJAY_ERR_NOT_IMPLEMENTED; // TODO: remove all Resource Instances
+
+{% endif %}
+{% endfor %}
+    default:
+        return ANJAY_ERR_METHOD_NOT_ALLOWED;
+    }
+}
+
+int resource_instance_remove(anjay_t *,
+                             const anjay_dm_object_def_t *const *obj_ptr,
+                             anjay_iid_t iid,
+                             anjay_rid_t rid,
+                             anjay_riid_t riid) {
+    // NOTE: This handler can be removed if the client application
+    // does not need to support LwM2M 1.2.
+{% if not obj.multiple %}
+    (void) iid;
+{% endif %}
+
+    {{ obj_cxx_type }} *obj = get_obj(obj_ptr);
+{% if obj.multiple %}
+    assert(iid < obj->instances.size());
+    {{ obj_inst_cxx_type }} &inst = obj->instances[iid];
+{% else %}
+    assert(iid == 0);
+{% endif %}
+
+    switch (rid) {
+{% for res in obj.resources %}
+{% if res.multiple and 'W' in res.operations %}
+    case {{ res.name_upper }}:
+        // TODO: extract and remove Resource Instance
+        return ANJAY_ERR_NOT_IMPLEMENTED;
 
 {% endif %}
 {% endfor %}
@@ -1662,6 +1798,9 @@ def generate_object_boilerplate(obj_tree: ElementTree, cxx: bool, instances_numb
     handlers.append(('transaction_commit', 'anjay_dm_transaction_NOOP'))
     handlers.append(('transaction_rollback', 'anjay_dm_transaction_NOOP'))
 
+    if obj.has_any_multiple_writable_resources:
+        handlers.append('')
+        handlers.append(('resource_instance_remove', 'resource_instance_remove'))
     template_args = dict(
         obj=obj,
         handlers=handlers,

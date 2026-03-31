@@ -56,6 +56,14 @@ VISIBILITY_SOURCE_BEGIN
 #    define FW_RES_PKG_VERSION 7
 #    define FW_RES_UPDATE_PROTOCOL_SUPPORT 8
 #    define FW_RES_UPDATE_DELIVERY_METHOD 9
+#    ifdef ANJAY_WITH_LWM2M11
+#        define FW_RES_CANCEL 10
+#        ifdef ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES
+#            define FW_RES_SEVERITY 11
+#            define FW_RES_LAST_STATE_CHANGE_TIME 12
+#            define FW_RES_MAX_DEFER_PERIOD 13
+#        endif // ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES
+#    endif     // ANJAY_WITH_LWM2M11
 
 typedef enum {
     UPDATE_STATE_IDLE = 0,
@@ -91,6 +99,14 @@ typedef struct fw_repr {
 #    ifdef ANJAY_WITH_SEND
     bool use_lwm2m_send;
 #    endif // ANJAY_WITH_SEND
+#    if defined(ANJAY_WITH_LWM2M11) \
+            && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
+    anjay_fw_update_severity_t severity;
+    avs_time_real_t last_state_change_time;
+    int32_t max_defer_period;
+    avs_time_real_t update_deadline;
+#    endif /* defined(ANJAY_WITH_LWM2M11) && \
+              defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
 } fw_repr_t;
 
 static inline fw_repr_t *get_fw(const anjay_dm_installed_object_t obj_ptr) {
@@ -202,6 +218,11 @@ static void set_update_result(anjay_unlocked_t *anjay,
 static void
 set_state(anjay_unlocked_t *anjay, fw_repr_t *fw, fw_update_state_t new_state) {
     if (fw->state != new_state) {
+#    if defined(ANJAY_WITH_LWM2M11) \
+            && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
+        fw->last_state_change_time = avs_time_real_now();
+#    endif /* defined(ANJAY_WITH_LWM2M11) && \
+              defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
         fw_log(DEBUG, _("Firmware Update State change: ") "%d" _(" -> ") "%d",
                (int) fw->state, (int) new_state);
         fw->state = new_state;
@@ -301,7 +322,11 @@ static int user_state_perform_upgrade(anjay_unlocked_t *anjay, fw_repr_t *fw) {
     // @ref anjay_fw_update_set_result was called and has overwritten the
     // State and Result. In that case, change State to Updating if update was
     // not deferred.
-    if (!result && user->state == UPDATE_STATE_DOWNLOADED) {
+    if (!result && user->state == UPDATE_STATE_DOWNLOADED
+#    ifdef ANJAY_WITH_LWM2M11
+            && fw->result != ANJAY_FW_UPDATE_RESULT_DEFERRED
+#    endif // ANJAY_WITH_LWM2M11
+    ) {
         set_user_state(user, UPDATE_STATE_UPDATING);
     }
     return result;
@@ -395,6 +420,9 @@ static void handle_err_result(anjay_unlocked_t *anjay,
     case -ANJAY_FW_UPDATE_RESULT_OUT_OF_MEMORY:
     case -ANJAY_FW_UPDATE_RESULT_INTEGRITY_FAILURE:
     case -ANJAY_FW_UPDATE_RESULT_UNSUPPORTED_PACKAGE_TYPE:
+#    ifdef ANJAY_WITH_LWM2M11
+    case -ANJAY_FW_UPDATE_RESULT_DEFERRED:
+#    endif // ANJAY_WITH_LWM2M11
         new_result = (anjay_fw_update_result_t) -result;
         break;
     default:
@@ -448,6 +476,18 @@ static int fw_list_resources(anjay_unlocked_t *anjay,
                                 ANJAY_DM_RES_RM, ANJAY_DM_RES_PRESENT);
     _anjay_dm_emit_res_unlocked(ctx, FW_RES_UPDATE_DELIVERY_METHOD,
                                 ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT);
+#    ifdef ANJAY_WITH_LWM2M11
+    _anjay_dm_emit_res_unlocked(ctx, FW_RES_CANCEL, ANJAY_DM_RES_E,
+                                ANJAY_DM_RES_PRESENT);
+#        ifdef ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES
+    _anjay_dm_emit_res_unlocked(ctx, FW_RES_SEVERITY, ANJAY_DM_RES_RW,
+                                ANJAY_DM_RES_PRESENT);
+    _anjay_dm_emit_res_unlocked(ctx, FW_RES_LAST_STATE_CHANGE_TIME,
+                                ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT);
+    _anjay_dm_emit_res_unlocked(ctx, FW_RES_MAX_DEFER_PERIOD, ANJAY_DM_RES_RW,
+                                ANJAY_DM_RES_PRESENT);
+#        endif // ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES
+#    endif     // ANJAY_WITH_LWM2M11
     return 0;
 }
 
@@ -520,6 +560,20 @@ static int fw_read(anjay_unlocked_t *anjay,
         return _anjay_ret_i64_unlocked(ctx, 1);
 #        endif // ANJAY_WITH_DOWNLOADER
 #    endif     // ANJAY_WITHOUT_MODULE_FW_UPDATE_PUSH_MODE
+#    if defined(ANJAY_WITH_LWM2M11) \
+            && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
+    case FW_RES_SEVERITY:
+        return _anjay_ret_i64_unlocked(ctx, (int32_t) fw->severity);
+    case FW_RES_LAST_STATE_CHANGE_TIME: {
+        int64_t last_state_change_timestamp = 0;
+        avs_time_real_to_scalar(&last_state_change_timestamp, AVS_TIME_S,
+                                fw->last_state_change_time);
+        return _anjay_ret_i64_unlocked(ctx, last_state_change_timestamp);
+    }
+    case FW_RES_MAX_DEFER_PERIOD:
+        return _anjay_ret_i64_unlocked(ctx, fw->max_defer_period);
+#    endif /* defined(ANJAY_WITH_LWM2M11) && \
+              defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
     default:
         AVS_UNREACHABLE("Read called on unknown or non-readable Firmware "
                         "Update resource");
@@ -570,6 +624,20 @@ static anjay_transport_security_t transport_security_from_uri(const char *uri) {
     return ANJAY_TRANSPORT_SECURITY_UNDEFINED;
 }
 #    endif // ANJAY_WITH_COAP_DOWNLOAD || ANJAY_WITH_HTTP_DOWNLOAD
+
+#    if defined(ANJAY_WITH_LWM2M11) \
+            && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
+static void set_update_deadline(fw_repr_t *fw) {
+    if (fw->max_defer_period <= 0) {
+        fw->update_deadline = AVS_TIME_REAL_INVALID;
+        return;
+    }
+    fw->update_deadline = avs_time_real_add(
+            avs_time_real_now(),
+            avs_time_duration_from_scalar(fw->max_defer_period, AVS_TIME_S));
+}
+#    endif /* defined(ANJAY_WITH_LWM2M11) && \
+              defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
 
 #    ifdef ANJAY_WITH_DOWNLOADER
 static avs_error_t download_write_block(anjay_t *anjay_locked,
@@ -1031,6 +1099,31 @@ static int fw_write(anjay_unlocked_t *anjay,
 
         return result;
     }
+#    if defined(ANJAY_WITH_LWM2M11) \
+            && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
+    case FW_RES_SEVERITY: {
+        assert(riid == ANJAY_ID_INVALID);
+        int32_t severity = ANJAY_FW_UPDATE_SEVERITY_MANDATORY;
+        if (_anjay_get_i32_unlocked(ctx, &severity)
+                || severity < (int32_t) ANJAY_FW_UPDATE_SEVERITY_CRITICAL
+                || severity > (int32_t) ANJAY_FW_UPDATE_SEVERITY_OPTIONAL) {
+            return ANJAY_ERR_BAD_REQUEST;
+        }
+        fw->severity = (anjay_fw_update_severity_t) severity;
+        return 0;
+    }
+    case FW_RES_MAX_DEFER_PERIOD: {
+        assert(riid == ANJAY_ID_INVALID);
+        int32_t max_defer_period = 0;
+        if (_anjay_get_i32_unlocked(ctx, &max_defer_period)
+                || max_defer_period < 0) {
+            return ANJAY_ERR_BAD_REQUEST;
+        }
+        fw->max_defer_period = max_defer_period;
+        return 0;
+    }
+#    endif /* defined(ANJAY_WITH_LWM2M11) && \
+              defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
     default:
         // Bootstrap Server may try to write to other resources,
         // so no AVS_UNREACHABLE() here
@@ -1063,6 +1156,11 @@ static int fw_resource_instances(anjay_unlocked_t *anjay,
 static void perform_upgrade(avs_sched_t *sched, const void *fw_ptr) {
     fw_repr_t *fw = *(fw_repr_t *const *) fw_ptr;
 
+#    if defined(ANJAY_WITH_LWM2M11) \
+            && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
+    set_update_deadline(fw);
+#    endif /* defined(ANJAY_WITH_LWM2M11) && \
+              defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
     anjay_t *anjay_locked = _anjay_get_from_sched(sched);
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     int result = user_state_perform_upgrade(anjay, fw);
@@ -1124,6 +1222,25 @@ static int fw_execute(anjay_unlocked_t *anjay,
             return ANJAY_ERR_INTERNAL;
         }
         return 0;
+#    ifdef ANJAY_WITH_LWM2M11
+    case FW_RES_CANCEL:
+        if (fw->state != UPDATE_STATE_DOWNLOADING
+                && fw->state != UPDATE_STATE_DOWNLOADED) {
+            fw_log(WARNING,
+                   _("Firmware Update Cancel requested, but the firmware is "
+                     "being installed or has already been installed "
+                     "(state = ") "%d" _(")"),
+                   fw->state);
+            return ANJAY_ERR_METHOD_NOT_ALLOWED;
+        }
+#        ifdef ANJAY_WITH_DOWNLOADER
+        cancel_existing_download_if_in_progress(anjay, fw);
+#        endif // ANJAY_WITH_DOWNLOADER
+        reset_user_state(anjay, fw);
+        update_state_and_update_result(anjay, fw, UPDATE_STATE_IDLE,
+                                       ANJAY_FW_UPDATE_RESULT_UPDATE_CANCELLED);
+        return 0;
+#    endif // ANJAY_WITH_LWM2M11
     default:
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
@@ -1191,6 +1308,14 @@ initialize_fw_repr(anjay_unlocked_t *anjay,
     repr->prefer_same_socket_downloads =
             initial_state->prefer_same_socket_downloads;
 #    endif // ANJAY_WITH_DOWNLOADER
+#    if defined(ANJAY_WITH_LWM2M11) \
+            && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
+    repr->severity = initial_state->persisted_severity;
+    repr->last_state_change_time =
+            initial_state->persisted_last_state_change_time;
+    repr->update_deadline = initial_state->persisted_update_deadline;
+#    endif /* defined(ANJAY_WITH_LWM2M11) && \
+              defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
 #    ifdef ANJAY_WITH_SEND
     repr->use_lwm2m_send = initial_state->use_lwm2m_send;
 #    endif // ANJAY_WITH_SEND
@@ -1306,6 +1431,12 @@ static bool is_error_result(anjay_fw_update_result_t result) {
 
 static bool is_result_change_allowed(fw_update_state_t current_state,
                                      anjay_fw_update_result_t new_result) {
+#    ifdef ANJAY_WITH_LWM2M11
+    if (new_result == ANJAY_FW_UPDATE_RESULT_UPDATE_CANCELLED) {
+        // it is never allowed
+        return false;
+    }
+#    endif // ANJAY_WITH_LWM2M11
     switch (current_state) {
     case UPDATE_STATE_IDLE:
         // changing result while nothing is going on is pointless
@@ -1343,7 +1474,15 @@ int anjay_fw_update_set_result(anjay_t *anjay_locked,
                    _("Firmware Update Result change to ") "%d" _(
                            " not allowed in State ") "%d",
                    (int) result, (int) fw->state);
-        } else {
+        }
+#    ifdef ANJAY_WITH_LWM2M11
+        else if (result == ANJAY_FW_UPDATE_RESULT_DEFERRED) {
+            update_state_and_update_result(anjay, fw, UPDATE_STATE_DOWNLOADED,
+                                           result);
+            retval = 0;
+        }
+#    endif // ANJAY_WITH_LWM2M11
+        else {
             reset_user_state(anjay, fw);
             update_state_and_update_result(anjay, fw, UPDATE_STATE_IDLE,
                                            result);
@@ -1398,5 +1537,64 @@ int anjay_fw_update_pull_reconnect(anjay_t *anjay_locked) {
     return result;
 }
 #    endif // ANJAY_WITH_DOWNLOADER
+
+#    if defined(ANJAY_WITH_LWM2M11) \
+            && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
+avs_time_real_t anjay_fw_update_get_deadline(anjay_t *anjay_locked) {
+    assert(anjay_locked);
+    avs_time_real_t result = AVS_TIME_REAL_INVALID;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    const anjay_dm_installed_object_t *obj =
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_DM_OID_FIRMWARE_UPDATE);
+    if (!obj) {
+        fw_log(WARNING, _("Firmware Update object not installed"));
+    } else {
+        fw_repr_t *fw = get_fw(*obj);
+        assert(fw);
+        result = fw->update_deadline;
+    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
+}
+
+anjay_fw_update_severity_t anjay_fw_update_get_severity(anjay_t *anjay_locked) {
+    assert(anjay_locked);
+    anjay_fw_update_severity_t result = ANJAY_FW_UPDATE_SEVERITY_MANDATORY;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    const anjay_dm_installed_object_t *obj =
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_DM_OID_FIRMWARE_UPDATE);
+    if (!obj) {
+        fw_log(WARNING, _("Firmware Update object not installed"));
+    } else {
+        fw_repr_t *fw = get_fw(*obj);
+        assert(fw);
+        result = fw->severity;
+    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
+}
+
+avs_time_real_t
+anjay_fw_update_get_last_state_change_time(anjay_t *anjay_locked) {
+    assert(anjay_locked);
+    avs_time_real_t result = AVS_TIME_REAL_INVALID;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    const anjay_dm_installed_object_t *obj =
+            _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay),
+                                         ANJAY_DM_OID_FIRMWARE_UPDATE);
+    if (!obj) {
+        fw_log(WARNING, _("Firmware Update object not installed"));
+    } else {
+        fw_repr_t *fw = get_fw(*obj);
+        assert(fw);
+        result = fw->last_state_change_time;
+    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
+}
+#    endif /* defined(ANJAY_WITH_LWM2M11) && \
+              defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
 
 #endif // ANJAY_WITH_MODULE_FW_UPDATE

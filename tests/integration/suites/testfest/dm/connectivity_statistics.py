@@ -9,7 +9,7 @@
 
 import time
 
-from framework_tools.utils.lwm2m_test import *
+from framework.lwm2m_test import *
 
 from .utils import DataModel, ValueValidator as VV
 
@@ -170,4 +170,3 @@ class Test910_ConnectivityStatistics_BasicObservationAndNotificationOnConnectivi
 
         # 8. The Server stops the OBSERVATION process
         self.test_cancel_observe('/%d/0' % OID.ConnectivityStatistics)
-

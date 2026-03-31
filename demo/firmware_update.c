@@ -33,6 +33,9 @@
 #define FORCE_SET_SUCCESS_FROM_PERFORM_UPGRADE 5
 #define FORCE_SET_FAILURE_FROM_PERFORM_UPGRADE 6
 #define FORCE_DO_NOTHING 7
+#ifdef ANJAY_WITH_LWM2M11
+#    define FORCE_DEFER 8
+#endif // ANJAY_WITH_LWM2M11
 
 #define HEADER_VER_FW 2
 
@@ -266,11 +269,31 @@ static int write_persistence_file(const char *path,
                                   const char *uri,
                                   char *download_file,
                                   bool filename_administratively_set,
-                                  const anjay_etag_t *etag) {
+                                  const anjay_etag_t *etag,
+                                  anjay_fw_update_severity_t severity,
+                                  avs_time_real_t last_state_change_time,
+                                  avs_time_real_t update_deadline) {
+#    if !defined(ANJAY_WITH_LWM2M11) \
+            || !defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
+    (void) severity;
+    (void) last_state_change_time;
+    (void) update_deadline;
+#    endif /* !defined(ANJAY_WITH_LWM2M11) && \
+              !defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
     avs_stream_t *stream = avs_stream_file_create(path, AVS_STREAM_FILE_WRITE);
     avs_persistence_context_t ctx =
             avs_persistence_store_context_create(stream);
     int8_t result8 = (int8_t) result;
+#    if defined(ANJAY_WITH_LWM2M11) \
+            && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
+    uint8_t severity8 = (uint8_t) severity;
+    int64_t last_state_change_timestamp = 0;
+    avs_time_real_to_scalar(&last_state_change_timestamp, AVS_TIME_S,
+                            last_state_change_time);
+    int64_t update_timestamp = 0;
+    avs_time_real_to_scalar(&update_timestamp, AVS_TIME_S, update_deadline);
+#    endif /* defined(ANJAY_WITH_LWM2M11) && \
+              defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
     int retval = 0;
     if (!stream
             || avs_is_err(avs_persistence_bytes(&ctx, (uint8_t *) &result8, 1))
@@ -279,7 +302,16 @@ static int write_persistence_file(const char *path,
             || avs_is_err(avs_persistence_string(&ctx, &download_file))
             || avs_is_err(avs_persistence_bool(&ctx,
                                                &filename_administratively_set))
-            || avs_is_err(store_etag(&ctx, etag))) {
+            || avs_is_err(store_etag(&ctx, etag))
+#    if defined(ANJAY_WITH_LWM2M11) \
+            && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
+            || avs_is_err(avs_persistence_bytes(&ctx, &severity8, 1))
+            || avs_is_err(
+                       avs_persistence_i64(&ctx, &last_state_change_timestamp))
+            || avs_is_err(avs_persistence_i64(&ctx, &update_timestamp))
+#    endif /* defined(ANJAY_WITH_LWM2M11) && \
+              defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
+    ) {
         demo_log(ERROR, "Could not write firmware state persistence file");
         retval = -1;
     }
@@ -302,13 +334,19 @@ static int write_persistence_file(const char *path,
                                   const char *uri,
                                   char *download_file,
                                   bool filename_administratively_set,
-                                  const anjay_etag_t *etag) {
+                                  const anjay_etag_t *etag,
+                                  anjay_fw_update_severity_t severity,
+                                  avs_time_real_t last_state_change_time,
+                                  avs_time_real_t update_deadline) {
     (void) path;
     (void) result;
     (void) uri;
     (void) download_file;
     (void) filename_administratively_set;
     (void) etag;
+    (void) severity;
+    (void) last_state_change_time;
+    (void) update_deadline;
     demo_log(WARNING, "Persistence not compiled in");
     return 0;
 }
@@ -361,10 +399,25 @@ static int fw_stream_open(void *fw_,
 
     avs_free(fw->package_uri);
     fw->package_uri = uri;
+#if defined(ANJAY_WITH_LWM2M11) \
+        && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
     if (write_persistence_file(
                 fw->persistence_file, ANJAY_FW_UPDATE_INITIAL_DOWNLOADING,
                 package_uri, fw->next_target_path,
-                !!fw->administratively_set_target_path, package_etag)) {
+                !!fw->administratively_set_target_path, package_etag,
+                anjay_fw_update_get_severity(fw->anjay),
+                anjay_fw_update_get_last_state_change_time(fw->anjay),
+                anjay_fw_update_get_deadline(fw->anjay))) {
+#else  /* defined(ANJAY_WITH_LWM2M11) && \
+          defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
+    if (write_persistence_file(
+                fw->persistence_file, ANJAY_FW_UPDATE_INITIAL_DOWNLOADING,
+                package_uri, fw->next_target_path,
+                !!fw->administratively_set_target_path, package_etag,
+                (anjay_fw_update_severity_t) 0, (avs_time_real_t) { { 0, 0 } },
+                (avs_time_real_t) { { 0, 0 } })) {
+#endif /* defined(ANJAY_WITH_LWM2M11) && \
+          defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
         fw_reset(fw_);
         return -1;
     }
@@ -404,12 +457,30 @@ static int fw_stream_finish(void *fw_) {
     fw->stream = NULL;
 
     int result;
-    if ((result = preprocess_firmware(fw))
-            || (result = write_persistence_file(
-                        fw->persistence_file,
-                        ANJAY_FW_UPDATE_INITIAL_DOWNLOADED, fw->package_uri,
-                        fw->next_target_path,
-                        !!fw->administratively_set_target_path, NULL))) {
+    if ((result = preprocess_firmware(fw))) {
+        return result;
+    }
+#if defined(ANJAY_WITH_LWM2M11) \
+        && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
+    result = write_persistence_file(
+            fw->persistence_file, ANJAY_FW_UPDATE_INITIAL_DOWNLOADED,
+            fw->package_uri, fw->next_target_path,
+            !!fw->administratively_set_target_path, NULL,
+            anjay_fw_update_get_severity(fw->anjay),
+            anjay_fw_update_get_last_state_change_time(fw->anjay),
+            anjay_fw_update_get_deadline(fw->anjay));
+#else  /* defined(ANJAY_WITH_LWM2M11) && \
+          defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
+    result = write_persistence_file(fw->persistence_file,
+                                    ANJAY_FW_UPDATE_INITIAL_DOWNLOADED,
+                                    fw->package_uri, fw->next_target_path,
+                                    !!fw->administratively_set_target_path,
+                                    NULL, (anjay_fw_update_severity_t) 0,
+                                    (avs_time_real_t) { { 0, 0 } },
+                                    (avs_time_real_t) { { 0, 0 } });
+#endif /* defined(ANJAY_WITH_LWM2M11) && \
+          defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
+    if (result) {
         fw_reset(fw);
     }
     return result;
@@ -428,10 +499,41 @@ static const char *fw_get_version(void *fw) {
 static int fw_perform_upgrade(void *fw_) {
     fw_update_logic_t *fw = (fw_update_logic_t *) fw_;
 
-    if (write_persistence_file(fw->persistence_file,
-                               ANJAY_FW_UPDATE_INITIAL_SUCCESS, NULL,
-                               fw->next_target_path,
-                               !!fw->administratively_set_target_path, NULL)) {
+    int result;
+#if defined(ANJAY_WITH_LWM2M11) \
+        && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
+    int64_t update_deadline_timestamp;
+    avs_time_real_t update_deadline = anjay_fw_update_get_deadline(fw->anjay);
+    anjay_fw_update_severity_t update_severity =
+            anjay_fw_update_get_severity(fw->anjay);
+    if (avs_time_real_to_scalar(&update_deadline_timestamp, AVS_TIME_S,
+                                update_deadline)) {
+        demo_log(INFO, "Firmware Update Deadline is not present");
+    } else {
+        char update_deadline_text[64];
+        strftime(update_deadline_text, sizeof(update_deadline_text),
+                 "%Y-%m-%d %H:%M:%S",
+                 localtime((const time_t *) &update_deadline_timestamp));
+        demo_log(INFO, "Firmware Update Deadline: %s, Severity: %d",
+                 update_deadline_text, update_severity);
+    }
+    result = write_persistence_file(
+            fw->persistence_file, ANJAY_FW_UPDATE_INITIAL_SUCCESS, NULL,
+            fw->next_target_path, !!fw->administratively_set_target_path, NULL,
+            update_severity,
+            anjay_fw_update_get_last_state_change_time(fw->anjay),
+            update_deadline);
+#else  /* defined(ANJAY_WITH_LWM2M11) && \
+          defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
+    result = write_persistence_file(
+            fw->persistence_file, ANJAY_FW_UPDATE_INITIAL_SUCCESS, NULL,
+            fw->next_target_path, !!fw->administratively_set_target_path, NULL,
+            (anjay_fw_update_severity_t) 0, (avs_time_real_t) { { 0, 0 } },
+            (avs_time_real_t) { { 0, 0 } });
+#endif /* defined(ANJAY_WITH_LWM2M11) && \
+          defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
+
+    if (result) {
         delete_persistence_file(fw);
         return -1;
     }
@@ -470,6 +572,15 @@ static int fw_perform_upgrade(void *fw_) {
         return 0;
     case FORCE_DO_NOTHING:
         return 0;
+#ifdef ANJAY_WITH_LWM2M11
+    case FORCE_DEFER:
+        if (anjay_fw_update_set_result(fw->anjay,
+                                       ANJAY_FW_UPDATE_RESULT_DEFERRED)) {
+            demo_log(ERROR, "anjay_fw_update_set_result failed");
+            return -1;
+        }
+        return 0;
+#endif // ANJAY_WITH_LWM2M11
     default:
         break;
     }
@@ -538,6 +649,13 @@ typedef struct {
     char *download_file;
     bool filename_administratively_set;
     anjay_etag_t *etag;
+#if defined(ANJAY_WITH_LWM2M11) \
+        && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
+    anjay_fw_update_severity_t severity;
+    avs_time_real_t last_state_change_time;
+    avs_time_real_t update_deadline;
+#endif /* defined(ANJAY_WITH_LWM2M11) && \
+          defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
 } persistence_file_data_t;
 
 #if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
@@ -553,6 +671,13 @@ static persistence_file_data_t read_persistence_file(const char *path) {
     }
     avs_persistence_context_t ctx =
             avs_persistence_restore_context_create(stream);
+#    if defined(ANJAY_WITH_LWM2M11) \
+            && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
+    uint8_t severity8 = (uint8_t) ANJAY_FW_UPDATE_SEVERITY_MANDATORY;
+    int64_t last_state_change_timestamp = 0;
+    int64_t update_timestamp = 0;
+#    endif /* defined(ANJAY_WITH_LWM2M11) && \
+              defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
     if (!stream
             || avs_is_err(avs_persistence_bytes(&ctx, (uint8_t *) &result8, 1))
             || !is_valid_result(result8)
@@ -560,7 +685,16 @@ static persistence_file_data_t read_persistence_file(const char *path) {
             || avs_is_err(avs_persistence_string(&ctx, &data.download_file))
             || avs_is_err(avs_persistence_bool(
                        &ctx, &data.filename_administratively_set))
-            || avs_is_err(restore_etag(&ctx, &data.etag))) {
+            || avs_is_err(restore_etag(&ctx, &data.etag))
+#    if defined(ANJAY_WITH_LWM2M11) \
+            && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
+            || avs_is_err(avs_persistence_bytes(&ctx, &severity8, 1))
+            || avs_is_err(
+                       avs_persistence_i64(&ctx, &last_state_change_timestamp))
+            || avs_is_err(avs_persistence_i64(&ctx, &update_timestamp))
+#    endif /* defined(ANJAY_WITH_LWM2M11) && \
+              defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
+    ) {
         demo_log(WARNING,
                  "Invalid data in the firmware state persistence file");
         avs_free(data.uri);
@@ -568,6 +702,15 @@ static persistence_file_data_t read_persistence_file(const char *path) {
         memset(&data, 0, sizeof(data));
     }
     data.result = (anjay_fw_update_initial_result_t) result8;
+#    if defined(ANJAY_WITH_LWM2M11) \
+            && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
+    data.severity = (anjay_fw_update_severity_t) severity8;
+    data.last_state_change_time =
+            avs_time_real_from_scalar(last_state_change_timestamp, AVS_TIME_S);
+    data.update_deadline =
+            avs_time_real_from_scalar(update_timestamp, AVS_TIME_S);
+#    endif /* defined(ANJAY_WITH_LWM2M11) && \
+              defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
     if (stream) {
         avs_stream_cleanup(&stream);
     }
@@ -659,6 +802,13 @@ int firmware_update_install(anjay_t *anjay,
 #ifdef ANJAY_WITH_SEND
         .use_lwm2m_send = use_lwm2m_send,
 #endif // ANJAY_WITH_SEND
+#if defined(ANJAY_WITH_LWM2M11) \
+        && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
+        .persisted_severity = data.severity,
+        .persisted_last_state_change_time = data.last_state_change_time,
+        .persisted_update_deadline = data.update_deadline
+#endif /* defined(ANJAY_WITH_LWM2M11) && \
+          defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
     };
 
     if (delayed_result != ANJAY_FW_UPDATE_RESULT_INITIAL) {

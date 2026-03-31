@@ -8,8 +8,8 @@
 # See the attached LICENSE file for details.
 
 from framework_tools.lwm2m.senml_cbor import *
-from framework_tools.utils.test_utils import *
-from framework_tools.utils.lwm2m_test import *
+from framework.test_utils import *
+from framework.lwm2m_test import *
 
 
 class ConnectToServerTest(test_suite.Lwm2mSingleServerTest, test_suite.Lwm2mDmOperations):

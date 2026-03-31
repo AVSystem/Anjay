@@ -200,6 +200,12 @@ _anjay_output_senml_like_create(avs_stream_t *stream,
                                 const size_t *items_count);
 #endif
 
+#if defined(ANJAY_WITH_CBOR) && defined(ANJAY_WITH_LWM2M12)
+anjay_unlocked_output_ctx_t *
+_anjay_output_lwm2m_cbor_create(avs_stream_t *stream,
+                                const anjay_uri_path_t *uri);
+#endif // defined(ANJAY_WITH_CBOR) && defined(ANJAY_WITH_LWM2M12)
+
 int _anjay_output_bytes_begin(anjay_unlocked_output_ctx_t *ctx,
                               size_t length,
                               anjay_unlocked_ret_bytes_ctx_t **out_bytes_ctx);
@@ -243,6 +249,10 @@ int _anjay_output_ctx_destroy(anjay_unlocked_output_ctx_t **ctx_ptr);
 
 int _anjay_output_ctx_destroy_and_process_result(
         anjay_unlocked_output_ctx_t **out_ctx_ptr, int result);
+
+#ifdef ANJAY_WITH_LWM2M12
+int _anjay_input_get_null(anjay_unlocked_input_ctx_t *ctx);
+#endif // ANJAY_WITH_LWM2M12
 
 int _anjay_input_next_entry(anjay_unlocked_input_ctx_t *ctx);
 int _anjay_input_get_path(anjay_unlocked_input_ctx_t *ctx,

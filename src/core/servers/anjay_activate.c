@@ -256,6 +256,22 @@ void _anjay_server_on_server_communication_error(anjay_server_info_t *server,
                            "ANJAY_SERVER_NEXT_ACTION_COMMUNICATION_ERROR"));
         server->refresh_failed = true;
     }
+
+#ifdef ANJAY_WITH_SSL_ERROR_API
+    if (err.category == AVS_NET_SSL_ALERT_CATEGORY
+            || err.category == AVS_NET_SSL_LIB_ERROR_CATEGORY) {
+        assert(server);
+
+        if (server->anjay->ssl_error_cb) {
+            ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, server->anjay);
+            server->anjay->ssl_error_cb(server->anjay->ssl_error_cb_arg,
+                                        anjay_locked, server->ssid, err);
+            ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
+        }
+    }
+
+#endif // ANJAY_WITH_SSL_ERROR_API
+
 #ifdef ANJAY_WITH_LWM2M11
     if (err.category == AVS_NET_SSL_ALERT_CATEGORY) {
         _anjay_server_update_last_ssl_alert_code(

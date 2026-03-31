@@ -121,7 +121,7 @@ if(NOT TARGET Python3::Interpreter)
 endif()
 
 add_custom_target(demo_firmware
-                  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../tests/integration/framework/create_package.py
+                  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../tests/integration/framework/framework/create_package.py
                           -i ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/demo
                           -o ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/demo.fw-pkg
                   DEPENDS demo)

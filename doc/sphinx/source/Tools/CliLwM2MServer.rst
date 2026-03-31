@@ -602,6 +602,17 @@ bootstrap ``URI`` ``SECURITY_MODE`` ``PSK_IDENTITY`` ``PSK_KEY`` ``CLIENT_CERT_P
    after setting up Security/Server instances.
 
 
+bootstrap_pack ``URI`` ``SECURITY_MODE`` ``PSK_IDENTITY`` ``PSK_KEY`` ``CLIENT_CERT_PATH`` ``CLIENT_PRIVATE_KEY_PATH`` ``SERVER_CERT_PATH`` ``SSID`` ``IS_BOOTSTRAP`` ``LIFETIME`` ``NOTIFICATION_STORING`` ``BINDING`` ``IID`` ``TLS_CIPHERSUITES``
+   Responds to the cached BootstrapPackRequest with BootstrapPack with the content
+   created from the arguments in the same way as the content of bootstrap writes
+   send by the BOOTSTRAP command.
+
+   It can be used only with AUTO_BSPACK_ERROR unset, because without that
+   BootstrapPackRequest is automatically responded with an error message.
+
+   Available as part of LwM2M 1.2 commercial feature.
+
+
 file_server ``ROOT_DIRECTORY`` ``PORT`` ``PSK_IDENTITY`` ``PSK_KEY`` ``CA_PATH`` ``CA_FILE`` ``CRT_FILE`` ``KEY_FILE`` ``IPV6`` ``DEBUG``
    Serves files from ``ROOT_DIRECTORY`` over CoAP(s).
 

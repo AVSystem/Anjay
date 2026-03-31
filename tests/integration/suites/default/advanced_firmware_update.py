@@ -18,8 +18,8 @@ import unittest
 
 from .firmware_update import FirmwareUpdate, UpdateState
 from .firmware_update import UpdateResult as FU_UpdateResult
-from framework_tools.utils.coap_file_server import CoapFileServer
-from framework_tools.utils.lwm2m_test import *
+from framework_tools.coap_file_server import CoapFileServer
+from framework.lwm2m_test import *
 from framework.create_package import PackageForcedError, make_firmware_package, make_multiple_firmware_package
 
 from .access_control import AccessMask

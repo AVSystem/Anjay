@@ -39,6 +39,13 @@ struct anjay_observation_struct {
     // to this resource+format or not)
     AVS_LIST(anjay_observation_value_t) last_unsent;
 
+#ifdef ANJAY_WITH_LWM2M12
+    int32_t historical_queue_size;
+    size_t notifications_count;
+#    ifdef ANJAY_WITH_OBSERVATION_ATTRIBUTES
+    anjay_dm_r_attributes_t attrs;
+#    endif // ANJAY_WITH_OBSERVATION_ATTRIBUTES
+#endif     // ANJAY_WITH_LWM2M12
     const size_t paths_count;
     const anjay_uri_path_t paths[];
 };

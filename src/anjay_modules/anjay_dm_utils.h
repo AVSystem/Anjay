@@ -644,6 +644,9 @@ typedef enum {
     ANJAY_DM_HANDLER_resource_instance_read_attrs,
     ANJAY_DM_HANDLER_resource_instance_write_attrs,
 #endif // ANJAY_WITH_LWM2M11
+#ifdef ANJAY_WITH_LWM2M12
+    ANJAY_DM_HANDLER_resource_instance_remove,
+#endif // ANJAY_WITH_LWM2M12
 } anjay_dm_handler_t;
 
 /**
@@ -765,7 +768,15 @@ int _anjay_dm_call_resource_instance_write_attrs(
         anjay_riid_t riid,
         anjay_ssid_t ssid,
         const anjay_dm_r_attributes_t *attrs);
-#endif // ANJAY_WITH_LWM2M11
+#    ifdef ANJAY_WITH_LWM2M12
+int _anjay_dm_call_resource_instance_remove(
+        anjay_unlocked_t *anjay,
+        const anjay_dm_installed_object_t *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid);
+#    endif // ANJAY_WITH_LWM2M12
+#endif     // ANJAY_WITH_LWM2M11
 
 int _anjay_dm_call_transaction_begin(
         anjay_unlocked_t *anjay, const anjay_dm_installed_object_t *obj_ptr);
@@ -959,6 +970,11 @@ AVS_LIST(anjay_dm_installed_object_t) _anjay_prepare_user_provided_object(
 
 int _anjay_dm_register_object(
         anjay_dm_t *dm, AVS_LIST(anjay_dm_installed_object_t) *elem_ptr_move);
+
+#ifdef ANJAY_WITH_LWM2M12
+void _anjay_dm_check_implemented_handlers(
+        anjay_unlocked_t *anjay, const anjay_dm_installed_object_t *obj);
+#endif // ANJAY_WITH_LWM2M12
 
 int _anjay_register_object_unlocked(
         anjay_unlocked_t *anjay,

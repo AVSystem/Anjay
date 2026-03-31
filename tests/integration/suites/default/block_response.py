@@ -10,7 +10,7 @@
 import unittest
 
 from framework_tools.lwm2m.tlv import TLV
-from framework_tools.utils.lwm2m_test import *
+from framework.lwm2m_test import *
 
 
 class BlockResponseTest(test_suite.Lwm2mSingleServerTest):

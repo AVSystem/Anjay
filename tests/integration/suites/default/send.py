@@ -9,8 +9,8 @@
 
 import itertools
 
-from framework_tools.utils.lwm2m_test import *
-from framework_tools.utils.test_utils import *
+from framework.lwm2m_test import *
+from framework.test_utils import *
 from . import retransmissions
 
 

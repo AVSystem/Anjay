@@ -6,7 +6,7 @@
 #
 # Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
-from framework_tools.utils.lwm2m_test import *
+from framework.lwm2m_test import *
 from framework_tools.lwm2m.coap.transport import Transport
 
 import re
@@ -454,6 +454,34 @@ class ConfirmableNotificationStatusTLS(ConfirmableNotificationStatus.BasicTest,
     def setUp(self, *args, **kwargs):
         super().setUp(binding='T', *args, **kwargs)
 
+
+class ConfirmableNotificationStatusAttr(test_suite.Lwm2mSingleServerTest,
+                                        ConfirmableNotificationStatus.Test):
+    def setUp(self):
+        super().setUp(minimum_version='1.2', maximum_version='1.2')
+
+    def runTest(self):
+        observe_path = self.make_path(OID.Location, 0, RID.Location.Latitude)
+        self.write_attributes_path(self.serv, observe_path, query=['con=1'])
+        observe = self.observe_path(self.serv, observe_path)
+
+        notify = self.serv.recv()
+
+        self.assertIsInstance(notify, Lwm2mNotify)
+        self.assertMsgEqual(
+            Lwm2mNotify(
+                token=observe.token,
+                confirmable=True),
+            notify)
+        self.serv.send(Lwm2mEmpty.matching(notify)())
+
+        self.read_log_until_confirmable_notification_success(
+            ssid=1, paths_count=1)
+        self.read_log_until_path_occur(observe_path)
+
+    def tearDown(self):
+        self.receive_notification_and_respond(self.serv)
+        super().tearDown()
 
 
 class ConfirmableNotificationStatusTwoObservations(test_suite.Lwm2mSingleServerTest,

@@ -1981,10 +1981,18 @@ AVS_UNIT_TEST(dm_write_attributes, resource) {
                     ,
                     .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                    ,
+                    .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
                 },
                 .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
                 .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
                 .step = 0.7
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .edge = ANJAY_DM_EDGE_ATTR_NONE
+#endif // ANJAY_WITH_LWM2M12
             },
             0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CHANGED, ID(0xFA3E), NO_PAYLOAD);
@@ -2012,6 +2020,10 @@ AVS_UNIT_TEST(dm_write_attributes, instance) {
                 ,
                 .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             },
             0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CHANGED, ID(0xFA3E), NO_PAYLOAD);
@@ -2037,6 +2049,10 @@ AVS_UNIT_TEST(dm_write_attributes, object) {
                 ,
                 .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             },
             0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CHANGED, ID(0xFA3E), NO_PAYLOAD);
@@ -2140,10 +2156,18 @@ AVS_UNIT_TEST(dm_discover, resource_instance_attrs) {
                     ,
                     .con = ANJAY_DM_CON_ATTR_NONE
 #    endif // ANJAY_WITH_CON_ATTR
+#    ifdef ANJAY_WITH_LWM2M12
+                    ,
+                    .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#    endif // ANJAY_WITH_LWM2M12
                 },
                 .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
                 .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
                 .step = ANJAY_ATTRIB_DOUBLE_NONE
+#    ifdef ANJAY_WITH_LWM2M12
+                ,
+                .edge = ANJAY_DM_EDGE_ATTR_NONE
+#    endif // ANJAY_WITH_LWM2M12
             });
     _anjay_mock_dm_expect_instance_read_default_attrs(
             anjay, &OBJ, 69, 34, 0, &ANJAY_DM_OI_ATTRIBUTES_EMPTY);
@@ -2168,10 +2192,18 @@ AVS_UNIT_TEST(dm_discover, resource_instance_attrs) {
                         ,
                         .con = ANJAY_DM_CON_ATTR_NONE
 #    endif // ANJAY_WITH_CON_ATTR
+#    ifdef ANJAY_WITH_LWM2M12
+                        ,
+                        .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#    endif // ANJAY_WITH_LWM2M12
                     },
                     .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
                     .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
                     .step = ANJAY_ATTRIB_DOUBLE_NONE
+#    ifdef ANJAY_WITH_LWM2M12
+                    ,
+                    .edge = ANJAY_DM_EDGE_ATTR_NONE
+#    endif // ANJAY_WITH_LWM2M12
                 });
     }
 
@@ -2217,10 +2249,18 @@ AVS_UNIT_TEST(dm_discover, resource) {
                     ,
                     .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                    ,
+                    .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
                 },
                 .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
                 .less_than = 6.46,
                 .step = ANJAY_ATTRIB_DOUBLE_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .edge = ANJAY_DM_EDGE_ATTR_NONE
+#endif // ANJAY_WITH_LWM2M12
             });
 
     _anjay_mock_dm_expect_instance_read_default_attrs(
@@ -2234,6 +2274,10 @@ AVS_UNIT_TEST(dm_discover, resource) {
                 ,
                 .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             });
 
     _anjay_mock_dm_expect_object_read_default_attrs(
@@ -2247,6 +2291,10 @@ AVS_UNIT_TEST(dm_discover, resource) {
                 ,
                 .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             });
 
     DM_TEST_EXPECT_RESPONSE(
@@ -2298,10 +2346,18 @@ AVS_UNIT_TEST(dm_discover, resource_multiple_servers) {
                     ,
                     .con = ANJAY_DM_CON_ATTR_NONE
 #    endif // ANJAY_WITH_CON_ATTR
+#    ifdef ANJAY_WITH_LWM2M12
+                    ,
+                    .hqmax = 4
+#    endif // ANJAY_WITH_LWM2M12
                 },
                 .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
                 .less_than = 6.46,
                 .step = ANJAY_ATTRIB_DOUBLE_NONE
+#    ifdef ANJAY_WITH_LWM2M12
+                ,
+                .edge = ANJAY_DM_EDGE_ATTR_RISING
+#    endif // ANJAY_WITH_LWM2M12
             });
 #    ifdef ANJAY_WITH_CON_ATTR
     _anjay_mock_dm_expect_instance_read_default_attrs(
@@ -2322,9 +2378,15 @@ AVS_UNIT_TEST(dm_discover, resource_multiple_servers) {
 
     DM_TEST_EXPECT_RESPONSE(
             mocksocks[0], ACK, CONTENT, ID(0xfa3e), CONTENT_FORMAT(LINK_FORMAT),
+#    ifdef ANJAY_WITH_LWM2M12
+            PAYLOAD("</42/69/"
+                    "4>;dim=3;pmin=10;pmax=514;epmin=3;epmax=600;hqmax=4;"
+                    "lt=6.46;edge=1,</42/69/4/0>,</42/69/4/1>,</42/69/4/2>"));
+#    else  // ANJAY_WITH_LWM2M12
             PAYLOAD("</42/69/"
                     "4>;dim=3;pmin=10;pmax=514;epmin=3;epmax=600;"
                     "lt=6.46,</42/69/4/0>,</42/69/4/1>,</42/69/4/2>"));
+#    endif // ANJAY_WITH_LWM2M12
     expect_has_buffered_data_check(mocksocks[0], false);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
@@ -2350,6 +2412,10 @@ AVS_UNIT_TEST(dm_discover, instance) {
                 ,
                 .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             });
     _anjay_mock_dm_expect_object_read_default_attrs(
             anjay, &OBJ, 69, 0,
@@ -2362,6 +2428,10 @@ AVS_UNIT_TEST(dm_discover, instance) {
                 ,
                 .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             });
 
     _anjay_mock_dm_expect_list_resources(
@@ -2410,6 +2480,10 @@ AVS_UNIT_TEST(dm_discover, instance_multiple_servers) {
                 ,
                 .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             });
     _anjay_mock_dm_expect_object_read_default_attrs(
             anjay, &OBJ, 69, 0,
@@ -2422,6 +2496,10 @@ AVS_UNIT_TEST(dm_discover, instance_multiple_servers) {
                 ,
                 .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             });
 
     _anjay_mock_dm_expect_list_resources(
@@ -2463,6 +2541,10 @@ static void test_discover_object(anjay_t *anjay, avs_net_socket_t *mocksock) {
                 ,
                 .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             });
 
     const anjay_mock_dm_res_entry_t *resources[] = {
@@ -2514,6 +2596,112 @@ AVS_UNIT_TEST(dm_discover, object) {
     DM_TEST_FINISH;
 }
 
+#ifdef ANJAY_WITH_LWM2M12
+AVS_UNIT_TEST(dm_discover, object_with_depth_ignored) {
+    DM_TEST_INIT_WITH_SSIDS(2);
+    DM_TEST_REQUEST(mocksocks[0], CON, GET, ID(0xFA3E), PATH("42"),
+                    QUERY("depth=1"), ACCEPT(0x28), NO_PAYLOAD);
+    // This is LwM2M 1.0, so depth is ignored
+    test_discover_object(anjay, mocksocks[0]);
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(dm_discover, object_with_depth_ignored_lwm2m11) {
+    DM_TEST_INIT_WITH_SSIDS(2);
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    anjay_unlocked->servers->registration_info.lwm2m_version =
+            ANJAY_LWM2M_VERSION_1_1;
+    ANJAY_MUTEX_UNLOCK(anjay);
+    DM_TEST_REQUEST(mocksocks[0], CON, GET, ID(0xFA3E), PATH("42"),
+                    QUERY("depth=1"), ACCEPT(0x28), NO_PAYLOAD);
+    // This is LwM2M 1.1, so depth is ignored
+    test_discover_object(anjay, mocksocks[0]);
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(dm_discover, object_lwm2m12) {
+    DM_TEST_INIT_WITH_SSIDS(2);
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    anjay_unlocked->servers->registration_info.lwm2m_version =
+            ANJAY_LWM2M_VERSION_1_2;
+    ANJAY_MUTEX_UNLOCK(anjay);
+    DM_TEST_REQUEST(mocksocks[0], CON, GET, ID(0xFA3E), PATH("42"),
+                    ACCEPT(0x28), NO_PAYLOAD);
+    _anjay_mock_dm_expect_object_read_default_attrs(
+            anjay, &OBJ, 2, 0,
+            &(const anjay_dm_oi_attributes_t) {
+                .min_period = ANJAY_ATTRIB_INTEGER_NONE,
+                .max_period = 514,
+                .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
+                .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+#    ifdef ANJAY_WITH_CON_ATTR
+                ,
+                .con = ANJAY_DM_CON_ATTR_NONE
+#    endif // ANJAY_WITH_CON_ATTR
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+            });
+
+    const anjay_mock_dm_res_entry_t *resources[] = {
+        (const anjay_mock_dm_res_entry_t[]) {
+                { 0, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                { 1, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
+                { 2, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
+                { 3, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                { 4, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                { 5, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
+                { 6, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                ANJAY_MOCK_DM_RES_END },
+        (const anjay_mock_dm_res_entry_t[]) {
+                { 0, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
+                { 1, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
+                { 2, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
+                { 3, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
+                { 4, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                { 5, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                { 6, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                ANJAY_MOCK_DM_RES_END }
+    };
+    const size_t ITERATIONS = AVS_ARRAY_SIZE(resources);
+    anjay_iid_t iids[ITERATIONS + 1];
+    for (anjay_iid_t iid = 0; iid < ITERATIONS; ++iid) {
+        iids[iid] = iid;
+    }
+    iids[ITERATIONS] = ANJAY_ID_INVALID;
+    _anjay_mock_dm_expect_list_instances(anjay, &OBJ, 0, iids);
+    for (anjay_iid_t iid = 0; iid < ITERATIONS; ++iid) {
+        anjay_dm_oi_attributes_t instance_attrs = ANJAY_DM_OI_ATTRIBUTES_EMPTY;
+        instance_attrs.min_period = iid;
+        _anjay_mock_dm_expect_instance_read_default_attrs(anjay, &OBJ, iid, 2,
+                                                          0, &instance_attrs);
+        _anjay_mock_dm_expect_list_resources(anjay, &OBJ, iid, 0,
+                                             resources[iid]);
+        for (const anjay_mock_dm_res_entry_t *resource_entry = resources[iid];
+             resource_entry->rid != ANJAY_ID_INVALID;
+             ++resource_entry) {
+            if (resource_entry->presence == ANJAY_DM_RES_ABSENT) {
+                continue;
+            }
+            anjay_dm_r_attributes_t resource_attrs =
+                    ANJAY_DM_R_ATTRIBUTES_EMPTY;
+            resource_attrs.greater_than = (double) resource_entry->rid;
+            _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, iid,
+                                                      resource_entry->rid, 2, 0,
+                                                      &resource_attrs);
+        }
+    }
+
+    DM_TEST_EXPECT_RESPONSE(
+            mocksocks[0], ACK, CONTENT, ID(0xfa3e), CONTENT_FORMAT(LINK_FORMAT),
+            PAYLOAD("</42>;pmax=514,</42/0>;pmin=0,</42/0/0>;gt=0,</42/0/3>;"
+                    "gt=3,</42/0/4>;gt=4,</42/0/6>;gt=6,</42/1>;pmin=1,"
+                    "</42/1/4>;gt=4,</42/1/5>;gt=5,</42/1/6>;gt=6"));
+    expect_has_buffered_data_check(mocksocks[0], false);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+    DM_TEST_FINISH;
+}
+#endif // ANJAY_WITH_LWM2M12
+
 AVS_UNIT_TEST(dm_discover, object_multiple_servers) {
     DM_TEST_INIT_WITH_SSIDS(2, 3);
     DM_TEST_REQUEST(mocksocks[0], CON, GET, ID(0xFA3E), PATH("42"),
@@ -2529,6 +2717,10 @@ AVS_UNIT_TEST(dm_discover, object_multiple_servers) {
                 ,
                 .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
             });
 
     const anjay_mock_dm_res_entry_t *resources[] = {
@@ -2912,6 +3104,94 @@ AVS_UNIT_TEST(dm_delete, failure) {
     DM_TEST_FINISH;
 }
 
+#ifdef ANJAY_WITH_LWM2M12
+AVS_UNIT_TEST(dm_delete, resource_instance_success) {
+    DM_TEST_INIT;
+    DM_TEST_REQUEST(mocksocks[0], CON, DELETE, ID(0xFA3E),
+                    PATH("42", "21", "69", "37"));
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &OBJ, 0, (const anjay_iid_t[]) { 21, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &OBJ, 21, 0,
+            (const anjay_mock_dm_res_entry_t[]) { { 69, ANJAY_DM_RES_WM,
+                                                    ANJAY_DM_RES_PRESENT },
+                                                  ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_list_resource_instances(
+            anjay, &OBJ, 21, 69, 0,
+            (const anjay_riid_t[]) { 37, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_resource_instance_remove(anjay, &OBJ, 21, 69, 37, 0);
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, DELETED, ID(0xfa3e), NO_PAYLOAD);
+    expect_has_buffered_data_check(mocksocks[0], false);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(dm_delete, resource_instance_not_exists) {
+    DM_TEST_INIT;
+    DM_TEST_REQUEST(mocksocks[0], CON, DELETE, ID(0xFA3E),
+                    PATH("42", "21", "69", "37"));
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &OBJ, 0, (const anjay_iid_t[]) { 21, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &OBJ, 21, 0,
+            (const anjay_mock_dm_res_entry_t[]) { { 69, ANJAY_DM_RES_WM,
+                                                    ANJAY_DM_RES_PRESENT },
+                                                  ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_list_resource_instances(anjay, &OBJ, 21, 69, 0,
+                                                  (const anjay_riid_t[]) {
+                                                          ANJAY_ID_INVALID });
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, NOT_FOUND, ID(0xfa3e),
+                            NO_PAYLOAD);
+    expect_has_buffered_data_check(mocksocks[0], false);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(dm_delete, resource_instance_not_writable) {
+    DM_TEST_INIT;
+    DM_TEST_REQUEST(mocksocks[0], CON, DELETE, ID(0xFA3E),
+                    PATH("42", "21", "69", "37"));
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &OBJ, 0, (const anjay_iid_t[]) { 21, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &OBJ, 21, 0,
+            (const anjay_mock_dm_res_entry_t[]) { { 69, ANJAY_DM_RES_RM,
+                                                    ANJAY_DM_RES_PRESENT },
+                                                  ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_list_resource_instances(
+            anjay, &OBJ, 21, 69, 0,
+            (const anjay_riid_t[]) { 37, ANJAY_ID_INVALID });
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, METHOD_NOT_ALLOWED, ID(0xfa3e),
+                            NO_PAYLOAD);
+    expect_has_buffered_data_check(mocksocks[0], false);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(dm_delete, resource_instance_failure) {
+    DM_TEST_INIT;
+    DM_TEST_REQUEST(mocksocks[0], CON, DELETE, ID(0xFA3E),
+                    PATH("42", "21", "69", "37"));
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &OBJ, 0, (const anjay_iid_t[]) { 21, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &OBJ, 21, 0,
+            (const anjay_mock_dm_res_entry_t[]) { { 69, ANJAY_DM_RES_WM,
+                                                    ANJAY_DM_RES_PRESENT },
+                                                  ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_list_resource_instances(
+            anjay, &OBJ, 21, 69, 0,
+            (const anjay_riid_t[]) { 37, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_resource_instance_remove(anjay, &OBJ, 21, 69, 37,
+                                                   ANJAY_ERR_INTERNAL);
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, INTERNAL_SERVER_ERROR,
+                            ID(0xfa3e), NO_PAYLOAD);
+    expect_has_buffered_data_check(mocksocks[0], false);
+    AVS_UNIT_ASSERT_FAILED(anjay_serve(anjay, mocksocks[0]));
+    DM_TEST_FINISH;
+}
+#endif // ANJAY_WITH_LWM2M12
+
 #warning \
         "TODO: requires proper setup of server connection along with CoAP2 streaming context"
 #if 0
@@ -3230,6 +3510,10 @@ AVS_UNIT_TEST(dm_effective_attrs, fallback_to_server) {
                 .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
                 .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
                 .step = ANJAY_ATTRIB_DOUBLE_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .edge = ANJAY_DM_EDGE_ATTR_NONE
+#endif // ANJAY_WITH_LWM2M12
             });
     ANJAY_MUTEX_UNLOCK(anjay);
     DM_TEST_FINISH;
@@ -3276,6 +3560,10 @@ AVS_UNIT_TEST(dm_effective_attrs, for_instance) {
                 .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
                 .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
                 .step = ANJAY_ATTRIB_DOUBLE_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .edge = ANJAY_DM_EDGE_ATTR_NONE
+#endif // ANJAY_WITH_LWM2M12
             });
     ANJAY_MUTEX_UNLOCK(anjay);
     DM_TEST_FINISH;
@@ -3326,6 +3614,10 @@ AVS_UNIT_TEST(dm_effective_attrs, for_object) {
                 .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
                 .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
                 .step = ANJAY_ATTRIB_DOUBLE_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .edge = ANJAY_DM_EDGE_ATTR_NONE
+#endif // ANJAY_WITH_LWM2M12
             });
     ANJAY_MUTEX_UNLOCK(anjay);
     DM_TEST_FINISH;
@@ -3433,10 +3725,18 @@ AVS_UNIT_TEST(dm_effective_attrs, server_default) {
                     ,
                     .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                    ,
+                    .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
                 },
                 .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
                 .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
                 .step = ANJAY_ATTRIB_DOUBLE_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .edge = ANJAY_DM_EDGE_ATTR_NONE
+#endif // ANJAY_WITH_LWM2M12
             });
     ANJAY_MUTEX_UNLOCK(anjay);
     DM_TEST_FINISH;
@@ -3468,10 +3768,18 @@ AVS_UNIT_TEST(dm_effective_attrs, no_server) {
                     ,
                     .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                    ,
+                    .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
                 },
                 .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
                 .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
                 .step = ANJAY_ATTRIB_DOUBLE_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .edge = ANJAY_DM_EDGE_ATTR_NONE
+#endif // ANJAY_WITH_LWM2M12
             });
     ANJAY_MUTEX_UNLOCK(anjay);
     DM_TEST_FINISH;
@@ -3558,10 +3866,18 @@ AVS_UNIT_TEST(dm_effective_attrs, no_resources) {
                     ,
                     .con = ANJAY_DM_CON_ATTR_NONE
 #endif // ANJAY_WITH_CON_ATTR
+#ifdef ANJAY_WITH_LWM2M12
+                    ,
+                    .hqmax = ANJAY_ATTRIB_INTEGER_NONE
+#endif // ANJAY_WITH_LWM2M12
                 },
                 .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
                 .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
                 .step = ANJAY_ATTRIB_DOUBLE_NONE
+#ifdef ANJAY_WITH_LWM2M12
+                ,
+                .edge = ANJAY_DM_EDGE_ATTR_NONE
+#endif // ANJAY_WITH_LWM2M12
             });
     ANJAY_MUTEX_UNLOCK(anjay);
     DM_TEST_FINISH;

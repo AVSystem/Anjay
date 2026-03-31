@@ -89,7 +89,17 @@ static anjay_unlocked_output_ctx_t *spawn_cbor(avs_stream_t *stream,
     return _anjay_output_cbor_create(stream);
 }
 
-#endif // ANJAY_WITH_CBOR
+#    ifdef ANJAY_WITH_LWM2M12
+static anjay_unlocked_output_ctx_t *
+spawn_lwm2m_cbor(avs_stream_t *stream,
+                 const anjay_uri_path_t *uri,
+                 const size_t *items_count) {
+    (void) uri;
+    (void) items_count;
+    return _anjay_output_lwm2m_cbor_create(stream, uri);
+}
+#    endif // ANJAY_WITH_LWM2M12
+#endif     // ANJAY_WITH_CBOR
 
 typedef struct {
     uint16_t format;
@@ -124,7 +134,11 @@ static const dynamic_format_def_t SUPPORTED_HIERARCHICAL_FORMATS[] = {
 #ifdef ANJAY_WITH_CBOR
     { AVS_COAP_FORMAT_SENML_CBOR, _anjay_input_senml_cbor_create,
       spawn_senml_cbor },
-#endif // ANJAY_WITH_CBOR
+#    ifdef ANJAY_WITH_LWM2M12
+    { AVS_COAP_FORMAT_OMA_LWM2M_CBOR, _anjay_input_lwm2m_cbor_create,
+      spawn_lwm2m_cbor },
+#    endif // ANJAY_WITH_LWM2M12
+#endif     // ANJAY_WITH_CBOR
     { AVS_COAP_FORMAT_NONE, NULL, NULL }
 };
 
@@ -136,11 +150,20 @@ static const dynamic_format_def_t SUPPORTED_COMPOSITE_READ_FORMATS[] = {
 #    ifdef ANJAY_WITH_CBOR
     { AVS_COAP_FORMAT_SENML_CBOR, _anjay_input_senml_cbor_composite_read_create,
       spawn_senml_cbor },
-#    endif // ANJAY_WITH_CBOR
+#        ifdef ANJAY_WITH_LWM2M12
+    { AVS_COAP_FORMAT_SENML_ETCH_CBOR,
+      _anjay_input_senml_cbor_composite_read_create, NULL },
+    { AVS_COAP_FORMAT_OMA_LWM2M_CBOR, NULL, spawn_lwm2m_cbor },
+#        endif // ANJAY_WITH_LWM2M12
+#    endif     // ANJAY_WITH_CBOR
 #    ifdef ANJAY_WITH_SENML_JSON
     { AVS_COAP_FORMAT_SENML_JSON, _anjay_input_json_composite_read_create,
       spawn_senml_json },
-#    endif // ANJAY_WITH_SENML_JSON
+#        ifdef ANJAY_WITH_LWM2M12
+    { AVS_COAP_FORMAT_SENML_ETCH_JSON, _anjay_input_json_composite_read_create,
+      NULL },
+#        endif // ANJAY_WITH_LWM2M12
+#    endif     // ANJAY_WITH_SENML_JSON
     { AVS_COAP_FORMAT_NONE, NULL, NULL }
 };
 #endif // defined(ANJAY_WITH_LWM2M11) &&
@@ -150,10 +173,17 @@ static const dynamic_format_def_t SUPPORTED_COMPOSITE_READ_FORMATS[] = {
 static const dynamic_format_def_t SUPPORTED_COMPOSITE_WRITE_FORMATS[] = {
 #    ifdef ANJAY_WITH_CBOR
     { AVS_COAP_FORMAT_SENML_CBOR, _anjay_input_senml_cbor_create, NULL },
-#    endif // ANJAY_WITH_CBOR
+#        ifdef ANJAY_WITH_LWM2M12
+    { AVS_COAP_FORMAT_SENML_ETCH_CBOR, _anjay_input_senml_cbor_create, NULL },
+    { AVS_COAP_FORMAT_OMA_LWM2M_CBOR, _anjay_input_lwm2m_cbor_create, NULL },
+#        endif // ANJAY_WITH_LWM2M12
+#    endif     // ANJAY_WITH_CBOR
 #    ifdef ANJAY_WITH_SENML_JSON
     { AVS_COAP_FORMAT_SENML_JSON, _anjay_input_json_create, NULL },
-#    endif // ANJAY_WITH_SENML_JSON
+#        ifdef ANJAY_WITH_LWM2M12
+    { AVS_COAP_FORMAT_SENML_ETCH_JSON, _anjay_input_json_create, NULL },
+#        endif // ANJAY_WITH_LWM2M12
+#    endif     // ANJAY_WITH_SENML_JSON
     { AVS_COAP_FORMAT_NONE, NULL, NULL }
 };
 #endif // ANJAY_WITH_LWM2M11
@@ -163,7 +193,10 @@ static const dynamic_format_def_t SUPPORTED_SEND_FORMATS[] = {
 #    ifdef ANJAY_WITH_CBOR
     { AVS_COAP_FORMAT_SENML_CBOR, _anjay_input_senml_cbor_composite_read_create,
       spawn_senml_cbor },
-#    endif // ANJAY_WITH_CBOR
+#        ifdef ANJAY_WITH_LWM2M12
+    { AVS_COAP_FORMAT_OMA_LWM2M_CBOR, NULL, spawn_lwm2m_cbor },
+#        endif // ANJAY_WITH_LWM2M12
+#    endif     // ANJAY_WITH_CBOR
 #    ifdef ANJAY_WITH_SENML_JSON
     { AVS_COAP_FORMAT_SENML_JSON, _anjay_input_json_composite_read_create,
       spawn_senml_json },
@@ -210,6 +243,9 @@ static int spawn_output_ctx(anjay_unlocked_output_ctx_t **out_ctx,
 uint16_t _anjay_default_hierarchical_format(anjay_lwm2m_version_t version) {
 #ifdef ANJAY_WITH_LWM2M11
     switch (version) {
+#    ifdef ANJAY_WITH_LWM2M12
+    case ANJAY_LWM2M_VERSION_1_2:
+#    endif // ANJAY_WITH_LWM2M12
     case ANJAY_LWM2M_VERSION_1_1:
 #    if defined(ANJAY_WITH_CBOR)
         return AVS_COAP_FORMAT_SENML_CBOR;

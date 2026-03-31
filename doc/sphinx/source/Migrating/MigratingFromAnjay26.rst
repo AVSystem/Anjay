@@ -22,7 +22,6 @@ Additionally, ``avs_commons`` cryptography support libraries have undergone a
 significant redesign and there are some changes which might prove to be breaking
 if old APIs have been used directly.
 
-
 Additional slight updates might be necessary if you are using any alternative
 build system instead of CMake to compile your project, of if you maintain your
 own implementation of the socket layer.
@@ -154,6 +153,21 @@ version. Please explicitly set ``dtls_version`` to
 Please note that Mbed TLS 3.0 has dropped support for TLS 1.1 and earlier, so
 this change will not affect behavior with that library.
 
+
+Addition of resource_instance_remove handler
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+LwM2M TS 1.2 introduced possibility to delete a Resource Instance, so
+one additional data model handler had to be added.
+
+New ``resource_instance_remove`` handler (and its associated
+``anjay_dm_resource_instance_remove_t`` function type) has been introduced. It
+is analogous to the ``instance_remove`` handler; its job is to remove a specific
+Resource Instance from a multiple-instance Resource.
+
+Its implementation is required in objects that include at least one writeable
+multiple-instance Resource, if the client application aims for compliance with
+LwM2M 1.2.
 
 Changes in avs_coap
 -------------------

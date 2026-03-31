@@ -225,6 +225,51 @@ as it only needs to clear the resource:
     }
 
 
+Implementing the Resource Instance Remove handler
+-------------------------------------------------
+
+LwM2M 1.2 introduced the possibility for the Delete operation to be called on
+Resource Instances. If compatibility with the 1.2 standard is aimed for, the
+``resource_instance_remove`` handler needs to be implemented.
+
+This handler is actually very similar to the Resource Reset in implementation.
+We just need to make sure that only a single Resource Instance is removed,
+rather than all of them:
+
+.. snippet-source:: examples/tutorial/AT-CustomObjects/multi-instance-resources-dynamic/src/test_object.c
+
+    static int
+    test_resource_instance_remove(anjay_t *anjay,
+                                  const anjay_dm_object_def_t *const *obj_ptr,
+                                  anjay_iid_t iid,
+                                  anjay_rid_t rid,
+                                  anjay_riid_t riid) {
+        (void) anjay; // unused
+
+        test_instance_t *current_instance =
+                (test_instance_t *) get_instance(get_test_object(obj_ptr), iid);
+
+        // this handler can only be called for Multiple-Instance Resources
+        assert(rid == 1);
+
+        // find the Resource Instance entry
+        AVS_LIST(test_value_instance_t) *it;
+        AVS_LIST_FOREACH_PTR(it, &current_instance->values) {
+            if ((*it)->index == riid) {
+                break;
+            }
+        }
+
+        // this handler can only be called for existing Resource Instances
+        assert(it && *it && (*it)->index == riid);
+
+        // free memory associated with the instance
+        AVS_LIST_DELETE(it);
+        current_instance->has_values = true;
+        return 0;
+    }
+
+
 Handling Multiple Instance Resources in Write operation
 -------------------------------------------------------
 

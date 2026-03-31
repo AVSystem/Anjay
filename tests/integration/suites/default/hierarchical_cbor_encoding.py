@@ -8,8 +8,8 @@
 # See the attached LICENSE file for details.
 
 import cbor2
-from framework_tools.utils.lwm2m_test import *
-from framework_tools.utils.test_utils import *
+from framework.lwm2m_test import *
+from framework.test_utils import *
 
 IID = 1
 
@@ -71,6 +71,14 @@ class SenmlCborEncoding:
 
     def value_extractor(self, res, element_name, label):
         return get_element(res, element_name, label)
+
+
+class Lwm2mCborEncoding:
+    format = coap.ContentFormat.APPLICATION_LWM2M_CBOR
+
+    def value_extractor(self, res, element_name, label):
+        res = flatten_dict(res)
+        return res[element_name]
 
 
 class BaseReadInteger:
@@ -386,3 +394,63 @@ class SenmlCborEncodingReadCompositeSameResources(
         BaseReadCompositeSameResources.TestMixin, SenmlCborEncoding):
     pass
 
+# LwM2M CBOR
+
+class Lwm2mCborEncodingReadInteger(
+        BaseReadInteger.TestMixin, Lwm2mCborEncoding):
+    pass
+
+
+class Lwm2mCborEncodingReadUnsignedInteger(
+        BaseReadUnsignedInteger.TestMixin, Lwm2mCborEncoding):
+    pass
+
+
+class Lwm2mCborEncodingReadFloat(BaseReadFloat.TestMixin, Lwm2mCborEncoding):
+    pass
+
+
+class Lwm2mCborEncodingReadDouble(BaseReadDouble.TestMixin, Lwm2mCborEncoding):
+    pass
+
+
+class Lwm2mCborEncodingReadBool(BaseReadBool.TestMixin, Lwm2mCborEncoding):
+    pass
+
+
+class Lwm2mCborEncodingReadObjectLink(
+        BaseReadObjectLink.TestMixin, Lwm2mCborEncoding):
+    pass
+
+
+class Lwm2mCborEncodingReadOpaque(BaseReadOpaque.TestMixin, Lwm2mCborEncoding):
+    pass
+
+
+class Lwm2mCborEncodingReadString(BaseReadString.TestMixin, Lwm2mCborEncoding):
+    pass
+
+
+class Lwm2mCborEncodingReadSingleInstance(
+        BaseReadSingleInstance.TestMixin, Lwm2mCborEncoding):
+    pass
+
+
+class Lwm2mCborEncodingReadSingleResource(
+        BaseReadSingleResource.TestMixin, Lwm2mCborEncoding):
+    pass
+
+
+class Lwm2mCborEncodingReadMultipleResource(
+        BaseReadMultipleResource.TestMixin, Lwm2mCborEncoding):
+    pass
+
+
+class Lwm2mCborEncodingReadComposite(
+        BaseReadComposite.TestMixin, Lwm2mCborEncoding):
+    pass
+
+
+class Lwm2mCborEncodingReadCompositeSameResources(
+        BaseReadCompositeSameResources.TestMixin, Lwm2mCborEncoding):
+    pass

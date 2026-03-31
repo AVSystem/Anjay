@@ -1,13 +1,30 @@
 # Changelog
 
+## 3.13.0 (Mar 31st, 2026)
+
+### Features
+- Introduced experimental SSL Error API under `WITH_SSL_ERROR_API` for MbedTLS
+  and custom TLS backends
+- Implemented FW Update Object v1.1 Resources.
+- Introduced support for LwM2M 1.2 features:
+  - LwM2M CBOR format,
+  - Bootstrap Pack operation,
+  - Observation Attributes (carried in Observe, not in Write Attributes)
+  - `hqmax` and `edge` attributes (`con` attribute is supported separatley from
+    LwM2M 1.2, enabled with `ANJAY_WITH_CON_ATTR`),
+  - Discover `depth` parameter,
+  - SenML-ETCH CBOR & JSON formats for composite operations,
+  - deleting Resource Instances.
+
+
 ## 3.12.0 (January 30th, 2026)
 
 ### BREAKING CHANGES
 
 - PEP 668 was adopted. Using Python based tools requires a virtual environment
   and `devconfig` script ensures it's activated.
-- Most tools from `tests/integration/framework` were extracted 
-  into `tools/test-framework-tools` directory which is being installed 
+- Most tools from `tests/integration/framework` were extracted
+  into `tools/test-framework-tools` directory which is being installed
   in venv by `devconfig`
 
 ### Bugfixes
@@ -75,13 +92,13 @@
 
 ### Improvements
 
-- Unified script for generating packages in integration tests, now it can also 
+- Unified script for generating packages in integration tests, now it can also
   be used to generate packages for the Software Management object.
 - The format of the metadata for packages used in integration tests and the
   demo has been revised to be more unambiguous and unified.
 - Added `confirmable_notification_status_cb` handler that is called if
   acknowledgement for confirmable notification is received from the Server or
-  some error has occurred.  
+  some error has occurred.
 
 ## 3.9.0 (February 28th, 2025)
 

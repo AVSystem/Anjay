@@ -153,6 +153,7 @@ fi
 # Not placing it in dockerfile to allow easier updates and ci runs
 # without rebuilding the images
 python3 -m pip install -e $SCRIPT_DIR/tools/test-framework-tools/tools
+python3 -m pip install -e $SCRIPT_DIR/tests/integration/framework
 
 rm -f CMakeCache.txt
 rm -rf CMakeFiles
@@ -160,6 +161,7 @@ ${CMAKE_COMMAND} \
     -D WITH_TEST=ON \
     -D WITH_LICENSE_TEST=ON \
     -D WITH_DEMO=ON \
+    -D WITH_DOCS=ON \
     -D WITH_EXTRA_WARNINGS=ON \
     -D WITH_CON_ATTR=ON \
     -D WITH_HTTP_DOWNLOAD=ON \

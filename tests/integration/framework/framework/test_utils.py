@@ -18,6 +18,7 @@ import socket
 from typing import Optional
 
 from framework_tools.lwm2m import coap
+from framework_tools.lwm2m.objlink import Objlink
 
 if sys.version_info[0] == 3 and sys.version_info[1] < 7:
     # based on https://stackoverflow.com/a/18348004/2339636
@@ -27,15 +28,6 @@ if sys.version_info[0] == 3 and sys.version_info[1] < 7:
         return cls
 else:
     namedtuple = collections.namedtuple
-
-
-class Objlink:
-    def __init__(self, ObjID, ObjInstID):
-        self.ObjID = ObjID
-        self.ObjInstID = ObjInstID
-
-    def __str__(self):
-        return '%d:%d' % (self.ObjID, self.ObjInstID)
 
 
 class SequentialMsgIdGenerator:

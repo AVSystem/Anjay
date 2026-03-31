@@ -9,7 +9,7 @@
 
 import time
 
-from framework_tools.utils.lwm2m_test import *
+from framework.lwm2m_test import *
 
 
 # Setting up the CoAP stream for communication with a specific server is done

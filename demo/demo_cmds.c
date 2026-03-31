@@ -911,6 +911,9 @@ static void cmd_set_attrs(anjay_demo_t *demo, const char *args_string) {
     int path_len = 0;
     const char *args = NULL, *pmin = NULL, *pmax = NULL, *lt = NULL, *gt = NULL,
                *st = NULL, *epmin = NULL, *epmax = NULL;
+#    ifdef ANJAY_WITH_LWM2M12
+    const char *hqmax = NULL;
+#    endif // ANJAY_WITH_LWM2M12
     anjay_dm_r_attributes_t attrs;
     int ssid;
 
@@ -933,6 +936,9 @@ static void cmd_set_attrs(anjay_demo_t *demo, const char *args_string) {
     lt = strstr(args, "lt=");
     gt = strstr(args, "gt=");
     st = strstr(args, "st=");
+#    ifdef ANJAY_WITH_LWM2M12
+    hqmax = strstr(args, "hqmax=");
+#    endif // ANJAY_WITH_LWM2M12
     if (pmin) {
         (void) sscanf(pmin, "pmin=%" PRId32, &attrs.common.min_period);
     }
@@ -954,6 +960,11 @@ static void cmd_set_attrs(anjay_demo_t *demo, const char *args_string) {
     if (st) {
         (void) sscanf(st, "st=%lf", &attrs.step);
     }
+#    ifdef ANJAY_WITH_LWM2M12
+    if (hqmax) {
+        (void) sscanf(hqmax, "hqmax=%" PRId32, &attrs.common.hqmax);
+    }
+#    endif // ANJAY_WITH_LWM2M12
 
     int oid, iid, rid;
 #    ifdef ANJAY_WITH_LWM2M11
@@ -1213,7 +1224,19 @@ static void cmd_fw_update_reconnect(anjay_demo_t *demo,
     anjay_fw_update_pull_reconnect(demo->anjay);
 }
 
-#endif // ANJAY_WITH_MODULE_FW_UPDATE
+#    if defined(ANJAY_WITH_LWM2M11) \
+            && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
+static void cmd_get_fw_update_deadline(anjay_demo_t *demo,
+                                       const char *args_string) {
+    (void) args_string;
+    int64_t update_deadline_timestamp = 0;
+    avs_time_real_to_scalar(&update_deadline_timestamp, AVS_TIME_S,
+                            anjay_fw_update_get_deadline(demo->anjay));
+    printf("FW_UPDATE_DEADLINE==%" PRId64 "\n", update_deadline_timestamp);
+}
+#    endif /* defined(ANJAY_WITH_LWM2M11) && \
+              defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
+#endif     // ANJAY_WITH_MODULE_FW_UPDATE
 
 static void cmd_ongoing_registration_exists(anjay_demo_t *demo,
                                             const char *args_string) {
@@ -1743,7 +1766,11 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 cmd_download,
                 "Download a file from given URL to target_file."),
 #ifdef ANJAY_WITH_ATTR_STORAGE
+#    ifdef ANJAY_WITH_LWM2M12
+#        define SUPPORTED_ATTRS "pmin,pmax,lt,gt,st,epmin,epmax,hqmax"
+#    else // ANJAY_WITH_LWM2M12
 #        define SUPPORTED_ATTRS "pmin,pmax,lt,gt,st,epmin,epmax"
+#    endif // ANJAY_WITH_LWM2M12
     CMD_HANDLER("set-attrs", "", cmd_set_attrs, "Syntax [/a [/b [/c [/d] ] ] ] "
                 "ssid [" SUPPORTED_ATTRS "] - e.g. /a/b 1 pmin=3,pmax=4"),
 #    undef SUPPORTED_ATTRS
@@ -1789,6 +1816,10 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 "Reconnects any ongoing PULL-mode downloads in the Firmware "
                 "Update module and if PULL-mode downloads are suspended, "
                 "resumes normal operation"),
+#if defined(ANJAY_WITH_LWM2M11) && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES)
+    CMD_HANDLER("get-fw-update-deadline", "", cmd_get_fw_update_deadline,
+                "Gets the Firmware Update deadline"),
+#endif /* defined(ANJAY_WITH_LWM2M11) && defined(ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES) */
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
     CMD_HANDLER("ongoing-registration-exists", "",
                 cmd_ongoing_registration_exists,

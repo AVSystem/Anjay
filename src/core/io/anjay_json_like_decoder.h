@@ -69,6 +69,22 @@ _anjay_json_like_decoder_state(const anjay_json_like_decoder_t *ctx);
 int _anjay_json_like_decoder_current_value_type(
         anjay_json_like_decoder_t *ctx, anjay_json_like_value_type_t *out_type);
 
+#ifdef ANJAY_WITH_LWM2M12
+/**
+ * Consumes a simple null value.
+ *
+ * NOTE: May only be called when the next value type is @ref
+ * ANJAY_JSON_LIKE_VALUE_NULL, otherwise an error will be reported.
+ *
+ * @param[in]   ctx         Decoder context to operate on.
+ *
+ * @returns 0 on success, negative value if an error occurred (including the
+ * case where the decoder is not in @ref ANJAY_JSON_LIKE_DECODER_STATE_OK
+ * state).
+ */
+int _anjay_json_like_decoder_null(anjay_json_like_decoder_t *ctx);
+#endif // ANJAY_WITH_LWM2M12
+
 /**
  * Consumes a simple boolean value.
  *

@@ -289,6 +289,10 @@ const char *_anjay_lwm2m_version_as_string(anjay_lwm2m_version_t version) {
         return "1.0";
     case ANJAY_LWM2M_VERSION_1_1:
         return "1.1";
+#    ifdef ANJAY_WITH_LWM2M12
+    case ANJAY_LWM2M_VERSION_1_2:
+        return "1.2";
+#    endif // ANJAY_WITH_LWM2M12
     }
     AVS_UNREACHABLE("The switch statement above is supposed to be exhaustive");
     return NULL;

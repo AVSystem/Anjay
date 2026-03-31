@@ -7,7 +7,7 @@
 # Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
-from framework_tools.utils.lwm2m_test import *
+from framework.lwm2m_test import *
 
 from .access_control import AccessMask
 from . import lwm2m_gateway as gw
@@ -356,3 +356,186 @@ class ObserveResourceInstance(ObserveWithGatewayBase,
         self.assertMsgEqual(Lwm2mNotify(token=observe_pkt.token, content=encoded), notify_pkt)
 
 
+from .observe_attributes import Hqmax
+
+class ObservePositiveHqmax(ObserveWithGatewayBase,
+                           Hqmax.Test):
+    def runTest(self):
+        SKIP_NOTIFICATIONS = 3  # number of Notify messages that should be skipped
+        HQMAX = 2
+
+        self.write_attributes_path(self.serv, self.button_input_counter_path, query=['hqmax=%d' % HQMAX])
+        observe = self.observe_path(self.serv, self.button_input_counter_path)
+        self.assertEqual(int(observe.content.decode('utf-8')), 0)
+
+        # # generate enough notifications to cause dropping the oldest ones
+        self.clickButtonNTimesInOfflineMode(self.servers, HQMAX + SKIP_NOTIFICATIONS)
+
+        seen_values = []
+
+        # exactly HQMAX notifications should be sent
+        for _ in range(HQMAX):
+            pkt = self.serv.recv(timeout_s=0.5)
+            self.assertMsgEqual(Lwm2mContent(msg_id=ANY,
+                                             type=coap.Type.NON_CONFIRMABLE,
+                                             token=observe.token),
+                                pkt)
+            seen_values.append(pkt.content)
+
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(2)
+
+        # make sure the oldest values were dropped
+        for idx in range(SKIP_NOTIFICATIONS + 1):
+            self.assertNotIn(str(idx).encode('utf-8'), seen_values)
+
+
+class ObserveZeroHqmax(ObserveWithGatewayBase,
+                       Hqmax.Test):
+    def runTest(self):
+        HQMAX = 0
+        SKIP_NOTIFICATIONS = 3  # number of Notify messages that should be skipped
+
+        self.write_attributes_path(self.serv, self.button_input_counter_path, query=['hqmax=%d' % HQMAX])
+
+        self.observe_path(self.serv, self.button_input_counter_path)
+
+        # # generate enough notifications to cause dropping the oldest ones
+        self.clickButtonNTimesInOfflineMode(self.servers, HQMAX + SKIP_NOTIFICATIONS)
+
+        # no notifications should be sent
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(2)
+
+
+class ObserveHqmaxAndMultipleServers(ObserveWithGatewayBase,
+                                     Hqmax.Test):
+    def setUp(self):
+        super().setUp(servers=2, 
+                      extra_cmdline_args=['--access-entry', '/%s/0,0,%s' % (OID.Lwm2mGateway, AccessMask.READ),
+                                          '--access-entry', '/%s/1,0,%s' % (OID.Lwm2mGateway, AccessMask.READ)])
+
+    def runTest(self):
+        hqmaxes = [2, 3]  # number of Notify messages for each server that should be sent
+        total_notifications = sum(hqmaxes)  # number of total Notify messages that should be sent
+        skips = [total_notifications - hqmax for hqmax in
+                 hqmaxes]  # number of Notify messages for each server that should be skipped
+        self.write_attributes_path(self.servers[0], path=self.button_input_counter_path,
+                              query=['hqmax=%d' % hqmaxes[0]])
+        self.write_attributes_path(self.servers[1], path=self.button_input_counter_path,
+                              query=['hqmax=%d' % hqmaxes[1]])
+
+        observes = [
+            self.observe_path(self.servers[0], path=self.button_input_counter_path),
+            self.observe_path(self.servers[1], path=self.button_input_counter_path),
+        ]
+        self.assertEqual(int(observes[0].content.decode('utf-8')), 0)
+        self.assertEqual(int(observes[1].content.decode('utf-8')), 0)
+
+        # # generate enough notifications to cause dropping the oldest ones
+        self.clickButtonNTimesInOfflineMode(self.servers, total_notifications)
+
+        seen_values = []
+
+        remaining_notifications = total_notifications
+        for observe, serv, hqmax in zip(observes, self.servers, hqmaxes):
+            try:
+                for _ in range(hqmax):
+                    pkt = serv.recv(timeout_s=0.5)
+                    self.assertMsgEqual(Lwm2mContent(msg_id=ANY,
+                                                     type=coap.Type.NON_CONFIRMABLE,
+                                                     token=observe.token),
+                                        pkt)
+                    remaining_notifications -= 1
+                    seen_values.append(pkt.content)
+            except socket.timeout:
+                pass
+
+        self.assertEqual(remaining_notifications, 0)
+
+        for serv in self.servers:
+            with self.assertRaises(socket.timeout):
+                serv.recv(2)
+
+        # make sure the oldest values were dropped
+        for _, skip in zip(observes, skips):
+            for idx in range(skip):
+                self.assertNotIn(str(idx).encode('utf-8'), seen_values)
+
+
+class ObserveHqmaxGreaterThanQueueSize(ObserveWithGatewayBase,
+                                       Hqmax.Test):
+    def runTest(self):
+        HQMAX = 8
+        SKIP_NOTIFICATIONS = HQMAX - self.QUEUE_SIZE  # number of Notify messages that should be skipped
+
+        self.write_attributes_path(self.serv, path=self.button_input_counter_path,
+                                   query=['hqmax=%d' % HQMAX])
+        observe = self.observe_path(self.serv, path=self.button_input_counter_path)
+        self.assertEqual(int(observe.content.decode('utf-8')), 0)
+
+        # # generate enough notifications to cause dropping the oldest ones
+        self.clickButtonNTimesInOfflineMode(self.servers, HQMAX)
+
+        seen_values = []
+
+        # exactly QUEUE_SIZE notifications should be sent
+        for _ in range(self.QUEUE_SIZE):
+            pkt = self.serv.recv(timeout_s=0.5)
+            self.assertMsgEqual(Lwm2mContent(msg_id=ANY,
+                                             type=coap.Type.NON_CONFIRMABLE,
+                                             token=observe.token),
+                                pkt)
+            seen_values.append(pkt.content)
+
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(2)
+
+        # make sure the oldest values were dropped
+        for idx in range(SKIP_NOTIFICATIONS + 1):
+            self.assertNotIn(str(idx).encode('utf-8'), seen_values)
+
+
+class ObserveEdgeRisingTest(ObserveWithGatewayBase,
+                            test_suite.Lwm2mDtlsSingleServerTest,
+                            test_suite.Lwm2mDmOperations):
+    def runTest(self):
+        # Observe with edge = 1 (notify on rising edge)
+        self.write_attributes_path(self.serv, path=self.button_input_state_path,
+                                   query=['edge=1'])
+        observe = self.observe_path(self.serv, path=self.button_input_state_path)
+
+        # Change boolean resource value to 1
+        self.communicate("gw_press_button 0")
+        # Expect a notification on transition 0 -> 1
+        self.assertMsgEqual(Lwm2mNotify(token=observe.token), self.serv.recv(timeout_s=2))
+
+        # Change boolean resource value to 0
+        self.communicate("gw_release_button 0")
+        # No notification should be sent on transition 1 -> 0
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(2)
+
+
+class ObserveEdgeFallingTest(ObserveWithGatewayBase,
+                             test_suite.Lwm2mDtlsSingleServerTest,
+                             test_suite.Lwm2mDmOperations):
+    def runTest(self):
+        # Set initial boolean resource value to 1
+        self.communicate("gw_press_button 0")
+
+        # Observe with edge = 0 (notify on falling edge)
+        self.write_attributes_path(self.serv, path=self.button_input_state_path,
+                                   query=['edge=0'])
+        observe = self.observe_path(self.serv, path=self.button_input_state_path)
+
+        # Change boolean resource value to 0
+        self.communicate("gw_release_button 0")
+        # Expect a notification on transition 1 -> 0
+        self.assertMsgEqual(Lwm2mNotify(token=observe.token), self.serv.recv(timeout_s=2))
+
+        # Change boolean resource value to 1
+        self.communicate("gw_press_button 0")
+        # No notification should be sent on transition 0 -> 1
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(2)

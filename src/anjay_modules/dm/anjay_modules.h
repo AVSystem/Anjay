@@ -241,6 +241,14 @@ typedef int anjay_unlocked_dm_resource_instance_write_attrs_t(
         anjay_ssid_t ssid,
         const anjay_dm_r_attributes_t *attrs);
 #endif // ANJAY_WITH_LWM2M11
+#ifdef ANJAY_WITH_LWM2M12
+typedef int anjay_unlocked_dm_resource_instance_remove_t(
+        anjay_unlocked_t *anjay,
+        const anjay_dm_installed_object_t obj,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid);
+#endif // ANJAY_WITH_LWM2M12
 typedef int
 anjay_unlocked_dm_transaction_begin_t(anjay_unlocked_t *anjay,
                                       const anjay_dm_installed_object_t obj);
@@ -284,6 +292,9 @@ typedef struct {
     anjay_unlocked_dm_resource_instance_write_attrs_t
             *resource_instance_write_attrs;
 #    endif // ANJAY_WITH_LWM2M11
+#    ifdef ANJAY_WITH_LWM2M12
+    anjay_unlocked_dm_resource_instance_remove_t *resource_instance_remove;
+#    endif // ANJAY_WITH_LWM2M12
 } anjay_unlocked_dm_handlers_t;
 #endif // ANJAY_WITH_THREAD_SAFETY
 

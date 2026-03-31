@@ -564,6 +564,10 @@ mode, but a number of functionalities will not work:
     LwM2M 1.1 only
 * TLS alert codes are not forwarded to calling code, and LwM2M 1.1 exposes them
   through the data model.
+* Support for the SSL error API is not implemented. This API requires
+  the ``connect()`` function to return ``avs_error_t`` objects created using
+  ``avs_net_ssl_lib_error()`` or ``avs_net_ssl_alert()`` defined in
+  ``deps/avs_commons/include_public/avsystem/commons/avs_socket.h``.
 * Socket file descriptor is used directly instead of wrapping ``avs_net`` APIs,
   and the ``decorate`` function is not implemented - the secure SMS mode will
   thus not work in versions that include the SMS commercial feature.

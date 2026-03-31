@@ -66,7 +66,8 @@ Table of contents:
 
 ## Supported features
 
-This version includes full support for OMA LwM2M TS 1.1 features. Some features, such as support for EST, SMS binding or HSM's are [available commercially](#commercial-support).
+This version includes full support for OMA LwM2M TS 1.1 and most of LwM2M 1.2 features.
+Some features, such as support for EST, SMS binding or HSM's are [available commercially](#commercial-support).
 
 - LwM2M Bootstrap Interface:
     - Request

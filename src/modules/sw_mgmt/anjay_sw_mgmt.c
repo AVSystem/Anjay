@@ -706,8 +706,9 @@ handle_downloader_error(anjay_download_status_t status) {
                 update_result = ANJAY_SW_MGMT_UPDATE_RESULT_OUT_OF_MEMORY;
                 break;
             }
-        } else if (status.details.error.category
-                   == AVS_NET_SSL_ALERT_CATEGORY) {
+        } else if (status.details.error.category == AVS_NET_SSL_ALERT_CATEGORY
+                   || status.details.error.category
+                              == AVS_NET_SSL_LIB_ERROR_CATEGORY) {
             update_result = ANJAY_SW_MGMT_UPDATE_RESULT_CONNECTION_LOST;
         }
         break;

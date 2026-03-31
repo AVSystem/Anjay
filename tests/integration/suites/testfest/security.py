@@ -9,7 +9,7 @@
 
 import binascii
 
-from framework_tools.utils.lwm2m_test import *
+from framework.lwm2m_test import *
 
 from .dm.utils import DataModel
 

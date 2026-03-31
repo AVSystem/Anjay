@@ -85,6 +85,11 @@ static inline void _anjay_log_feature_list(void) {
 #else // ANJAY_WITH_BOOTSTRAP
     _anjay_log(anjay, TRACE, "ANJAY_WITH_BOOTSTRAP = OFF");
 #endif // ANJAY_WITH_BOOTSTRAP
+#ifdef ANJAY_WITH_BOOTSTRAP_PACK
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_BOOTSTRAP_PACK = ON");
+#else // ANJAY_WITH_BOOTSTRAP_PACK
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_BOOTSTRAP_PACK = OFF");
+#endif // ANJAY_WITH_BOOTSTRAP_PACK
 #ifdef ANJAY_WITH_CBOR
     _anjay_log(anjay, TRACE, "ANJAY_WITH_CBOR = ON");
 #else // ANJAY_WITH_CBOR
@@ -165,6 +170,11 @@ static inline void _anjay_log_feature_list(void) {
 #else // ANJAY_WITH_LWM2M11
     _anjay_log(anjay, TRACE, "ANJAY_WITH_LWM2M11 = OFF");
 #endif // ANJAY_WITH_LWM2M11
+#ifdef ANJAY_WITH_LWM2M12
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_LWM2M12 = ON");
+#else // ANJAY_WITH_LWM2M12
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_LWM2M12 = OFF");
+#endif // ANJAY_WITH_LWM2M12
 #ifdef ANJAY_WITH_LWM2M_GATEWAY
     _anjay_log(anjay, TRACE, "ANJAY_WITH_LWM2M_GATEWAY = ON");
 #else // ANJAY_WITH_LWM2M_GATEWAY
@@ -210,6 +220,11 @@ static inline void _anjay_log_feature_list(void) {
 #else // ANJAY_WITH_MODULE_FW_UPDATE
     _anjay_log(anjay, TRACE, "ANJAY_WITH_MODULE_FW_UPDATE = OFF");
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES = ON");
+#else // ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES = OFF");
+#endif // ANJAY_WITH_MODULE_FW_UPDATE_V11_RESOURCES
 #ifdef ANJAY_WITH_MODULE_IPSO_OBJECTS
     _anjay_log(anjay, TRACE, "ANJAY_WITH_MODULE_IPSO_OBJECTS = ON");
 #else // ANJAY_WITH_MODULE_IPSO_OBJECTS
@@ -260,6 +275,11 @@ static inline void _anjay_log_feature_list(void) {
 #else // ANJAY_WITH_NIDD
     _anjay_log(anjay, TRACE, "ANJAY_WITH_NIDD = OFF");
 #endif // ANJAY_WITH_NIDD
+#ifdef ANJAY_WITH_OBSERVATION_ATTRIBUTES
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_OBSERVATION_ATTRIBUTES = ON");
+#else // ANJAY_WITH_OBSERVATION_ATTRIBUTES
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_OBSERVATION_ATTRIBUTES = OFF");
+#endif // ANJAY_WITH_OBSERVATION_ATTRIBUTES
 #ifdef ANJAY_WITH_OBSERVATION_STATUS
     _anjay_log(anjay, TRACE, "ANJAY_WITH_OBSERVATION_STATUS = ON");
 #else // ANJAY_WITH_OBSERVATION_STATUS
@@ -295,6 +315,11 @@ static inline void _anjay_log_feature_list(void) {
 #else // ANJAY_WITH_SMS_MULTIPART
     _anjay_log(anjay, TRACE, "ANJAY_WITH_SMS_MULTIPART = OFF");
 #endif // ANJAY_WITH_SMS_MULTIPART
+#ifdef ANJAY_WITH_SSL_ERROR_API
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_SSL_ERROR_API = ON");
+#else // ANJAY_WITH_SSL_ERROR_API
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_SSL_ERROR_API = OFF");
+#endif // ANJAY_WITH_SSL_ERROR_API
 #ifdef ANJAY_WITH_THREAD_SAFETY
     _anjay_log(anjay, TRACE, "ANJAY_WITH_THREAD_SAFETY = ON");
 #else // ANJAY_WITH_THREAD_SAFETY

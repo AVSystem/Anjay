@@ -467,6 +467,28 @@ static int unlocking_resource_instance_write_attrs(
 }
 #    endif // ANJAY_WITH_LWM2M11
 
+#    ifdef ANJAY_WITH_LWM2M12
+static int
+unlocking_resource_instance_remove(anjay_unlocked_t *anjay,
+                                   const anjay_dm_installed_object_t obj_def,
+                                   anjay_iid_t iid,
+                                   anjay_rid_t rid,
+                                   anjay_riid_t riid) {
+    assert(obj_def.type == ANJAY_DM_OBJECT_USER_PROVIDED);
+    assert(obj_def.impl.user_provided);
+    assert(*obj_def.impl.user_provided);
+    assert((*obj_def.impl.user_provided)->handlers.resource_instance_remove);
+    int result = -1;
+    ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, anjay);
+    result = (*obj_def.impl.user_provided)
+                     ->handlers.resource_instance_remove(
+                             anjay_locked, obj_def.impl.user_provided, iid, rid,
+                             riid);
+    ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
+    return result;
+}
+#    endif // ANJAY_WITH_LWM2M12
+
 static const anjay_unlocked_dm_handlers_t UNLOCKING_HANDLER_WRAPPERS = {
     unlocking_object_read_default_attrs,
     unlocking_object_write_default_attrs,
@@ -492,6 +514,9 @@ static const anjay_unlocked_dm_handlers_t UNLOCKING_HANDLER_WRAPPERS = {
     unlocking_resource_instance_read_attrs,
     unlocking_resource_instance_write_attrs,
 #    endif // ANJAY_WITH_LWM2M11
+#    ifdef ANJAY_WITH_LWM2M12
+    unlocking_resource_instance_remove,
+#    endif // ANJAY_WITH_LWM2M12
 };
 
 static bool has_handler_locked(const anjay_dm_handlers_t *def,
@@ -525,6 +550,9 @@ static bool has_handler_locked(const anjay_dm_handlers_t *def,
         HANDLER_CASE(resource_instance_read_attrs);
         HANDLER_CASE(resource_instance_write_attrs);
 #    endif // ANJAY_WITH_LWM2M11
+#    ifdef ANJAY_WITH_LWM2M12
+        HANDLER_CASE(resource_instance_remove);
+#    endif // ANJAY_WITH_LWM2M12
     }
 #    undef HANDLER_CASE
     AVS_UNREACHABLE("unknown handler type passed");
@@ -564,6 +592,9 @@ static bool has_handler_unlocked(const anjay_unlocked_dm_handlers_t *def,
         HANDLER_CASE(resource_instance_read_attrs);
         HANDLER_CASE(resource_instance_write_attrs);
 #endif // ANJAY_WITH_LWM2M11
+#ifdef ANJAY_WITH_LWM2M12
+        HANDLER_CASE(resource_instance_remove);
+#endif // ANJAY_WITH_LWM2M12
     }
 #undef HANDLER_CASE
     AVS_UNREACHABLE("unknown handler type passed");
@@ -964,7 +995,26 @@ int _anjay_dm_call_resource_instance_write_attrs(
                               *obj_ptr, iid, rid, riid, ssid, attrs);
 }
 
-#endif // ANJAY_WITH_LWM2M11
+#    ifdef ANJAY_WITH_LWM2M12
+int _anjay_dm_call_resource_instance_remove(
+        anjay_unlocked_t *anjay,
+        const anjay_dm_installed_object_t *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid) {
+    dm_log(TRACE, _("resource_instance_remove") DM_LOG_PREFIX "/%u/%u/%u/%u",
+           DM_LOG_PREFIX_OBJ_ARG(obj_ptr)
+                   _anjay_dm_installed_object_oid(obj_ptr),
+           iid, rid, riid);
+    int result = _anjay_dm_transaction_include_object(anjay, obj_ptr);
+    if (result) {
+        return result;
+    }
+    CHECKED_TAIL_CALL_HANDLER(obj_ptr, resource_instance_remove, anjay,
+                              *obj_ptr, iid, rid, riid);
+}
+#    endif // ANJAY_WITH_LWM2M12
+#endif     // ANJAY_WITH_LWM2M11
 
 int _anjay_dm_call_transaction_begin(
         anjay_unlocked_t *anjay, const anjay_dm_installed_object_t *obj_ptr) {

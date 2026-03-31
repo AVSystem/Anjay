@@ -284,6 +284,37 @@ static int test_resource_reset(anjay_t *anjay,
 }
 
 static int
+test_resource_instance_remove(anjay_t *anjay,
+                              const anjay_dm_object_def_t *const *obj_ptr,
+                              anjay_iid_t iid,
+                              anjay_rid_t rid,
+                              anjay_riid_t riid) {
+    (void) anjay; // unused
+
+    test_instance_t *current_instance =
+            (test_instance_t *) get_instance(get_test_object(obj_ptr), iid);
+
+    // this handler can only be called for Multiple-Instance Resources
+    assert(rid == 1);
+
+    // find the Resource Instance entry
+    AVS_LIST(test_value_instance_t) *it;
+    AVS_LIST_FOREACH_PTR(it, &current_instance->values) {
+        if ((*it)->index == riid) {
+            break;
+        }
+    }
+
+    // this handler can only be called for existing Resource Instances
+    assert(it && *it && (*it)->index == riid);
+
+    // free memory associated with the instance
+    AVS_LIST_DELETE(it);
+    current_instance->has_values = true;
+    return 0;
+}
+
+static int
 test_list_resource_instances(anjay_t *anjay,
                              const anjay_dm_object_def_t *const *obj_ptr,
                              anjay_iid_t iid,

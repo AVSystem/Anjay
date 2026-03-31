@@ -348,7 +348,9 @@ class Lwm2mCmd(powercmd.Cmd):
         self.auto_reregister = True
         self.auto_update = True
         self.auto_ack = True
+        self.auto_bspack_error = True
 
+        self.cached_bspack_request = None
 
         self.history = []
 
@@ -471,6 +473,12 @@ class Lwm2mCmd(powercmd.Cmd):
                 self._send(Lwm2mCreated.matching(msg)(location=REGISTER_PATH))
             elif isinstance(msg, Lwm2mRequestBootstrap):
                 self._send(Lwm2mChanged.matching(msg)())
+            elif isinstance(msg, Lwm2mBootstrapPackRequest):
+                print("Received Bootstrap Pack Request")
+                if self.auto_bspack_error:
+                    self._send(Lwm2mErrorResponse.matching(msg)(code=coap.Code.RES_NOT_FOUND))
+                else:
+                    self.cached_bspack_request = msg
 
             self.payload_buffer = b''
         except KeyboardInterrupt:
@@ -635,6 +643,7 @@ class Lwm2mCmd(powercmd.Cmd):
     def do_set(self,
                auto_update: bool = None,
                auto_reregister: bool = None,
+               auto_bspack_error: bool = None,
                auto_ack: bool = None):
         if auto_reregister is not None:
             self.auto_reregister = auto_reregister
@@ -642,6 +651,10 @@ class Lwm2mCmd(powercmd.Cmd):
         if auto_update is not None:
             self.auto_update = auto_update
             print('Auto update responses %s' % ('enabled' if self.auto_update else 'disabled',))
+        if auto_bspack_error is not None:
+            self.auto_bspack_error = auto_bspack_error
+            print('Auto Bootstrap Pack error responses %s' %
+                  ('enabled' if self.auto_bspack_error else 'disabled',))
         if auto_ack is not None:
             self.auto_ack = auto_ack
             print('Auto 0.00 ACK responses %s' % ('enabled' if self.auto_ack else 'disabled',))
@@ -811,6 +824,105 @@ class Lwm2mCmd(powercmd.Cmd):
         if finish:
             self._send(Lwm2mBootstrapFinish())
 
+    def do_bootstrap_pack(self,
+                          uri: str,
+                          security_mode: SecurityMode = None,
+                          psk_identity: EscapedBytes = None,
+                          psk_key: EscapedBytes = None,
+                          client_cert_path: str = None,
+                          client_private_key_path: str = None,
+                          server_cert_path: str = None,
+                          ssid: int = 1,
+                          is_bootstrap: bool = False,
+                          lifetime: int = 86400,
+                          notification_storing: bool = False,
+                          binding: str = 'U',
+                          iid: int = 1,
+                          tls_ciphersuites: List[int] = []):
+        """
+        Responds to the cached BootstrapPackRequest with BootstrapPack with the content
+        created from the arguments in the same way as the content of bootstrap writes
+        send by the BOOTSTRAP command.
+
+        It can be used only with AUTO_BSPACK_ERROR unset, because without that
+        BootstrapPackRequest is automatically responded with an error message.
+
+        Available as a part of LwM2M 1.2 commercial feature only.
+        """
+
+        if self.cached_bspack_request is None:
+            print("Skipping - no BootstrapPackRequest is cached.")
+            return
+
+        accept = self.cached_bspack_request.get_options(coap.Option.ACCEPT)
+        format = coap.ContentFormat.APPLICATION_LWM2M_SENML_CBOR
+        if accept is not None and coap.Option.ACCEPT(format) not in accept:
+            print('No accepted format is supported')
+            print('Accepted formats: ' + str(accept))
+            self._send(Lwm2mErrorResponse.matching(self.cached_bspack_request)(
+                code=coap.Code.RES_NOT_ACCEPTABLE))
+            self.cached_bspack_request = None
+            return
+
+        if ((psk_identity or psk_key)
+                and (client_cert_path or client_private_key_path or server_cert_path)):
+            print('Cannot set both PSK and cert mode at the same time')
+            self.cached_bspack_request = None
+            return
+
+        bootstrap_vars = self.prepare_bootstrap(uri,
+                                                security_mode,
+                                                psk_identity,
+                                                client_cert_path,
+                                                psk_key,
+                                                client_private_key_path,
+                                                server_cert_path)
+        security_mode, pubkey_or_identity, privkey, server_pubkey_or_identity = bootstrap_vars
+
+        sec_pref = '0/' + str(iid) + '/'
+
+        security_data = [
+            {SenmlLabel.BASE_NAME: '/',
+                SenmlLabel.NAME: sec_pref + '0', SenmlLabel.STRING: uri},
+            {SenmlLabel.NAME: sec_pref + '1', SenmlLabel.BOOL: is_bootstrap},
+            {SenmlLabel.NAME: sec_pref + '2', SenmlLabel.VALUE: security_mode.value}
+        ]
+
+        if pubkey_or_identity:
+            security_data += [{SenmlLabel.NAME: sec_pref +
+                               '3', SenmlLabel.OPAQUE: pubkey_or_identity}]
+
+        if server_pubkey_or_identity:
+            security_data += [{SenmlLabel.NAME: sec_pref + '4',
+                               SenmlLabel.OPAQUE: server_pubkey_or_identity}]
+
+        if privkey:
+            security_data += [{SenmlLabel.NAME: sec_pref +
+                               '5', SenmlLabel.OPAQUE: privkey}]
+
+        security_data += [{SenmlLabel.NAME: sec_pref +
+                           '10', SenmlLabel.VALUE: ssid}]
+
+        for (num, ciphersuite) in enumerate(tls_ciphersuites):
+            security_data += [{SenmlLabel.NAME: sec_pref +
+                               '16/' + str(num), SenmlLabel.VALUE: ciphersuite}]
+
+        srv_pref = '1/' + str(iid) + '/'
+
+        server_data = [
+            {SenmlLabel.NAME: srv_pref + '0', SenmlLabel.VALUE: ssid},
+            {SenmlLabel.NAME: srv_pref + '1', SenmlLabel.VALUE: lifetime},
+            {SenmlLabel.NAME: srv_pref + '6', SenmlLabel.BOOL: notification_storing},
+            {SenmlLabel.NAME: srv_pref + '7', SenmlLabel.STRING: binding}
+        ]
+
+        data = security_data + server_data
+        if is_bootstrap:
+            data = security_data
+
+        self._send(Lwm2mContent.matching(self.cached_bspack_request)(
+            content=CBOR.serialize(data), format=format))
+        self.cached_bspack_request = None
 
     def do_write_file(self,
                       fname: str,

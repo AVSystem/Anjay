@@ -7,7 +7,7 @@
 # Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
-from framework_tools.utils.lwm2m_test import *
+from framework.lwm2m_test import *
 
 from . import access_control as ac
 
@@ -380,3 +380,314 @@ class ObserveResourceInstance(test_suite.Lwm2mSingleServerTest,
         self.assertMsgEqual(Lwm2mNotify(token=observe_pkt.token, content=b'2001'), notify_pkt)
 
 
+class Hqmax:
+    class Test(test_suite.Lwm2mDtlsSingleServerTest,
+               test_suite.Lwm2mDmOperations):
+        QUEUE_SIZE = 6
+
+        def setUp(self, servers=1, extra_cmdline_args=[]):
+
+            extra_cmdline_args += ['--stored-notification-limit', str(self.QUEUE_SIZE)]
+            super().setUp(servers=servers, extra_cmdline_args=extra_cmdline_args)
+            for server in range(servers):
+                self.write_resource(self.servers[server], OID.Server, server + 1,
+                                    RID.Server.NotificationStoring, '1')
+
+
+class ObservePositiveHqmax(Hqmax.Test):
+    def runTest(self):
+        PMAX_S = 1
+        SKIP_NOTIFICATIONS = 3  # number of Notify messages that should be skipped
+        EPSILON_S = PMAX_S / 2  # extra time to wait for each Notify
+
+        HQMAX = 2
+        self.write_attributes(self.serv, OID.Device, 0, RID.Device.CurrentTime,
+                              query=['pmax=%d' % PMAX_S, 'hqmax=%d' % HQMAX])
+
+        observe = self.observe(self.serv, OID.Device, 0, RID.Device.CurrentTime)
+
+        self.communicate('enter-offline')
+        # wait long enough to cause dropping oldest notifications
+        time.sleep(PMAX_S * (HQMAX + SKIP_NOTIFICATIONS))
+        self.serv.reset()
+
+        # prevent the demo from queueing any additional notifications
+        self.communicate('set-attrs %s 1 pmin=9999 pmax=9999' % (ResPath.Device.CurrentTime,))
+        # wait until attribute change gets applied during next notification poll
+        time.sleep(PMAX_S)
+
+        self.communicate('exit-offline')
+
+        # demo will resume DTLS session without sending any LwM2M messages
+        self.serv.listen()
+
+        seen_values = []
+
+        # exactly HQMAX notifications should be sent
+        for _ in range(HQMAX):
+            pkt = self.serv.recv(timeout_s=EPSILON_S)
+            self.assertMsgEqual(Lwm2mContent(msg_id=ANY,
+                                             type=coap.Type.NON_CONFIRMABLE,
+                                             token=observe.token),
+                                pkt)
+            seen_values.append(pkt.content)
+
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(PMAX_S * 2)
+
+        # make sure the oldest values were dropped
+        for idx in range(SKIP_NOTIFICATIONS):
+            self.assertNotIn(str(int(observe.content.decode('utf-8')) + idx).encode('utf-8'),
+                             seen_values)
+
+
+class ObserveZeroHqmax(Hqmax.Test):
+    def runTest(self):
+        PMAX_S = 1
+
+        HQMAX = 0
+        self.write_attributes(self.serv, OID.Device, 0, RID.Device.CurrentTime,
+                              query=['pmax=%d' % PMAX_S, 'hqmax=%d' % HQMAX])
+
+        self.observe(self.serv, OID.Device, 0, RID.Device.CurrentTime)
+
+        self.communicate('enter-offline')
+        # wait long enough to potentially store notifications
+        time.sleep(PMAX_S * 2)
+        self.serv.reset()
+
+        # prevent the demo from queueing any additional notifications
+        self.communicate('set-attrs %s 1 pmin=9999 pmax=9999' % (ResPath.Device.CurrentTime,))
+        # wait until attribute change gets applied during next notification poll
+        time.sleep(PMAX_S)
+
+        self.communicate('exit-offline')
+
+        # demo will resume DTLS session without sending any LwM2M messages
+        self.serv.listen()
+
+        # no notifications should be sent
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(PMAX_S * 2)
+
+
+class ObserveHqmaxAndMultipleServers(Hqmax.Test):
+    def setUp(self):
+        super().setUp(servers=2)
+
+    def runTest(self):
+        PMAX_S = 1
+        EPSILON_S = PMAX_S / 2  # extra time to wait for each Notify
+
+        hqmaxes = [2, 3]  # number of Notify messages for each server that should be sent
+        total_notifications = sum(hqmaxes)  # number of total Notify messages that should be sent
+        skips = [total_notifications - hqmax for hqmax in
+                 hqmaxes]  # number of Notify messages for each server that should be skipped
+        self.write_attributes(self.servers[0], OID.Device, 0, RID.Device.CurrentTime,
+                              query=['pmax=%d' % PMAX_S, 'hqmax=%d' % hqmaxes[0]])
+        self.write_attributes(self.servers[1], OID.Device, 0, RID.Device.CurrentTime,
+                              query=['pmax=%d' % PMAX_S, 'hqmax=%d' % hqmaxes[1]])
+
+        observes = [
+            self.observe(self.servers[0], OID.Device, 0, RID.Device.CurrentTime),
+            self.observe(self.servers[1], OID.Device, 0, RID.Device.CurrentTime),
+        ]
+
+        self.communicate('enter-offline')
+        # wait long enough to cause dropping oldest notifications
+        time.sleep(PMAX_S * total_notifications)
+        for serv in self.servers:
+            serv.reset()
+
+        # prevent the demo from queueing any additional notifications
+        self.communicate('set-attrs %s 1 pmin=9999 pmax=9999' % (ResPath.Device.CurrentTime,))
+        self.communicate('set-attrs %s 2 pmin=9999 pmax=9999' % (ResPath.Device.CurrentTime,))
+        # wait until attribute change gets applied during next notification poll
+        time.sleep(PMAX_S)
+
+        self.communicate('exit-offline')
+
+        # demo will resume DTLS sessions without sending any LwM2M messages
+        for serv in self.servers:
+            serv.listen()
+
+        seen_values = []
+
+        remaining_notifications = total_notifications
+        for observe, serv, hqmax in zip(observes, self.servers, hqmaxes):
+            try:
+                for _ in range(hqmax):
+                    pkt = serv.recv(timeout_s=EPSILON_S)
+                    self.assertMsgEqual(Lwm2mContent(msg_id=ANY,
+                                                     type=coap.Type.NON_CONFIRMABLE,
+                                                     token=observe.token),
+                                        pkt)
+                    remaining_notifications -= 1
+                    seen_values.append(pkt.content)
+            except socket.timeout:
+                pass
+
+        self.assertEqual(remaining_notifications, 0)
+
+        for serv in self.servers:
+            with self.assertRaises(socket.timeout):
+                serv.recv(PMAX_S * 2)
+
+        # make sure the oldest values were dropped
+        for observe, skip in zip(observes, skips):
+            for idx in range(skip):
+                self.assertNotIn(str(int(observe.content.decode('utf-8')) + idx).encode('utf-8'),
+                                 seen_values)
+
+
+class ObserveHqmaxGreaterThanQueueSize(Hqmax.Test):
+    def runTest(self):
+        PMAX_S = 1
+        HQMAX = 8
+        SKIP_NOTIFICATIONS = HQMAX - self.QUEUE_SIZE  # number of Notify messages that should be skipped
+        EPSILON_S = PMAX_S / 2  # extra time to wait for each Notify
+
+        self.write_attributes(self.serv, OID.Device, 0, RID.Device.CurrentTime,
+                              query=['pmax=%d' % PMAX_S, 'hqmax=%d' % HQMAX])
+
+        observe = self.observe(self.serv, OID.Device, 0, RID.Device.CurrentTime)
+
+        self.communicate('enter-offline')
+        # wait long enough to cause dropping oldest notifications
+        time.sleep(PMAX_S * HQMAX)
+        self.serv.reset()
+
+        # prevent the demo from queueing any additional notifications
+        self.communicate('set-attrs %s 1 pmin=9999 pmax=9999' % (ResPath.Device.CurrentTime,))
+        # wait until attribute change gets applied during next notification poll
+        time.sleep(PMAX_S)
+
+        self.communicate('exit-offline')
+
+        # demo will resume DTLS session without sending any LwM2M messages
+        self.serv.listen()
+
+        seen_values = []
+
+        # exactly QUEUE_SIZE notifications should be sent
+        for _ in range(self.QUEUE_SIZE):
+            pkt = self.serv.recv(timeout_s=EPSILON_S)
+            self.assertMsgEqual(Lwm2mContent(msg_id=ANY,
+                                             type=coap.Type.NON_CONFIRMABLE,
+                                             token=observe.token),
+                                pkt)
+            seen_values.append(pkt.content)
+
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(PMAX_S * 2)
+
+        # make sure the oldest values were dropped
+        for idx in range(SKIP_NOTIFICATIONS):
+            self.assertNotIn(str(int(observe.content.decode('utf-8')) + idx).encode('utf-8'),
+                             seen_values)
+
+
+class ObserveEdgeRisingTest(test_suite.Lwm2mSingleServerTest,
+                            test_suite.Lwm2mDmOperations):
+    def runTest(self):
+        # Create object
+        self.create_instance(self.serv, oid=OID.Test, iid=1)
+        # Set initial boolean resource value to 0
+        self.write_resource(self.serv, oid=OID.Test, iid=1, rid=RID.Test.ResBool, content=b'0')
+
+        # Observe with edge = 1 (notify on rising edge)
+        self.write_attributes(self.serv, oid=OID.Test, iid=1, rid=RID.Test.ResBool,
+                              query=['edge=1'])
+        observe = self.observe(self.serv, oid=OID.Test, iid=1, rid=RID.Test.ResBool)
+
+        # Change boolean resource value to 1
+        self.execute_resource(self.serv, oid=OID.Test, iid=1, rid=RID.Test.ToggleBool)
+        # Expect a notification on transition 0 -> 1
+        self.assertMsgEqual(Lwm2mNotify(token=observe.token), self.serv.recv(timeout_s=2))
+
+        # Change boolean resource value to 0
+        self.execute_resource(self.serv, oid=OID.Test, iid=1, rid=RID.Test.ToggleBool)
+        # No notification should be sent on transition 1 -> 0
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(2)
+
+
+class ObserveEdgeFallingTest(test_suite.Lwm2mSingleServerTest,
+                             test_suite.Lwm2mDmOperations):
+    def runTest(self):
+        # Create object
+        self.create_instance(self.serv, oid=OID.Test, iid=1)
+        # Set initial boolean resource value to 1
+        self.write_resource(self.serv, oid=OID.Test, iid=1, rid=RID.Test.ResBool, content=b'1')
+
+        # Observe with edge = 0 (notify on falling edge)
+        self.write_attributes(self.serv, oid=OID.Test, iid=1, rid=RID.Test.ResBool,
+                              query=['edge=0'])
+        observe = self.observe(self.serv, oid=OID.Test, iid=1, rid=RID.Test.ResBool)
+
+        # Change boolean resource value to 0
+        self.execute_resource(self.serv, oid=OID.Test, iid=1, rid=RID.Test.ToggleBool)
+        # Expect a notification on transition 1 -> 0
+        self.assertMsgEqual(Lwm2mNotify(token=observe.token), self.serv.recv(timeout_s=2))
+
+        # Change boolean resource value to 1
+        self.execute_resource(self.serv, oid=OID.Test, iid=1, rid=RID.Test.ToggleBool)
+        # No notification should be sent on transition 0 -> 1
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(2)
+
+
+class ObserveEdgeRisingMultipleInstanceResourceTest(test_suite.Lwm2mSingleServerTest,
+                                                    test_suite.Lwm2mDmOperations):
+    def runTest(self):
+        # Create object
+        self.create_instance(self.serv, oid=OID.Test, iid=1)
+
+        # Create a new boolean resource instance with value 0
+        self.execute_resource(self.serv, oid=OID.Test, iid=1,
+                              rid=RID.Test.ResInitBoolArray, content=b"0='0'")
+
+        # Observe with edge = 1 (notify on rising edge)
+        self.write_attributes(self.serv, oid=OID.Test, iid=1,
+                              rid=RID.Test.BoolArray, query=['edge=1'])
+        observe = self.observe(self.serv, oid=OID.Test, iid=1,
+                               rid=RID.Test.BoolArray, riid=0)
+
+        # Change boolean resource instance value to 1
+        self.execute_resource(self.serv, oid=OID.Test, iid=1, rid=RID.Test.ToggleBool)
+        # Expect a notification on transition 0 -> 1
+        self.assertMsgEqual(Lwm2mNotify(token=observe.token), self.serv.recv(timeout_s=2))
+
+        # Change boolean resource instance value to 0
+        self.execute_resource(self.serv, oid=OID.Test, iid=1, rid=RID.Test.ToggleBool)
+        # No notification should be sent on transition 1 -> 0
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(2)
+
+
+class ObserveEdgeFallingMultipleInstanceResourceTest(test_suite.Lwm2mSingleServerTest,
+                                                     test_suite.Lwm2mDmOperations):
+    def runTest(self):
+        # Create object
+        self.create_instance(self.serv, oid=OID.Test, iid=1)
+
+        # Create a new boolean resource instance with value 1
+        self.execute_resource(self.serv, oid=OID.Test, iid=1,
+                              rid=RID.Test.ResInitBoolArray, content=b"0='1'")
+
+        # Observe with edge = 0 (notify on falling edge)
+        self.write_attributes(self.serv, oid=OID.Test, iid=1,
+                              rid=RID.Test.BoolArray, query=['edge=0'])
+        observe = self.observe(self.serv, oid=OID.Test, iid=1,
+                               rid=RID.Test.BoolArray, riid=0)
+
+        # Change boolean resource instance value to 0
+        self.execute_resource(self.serv, oid=OID.Test, iid=1, rid=RID.Test.ToggleBool)
+        # Expect a notification on transition 1 -> 0
+        self.assertMsgEqual(Lwm2mNotify(token=observe.token), self.serv.recv(timeout_s=2))
+
+        # Change boolean resource instance value to 1
+        self.execute_resource(self.serv, oid=OID.Test, iid=1, rid=RID.Test.ToggleBool)
+        # No notification should be sent on transition 0 -> 1
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(2)

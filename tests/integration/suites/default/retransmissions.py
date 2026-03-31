@@ -12,7 +12,7 @@ import time
 import socket
 
 from framework_tools.lwm2m.coap.server import SecurityMode
-from framework_tools.utils.lwm2m_test import *
+from framework.lwm2m_test import *
 from suites.default import bootstrap_client
 from suites.default.block_write import equal_chunk_splitter, packets_from_chunks, Block
 

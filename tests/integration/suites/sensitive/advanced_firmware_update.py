@@ -10,7 +10,7 @@
 import os
 import re
 
-from framework_tools.utils.lwm2m_test import *
+from framework.lwm2m_test import *
 from framework.create_package import PackageForcedError
 
 from suites.default.advanced_firmware_update import AdvancedFirmwareUpdate, equal_chunk_splitter

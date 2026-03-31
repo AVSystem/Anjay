@@ -28,22 +28,45 @@ VISIBILITY_SOURCE_BEGIN
 #    define _ANJAY_DM_CUSTOM_CON_ATTR_INITIALIZER
 #endif // ANJAY_WITH_CON_ATTR
 
-#define _ANJAY_DM_OI_ATTRIBUTES_EMPTY                 \
-    {                                                 \
-        .min_period = ANJAY_ATTRIB_INTEGER_NONE,      \
-        .max_period = ANJAY_ATTRIB_INTEGER_NONE,      \
-        .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE, \
-        .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE  \
-                _ANJAY_DM_CUSTOM_CON_ATTR_INITIALIZER \
-    }
+#ifdef ANJAY_WITH_LWM2M12
+#    define _ANJAY_DM_OI_ATTRIBUTES_EMPTY                  \
+        {                                                  \
+            .min_period = ANJAY_ATTRIB_INTEGER_NONE,       \
+            .max_period = ANJAY_ATTRIB_INTEGER_NONE,       \
+            .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,  \
+            .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE   \
+                    _ANJAY_DM_CUSTOM_CON_ATTR_INITIALIZER, \
+            .hqmax = ANJAY_ATTRIB_INTEGER_NONE             \
+        }
+#else // ANJAY_WITH_LWM2M12
+#    define _ANJAY_DM_OI_ATTRIBUTES_EMPTY                 \
+        {                                                 \
+            .min_period = ANJAY_ATTRIB_INTEGER_NONE,      \
+            .max_period = ANJAY_ATTRIB_INTEGER_NONE,      \
+            .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE, \
+            .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE  \
+                    _ANJAY_DM_CUSTOM_CON_ATTR_INITIALIZER \
+        }
+#endif // ANJAY_WITH_LWM2M12
 
-#define _ANJAY_DM_R_ATTRIBUTES_EMPTY              \
-    {                                             \
-        .common = _ANJAY_DM_OI_ATTRIBUTES_EMPTY,  \
-        .greater_than = ANJAY_ATTRIB_DOUBLE_NONE, \
-        .less_than = ANJAY_ATTRIB_DOUBLE_NONE,    \
-        .step = ANJAY_ATTRIB_DOUBLE_NONE          \
-    }
+#ifdef ANJAY_WITH_LWM2M12
+#    define _ANJAY_DM_R_ATTRIBUTES_EMPTY              \
+        {                                             \
+            .common = _ANJAY_DM_OI_ATTRIBUTES_EMPTY,  \
+            .greater_than = ANJAY_ATTRIB_DOUBLE_NONE, \
+            .less_than = ANJAY_ATTRIB_DOUBLE_NONE,    \
+            .step = ANJAY_ATTRIB_DOUBLE_NONE,         \
+            .edge = ANJAY_DM_EDGE_ATTR_NONE           \
+        }
+#else // ANJAY_WITH_LWM2M12
+#    define _ANJAY_DM_R_ATTRIBUTES_EMPTY              \
+        {                                             \
+            .common = _ANJAY_DM_OI_ATTRIBUTES_EMPTY,  \
+            .greater_than = ANJAY_ATTRIB_DOUBLE_NONE, \
+            .less_than = ANJAY_ATTRIB_DOUBLE_NONE,    \
+            .step = ANJAY_ATTRIB_DOUBLE_NONE          \
+        }
+#endif // ANJAY_WITH_LWM2M12
 
 const anjay_dm_oi_attributes_t ANJAY_DM_OI_ATTRIBUTES_EMPTY =
         _ANJAY_DM_OI_ATTRIBUTES_EMPTY;
@@ -73,6 +96,9 @@ static inline void combine_attrs(anjay_dm_oi_attributes_t *out,
     combine_integer(&out->max_period, other->max_period);
     combine_integer(&out->min_eval_period, other->min_eval_period);
     combine_integer(&out->max_eval_period, other->max_eval_period);
+#ifdef ANJAY_WITH_LWM2M12
+    combine_integer(&out->hqmax, other->hqmax);
+#endif // ANJAY_WITH_LWM2M12
 }
 
 static inline void
@@ -82,6 +108,11 @@ combine_resource_attrs(anjay_dm_r_attributes_t *out,
     combine_double(&out->greater_than, other->greater_than);
     combine_double(&out->less_than, other->less_than);
     combine_double(&out->step, other->step);
+#ifdef ANJAY_WITH_LWM2M12
+    if (out->edge < 0) {
+        out->edge = other->edge;
+    }
+#endif // ANJAY_WITH_LWM2M12
 }
 
 int _anjay_read_period(anjay_unlocked_t *anjay,
@@ -204,6 +235,9 @@ static int dm_read_combined_object_attrs(anjay_unlocked_t *anjay,
 bool _anjay_dm_attributes_empty(const anjay_dm_oi_attributes_t *attrs) {
     return attrs->min_period < 0 && attrs->max_period < 0
            && attrs->min_eval_period < 0 && attrs->max_eval_period < 0
+#ifdef ANJAY_WITH_LWM2M12
+           && attrs->hqmax < 0
+#endif // ANJAY_WITH_LWM2M12
 #ifdef ANJAY_WITH_CON_ATTR
            && attrs->con < 0
 #endif // ANJAY_WITH_CON_ATTR
@@ -213,12 +247,19 @@ bool _anjay_dm_attributes_empty(const anjay_dm_oi_attributes_t *attrs) {
 bool _anjay_dm_resource_attributes_empty(const anjay_dm_r_attributes_t *attrs) {
     return _anjay_dm_attributes_empty(&attrs->common)
            && isnan(attrs->greater_than) && isnan(attrs->less_than)
-           && isnan(attrs->step);
+           && isnan(attrs->step)
+#ifdef ANJAY_WITH_LWM2M12
+           && attrs->edge < 0
+#endif // ANJAY_WITH_LWM2M12
+            ;
 }
 
 bool _anjay_dm_attributes_full(const anjay_dm_oi_attributes_t *attrs) {
     return attrs->min_period >= 0 && attrs->max_period >= 0
            && attrs->min_eval_period >= 0 && attrs->max_eval_period >= 0
+#ifdef ANJAY_WITH_LWM2M12
+           && attrs->hqmax >= 0
+#endif // ANJAY_WITH_LWM2M12
 #ifdef ANJAY_WITH_CON_ATTR
            && attrs->con >= 0
 #endif // ANJAY_WITH_CON_ATTR
@@ -230,7 +271,11 @@ bool _anjay_dm_resource_attributes_full(const anjay_dm_r_attributes_t *attrs) {
     // con != ANJAY_DM_CON_ATTR_NONE
     return _anjay_dm_attributes_full(&attrs->common)
            && !isnan(attrs->greater_than) && !isnan(attrs->less_than)
-           && !isnan(attrs->step);
+           && !isnan(attrs->step)
+#ifdef ANJAY_WITH_LWM2M12
+           && attrs->edge >= 0
+#endif // ANJAY_WITH_LWM2M12
+            ;
 }
 
 int _anjay_dm_effective_attrs(anjay_unlocked_t *anjay,

@@ -8,7 +8,7 @@
 # See the attached LICENSE file for details.
 import re
 
-from framework_tools.utils.lwm2m_test import *
+from framework.lwm2m_test import *
 
 
 class ClientIgnoresNonBootstrapTrafficDuringBootstrap(test_suite.Lwm2mSingleServerTest):

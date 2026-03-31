@@ -157,3 +157,15 @@ Implementations of the following functions will need to be provided:
   The function should clean up any global state that is kept by the TLS
   implementation. If there is no such global state or it is managed elsewhere,
   it is safe to implement this function as a no-op.
+
+* ``avs_crypto_clear_buffer`` – a function with the following signature:
+
+  .. snippet-source:: deps/avs_commons/include_public/avsystem/commons/avs_crypto_common.h
+
+      void avs_crypto_clear_buffer(void *buf, size_t size);
+
+  This function shall securely overwrite the memory region pointed to by
+  ``buf`` with a sequence of bytes (typically zeros) in a way that prevents the
+  compiler from optimizing the memory clearing operation away. It is used to
+  ensure that sensitive data such as cryptographic keys, passwords, or
+  temporary plaintext is not left in memory after it is no longer needed.

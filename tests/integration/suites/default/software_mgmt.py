@@ -13,8 +13,8 @@ import threading
 import unittest
 import ssl
 
-from framework_tools.utils.coap_file_server import CoapFileServer
-from framework_tools.utils.lwm2m_test import *
+from framework_tools.coap_file_server import CoapFileServer
+from framework.lwm2m_test import *
 from framework.create_package import PackageForcedError, make_software_package
 
 from .firmware_update import FirmwareUpdate

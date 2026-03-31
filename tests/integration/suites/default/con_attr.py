@@ -9,7 +9,7 @@
 
 import socket
 
-from framework_tools.utils.lwm2m_test import *
+from framework.lwm2m_test import *
 
 
 class ConfirmableTest(test_suite.Lwm2mSingleServerTest,

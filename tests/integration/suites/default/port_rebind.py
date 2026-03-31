@@ -11,7 +11,7 @@ import contextlib
 import socket
 import time
 
-from framework_tools.utils.lwm2m_test import *
+from framework.lwm2m_test import *
 
 
 class RandomPortRebind(test_suite.Lwm2mDtlsSingleServerTest, test_suite.Lwm2mDmOperations):

@@ -9,7 +9,7 @@
 
 from framework_tools.lwm2m.coap.code import Code
 from framework_tools.lwm2m.coap.server import SecurityMode
-from framework_tools.utils.lwm2m_test import *
+from framework.lwm2m_test import *
 
 
 class BootstrapTest:

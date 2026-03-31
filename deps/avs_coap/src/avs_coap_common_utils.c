@@ -32,9 +32,15 @@ int _avs_coap_bytes_append(bytes_appender_t *appender,
             (unsigned) size_bytes, (unsigned) appender->bytes_left);
         return -1;
     }
-    memcpy(appender->write_ptr, data ? data : "", size_bytes);
-    appender->write_ptr += size_bytes;
-    appender->bytes_left -= size_bytes;
+    if (!data && size_bytes) {
+        LOG(DEBUG, _("NULL data with non-zero size"));
+        return -1;
+    }
+    if (size_bytes) {
+        memcpy(appender->write_ptr, data, size_bytes);
+        appender->write_ptr += size_bytes;
+        appender->bytes_left -= size_bytes;
+    }
     return 0;
 }
 

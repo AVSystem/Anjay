@@ -68,18 +68,25 @@ AVS_UNIT_TEST(parse_headers, split_query_string) {
 #undef TEST_SPLIT_QUERY_STRING
 #undef TEST_NULLABLE_STRING_EQUAL
 
-#define PARSE_QUERY_WRAPPED(OutAttrs, OutDepth, Key, Value)               \
-    ({                                                                    \
-        int parse_query_result = parse_query((OutAttrs), (Key), (Value)); \
-        *(OutDepth) = -1;                                                 \
-        parse_query_result;                                               \
-    })
-#define PARSE_QUERIES_WRAPPED(Header, OutAttrs, OutDepth)               \
-    ({                                                                  \
-        int parse_queries_result = parse_queries((Header), (OutAttrs)); \
-        *(OutDepth) = -1;                                               \
-        parse_queries_result;                                           \
-    })
+#ifdef ANJAY_WITH_LWM2M12
+#    define PARSE_QUERY_WRAPPED parse_query
+#    define PARSE_QUERIES_WRAPPED parse_queries
+// NOTE: Additional parameter for code compatibility with the version including
+// LwM2M 1.2 commercial feature
+#else // ANJAY_WITH_LWM2M12
+#    define PARSE_QUERY_WRAPPED(OutAttrs, OutDepth, Key, Value)               \
+        ({                                                                    \
+            int parse_query_result = parse_query((OutAttrs), (Key), (Value)); \
+            *(OutDepth) = -1;                                                 \
+            parse_query_result;                                               \
+        })
+#    define PARSE_QUERIES_WRAPPED(Header, OutAttrs, OutDepth)               \
+        ({                                                                  \
+            int parse_queries_result = parse_queries((Header), (OutAttrs)); \
+            *(OutDepth) = -1;                                               \
+            parse_queries_result;                                           \
+        })
+#endif // ANJAY_WITH_LWM2M12
 
 #define TEST_PARSE_ATTRIBUTE_SUCCESS(Key, Value, ExpectedField,         \
                                      ExpectedHasField, ExpectedValue)   \
@@ -160,7 +167,15 @@ AVS_UNIT_TEST(parse_headers, parse_attribute) {
 #    define ASSERT_CON_ATTRIBUTE_VALUES_EQUAL(actual, expected) ((void) 0)
 #endif // ANJAY_WITH_CON_ATTR
 
-#define ASSERT_LWM2M12_ATTRIBUTE_VALUES_EQUAL(actual, expected) ((void) 0)
+#ifdef ANJAY_WITH_LWM2M12
+#    define ASSERT_LWM2M12_ATTRIBUTE_VALUES_EQUAL(actual, expected) \
+        do {                                                        \
+            ASSERT_EQ(actual.common.hqmax, expected.common.hqmax);  \
+            ASSERT_EQ(actual.edge, expected.edge);                  \
+        } while (0)
+#else // ANJAY_WITH_LWM2M12
+#    define ASSERT_LWM2M12_ATTRIBUTE_VALUES_EQUAL(actual, expected) ((void) 0)
+#endif // ANJAY_WITH_LWM2M12
 
 #define ASSERT_ATTRIBUTE_VALUES_EQUAL(actual, expected)                  \
     do {                                                                 \
@@ -184,7 +199,15 @@ AVS_UNIT_TEST(parse_headers, parse_attribute) {
 #    define ASSERT_CON_ATTRIBUTE_FLAGS_EQUAL(actual, expected) ((void) 0)
 #endif // ANJAY_WITH_CON_ATTR
 
-#define ASSERT_LWM2M12_ATTRIBUTE_FLAGS_EQUAL(actual, expected) ((void) 0)
+#ifdef ANJAY_WITH_LWM2M12
+#    define ASSERT_LWM2M12_ATTRIBUTE_FLAGS_EQUAL(actual, expected) \
+        do {                                                       \
+            ASSERT_EQ(actual.has_hqmax, expected.has_hqmax);       \
+            ASSERT_EQ(actual.has_edge, expected.has_edge);         \
+        } while (0)
+#else // ANJAY_WITH_LWM2M12
+#    define ASSERT_LWM2M12_ATTRIBUTE_FLAGS_EQUAL(actual, expected) ((void) 0)
+#endif // ANJAY_WITH_LWM2M12
 
 #define ASSERT_ATTRIBUTES_EQUAL(actual, expected)                            \
     do {                                                                     \
@@ -321,6 +344,45 @@ AVS_UNIT_TEST(parse_headers, parse_attributes) {
                                     "YouShouldHaveLeftATinyHint", NULL),
             &attrs, &depth));
 }
+
+#ifdef ANJAY_WITH_LWM2M12
+AVS_UNIT_TEST(parse_headers, parse_depth) {
+    anjay_request_attributes_t attrs;
+    anjay_request_attributes_t empty_attrs;
+    memset(&empty_attrs, 0, sizeof(empty_attrs));
+    empty_attrs.values = ANJAY_DM_R_ATTRIBUTES_EMPTY;
+    int8_t depth;
+    header_with_opts_storage_t header_storage;
+
+    // valid depth values
+    for (int expected_depth = 0; expected_depth <= 3; ++expected_depth) {
+        char opt[16];
+        snprintf(opt, sizeof(opt), "depth=%d", expected_depth);
+        ASSERT_OK(PARSE_QUERIES_WRAPPED(
+                header_with_string_opts(&header_storage,
+                                        AVS_COAP_OPTION_URI_QUERY, opt, NULL),
+                &attrs, &depth));
+        ASSERT_ATTRIBUTES_EQUAL(attrs, empty_attrs);
+        ASSERT_EQ(depth, expected_depth);
+    }
+
+    // depth out of range
+    ASSERT_FAIL(PARSE_QUERIES_WRAPPED(
+            header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_QUERY,
+                                    "depth=-1", NULL),
+            &attrs, &depth));
+    ASSERT_FAIL(PARSE_QUERIES_WRAPPED(
+            header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_QUERY,
+                                    "depth=4", NULL),
+            &attrs, &depth));
+
+    // duplicate depth
+    ASSERT_FAIL(PARSE_QUERIES_WRAPPED(
+            header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_QUERY,
+                                    "depth=1", "depth=2", NULL),
+            &attrs, &depth));
+}
+#endif // ANJAY_WITH_LWM2M12
 
 #undef ASSERT_ATTRIBUTES_EQUAL
 #undef ASSERT_ATTRIBUTE_VALUES_EQUAL

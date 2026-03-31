@@ -47,7 +47,7 @@ Let's take a closer look:
   following:
 
   .. highlight:: python
-  .. snippet-source:: tools/test-framework-tools/tools/framework_tools/utils/test_utils.py
+  .. snippet-source:: tools/test-framework-tools/tools/framework_tools/lwm2m/objlink.py
 
       class Objlink:
           def __init__(self, ObjID, ObjInstID):

@@ -10,7 +10,7 @@
 import struct
 import typing
 from textwrap import indent
-from framework_tools.utils.test_utils import Objlink
+from .objlink import Objlink
 
 
 class TLVType:

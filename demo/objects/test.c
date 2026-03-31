@@ -885,6 +885,51 @@ static int test_resource_reset(anjay_t *anjay,
     return 0;
 }
 
+#ifdef ANJAY_WITH_LWM2M12
+static int
+test_resource_instance_remove(anjay_t *anjay,
+                              const anjay_dm_object_def_t *const *obj_ptr,
+                              anjay_iid_t iid,
+                              anjay_rid_t rid,
+                              anjay_riid_t riid) {
+    (void) anjay;
+
+    test_repr_t *test = get_test(obj_ptr);
+    test_instance_t *inst = find_instance(test, iid);
+    assert(inst);
+
+    switch (rid) {
+    case TEST_RES_INT_ARRAY: {
+        AVS_LIST(test_int_array_entry_t) *it;
+        AVS_LIST_FOREACH_PTR(it, &inst->int_array) {
+            if ((*it)->index == riid) {
+                break;
+            }
+        }
+        assert(it && *it && (*it)->index == riid);
+        AVS_LIST_DELETE(it);
+        break;
+    }
+    case TEST_RES_BOOL_ARRAY: {
+        AVS_LIST(test_bool_array_entry_t) *it;
+        AVS_LIST_FOREACH_PTR(it, &inst->bool_array) {
+            if ((*it)->index == riid) {
+                break;
+            }
+        }
+        assert(it && *it && (*it)->index == riid);
+        AVS_LIST_DELETE(it);
+        break;
+    }
+    default:
+        AVS_UNREACHABLE("Resource instance remove called on "
+                        "non-mutliple-instance resource");
+        return ANJAY_ERR_METHOD_NOT_ALLOWED;
+    }
+    return 0;
+}
+#endif // ANJAY_WITH_LWM2M12
+
 static int
 test_list_resource_instances(anjay_t *anjay,
                              const anjay_dm_object_def_t *const *obj_ptr,
@@ -944,6 +989,10 @@ const anjay_dm_object_def_t TEST_OBJECT = {
         .transaction_validate = anjay_dm_transaction_NOOP,
         .transaction_commit = anjay_dm_transaction_NOOP,
         .transaction_rollback = anjay_dm_transaction_NOOP
+#ifdef ANJAY_WITH_LWM2M12
+        ,
+        .resource_instance_remove = test_resource_instance_remove
+#endif // ANJAY_WITH_LWM2M12
     }
 };
 

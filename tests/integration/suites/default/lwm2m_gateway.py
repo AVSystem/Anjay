@@ -6,7 +6,7 @@
 #
 # Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
-from framework_tools.utils.lwm2m_test import *
+from framework.lwm2m_test import *
 from . import register
 from . import access_control
 from .access_control import AccessMask
@@ -14,7 +14,7 @@ from .bootstrap_client import BootstrapTest
 from .send import Send
 from .notifications import ConfirmableNotificationStatus
 from framework_tools.lwm2m.tlv import TLVType
-from framework_tools.utils.test_utils import *
+from framework.test_utils import *
 import json
 
 

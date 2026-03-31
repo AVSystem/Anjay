@@ -241,6 +241,29 @@ static void preprocess_next_value(anjay_json_decoder_t *ctx) {
     }
 }
 
+#    ifdef ANJAY_WITH_LWM2M12
+static int json_decoder_null(anjay_json_like_decoder_t *ctx_) {
+    anjay_json_decoder_t *ctx = (anjay_json_decoder_t *) ctx_;
+    if (ctx->state != ANJAY_JSON_LIKE_DECODER_STATE_OK
+            || ctx->current_item_type != ANJAY_JSON_LIKE_VALUE_NULL) {
+        return -1;
+    }
+    char buf[4];
+    if (avs_is_err(avs_stream_read_reliably(ctx->stream, buf, sizeof(buf)))) {
+        goto error;
+    }
+    if (memcmp(buf, "null", 4) != 0) {
+        LOG(DEBUG, _("JSON parse error: invalid null value"));
+        goto error;
+    }
+    preprocess_next_value(ctx);
+    return 0;
+error:
+    ctx->state = ANJAY_JSON_LIKE_DECODER_STATE_ERROR;
+    return -1;
+}
+#    endif // ANJAY_WITH_LWM2M12
+
 static int json_decoder_bool(anjay_json_like_decoder_t *ctx_, bool *out_value) {
     anjay_json_decoder_t *ctx = (anjay_json_decoder_t *) ctx_;
     if (ctx->state != ANJAY_JSON_LIKE_DECODER_STATE_OK
@@ -488,6 +511,9 @@ static void json_decoder_cleanup(anjay_json_like_decoder_t **ctx) {
 static const anjay_json_like_decoder_vtable_t VTABLE = {
     .state = json_decoder_state,
     .current_value_type = json_decoder_current_value_type,
+#    ifdef ANJAY_WITH_LWM2M12
+    .read_null = json_decoder_null,
+#    endif // ANJAY_WITH_LWM2M12
     .read_bool = json_decoder_bool,
     .number = json_decoder_number,
     .bytes = json_decoder_bytes,

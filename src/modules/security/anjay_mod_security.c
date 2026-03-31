@@ -616,7 +616,28 @@ static int sec_resource_reset(anjay_unlocked_t *anjay,
     return 0;
 }
 
-#    endif // ANJAY_WITH_LWM2M11
+#        ifdef ANJAY_WITH_LWM2M12
+static int
+sec_resource_instance_remove(anjay_unlocked_t *anjay,
+                             const anjay_dm_installed_object_t obj_ptr,
+                             anjay_iid_t iid,
+                             anjay_rid_t rid,
+                             anjay_riid_t riid) {
+    (void) anjay;
+
+    assert(rid == SEC_RES_DTLS_TLS_CIPHERSUITE);
+    (void) rid;
+
+    sec_instance_t *inst = find_instance(_anjay_sec_get(obj_ptr), iid);
+    assert(inst);
+    AVS_LIST(sec_cipher_instance_t) *rinst_ptr =
+            find_cipher_instance_insert_ptr(&inst->enabled_ciphersuites, riid);
+    assert(rinst_ptr && *rinst_ptr && (*rinst_ptr)->riid);
+    AVS_LIST_DELETE(rinst_ptr);
+    return 0;
+}
+#        endif // ANJAY_WITH_LWM2M12
+#    endif     // ANJAY_WITH_LWM2M11
 
 static int sec_list_instances(anjay_unlocked_t *anjay,
                               const anjay_dm_installed_object_t obj_ptr,
@@ -720,6 +741,10 @@ static const anjay_unlocked_dm_object_def_t SECURITY = {
         .transaction_commit = sec_transaction_commit,
         .transaction_validate = sec_transaction_validate,
         .transaction_rollback = sec_transaction_rollback
+#    ifdef ANJAY_WITH_LWM2M12
+        ,
+        .resource_instance_remove = sec_resource_instance_remove
+#    endif // ANJAY_WITH_LWM2M12
     }
 };
 

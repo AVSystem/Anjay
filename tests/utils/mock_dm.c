@@ -41,6 +41,10 @@ typedef enum {
     MOCK_DM_TRANSACTION_VALIDATE,
     MOCK_DM_TRANSACTION_COMMIT,
     MOCK_DM_TRANSACTION_ROLLBACK
+#ifdef ANJAY_WITH_LWM2M12
+    ,
+    MOCK_DM_RESOURCE_INSTANCE_REMOVE
+#endif // ANJAY_WITH_LWM2M12
 } anjay_mock_dm_expected_command_type_t;
 
 typedef struct {
@@ -116,6 +120,9 @@ void _anjay_mock_dm_assert_common_attributes_equal(
     AVS_UNIT_ASSERT_FIELD_EQUAL(a, b, max_period);
     AVS_UNIT_ASSERT_FIELD_EQUAL(a, b, min_eval_period);
     AVS_UNIT_ASSERT_FIELD_EQUAL(a, b, max_eval_period);
+#ifdef ANJAY_WITH_LWM2M12
+    AVS_UNIT_ASSERT_FIELD_EQUAL(a, b, hqmax);
+#endif // ANJAY_WITH_LWM2M12
 }
 
 void _anjay_mock_dm_assert_attributes_equal(const anjay_dm_r_attributes_t *a,
@@ -124,6 +131,9 @@ void _anjay_mock_dm_assert_attributes_equal(const anjay_dm_r_attributes_t *a,
     AVS_UNIT_ASSERT_FIELD_EQUAL(a, b, greater_than);
     AVS_UNIT_ASSERT_FIELD_EQUAL(a, b, less_than);
     AVS_UNIT_ASSERT_FIELD_EQUAL(a, b, step);
+#ifdef ANJAY_WITH_LWM2M12
+    AVS_UNIT_ASSERT_FIELD_EQUAL(a, b, edge);
+#endif // ANJAY_WITH_LWM2M12
 }
 
 int _anjay_mock_dm_object_read_default_attrs(
@@ -537,6 +547,21 @@ int _anjay_mock_dm_resource_instance_write_attrs(
 }
 #endif // ANJAY_WITH_LWM2M11
 
+#ifdef ANJAY_WITH_LWM2M12
+int _anjay_mock_dm_resource_instance_remove(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid) {
+    DM_ACTION_COMMON(RESOURCE_INSTANCE_REMOVE);
+    AVS_UNIT_ASSERT_EQUAL(iid, EXPECTED_COMMANDS->input.iid_rid_riid.iid);
+    AVS_UNIT_ASSERT_EQUAL(rid, EXPECTED_COMMANDS->input.iid_rid_riid.rid);
+    AVS_UNIT_ASSERT_EQUAL(riid, EXPECTED_COMMANDS->input.iid_rid_riid.riid);
+    DM_ACTION_RETURN;
+}
+#endif // ANJAY_WITH_LWM2M12
+
 static anjay_mock_dm_expected_command_t *
 new_expected_command_impl(anjay_mock_dm_expected_command_type_t type,
                           const char *type_str) {
@@ -881,6 +906,25 @@ EXPECT_TRANSACTION_ACTION(begin, BEGIN)
 EXPECT_TRANSACTION_ACTION(validate, VALIDATE)
 EXPECT_TRANSACTION_ACTION(commit, COMMIT)
 EXPECT_TRANSACTION_ACTION(rollback, ROLLBACK)
+
+#ifdef ANJAY_WITH_LWM2M12
+void _anjay_mock_dm_expect_resource_instance_remove(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid,
+        int retval) {
+    anjay_mock_dm_expected_command_t *command =
+            NEW_EXPECTED_COMMAND(MOCK_DM_RESOURCE_INSTANCE_REMOVE);
+    command->anjay = anjay;
+    command->obj_ptr = obj_ptr;
+    command->input.iid_rid_riid.iid = iid;
+    command->input.iid_rid_riid.rid = rid;
+    command->input.iid_rid_riid.riid = riid;
+    command->retval = retval;
+}
+#endif // ANJAY_WITH_LWM2M12
 
 void _anjay_mock_dm_expect_clean(void) {
     AVS_UNIT_ASSERT_NULL(EXPECTED_COMMANDS);

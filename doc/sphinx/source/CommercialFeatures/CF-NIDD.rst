@@ -56,7 +56,7 @@ Usage example
 In this example we will use a BG96 wrapper for an NIDD driver that is part of Anjay.
 To run this example on a Linux-based system you will need to have a
 `Quectel BG96 <https://www.quectel.com/product/lpwa-bg96-cat-m1-nb1-egprs>`_ modem connected
-to your PC or utilize the Python script found in `tests/integration/framework/nidd/modem.py`
+to your PC or utilize the Python script found in `tests/integration/framework/framework/nidd/modem.py`
 that will simulate BG96 modem and act as a proxy to connect to a LwM2M server.
 
 .. note::
