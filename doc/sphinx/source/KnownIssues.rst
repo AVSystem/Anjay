@@ -119,3 +119,14 @@ to rebuilt ``libengine-pkcs11-openssl`` from a newer upstream tag:
 After installation, the newer libp11 should resolve the incompatibility and
 enable stable operation of PKCS#11 integration with OpenSSL-based DTLS/TLS
 backend.
+
+Notification payload may not reflect threshold crossing
+-------------------------------------------------------
+
+In certain cases, a notification may be triggered when the observed value
+crosses a threshold (for example, configured using the **gt** attribute),
+but the actual notification is not sent immediately. If the value goes back
+below (or above) that threshold before the notification message is constructed,
+the server will receive a notification containing the new value that itself would
+not have caused the notification to be triggered. This applies to all value-based 
+attributes: **lt**, **gt**, **st** and **edge**.

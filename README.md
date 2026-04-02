@@ -1,4 +1,4 @@
-# Anjay LwM2M library [<img align="right" height="50px" src="https://avsystem.github.io/Anjay-doc/_images/avsystem_logo.png">](http://www.avsystem.com/)
+# Anjay LwM2M library [<img align="right" height="50px" src="https://docs.avsystem.com/hubfs/Anjay_Docs/_images/avsystem_logo.png">](http://www.avsystem.com/)
 
 [![Build Status](https://github.com/AVSystem/Anjay/actions/workflows/anjay-tests.yml/badge.svg?branch=master)](https://github.com/AVSystem/Anjay/actions)
 [![Coverity Status](https://scan.coverity.com/projects/13206/badge.svg)](https://scan.coverity.com/projects/avsystem-anjay)
@@ -36,9 +36,9 @@ Anjay is a C library that aims to be the reference implementation of the OMA Lig
 The project has been created and is actively maintained by [AVSystem](https://www.avsystem.com).
 
 Quick links:
-- [Full documentation](https://AVSystem.github.io/Anjay-doc/)
-- [Tutorials](https://AVSystem.github.io/Anjay-doc/BasicClient.html)
-- [API docs](https://AVSystem.github.io/Anjay-doc/api/)
+- [Full documentation](https://docs.avsystem.com/hubfs/Anjay_Docs/index.html)
+- [Tutorials](https://docs.avsystem.com/hubfs/Anjay_Docs/BasicClient.html)
+- [API docs](https://docs.avsystem.com/hubfs/Anjay_Docs/api/index.html)
 - [Changelog](CHANGELOG.md)
 
 Table of contents:
@@ -115,7 +115,7 @@ Some features, such as support for EST, SMS binding or HSM's are [available comm
     - any Unix-like operating system, such as Linux (including Android), macOS and BSD family
     - Microsoft Windows (preliminary support, see [README.Windows.md](README.Windows.md) for details)
     - any embedded platform (e.g. FreeRTOS, Zephyr) - check the list of [ready to use integrations](#embedded-operating-systems-ports)
-    - porting is possible for any other platform that has ISO C99 compiler available, see [Porting guide for non-POSIX platforms](https://avsystem.github.io/Anjay-doc/PortingGuideForNonPOSIXPlatforms.html) for details
+    - porting is possible for any other platform that has ISO C99 compiler available, see [Porting guide for non-POSIX platforms](https://docs.avsystem.com/hubfs/Anjay_Docs/PortingGuideForNonPOSIXPlatforms.html) for details
 
 - CoAP data formats:
     - Plain Text
@@ -148,7 +148,7 @@ OMA LwM2M is a remote device management and telemetry protocol designed to conse
 
 For quick and simple protocol learning, visit [LwM2M Crash Course](https://avsystem.com/crashcourse/lwm2m/)
 
-More details about OMA LwM2M: [Brief introduction to LwM2M](https://AVSystem.github.io/Anjay-doc/LwM2M.html)
+More details about OMA LwM2M: [Brief introduction to LwM2M](https://docs.avsystem.com/hubfs/Anjay_Docs/LwM2M.html)
 
 ## Embedded operating systems ports
 
@@ -225,11 +225,11 @@ git clone https://github.com/AVSystem/Anjay.git \
 
 **NOTE**: On some older systems like CentOS 7, you may need to use `cmake3` instead of `cmake`.
 
-**NOTE**: We strongly recommend replacing `$(hostname)` with some actual unique hostname. Please see the [documentation](https://avsystem.github.io/Anjay-doc/LwM2M.html#clients-and-servers) for information on preferred endpoint name formats. Note that with the Coiote IoT Device Management platform, you will need to enter the endpoint name into the server UI first.
+**NOTE**: We strongly recommend replacing `$(hostname)` with some actual unique hostname. Please see the [documentation](https://docs.avsystem.com/hubfs/Anjay_Docs/LwM2M.html#clients-and-servers) for information on preferred endpoint name formats. Note that with the Coiote IoT Device Management platform, you will need to enter the endpoint name into the server UI first.
 
 ### Detailed compilation guide
 
-For a detailed guide on configuring and compiling the project (including cross-compiling), see [Compiling client applications](https://AVSystem.github.io/Anjay-doc/Compiling_client_applications.html).
+For a detailed guide on configuring and compiling the project (including cross-compiling), see [Compiling client applications](https://docs.avsystem.com/hubfs/Anjay_Docs/Compiling_client_applications.html).
 
 First, make sure all necessary submodules are downloaded and up-to-date:
 
@@ -301,7 +301,7 @@ See [LICENSE](LICENSE) file.
 
 Anjay LwM2M library comes with the option of [full commercial support, provided by AVSystem](https://avsystem.com/anjay-iot-sdk/).
 
-The list of features available commercially is [available here](https://AVSystem.github.io/Anjay-doc/CommercialFeatures.html).
+The list of features available commercially is [available here](https://docs.avsystem.com/hubfs/Anjay_Docs/CommercialFeatures.html).
 
 If you're interested in LwM2M Server, be sure to check out the [Coiote IoT Device Management](https://www.avsystem.com/products/coiote-iot-dm/) platform by AVSystem. It also includes the [interoperability test module](https://avsystem.com/coiote-iot-device-management-platform/lwm2m-interoperability-test/) that you can use to test your LwM2M client implementation. Our automated tests and testing scenarios enable you to quickly check how interoperable your device is with LwM2M.
 

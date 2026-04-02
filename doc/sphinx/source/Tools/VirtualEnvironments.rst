@@ -12,10 +12,10 @@ Virtual environments
 There are several Python-based tools in the repository:
 
 * integration tests framework,
-* `LwM2M testing shell <https://avsystem.github.io/Anjay-doc/Tools/CliLwM2MServer.html>`_,
-* `Factory provisioning tool <https://avsystem.github.io/Anjay-doc/Tools/FactoryProvisioning.html>`_,
-* `Package generator <https://avsystem.github.io/Anjay-doc/Tools/PackagesGenerator.html>`_,
-* `Object stub generator <https://avsystem.github.io/Anjay-doc/Tools/StubGenerator.html>`_.
+* :doc:`CliLwM2MServer`,
+* :doc:`FactoryProvisioning`,
+* :doc:`PackagesGenerator`,
+* :doc:`StubGenerator`.
 
 To use them, create, activate and configure a Python vitrual environment by running
 

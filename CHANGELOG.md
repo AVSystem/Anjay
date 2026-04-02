@@ -1,6 +1,13 @@
 # Changelog
 
-## 3.13.0 (Mar 31st, 2026)
+## 3.13.1 (April 2nd, 2026)
+
+### Bugfixes
+
+- Tests and documentation corrections
+
+
+## 3.13.0 (March 31st, 2026)
 
 ### Features
 - Introduced experimental SSL Error API under `WITH_SSL_ERROR_API` for MbedTLS
@@ -490,7 +497,7 @@
 
 ### BREAKING CHANGES
 
-**Note:** the following changes, while technically breaking, are minor, and should not cause problems in most pratical usages. See also: https://avsystem.github.io/Anjay-doc/Migrating/MigratingFromAnjay30.html
+**Note:** the following changes, while technically breaking, are minor, and should not cause problems in most pratical usages. See also: https://docs.avsystem.com/hubfs/Anjay_Docs/Migrating/MigratingFromAnjay30.html
 
 - Changed error handling semantics of anjay_attr_storage_restore() to match other persistence restore functions
 - TLS 1.2 is no longer implicitly set as the default (D)TLS version; the underlying crypto library's default is now used
@@ -528,7 +535,7 @@
 - The "con" attribute is now included in anjay_dm_oi_attributes_t, as it has been standardized for LwM2M TS 1.2
 - Refactored public headers to consistently use conditional compilation; APIs for disabled features are no longer accessible
 - Removed previously deprecated APIs
-- avs_commons 5.0 refactor the API for providing PSK credentials. Please refer to the change log there, or the document below for details: https://avsystem.github.io/Anjay-doc/Migrating/MigratingFromAnjay215.html
+- avs_commons 5.0 refactor the API for providing PSK credentials. Please refer to the change log there, or the document below for details: https://docs.avsystem.com/hubfs/Anjay_Docs/Migrating/MigratingFromAnjay215.html
 
 ### Features
 
@@ -561,7 +568,7 @@
 
 ### BREAKING CHANGES
 
-- avs_commons 4.10 contains a refator of PSK security credential handling. Please refer to the change log there, or the document below for details: https://avsystem.github.io/Anjay-doc/Migrating/MigratingFromAnjay214.html
+- avs_commons 4.10 contains a refator of PSK security credential handling. Please refer to the change log there, or the document below for details: https://docs.avsystem.com/hubfs/Anjay_Docs/Migrating/MigratingFromAnjay214.html
 
 ### Features
 
@@ -757,13 +764,13 @@ Also updates avs_commons to version 4.7. For details, see: https://github.com/AV
 - Minimum required CMake version is raised to 3.6
 - avs_commons 4.6 contains a refactor of avs_net_local_address_for_target_host() that may be breaking for users who maintain their own socket integration code
 
-For more detailed information about breaking changes and how your code needs to be updated, see: https://avsystem.github.io/Anjay-doc/Migrating/MigratingFromAnjay28.html
+For more detailed information about breaking changes and how your code needs to be updated, see: https://docs.avsystem.com/hubfs/Anjay_Docs/Migrating/MigratingFromAnjay28.html
 
 ### Features
 
-- LwM2M Testing Shell is now included in the open-source version, see https://avsystem.github.io/Anjay-doc/Tools/CliLwM2MServer.html
+- LwM2M Testing Shell is now included in the open-source version, see https://docs.avsystem.com/hubfs/Anjay_Docs/Tools/CliLwM2MServer.html
 - Demo application can now be built even when some of the optional library features (e.g. bootstrap, Access Control, observation support, persistence) are disabled
-- A new guide for writing custom socket integration code, and example lightweight implementation: https://avsystem.github.io/Anjay-doc/PortingGuideForNonPOSIXPlatforms/NetworkingAPI.html
+- A new guide for writing custom socket integration code, and example lightweight implementation: https://docs.avsystem.com/hubfs/Anjay_Docs/PortingGuideForNonPOSIXPlatforms/NetworkingAPI.html
 
 ### Improvements
 
@@ -797,7 +804,7 @@ Bugfixes
 
 See below for breaking changes in avs_commons. Note that these are unlikely to affect users that use CMake for building the library, but may require updating configuration headers when using alternative build systems.
 
-For more detailed information about breaking changes and how your code needs to be updated, see: https://avsystem.github.io/Anjay-doc/Migrating/MigratingFromAnjay27.html
+For more detailed information about breaking changes and how your code needs to be updated, see: https://docs.avsystem.com/hubfs/Anjay_Docs/Migrating/MigratingFromAnjay27.html
 
 ### Features
 
@@ -814,7 +821,7 @@ For more detailed information about breaking changes and how your code needs to 
 - Integration test target logs path is now configurable in runtest.py
 - Various improvements to documentation and examples:
   - Attribute storage module is now installed in most tutorials, making them more complete
-  - https://avsystem.github.io/Anjay-doc/AdvancedTopics/AT-NetworkErrorHandling.html now mentions retry behavior of the commercial version in LwM2M 1.1
+  - https://docs.avsystem.com/hubfs/Anjay_Docs/AdvancedTopics/AT-NetworkErrorHandling.html now mentions retry behavior of the commercial version in LwM2M 1.1
   - API documentation generated by Doxygen now properly includes all commercial-only APIs when run in commercial codebase
   - Updated installation instructions for CentOS that referred to non-existent URLs
   - Updated visual style to match corporate identity
@@ -862,7 +869,7 @@ Also updates avs_commons to version 4.5 which introduces the following changes:
 
 - Changed signature of anjay_security_config_from_dm() and expected lifetime of anjay_security_config_t; removed anjay_fw_update_load_security_from_dm() compatibility alias
 
-Note: For a more detailed information about breaking changes and how your code needs to be updated, see: https://avsystem.github.io/Anjay-doc/Migrating/MigratingFromAnjay26.html
+Note: For a more detailed information about breaking changes and how your code needs to be updated, see: https://docs.avsystem.com/hubfs/Anjay_Docs/Migrating/MigratingFromAnjay26.html
 
 ### Features
 
@@ -1103,7 +1110,7 @@ Also updates avs_commons to version 4.1.1, which includes the following changes:
   - Removed the legacy avs_coap component (the version used by Anjay 1.x)
   - Removed the mbed TLS custom entropy initializer pattern in favor of the new PRNG framework
 
-Note: For a more detailed information about breaking changes and how your code needs to be fixed, see https://avsystem.github.io/Anjay-doc/Migrating/MigratingFromAnjay225.html
+Note: For a more detailed information about breaking changes and how your code needs to be fixed, see https://docs.avsystem.com/hubfs/Anjay_Docs/Migrating/MigratingFromAnjay225.html
 
 ### Features
 

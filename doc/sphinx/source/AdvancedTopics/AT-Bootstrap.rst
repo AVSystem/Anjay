@@ -54,7 +54,7 @@ Add a Bootstrap Account in Anjay
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 The Security Object holds connection parameters for the LwM2M server. In this
 example, we configure a non-secure connection to the Coiote IoT Device
-Management platform. `anjay_security_instance_t.bootstrap_server <https://avsystem.github.io/Anjay-doc/api/structanjay__security__instance__t.html#aabce58ea8cf040fbb08cbb43efe60dd9>`_
+Management platform. `anjay_security_instance_t.bootstrap_server <https://docs.avsystem.com/hubfs/Anjay_Docs/api/api_generated/structanjay__security__instance__t.html#_CPPv4N25anjay_security_instance_t16bootstrap_serverE>`_
 flag needs to be set to `true`. Also, LwM2M Bootstrap Server has a different IP
 port than a regular LwM2M Server.
 
@@ -116,7 +116,7 @@ The Bootstrap Procedure is considered failed if a LwM2M Client does not receive
 the "Bootstrap-Finish" operation after the last received Bootstrap-Server command
 in a certain period. The LwM2M Specification suggest setting it to the
 value of CoAP Parameter ``EXCHANGE_LIFETIME`` and it is calculated based on 
-`anjay_configuration_t::udp_tx_params <https://avsystem.github.io/Anjay-doc/api/structanjay__configuration.html#a9690621b087639e06dd0c747206d0679>`_ or `anjay_configuration_t::coap_tcp_request_timeout <https://avsystem.github.io/Anjay-doc/api/structanjay__configuration.html#a3ed2199020b41ef9cab2b20fb27a7f3e>`_.
+`anjay_configuration_t::udp_tx_params <https://docs.avsystem.com/hubfs/Anjay_Docs/api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration13udp_tx_paramsE>`_ or `anjay_configuration_t::coap_tcp_request_timeout <https://docs.avsystem.com/hubfs/Anjay_Docs/api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration24coap_tcp_request_timeoutE>`_.
 
 The default values are as follows:
  - 247 seconds for UDP
@@ -125,18 +125,18 @@ The default values are as follows:
 The following Bootstrap-related Resources are also implemented in the Anjay's
 build-in Security Object:
 
-- `anjay_security_instance_t::client_holdoff_s <https://avsystem.github.io/Anjay-doc/api/structanjay__security__instance__t.html#abe22f8c8164f40496fcf4e1d4d688cf2>`_ - the time that Anjay waits
+- `anjay_security_instance_t::client_holdoff_s <https://docs.avsystem.com/hubfs/Anjay_Docs/api/api_generated/structanjay__security__instance__t.html#_CPPv4N25anjay_security_instance_t16client_holdoff_sE>`_ - the time that Anjay waits
   before performing a Client Initiated Bootstrap once it determines that it
   should initiate this bootstrap mode.
 
-- `anjay_security_instance_t::bootstrap_timeout_s <https://avsystem.github.io/Anjay-doc/api/structanjay__security__instance__t.html#a5f249397d36fffa3c7e263c2c923fb76>`_ - if set, Anjay will automatically
+- `anjay_security_instance_t::bootstrap_timeout_s <https://docs.avsystem.com/hubfs/Anjay_Docs/api/api_generated/structanjay__security__instance__t.html#_CPPv4N25anjay_security_instance_t19bootstrap_timeout_sE>`_ - if set, Anjay will automatically
   purge the LwM2M Bootstrap-Server Account after this timeout value if a Bootstrap
   procedure ends successfully. By default, the Bootstrap-Server Account lifetime
   is infinite.
 
 There is also a legacy Server-Initiated Bootstrap mechanism based on an
 interpretation of LwM2M 1.0 TS. To learn more, see
-`anjay_configuration_t::disable_legacy_server_initiated_bootstrap <https://avsystem.github.io/Anjay-doc/api/structanjay__configuration.html#aa5f75a1b0546352b00b4bddb3edab1eb>`_.
+`anjay_configuration_t::disable_legacy_server_initiated_bootstrap <https://docs.avsystem.com/hubfs/Anjay_Docs/api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration41disable_legacy_server_initiated_bootstrapE>`_.
 
 Coiote LwM2M Server
 ^^^^^^^^^^^^^^^^^^^

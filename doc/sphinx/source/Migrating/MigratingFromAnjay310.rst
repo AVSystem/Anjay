@@ -6,8 +6,8 @@
    Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
    See the attached LICENSE file for details.
 
-Migrating from Anjay 3.10
-=========================
+Migrating from Anjay 3.8, 3.9 or 3.10
+=====================================
 
 .. contents:: :local:
 
@@ -18,9 +18,6 @@ Introduction
 
 Starting from Anjay 3.11.0, the behavior regarding the maximum Hold Off Time for
 bootstrap connections has changed.
-
-LwM2M TS 1.2 introduced possibility to delete a Resource Instance, so
-one additional data model handler had to be added.
 
 Limiting the maximum Hold Off Time for Bootstrap
 ------------------------------------------------
