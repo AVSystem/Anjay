@@ -56,7 +56,7 @@ jobs:
 
   ubuntu2404-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:ubuntu-24.04-3.0
+    container: registry.avsystem.com/embedded-public/anjay-travis:ubuntu-24.04-3.0
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
@@ -102,7 +102,7 @@ jobs:
 
   rockylinux9-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:rockylinux-9-3.0
+    container: registry.avsystem.com/embedded-public/anjay-travis:rockylinux-9-3.0
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
