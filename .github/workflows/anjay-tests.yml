@@ -10,7 +10,7 @@ on: [push]
 jobs:
   ubuntu2204-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:ubuntu-22.04-3.0
+    container: registry.avsystem.com/embedded-public/anjay-travis:ubuntu-22.04-3.0
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
