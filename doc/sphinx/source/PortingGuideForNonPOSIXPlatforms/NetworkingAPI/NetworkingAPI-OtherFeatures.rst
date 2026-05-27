@@ -68,7 +68,7 @@ The reference implementation includes full support for the
 structure. No configuration options except ``reuse_addr`` and
 ``preferred_endpoint`` are directly used by Anjay, but they can be directly
 specified by the user through the `socket_config field in anjay_configuration_t
-<../../api/structanjay__configuration.html#a14968e097106889daad258f9e3a066d9>`_.
+<../../api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration13socket_configE>`_.
 
 In the tutorial implementation all such configuration is ignored.
 

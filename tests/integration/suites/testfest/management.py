@@ -119,6 +119,7 @@ class Test215_SettingBasicInformationInTLVFormat(DataModel.Test):
                            RID.Server.DisableTimeout,
                            RID.Server.NotificationStoring,
                            RID.Server.Binding,
+                           RID.Server.InitialRegistrationDelayTimer,
                            RID.Server.ServerCommunicationRetryCount,
                            RID.Server.ServerCommunicationRetryTimer,
                            RID.Server.ServerCommunicationSequenceRetryCount,

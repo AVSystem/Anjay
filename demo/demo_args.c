@@ -45,9 +45,10 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
             .id = 1,
             .binding_mode = NULL,
 #ifdef ANJAY_WITH_LWM2M11
-            .retry_count = 1,
+            .initial_registration_delay_timer = 0,
+            .retry_count = 0,
             .retry_timer = 0,
-            .sequence_retry_count = 1,
+            .sequence_retry_count = 0,
             .sequence_delay_timer = 0,
             .certificate_usage = AVS_NET_SOCKET_DANE_DOMAIN_ISSUED_CERTIFICATE,
 #endif // ANJAY_WITH_LWM2M11
@@ -652,7 +653,8 @@ static void print_help_full(const struct option *options) {
         && defined(AVS_COMMONS_STREAM_WITH_FILE)
         { 289, "PERSISTENCE_FILE", NULL,
           "File to load Server, Security and Access Control object contents at "
-          "startup, and store it at shutdown" },
+          "startup, and store it at shutdown. Used for OSCORE object and EST "
+          "state persistence too if applicable" },
 #endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
        // defined(AVS_COMMONS_STREAM_WITH_FILE)
 #ifdef ANJAY_WITH_SECURITY_STRUCTURED
@@ -826,6 +828,11 @@ static void print_help_full(const struct option *options) {
           "is written to. Each packet contains json with intercepted "
           "datagram." },
 #endif // WITH_DEMO_TRAFFIC_INTERCEPTOR
+#ifdef ANJAY_WITH_LWM2M11
+        { 358, "INITIAL REGISTRATION DELAY", "0",
+          "Configures Initial Registration Delay Timer for the last "
+          "configured server" },
+#endif // ANJAY_WITH_LWM2M11
     };
 
     const size_t screen_width = get_screen_width();
@@ -1247,6 +1254,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
 #endif // ANJAY_WITH_DOWNLOADER
 #ifdef ANJAY_WITH_LWM2M11
         {"certificate-usage", required_argument, 0, 351},
+        {"initial-registration-delay-timer", required_argument, 0, 358},
 #endif // ANJAY_WITH_LWM2M11
 #ifdef WITH_DEMO_TRAFFIC_INTERCEPTOR
 { "traffic_interceptor_path", required_argument, 0, 357 },
@@ -2321,6 +2329,20 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             parsed_args->traffic_intercept_path = optarg;
         }
 #endif // WITH_DEMO_TRAFFIC_INTERCEPTOR
+#ifdef ANJAY_WITH_LWM2M11
+        case 358: {
+            int idx = num_servers == 0 ? 0 : num_servers - 1;
+            if (parse_u32(optarg,
+                          &parsed_args->connection_args.servers[idx]
+                                   .initial_registration_delay_timer)) {
+                demo_log(ERROR,
+                         "Invalid Initial Registration Delay Timer value: %s",
+                         optarg);
+                goto finish;
+            }
+            break;
+        }
+#endif // ANJAY_WITH_LWM2M11
         case 0:
             goto process;
         }

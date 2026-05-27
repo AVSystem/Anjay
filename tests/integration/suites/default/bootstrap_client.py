@@ -7,6 +7,8 @@
 # Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
+import re
+
 from framework_tools.lwm2m.coap.code import Code
 from framework_tools.lwm2m.coap.server import SecurityMode
 from framework.lwm2m_test import *
@@ -90,7 +92,8 @@ class BootstrapTest:
                                       additional_security_data=b'',
                                       additional_server_data=b'',
                                       bootstrap_on_registration_failure=None,
-                                      bootstrap_request_timeout_s=None):
+                                      bootstrap_request_timeout_s=None,
+                                      preferred_content_format=None):
             # For the first holdoff_s seconds, the client should wait for
             # 1.0-style Server Initiated Bootstrap. Note that we subtract
             # 2 seconds to take into account code execution delays.
@@ -103,10 +106,13 @@ class BootstrapTest:
 
             # We should get Bootstrap Request now
             if bootstrap_request_timeout_s is None:
-                self.assertDemoRequestsBootstrap(endpoint=endpoint)
+                self.assertDemoRequestsBootstrap(endpoint=endpoint,
+                                                 preferred_content_format=preferred_content_format)
             elif bootstrap_request_timeout_s >= 0:
                 self.assertDemoRequestsBootstrap(
-                    endpoint=endpoint, timeout_s=bootstrap_request_timeout_s)
+                    endpoint=endpoint,
+                    preferred_content_format=preferred_content_format,
+                    timeout_s=bootstrap_request_timeout_s)
 
             if clear_everything:
                 req = Lwm2mDelete('/')
@@ -139,6 +145,8 @@ class BootstrapTest:
                 extra_args += ['--bootstrap-holdoff', str(holdoff_s)]
             if timeout_s is not None:
                 extra_args += ['--bootstrap-timeout', str(timeout_s)]
+            extra_args += [ '--retry-count', str(1)]
+            extra_args += ['--sequence-retry-count', str(0)]
 
             self.holdoff_s = holdoff_s
             self.timeout_s = timeout_s
@@ -190,6 +198,31 @@ class BootstrapClientTest(BootstrapTest.Test):
         # ensure that bootstrap account was purged and client won't accept Request Bootstrap Trigger
         self.execute_resource(server=self.serv, oid=OID.Server, iid=1, rid=RID.Server.RequestBootstrapTrigger,
                               expect_error_code=Code.RES_METHOD_NOT_ALLOWED)
+
+
+class BootstrapInitialRegistrationDelayTest(BootstrapTest.Test):
+    INITIAL_REGISTRATION_DELAY_S = 5
+
+    def setUp(self):
+        super().setUp(holdoff_s=3, timeout_s=3, maximum_version='1.1')
+
+    def runTest(self):
+        self.perform_typical_bootstrap(
+            server_iid=1,
+            security_iid=2,
+            server_uri='coap://127.0.0.1:%d' % self.serv.get_listen_port(),
+            lifetime=60,
+            additional_server_data=TLV.make_resource(
+                RID.Server.InitialRegistrationDelayTimer,
+                self.INITIAL_REGISTRATION_DELAY_S).serialize(),
+            preferred_content_format=coap.ContentFormat.APPLICATION_LWM2M_SENML_CBOR)
+
+        # no communication for the Initial Registration Delay time
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=self.INITIAL_REGISTRATION_DELAY_S - 1)
+
+        self.assertDemoRegisters(self.serv, lifetime=60, version='1.1',
+                                 timeout_s=2)
 
 
 class BootstrapOneResourceAtATimeTest(BootstrapTest.Test):
@@ -278,6 +311,39 @@ class ClientBootstrapBacksOffAfterErrorResponse(BootstrapTest.Test):
                                                    "Request Bootstrap immediately after receiving "
                                                    "an error response"):
             self.bootstrap_server.recv(timeout_s=1)
+
+
+class BootstrapRequestRejectLogsClientErrorResponse(BootstrapTest.Test):
+    # regex to match Anjay log
+    BOOTSTRAP_REJECTED_REGEX = re.compile(
+        rb'server responded with (\d\.\d{2} [^)\n]+) \(expected 2\.04 Changed\)')
+
+    def setUp(self):
+        super().setUp(servers=0)
+
+    def runTest(self):
+        def check(code: coap.Code, trigger_bootstrap=False):
+            if trigger_bootstrap:
+                self.communicate('enable-server 65535')
+
+            self.assertDemoRequestsBootstrap(respond_with_error_code=code)
+
+            assert_server_communication_error_logs(
+                self, self.BOOTSTRAP_REJECTED_REGEX, 65535, code)
+
+        # check all possible client (4.xx) errors
+        for detail in range(16):
+            if detail == 13:
+                # ignore Request Entity Too Large
+                continue
+            check(coap.Code(4, detail), trigger_bootstrap=(detail != 0))
+
+        # check all possible server (5.xx) errors
+        for detail in range(6):
+            check(coap.Code(5, detail), trigger_bootstrap=True)
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
 
 
 class ClientBootstrapReconnect(BootstrapTest.Test):
@@ -816,9 +882,10 @@ class BootstrappedSecurityInstanceBindingAndUriMismatch(BootstrapTest.Test):
 
 
 # NOTE: consecutive Bootstrap Requests are sent with exponential backoff (see schedule_request_bootstrap()),
-# starting with 3s. If we were to test like k different values for the resource that causes re-bootstrapping,
-# it makes more sense to do k separate tests and pay 3 seconds for each (O(k)), rather than one with cost:
-# 3*(1) + 3*(2) + 3*(3) + ... + 3*(k) = O(k^2)
+# starting with 1s * [1, ANJAY_HOLDOFF_JITTER_RANDOM_FACTOR (by default 1.5)]. If we were to test k different values
+# for the resource that causes re-bootstrapping, it makes more sense to do k separate tests and pay 1 seconds
+# for each (O(k)), rather than one with cost:
+# 1*(1) + 1*(2) + 1*(3) + ... + 1*(k) = O(k^2)
 class BootstrapSingleServerRegistrationOnFailureNotSet(BootstrapTest.Test):
     BOOTSTRAP_ON_REGISTRATION_FAILURE = None
 
@@ -835,7 +902,7 @@ class BootstrapSingleServerRegistrationOnFailureNotSet(BootstrapTest.Test):
                                        bootstrap_on_registration_failure=self.BOOTSTRAP_ON_REGISTRATION_FAILURE,
                                        finish=True)
         # See the comment above to understand where the timeout_s came from.
-        self.assertDemoRequestsBootstrap(timeout_s=3 + 1)
+        self.assertDemoRequestsBootstrap(timeout_s=1 * 2 * 1.5 + 1)
 
 
 class BootstrapSingleServerRegistrationOnFailureFalse(

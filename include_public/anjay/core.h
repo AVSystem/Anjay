@@ -357,6 +357,29 @@ typedef void anjay_ssl_error_cb_t(void *arg,
 
 #endif // ANJAY_WITH_SSL_ERROR_API
 
+/**
+ * @experimental This is experimental SSL error callback API. This API
+ *               can change in future versions without any notice.
+ *
+ * Callback called each time the Bootstrap Request, Register or Update message
+ * gets a response different than expected.
+ *
+ * @param arg    Opaque argument as set through the
+ *               @ref anjay_configuration_t::communication_error_cb_arg
+ *
+ * @param anjay  Anjay object that calls this callback
+ *
+ * @param ssid   Short Server ID of the server which responded with error code
+ *
+ * @param code   Error code received. See <c>AVS_COAP_CODE()</c> and
+ *               <c>AVS_COAP_CODE_*</c> definitions in
+ *               `deps/avs_coap/include_public/avsystem/coap/code.h` file.
+ */
+typedef void anjay_server_communication_error_cb_t(void *arg,
+                                                   anjay_t *anjay,
+                                                   anjay_ssid_t ssid,
+                                                   uint8_t code);
+
 typedef struct anjay_configuration {
     /**
      * Endpoint name as presented to the LwM2M server. Must be non-NULL, or
@@ -735,6 +758,28 @@ typedef struct anjay_configuration {
      */
     void *ssl_error_cb_arg;
 #endif // ANJAY_WITH_SSL_ERROR_API
+    /**
+     * @experimental This is experimental server communication error callback
+     *               API. This API can change in future versions without any
+     *               notice.
+     *
+     * Function called each time a response different than expected is received
+     * in response to a Bootstrap Request, Register or Update message.
+     */
+    anjay_server_communication_error_cb_t *server_communication_error_cb;
+
+    /**
+     * @experimental This is experimental server communication error callback
+     *               API. This API can change in future versions without any
+     *               notice.
+     *
+     * Opaque argument that will be passed to the function configured in the
+     * <c>server_communication_error_cb</c> field.
+     *
+     * If <c>server_communication_error_cb</c> is NULL, this field is ignored.
+     */
+    void *server_communication_error_cb_arg;
+
 #ifdef ANJAY_WITH_COAP_DOWNLOAD
     /**
      * If set, defines the number of additional CoAP download attempts that will
@@ -1553,11 +1598,9 @@ int anjay_transport_schedule_reconnect(anjay_t *anjay,
  *
  * If this function returns <c>true</c>, it means that Anjay is in an
  * essentially non-operational state. @ref anjay_transport_schedule_reconnect
- * may be called to reset the failure state and retry connecting to all
- * configured servers. @ref anjay_transport_schedule_reconnect will do the same,
- * but only for the specified transports. Alternatively,
- * @ref anjay_enable_server may be used to retry connection only to a specific
- * server.
+ * may be called to reset the failure state for the specified transports.
+ * Alternatively, @ref anjay_enable_server may be used to retry connection only
+ * to a specific server.
  *
  * @param anjay Anjay object to operate on.
  *

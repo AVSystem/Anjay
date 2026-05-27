@@ -78,7 +78,7 @@ Usage example
    For simplicity, we'll also use the example SMS driver implementation for AT
    modems through the whole tutorial. You can find more information about
    features and limitations of that implementation in
-   `driver's documentation <../api/at__sms_8h.html>`_.
+   `driver's documentation <../api/api_generated/file_include_public_anjay_at_sms.h.html>`_.
 
    To make those examples work out-of-the-box with the virtual modem/SMS proxy
    script, client's and server's phone numbers will be set to the default values

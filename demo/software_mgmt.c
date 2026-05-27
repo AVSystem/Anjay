@@ -94,8 +94,7 @@ static void fix_sw_meta_endianness(sw_metadata_t *meta) {
 }
 
 static int read_sw_meta_from_file(FILE *f, sw_metadata_t *out_metadata) {
-    sw_metadata_t m;
-    memset(&m, 0, sizeof(m));
+    sw_metadata_t m = { 0 };
 
     if (fread(m.magic, sizeof(m.magic), 1, f) != 1
             || fread(&m.header_ver, sizeof(m.header_ver), 1, f) != 1

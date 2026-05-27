@@ -196,7 +196,10 @@ int _anjay_schedule_socket_update(anjay_unlocked_t *anjay,
         _anjay_server_update_registration_info(
                 server, NULL,
 #ifdef ANJAY_WITH_LWM2M11
-                anjay->lwm2m_version_config.minimum_version,
+                // maximum_version is the default registration version.
+                // If the server responds with 4.12, the registration version
+                // will be downgraded.
+                anjay->lwm2m_version_config.maximum_version,
 #else  // ANJAY_WITH_LWM2M11
                 ANJAY_LWM2M_VERSION_1_0,
 #endif // ANJAY_WITH_LWM2M11

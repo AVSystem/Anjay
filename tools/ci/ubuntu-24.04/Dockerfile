@@ -18,6 +18,8 @@ RUN apt-get update && \
 
 # set up Python3 venv
 COPY requirements.txt requirements.txt
+COPY tools/test-framework-tools/tools tools/test-framework-tools/tools
+COPY tests/integration/framework tests/integration/framework
 RUN python3 -m venv /venv
 RUN . /venv/bin/activate && \
     pip install --upgrade pip && \

@@ -290,7 +290,7 @@ this tutorial, but the presented code may be used as a good starting point.
 anjay_serve_any()
 ^^^^^^^^^^^^^^^^^
 
-`anjay_serve_any() <../api/core_8h.html#ac436ac24095cb10ef008c8fd91126b31>`_ is
+`anjay_serve_any() <../api/api_generated/function_core_8h_1ac436ac24095cb10ef008c8fd91126b31.html>`_ is
 a simplified API that allows writing a simple event loop that the user retains
 control of.
 

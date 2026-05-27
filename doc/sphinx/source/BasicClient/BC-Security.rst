@@ -18,8 +18,8 @@ using the ``security`` module that pre-implements the Security Object, or if you
 perhaps decide to implement the Security Object yourself from scratch. The
 library will always read the necessary DTLS configuration from the data model.
 
-.. note:: **mbed TLS 2.0 or newer** or **OpenSSL 1.1 or newer** or
-          **tinydtls 0.9 or newer** is required for proper, conformant support
+.. note:: **mbed TLS 2.0 or newer** or **OpenSSL 1.1 or newer**
+          is required for proper, conformant support
           for the security modes defined in the LwM2M specification.
 
 .. warning:: Anjay will likely compile successfully with older DTLS library

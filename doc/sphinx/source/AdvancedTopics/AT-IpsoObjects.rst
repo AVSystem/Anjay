@@ -187,9 +187,9 @@ Installing objects and instances
 To setup an IPSO object, you must install it first using one of the following
 methods:
 
- * `anjay_ipso_v2_basic_sensor_install <../api/ipso__objects__v2_8h.html#ac3200c3c61ea62f76eb4e606adfcd90f>`_,
- * `anjay_ipso_v2_3d_sensor_install <../api/ipso__objects__v2_8h.html#a154a62e2adafe9890cbd66c91bb8f20a>`_,
- * `anjay_ipso_button_install <../api/ipso__objects_8h.html#a11e68bd571d70da7d17ee5c73cff6e0d>`_.
+ * `anjay_ipso_v2_basic_sensor_install <../api/api_generated/function_ipso__objects__v2_8h_1ac3200c3c61ea62f76eb4e606adfcd90f.html>`_,
+ * `anjay_ipso_v2_3d_sensor_install <../api/api_generated/function_ipso__objects__v2_8h_1a154a62e2adafe9890cbd66c91bb8f20a.html>`_,
+ * `anjay_ipso_button_install <../api/api_generated/function_ipso__objects_8h_1a11e68bd571d70da7d17ee5c73cff6e0d.html>`_.
 
 For sensors, the API accepts Object ID, object version and maximum number of
 instances that'll be installed later. For button, the Object ID and version is
@@ -209,15 +209,15 @@ defined upfront.
 After installing objects, instances of these objects can be added using
 following APIs:
 
- * `anjay_ipso_v2_basic_sensor_instance_add <../api/ipso__objects__v2_8h.html#ae92a38b4eba14909b00233088e6256b5>`_,
- * `anjay_ipso_v2_3d_sensor_instance_add <../api/ipso__objects__v2_8h.html#a760f33f44690447409e77066b4c86295>`_,
- * `anjay_ipso_button_instance_add <../api/ipso__objects_8h.html#ae981fe67ce9c2e9032284f26fa5fb3c3>`_.
+ * `anjay_ipso_v2_basic_sensor_instance_add <../api/api_generated/function_ipso__objects__v2_8h_1ae92a38b4eba14909b00233088e6256b5.html>`_,
+ * `anjay_ipso_v2_3d_sensor_instance_add <../api/api_generated/function_ipso__objects__v2_8h_1a760f33f44690447409e77066b4c86295.html>`_,
+ * `anjay_ipso_button_instance_add <../api/api_generated/function_ipso__objects_8h_1ae981fe67ce9c2e9032284f26fa5fb3c3.html>`_.
 
 For basic and 3D sensors, these methods accept an initial value of the sensor
 and a structure that provides metadata about each instance:
-`anjay_ipso_v2_basic_sensor_meta_t <../api/ipso__objects__v2_8h.html#a2e0cd9b35002025a91edb96842cd29cf>`_
+`anjay_ipso_v2_basic_sensor_meta_t <../api/api_generated/typedef_ipso__objects__v2_8h_1a2e0cd9b35002025a91edb96842cd29cf.html>`_
 and
-`anjay_ipso_v2_3d_sensor_meta_t <../api/ipso__objects__v2_8h.html#a34fe615fc03fa7313a2dffabd326058f>`_,
+`anjay_ipso_v2_3d_sensor_meta_t <../api/api_generated/typedef_ipso__objects__v2_8h_1a34fe615fc03fa7313a2dffabd326058f.html>`_,
 respectively.
 
 These structs are used to configure unit, reported minimum and maximum values
@@ -338,9 +338,9 @@ Updating values
 
 To update reported value of a sensor, use one of following methods:
 
- * `anjay_ipso_v2_basic_sensor_value_update <../api/ipso__objects__v2_8h.html#ab9ee3d855e885a2dc25ae73f466dd228>`_,
- * `anjay_ipso_v2_3d_sensor_value_update <../api/ipso__objects__v2_8h.html#a2166bd5daae8fb235f96064d8b97c740>`_,
- * `anjay_ipso_button_update <../api/ipso__objects_8h.html#a84a9bf58b9cff7e1bd5fe9083576cfa2>`_.
+ * `anjay_ipso_v2_basic_sensor_value_update <../api/api_generated/function_ipso__objects__v2_8h_1ab9ee3d855e885a2dc25ae73f466dd228.html>`_,
+ * `anjay_ipso_v2_3d_sensor_value_update <../api/api_generated/function_ipso__objects__v2_8h_1a2166bd5daae8fb235f96064d8b97c740.html>`_,
+ * `anjay_ipso_button_update <../api/api_generated/function_ipso__objects_8h_1a84a9bf58b9cff7e1bd5fe9083576cfa2.html>`_.
 
 .. important::
 
@@ -445,9 +445,9 @@ Removing instances
 In case you need to change the set of instances of installed IPSO objects, those
 instances can be removed using following methods:
 
- * `anjay_ipso_v2_basic_sensor_instance_remove <../api/ipso__objects__v2_8h.html#af53a1881ef4ed8de52cb000700a0dbb9>`_,
- * `anjay_ipso_v2_3d_sensor_instance_remove <../api/ipso__objects__v2_8h.html#a2bd255f62cf4817ea567b65ddae6644c>`_,
- * `anjay_ipso_button_instance_remove <../api/ipso__objects_8h.html#af53a1881ef4ed8de52cb000700a0dbb9>`_.
+ * `anjay_ipso_v2_basic_sensor_instance_remove <../api/api_generated/function_ipso__objects__v2_8h_1afda08ed7a16c309ba541464f4e2224ed.html>`_,
+ * `anjay_ipso_v2_3d_sensor_instance_remove <../api/api_generated/function_ipso__objects__v2_8h_1ad2b11e97c665a2142dc1f50cac931adc.html>`_,
+ * `anjay_ipso_button_instance_remove <../api/api_generated/function_ipso__objects_8h_1af53a1881ef4ed8de52cb000700a0dbb9.html>`_.
 
 In our example instance set doesn't change. All objects and instances are
 automatically deleted when ``anjay_delete()`` is called.

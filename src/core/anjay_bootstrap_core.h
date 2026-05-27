@@ -14,6 +14,7 @@
 
 #include <anjay_modules/anjay_bootstrap.h>
 
+#include <avsystem/commons/avs_errno.h>
 #include <avsystem/commons/avs_stream.h>
 #include <avsystem/commons/avs_stream_outbuf.h>
 

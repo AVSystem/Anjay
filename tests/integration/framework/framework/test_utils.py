@@ -8,6 +8,7 @@
 # See the attached LICENSE file for details.
 
 import binascii
+import re
 import struct
 import tempfile
 import collections
@@ -19,6 +20,42 @@ from typing import Optional
 
 from framework_tools.lwm2m import coap
 from framework_tools.lwm2m.objlink import Objlink
+
+DEMO_SERVER_COMMUNICATION_ERROR_REGEX = re.compile(
+    rb'ERROR \[demo\] .*: Server Communication error from server with SSID=(\d+): '
+    rb'code=(\d\.\d{2} [^\n]+)\n')
+
+
+def _logged_code_to_coap_code(logged_code):
+    cls, detail = map(int, logged_code.split(maxsplit=1)[0].split(b'.'))
+    return coap.Code(cls, detail)
+
+
+def assert_server_communication_error_logs(test, anjay_log_regex, ssid, code,
+                                           timeout_s=2):
+    """
+    Verifies logs emitted when Request Bootstrap, Register or Update is rejected;
+    used by rejection tests for all three operations. This checks both the Anjay
+    library log and the demo log produced through
+    anjay_server_communication_error_cb_t.
+    """
+    # first there is Anjay lib log
+    match = test.read_log_until_match(
+        anjay_log_regex,
+        timeout_s=timeout_s)
+    test.assertIsNotNone(match)
+    test.assertEqual(_logged_code_to_coap_code(match.group(1)), code)
+
+    # then there is demo app log from callback
+    match = test.read_log_until_match(
+        regex=DEMO_SERVER_COMMUNICATION_ERROR_REGEX,
+        timeout_s=timeout_s)
+    test.assertIsNotNone(match)
+    # assert SSID
+    test.assertEqual(int(match.group(1)), ssid)
+    # assert code passed in callback
+    test.assertEqual(_logged_code_to_coap_code(match.group(2)), code)
+
 
 if sys.version_info[0] == 3 and sys.version_info[1] < 7:
     # based on https://stackoverflow.com/a/18348004/2339636
@@ -128,6 +165,7 @@ class RID:
         RequestBootstrapTrigger = 9
         TlsDtlsAlertCode = 11
         LastBootstrapped = 12
+        InitialRegistrationDelayTimer = 14
         BootstrapOnRegistrationFailure = 16
         ServerCommunicationRetryCount = 17
         ServerCommunicationRetryTimer = 18

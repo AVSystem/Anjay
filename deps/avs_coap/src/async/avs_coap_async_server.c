@@ -1337,14 +1337,14 @@ avs_coap_notify_async(avs_coap_ctx_t *ctx,
     if (!avs_coap_code_is_response(response_header->code)) {
         LOG(ERROR, "%s" _(" is not a valid response code"),
             AVS_COAP_CODE_STRING(response_header->code));
-        avs_errno(AVS_EINVAL);
+        return avs_errno(AVS_EINVAL);
     }
 
     if (!delivery_handler
             && reliability_hint != AVS_COAP_NOTIFY_PREFER_NON_CONFIRMABLE) {
         LOG(ERROR,
             _("delivery_handler is mandatory for reliable notifications"));
-        avs_errno(AVS_EINVAL);
+        return avs_errno(AVS_EINVAL);
     }
 
     // FIXME: Unsolicited non-confirmable notifications with an error code are

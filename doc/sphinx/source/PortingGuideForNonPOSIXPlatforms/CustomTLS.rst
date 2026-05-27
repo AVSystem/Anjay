@@ -16,9 +16,7 @@ Introduction
 
 ``avs_crypto`` and ``avs_net`` include full-featured, ready-to-use integrations
 with the TLS and DTLS protocols, using either
-`OpenSSL <https://www.openssl.org/>`_ or `Mbed TLS <https://www.trustedfirmware.org/projects/mbed-tls/>`_,
-as well as a basic implementation that supports the PSK mode only, using
-`tinydtls <https://projects.eclipse.org/projects/iot.tinydtls>`_.
+`OpenSSL <https://www.openssl.org/>`_ or `Mbed TLS <https://www.trustedfirmware.org/projects/mbed-tls/>`_.
 
 These integrations use the ``avs_net`` socket APIs underneath, so if the socket
 layer is implemented properly (either using the default implementation or by the
@@ -91,8 +89,8 @@ configuration first:
 * When using CMake, use ``-DDTLS_BACKEND=custom`` when configuring Anjay.
 
 * When using another build system, enable ``AVS_COMMONS_WITH_CUSTOM_TLS`` and
-  disable ``AVS_COMMONS_WITH_MBEDTLS``, ``AVS_COMMONS_WITH_OPENSSL`` and
-  ``AVS_COMMONS_WITH_TINYDTLS`` in ``avs_commons_config.h``.
+  disable ``AVS_COMMONS_WITH_MBEDTLS`` and ``AVS_COMMONS_WITH_OPENSSL`` in
+  ``avs_commons_config.h``.
 
 * Usually you should also disable
   ``AVS_COMMONS_WITH_AVS_CRYPTO_ADVANCED_FEATURES`` in ``avs_commons_config.h``.

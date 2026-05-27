@@ -24,6 +24,10 @@ settings, call the following command in Anjay root directory:
 
     cmake . && make
 
+.. note::
+
+    When configuring with :doc:`/Tools/VirtualEnvironments` activated, additional
+    ``demo_firmware`` target will be available, which creates FOTA package.
 
 Cross-compiling
 ---------------
@@ -101,8 +105,7 @@ for more details) along with specific variable indicating where the required
 DTLS libraries are to be found, i.e. one of:
 
     - ``OPENSSL_ROOT_DIR`` (as `FindOpenSSL.cmake` suggests),
-    - ``MBEDTLS_ROOT_DIR``,
-    - ``TINYDTLS_ROOT_DIR``
+    - ``MBEDTLS_ROOT_DIR``
 
 depending on the chosen backend.
 

@@ -7,6 +7,7 @@
 # Licensed under AVSystem Anjay LwM2M Client SDK - Non-Commercial License.
 # See the attached LICENSE file for details.
 
+import re
 from framework.lwm2m_test import *
 
 
@@ -79,6 +80,10 @@ class UpdateFallbacksToRegisterAfterLifetimeExpiresTest(test_suite.Lwm2mSingleSe
 
 
 class UpdateFallbacksToRegisterAfterCoapClientErrorResponse(test_suite.Lwm2mSingleServerTest):
+    # regex to match Anjay log
+    UPDATE_REJECTED_REGEX = re.compile(
+        rb'Update rejected: (\d\.\d{2} [^)\n]+) \(expected 2\.04 Changed\)')
+
     def runTest(self):
         def check(code: coap.Code):
             self.communicate('send-update')
@@ -87,14 +92,23 @@ class UpdateFallbacksToRegisterAfterCoapClientErrorResponse(test_suite.Lwm2mSing
             self.assertMsgEqual(Lwm2mUpdate(self.DEFAULT_REGISTER_ENDPOINT, content=b''), req)
             self.serv.send(Lwm2mErrorResponse.matching(req)(code))
 
+            assert_server_communication_error_logs(
+                self, self.UPDATE_REJECTED_REGEX, 1, code)
+
             self.assertDemoRegisters()
 
         # check all possible client (4.xx) errors
-        for detail in range(32):
+        for detail in range(16):
             if detail == 13:
                 # TODO: do not ignore Request Entity Too Large (T2171)
                 continue
             check(coap.Code(4, detail))
+
+        # check all possible server (5.xx) errors
+        for detail in range(6):
+            check(coap.Code(5, detail))
+
+
 
 
 class ReconnectFailsWithCoapErrorCodeTest(test_suite.Lwm2mSingleServerTest):

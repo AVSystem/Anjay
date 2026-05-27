@@ -264,12 +264,12 @@ While setting ``anjay_configuration_t::udp_tx_params`` parameter
 covers most cases, there are also means to configure:
 
 - DTLS handshake retransmissions
-  (``anjay_configuration_t::udp_dtls_hs_tx_params`` `docs
-  <../api/structanjay__configuration.html#ab8ca076537138e7d78bd1ee5d5e2031a>`__),
+  (`anjay_configuration_t::udp_dtls_hs_tx_params
+  <../api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration21udp_dtls_hs_tx_paramsE>`_),
 
 - firmware update module retransmissions (by implementing
-  custom ``anjay_fw_update_get_coap_tx_params_t`` handler `docs
-  <../api/fw__update_8h.html#a50900e2aaff21e91df693795965136b2>`__),
+  custom `anjay_fw_update_get_coap_tx_params_t handler
+  <../api/api_generated/typedef_fw__update_8h_1a50900e2aaff21e91df693795965136b2.html>`_),
 
 - additional fields in ``anjay_configuration_t`` that configure transmission
   parameters for non-UDP transports.

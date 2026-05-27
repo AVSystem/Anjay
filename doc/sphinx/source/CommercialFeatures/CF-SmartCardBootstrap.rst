@@ -69,7 +69,7 @@ in the ``anjay_config.h`` file or, if using CMake, enabling the corresponding
 ``WITH_MODULE_bootstrapper`` CMake option.
 
 When this feature is enabled, the `anjay_bootstrapper()
-<../api/bootstrapper_8h.html#a9763a2328433e93ae5121f0b218b43a1>`_ function can
+<../api/api_generated/function_bootstrapper_8h_1a9763a2328433e93ae5121f0b218b43a1.html>`_ function can
 be used. The user will need to provide an implementation of ``avs_stream_t``
 that allows the Anjay code to read the file contained on the smartcard. The
 ``avs_stream_simple_input_create()`` function from the `avs_stream_simple_io.h
@@ -105,10 +105,10 @@ search entirely and set a hardcoded file ID, e.g. ``0x6432``.
 
 Once the module is enabled and configured, you can use the
 `anjay_sim_bootstrap_stream_create()
-<../api/sim__bootstrap_8h.html#a7cd497f30bfc7d36c6f0efb1db1d5a19>`_ function to
+<../api/api_generated/function_sim__bootstrap_8h_1a76043bab306b247a5b3afc634a2e3bd6.html>`_ function to
 create an input stream suitable for passing to ``anjay_bootstrapper()``. In the
 simplest case, you can also use the `anjay_sim_bootstrap_perform()
-<../api/sim__bootstrap_8h.html#aa94114321f3af6532babde1efd9bdcec>`_ function
+<../api/api_generated/function_sim__bootstrap_8h_1aa94114321f3af6532babde1efd9bdcec.html>`_ function
 that combines both calls and automatically closes the stream as well.
 
 Bootstrap information generator tool
@@ -241,9 +241,9 @@ tutorial, and additionally borrows much of the modem communication code from
 card, the ``setup_security_object()`` and ``setup_server_object()`` functions
 are no longer necessary, and the calls to them can be replaced with direct calls
 to `anjay_security_object_install()
-<../api/security_8h.html#a5fffaeedfc5c2933e58ac1446fd0401d>`_ and
+<../api/api_generated/function_security_8h_1a5fffaeedfc5c2933e58ac1446fd0401d.html>`_ and
 `anjay_server_object_install()
-<../api/server_8h.html#a36a369c0d7d1b2ad42c898ac47b75765>`_:
+<../api/api_generated/function_server_8h_1a36a369c0d7d1b2ad42c898ac47b75765.html>`_:
 
 .. highlight:: c
 .. snippet-source:: examples/commercial-features/CF-SmartCardBootstrap/src/main.c
@@ -425,6 +425,6 @@ the one originally implemented for :doc:`CF-NIDD`.
 
 The ``bootstrap_from_sim()`` function itself is a wrapper over
 `anjay_sim_bootstrap_perform()
-<../api/sim__bootstrap_8h.html#aa94114321f3af6532babde1efd9bdcec>`_ that
+<../api/api_generated/function_sim__bootstrap_8h_1aa94114321f3af6532babde1efd9bdcec.html>`_ that
 additionally initializes and closes the card communication channel.
 

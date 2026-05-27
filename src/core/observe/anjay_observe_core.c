@@ -526,16 +526,26 @@ detach_first_unsent_value(anjay_observe_connection_entry_t *conn_state) {
     return result;
 }
 
-static void drop_oldest_queued_notification(anjay_unlocked_t *anjay,
-                                            anjay_observe_state_t *observe) {
+static int drop_oldest_queued_notification(anjay_unlocked_t *anjay,
+                                           anjay_observe_state_t *observe) {
+    anjay_log(TRACE, "Try to drop oldest queued notification");
     AVS_LIST(anjay_observe_connection_entry_t) oldest =
             find_oldest_queued_notification(observe);
 
     AVS_ASSERT(oldest, "function is not supposed to be called when there are "
                        "no queued notifications");
 
+    if (avs_coap_exchange_id_valid(oldest->notify_exchange_id)) {
+        anjay_log(WARNING, "Stored notification queue is full, but the oldest "
+                           "notification cannot be dropped because it is "
+                           "currently being processed in an active Notify "
+                           "exchange; the new notification will be skipped");
+        return -1;
+    }
+
     anjay_observation_value_t *entry = detach_first_unsent_value(oldest);
     delete_value(anjay, &entry);
+    return 0;
 }
 
 #    ifdef ANJAY_WITH_LWM2M12
@@ -605,12 +615,19 @@ static void drop_oldest_queued_notification_from_observation(
 }
 #    endif // ANJAY_WITH_LWM2M12
 
-static int insert_new_value(anjay_observe_connection_entry_t *conn_state,
-                            anjay_observation_t *observation,
-                            avs_coap_notify_reliability_hint_t reliability_hint,
-                            const anjay_msg_details_t *details,
-                            const avs_time_real_t *timestamp,
-                            const anjay_batch_t *const *values) {
+typedef enum {
+    INSERT_NEW_VALUE_ERROR = -1,
+    INSERT_NEW_VALUE_SKIPPED = 0,
+    INSERT_NEW_VALUE_INSERTED = 1
+} insert_new_value_result_t;
+
+static insert_new_value_result_t
+insert_new_value(anjay_observe_connection_entry_t *conn_state,
+                 anjay_observation_t *observation,
+                 avs_coap_notify_reliability_hint_t reliability_hint,
+                 const anjay_msg_details_t *details,
+                 const avs_time_real_t *timestamp,
+                 const anjay_batch_t *const *values) {
     anjay_unlocked_t *anjay = _anjay_from_server(conn_state->conn_ref.server);
     anjay_observe_state_t *observe = &anjay->observe;
 #    ifdef ANJAY_WITH_LWM2M12
@@ -623,11 +640,14 @@ static int insert_new_value(anjay_observe_connection_entry_t *conn_state,
         switch (observe->notify_queue_limit_mode) {
         case NOTIFY_QUEUE_UNLIMITED:
             AVS_UNREACHABLE("is_observe_queue_full broken");
-            return -1;
+            return INSERT_NEW_VALUE_ERROR;
 
         case NOTIFY_QUEUE_DROP_OLDEST:
             assert(observe->notify_queue_limit != 0);
-            drop_oldest_queued_notification(anjay, observe);
+            if (drop_oldest_queued_notification(anjay, observe)) {
+                return INSERT_NEW_VALUE_SKIPPED; // shouldn't be treated as a
+                                                 // error in the layer above
+            }
             break;
         }
     }
@@ -636,7 +656,7 @@ static int insert_new_value(anjay_observe_connection_entry_t *conn_state,
             create_observation_value(details, reliability_hint, observation,
                                      timestamp, values);
     if (!res_value) {
-        return -1;
+        return INSERT_NEW_VALUE_ERROR;
     }
 
     AVS_LIST_APPEND(&conn_state->unsent_last, res_value);
@@ -648,7 +668,7 @@ static int insert_new_value(anjay_observe_connection_entry_t *conn_state,
         conn_state->unsent = res_value;
     }
     observation->last_unsent = res_value;
-    return 0;
+    return INSERT_NEW_VALUE_INSERTED;
 }
 
 static int insert_error(anjay_observe_connection_entry_t *conn_state,
@@ -665,7 +685,10 @@ static int insert_error(anjay_observe_connection_entry_t *conn_state,
     const avs_time_real_t timestamp = avs_time_real_now();
     return insert_new_value(conn_state, observation,
                             AVS_COAP_NOTIFY_PREFER_CONFIRMABLE, &details,
-                            &timestamp, NULL);
+                            &timestamp, NULL)
+                           == INSERT_NEW_VALUE_ERROR
+                   ? -1
+                   : 0;
 }
 
 static int get_effective_attrs(anjay_unlocked_t *anjay,
@@ -2119,10 +2142,13 @@ update_notification_value(anjay_observe_connection_entry_t *conn_state,
         avs_coap_notify_reliability_hint_t reliability_hint =
                 (con > 0) ? AVS_COAP_NOTIFY_PREFER_CONFIRMABLE
                           : AVS_COAP_NOTIFY_PREFER_NON_CONFIRMABLE;
-        result = insert_new_value(conn_state, observation, reliability_hint,
-                                  &newest_value(observation)->details,
-                                  &timestamp,
-                                  cast_to_const_batch_array(batches));
+        result =
+                insert_new_value(conn_state, observation, reliability_hint,
+                                 &newest_value(observation)->details,
+                                 &timestamp, cast_to_const_batch_array(batches))
+                                == INSERT_NEW_VALUE_ERROR
+                        ? -1
+                        : 0;
     }
 
     if (!result && pmax >= 0) {

@@ -3221,8 +3221,7 @@ typedef struct coap_stream_mock {
 } coap_stream_mock_t;
 
 AVS_UNIT_TEST(dm_operations, unimplemented) {
-    anjay_t anjay;
-    memset(&anjay, 0, sizeof(anjay));
+    anjay_t anjay = { 0 };
 
     coap_stream_mock_t mock = {
         .vtable = &(const avs_stream_v_table_t) {

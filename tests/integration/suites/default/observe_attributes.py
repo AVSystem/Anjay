@@ -691,3 +691,252 @@ class ObserveEdgeFallingMultipleInstanceResourceTest(test_suite.Lwm2mSingleServe
         # No notification should be sent on transition 0 -> 1
         with self.assertRaises(socket.timeout):
             self.serv.recv(2)
+
+class ObserveStoredNotificationLimitOngoingInstanceBlockwiseNotify(
+        test_suite.Lwm2mSingleServerTest,
+        test_suite.Lwm2mDmOperations):
+    """
+    Regression test for dropping an Observe notification that is still being
+    serialized as a BLOCK2 response.
+
+    This intentionally observes the whole Test object instance, not just a
+    single resource. A single-resource notification may have all its batch
+    entries consumed during the first write_payload() call, so dropping it does
+    not necessarily leave serialization_state.output_state pointing into the
+    released batch. Instance-level TLV notification contains multiple batch
+    entries; after the first block, output_state is expected to still point into
+    the currently serialized batch.
+    """
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--stored-notification-limit', '1'])
+
+    def runTest(self):
+        self.create_instance(self.serv, OID.Test)
+
+        # Make instance notifications Confirmable, so that the first Notify
+        # exchange stays alive while the test injects another resource change.
+        self.write_attributes(self.serv, OID.Test, 0, query=['con=1'])
+
+        observe = self.observe(self.serv, OID.Test, 0,
+                               accept=coap.ContentFormat.APPLICATION_LWM2M_TLV)
+
+        # Trigger a large instance-level notification. ResBytes is large enough
+        # to force BLOCK2, while other resources in the instance ensure that the
+        # batch serializer still has a non-NULL output_state after block 0.
+        self.write_resource(self.serv, OID.Test, 0, RID.Test.ResBytesSize, b'1500')
+
+        first_block = self.serv.recv(timeout_s=5)
+        self.assertMsgEqual(
+            Lwm2mNotify(token=observe.token,
+                        format=coap.ContentFormat.APPLICATION_LWM2M_TLV,
+                        confirmable=True,
+                        options=[coap.Option.OBSERVE(1),
+                                 coap.Option.BLOCK2(seq_num=0,
+                                                    has_more=True,
+                                                    block_size=1024)]),
+            first_block)
+
+        # Do not ACK the first notification yet. Queue another notification
+        # by performing a write on one of the resources.
+        # With stored_notification_limit == 1 this forces drop_oldest_queued_
+        # notification().
+        req = Lwm2mWrite(ResPath.Test[0].ResBytesSize, b'1600')
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv(timeout_s=5))
+
+        # Continue the original BLOCK2 transfer before ACKing the first CON
+        # notification.
+        req = Lwm2mRead('/%d/%d' % (OID.Test, 0),
+                        token=observe.token,
+                        accept=coap.ContentFormat.APPLICATION_LWM2M_TLV,
+                        options=[coap.Option.BLOCK2(seq_num=1,
+                                                    has_more=False,
+                                                    block_size=1024)])
+        self.serv.send(req)
+
+        # ACK the first notification
+        self.serv.send(Lwm2mEmpty.matching(first_block)())
+
+        pkt = self.serv.recv(timeout_s=5)
+        self.assertMsgEqual(
+            Lwm2mContent.matching(req)(format=coap.ContentFormat.APPLICATION_LWM2M_TLV,
+                                      options=[coap.Option.BLOCK2(seq_num=1,
+                                                                 has_more=False,
+                                                                 block_size=1024)]),
+            pkt)
+        # ACK the second notification
+        self.serv.send(Lwm2mEmpty.matching(req)())
+
+
+class ObserveStoredNotificationLimitTwoOngoingInstanceBlockwiseNotify(
+        test_suite.Lwm2mSingleServerTest,
+        test_suite.Lwm2mDmOperations):
+    """
+    Check behavior with stored_notification_limit == 2 when the oldest
+    notification is still being serialized as a BLOCK2 response.
+
+    The first notification is large and blockwise. While it is still ongoing,
+    two more changes are triggered:
+    - the second notification should be queued,
+    - the third notification  should not be queued because the queue is already
+      full and the oldest notification is still being processed.
+    """
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--stored-notification-limit', '2'])
+
+    def runTest(self):
+        self.create_instance(self.serv, OID.Test)
+
+        # Make instance notifications Confirmable, so that the first Notify
+        # exchange stays alive while we trigger more resource changes.
+        self.write_attributes(self.serv, OID.Test, 0, query=['con=1'])
+
+        observe = self.observe(self.serv, OID.Test, 0,
+                               accept=coap.ContentFormat.APPLICATION_LWM2M_TLV)
+
+        # First notification: large enough to force BLOCK2.
+        self.write_resource(self.serv, OID.Test, 0,
+                            RID.Test.ResBytesSize, b'1500')
+
+        first_block = self.serv.recv(timeout_s=5)
+        self.assertMsgEqual(
+            Lwm2mNotify(token=observe.token,
+                        format=coap.ContentFormat.APPLICATION_LWM2M_TLV,
+                        confirmable=True,
+                        options=[coap.Option.OBSERVE(1),
+                                 coap.Option.BLOCK2(seq_num=0,
+                                                    has_more=True,
+                                                    block_size=1024)]),
+            first_block)
+
+        # Do not ACK the first notification yet.
+        #
+        # Second notification trigger
+        second_write = Lwm2mWrite(ResPath.Test[0].ResBytesSize, b'16')
+        self.serv.send(second_write)
+        self.assertMsgEqual(Lwm2mChanged.matching(second_write)(),
+                            self.serv.recv(timeout_s=5))
+
+        # Third notification:
+        #
+        # At this point stored_notification_limit == 2 is already reached:
+        # - first notification is still ongoing,
+        # - second notification is queued.
+        #
+        # Inserting the third notification would require dropping the oldest
+        # one, but the oldest one is the ongoing BLOCK2 notification, so
+        # drop_oldest_queued_notification() fails.
+        third_write = Lwm2mWrite(ResPath.Test[0].ResBytesSize, b'17')
+        self.serv.send(third_write)
+        self.assertMsgEqual(Lwm2mChanged.matching(third_write)(),
+                            self.serv.recv(timeout_s=5))
+
+        # Continue the original BLOCK2 transfer.
+        block_req = Lwm2mRead('/%d/%d' % (OID.Test, 0),
+                              token=observe.token,
+                              accept=coap.ContentFormat.APPLICATION_LWM2M_TLV,
+                              options=[coap.Option.BLOCK2(seq_num=1,
+                                                          has_more=False,
+                                                          block_size=1024)])
+        self.serv.send(block_req)
+
+        # ACK the first notification.
+        self.serv.send(Lwm2mEmpty.matching(first_block)())
+
+        self.assertMsgEqual(
+            Lwm2mContent.matching(block_req)(
+                format=coap.ContentFormat.APPLICATION_LWM2M_TLV,
+                options=[coap.Option.BLOCK2(seq_num=1,
+                                            has_more=False,
+                                            block_size=1024)]),
+            self.serv.recv(timeout_s=5))
+
+        # Now the only queued notification should be delivered.
+        # It should be the second notification
+        second_notify = self.serv.recv(timeout_s=5)
+        self.assertMsgEqual(
+            Lwm2mNotify(token=observe.token,
+                        format=coap.ContentFormat.APPLICATION_LWM2M_TLV,
+                        confirmable=True,
+                        options=[coap.Option.OBSERVE(2)]),
+            second_notify)
+
+        self.serv.send(Lwm2mEmpty.matching(second_notify)())
+
+
+class ObserveStoredNotificationLimitOngoingInstanceNotify(
+        test_suite.Lwm2mSingleServerTest,
+        test_suite.Lwm2mDmOperations):
+    """
+    Regression test for attempting to drop an Observe notification that is still
+    awaiting ACK.
+
+    This test observes the whole Test object instance, but keeps the payload
+    small enough so that the first notification is not blockwise. The important
+    part is that the notification is Confirmable and is not ACKed before another
+    resource change is triggered.
+
+    With stored_notification_limit == 1, the ongoing Confirmable notification
+    occupies the single stored notification slot. When another notification is
+    generated before the first one is ACKed, Anjay attempts to drop the oldest
+    queued notification. This must fail because that notification is still being
+    processed in an active Notify exchange.
+    """
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--stored-notification-limit', '1'])
+
+    def runTest(self):
+        self.create_instance(self.serv, OID.Test)
+
+        # Make instance notifications Confirmable, so that the first Notify
+        # exchange stays alive while the test injects another resource change.
+        self.write_attributes(self.serv, OID.Test, 0, query=['con=1'])
+
+        observe = self.observe(self.serv, OID.Test, 0,
+                               accept=coap.ContentFormat.APPLICATION_LWM2M_TLV)
+
+        # Trigger a small instance-level notification. It is not blockwise, but
+        # it is Confirmable, so the Notify exchange remains active until ACKed.
+        self.write_resource(self.serv, OID.Test, 0, RID.Test.ResBytesSize, b'15')
+
+        notification = self.serv.recv(timeout_s=5)
+        self.assertMsgEqual(
+            Lwm2mNotify(token=observe.token,
+                        format=coap.ContentFormat.APPLICATION_LWM2M_TLV,
+                        confirmable=True,
+                        options=[coap.Option.OBSERVE(1)]),
+            notification)
+
+        # Do not ACK the first notification yet. Trigger another notification
+        # by performing a write on one of the observed instance resources.
+        # With stored_notification_limit == 1 this forces
+        # drop_oldest_queued_notification(), but the oldest notification is the
+        # ongoing Confirmable Notify exchange and must not be dropped.
+        req = Lwm2mWrite(ResPath.Test[0].ResBytesSize, b'16')
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv(timeout_s=5))
+
+        # Give Anjay a chance to process the Write message and try to put a new
+        # entry in the notification queue which should be dropped
+        time.sleep(0.1)
+
+        # ACK the first notification
+        self.serv.send(Lwm2mEmpty.matching(notification)())
+
+        # Trigger another notification after the previous Notify exchange has
+        # been completed. This verifies that the failed attempt to queue the
+        # previous notification did not cancel the observation.
+        req = Lwm2mWrite(ResPath.Test[0].ResBytesSize, b'17')
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.serv.recv(timeout_s=5))
+
+        notification = self.serv.recv(timeout_s=5)
+        self.assertMsgEqual(
+            Lwm2mNotify(token=observe.token,
+                        format=coap.ContentFormat.APPLICATION_LWM2M_TLV,
+                        confirmable=True,
+                        options=[coap.Option.OBSERVE(2)]),
+            notification)
+
+        self.serv.send(Lwm2mEmpty.matching(notification)())

@@ -70,8 +70,7 @@ static int restore_etag(FILE *fp, anjay_etag_t **out_etag) {
 }
 
 static int restore_download_state(download_state_t *out_state) {
-    download_state_t data;
-    memset(&data, 0, sizeof(data));
+    download_state_t data = { 0 };
 
     FILE *fp = fopen(FW_DOWNLOAD_STATE_NAME, "rb");
     if (!fp) {
@@ -307,8 +306,7 @@ static const anjay_fw_update_handlers_t HANDLERS = {
 const char *ENDPOINT_NAME = NULL;
 
 int fw_update_install(anjay_t *anjay) {
-    anjay_fw_update_initial_state_t state;
-    memset(&state, 0, sizeof(state));
+    anjay_fw_update_initial_state_t state = { 0 };
 
     if (access(FW_UPDATED_MARKER, F_OK) != -1) {
         // marker file exists, it means firmware update succeded!

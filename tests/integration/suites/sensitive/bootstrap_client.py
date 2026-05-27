@@ -40,9 +40,9 @@ class BootstrapIncorrectData(BootstrapTest.Test):
         # calling reset() just before Bootstrap Finish, so that we're absolutely sure that all leftover messages are
         # discarded just before we get the new Client Hello.
 
-        holdoff_s = 0
+        minimal_holdoff_s = 1
         last_time = time.time()
-        for attempt in range(num_attempts):
+        for _ in range(num_attempts):
             # Create Security Object instance with deliberately wrong keys
             self.perform_typical_bootstrap(server_iid=1,
                                            security_iid=2,
@@ -51,7 +51,7 @@ class BootstrapIncorrectData(BootstrapTest.Test):
                                            secure_key=self.PSK_KEY + b'durr',
                                            security_mode=SecurityMode.PreSharedKey,
                                            finish=False,
-                                           holdoff_s=max(last_time + holdoff_s - time.time(), 0))
+                                           holdoff_s=max(last_time + minimal_holdoff_s - time.time(), 0))
             last_time = time.time()
 
             self.serv.reset()
@@ -59,7 +59,7 @@ class BootstrapIncorrectData(BootstrapTest.Test):
             with self.assertRaisesRegex(RuntimeError, 'handshake failed'):
                 self.serv.recv()
 
-            holdoff_s = min(max(2 * holdoff_s, 3), 20)
+            minimal_holdoff_s = min(2 * minimal_holdoff_s, 20)
 
     def runTest(self):
         self.test_bootstrap_backoff(3)
@@ -72,7 +72,7 @@ class BootstrapIncorrectData(BootstrapTest.Test):
                                        secure_key=self.PSK_KEY,
                                        security_mode=SecurityMode.PreSharedKey,
                                        finish=False,
-                                       holdoff_s=12)
+                                       holdoff_s=8)
 
         self.serv.reset()
         self.perform_bootstrap_finish()

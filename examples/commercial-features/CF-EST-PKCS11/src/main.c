@@ -224,7 +224,8 @@ int main(int argc, char *argv[]) {
         .est_reenroll_config = &(const anjay_est_reenroll_config_t) {
             .enable = true,
             .nominal_usage = 0.8,
-            .max_margin = avs_time_duration_from_scalar(7, AVS_TIME_DAY)
+            .max_margin = avs_time_duration_from_scalar(7, AVS_TIME_DAY),
+            .sren_attempts_count = 5
         },
         .est_cacerts_policy = ANJAY_EST_CACERTS_FOR_EST_SECURITY,
 

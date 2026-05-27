@@ -32,6 +32,7 @@ typedef enum {
     SERV_RES_BOOTSTRAP_REQUEST_TRIGGER = 9,
     SERV_RES_TLS_DTLS_ALERT_CODE = 11,
     SERV_RES_LAST_BOOTSTRAPPED = 12,
+    SERV_RES_INITIAL_REGISTRATION_DELAY_TIMER = 14,
     SERV_RES_BOOTSTRAP_ON_REGISTRATION_FAILURE = 16,
     SERV_RES_SERVER_COMMUNICATION_RETRY_COUNT = 17,
     SERV_RES_SERVER_COMMUNICATION_RETRY_TIMER = 18,
@@ -62,6 +63,7 @@ typedef struct {
 #ifdef ANJAY_WITH_LWM2M11
     int64_t last_bootstrapped_timestamp;
     uint8_t last_alert;
+    uint32_t initial_registration_delay_timer;
     bool bootstrap_on_registration_failure;
     uint32_t server_communication_retry_count;
     uint32_t server_communication_retry_timer;

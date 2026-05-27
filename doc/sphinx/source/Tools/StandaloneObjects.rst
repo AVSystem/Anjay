@@ -53,17 +53,16 @@ To use the standalone objects:
     return ``const anjay_dm_object_def_t **`` pointers. Please store this value
     during installation, as it needs to be passed for further API calls.
     However, you **do not** need to call `anjay_register_object()
-    <../api/dm_8h.html#a1468b47fa9169474920c8c86d533b991>`_ as the install
+    <../api/api_generated/function_dm_8h_1a1468b47fa9169474920c8c86d533b991.html>`_ as the install
     functions already call it.
 
   * All other public APIs take the aforementioned
-    ``const anjay_dm_object_def_t *const *`` pointer instead of the `anjay_t
-    <../api/core_8h.html#a6c9664a3b0c2d5629c9639dce7b1dbfb>`_ object. Adjust the
-    calls accordingly.
+    ``const anjay_dm_object_def_t *const *`` pointer instead of the ``anjay_t``
+    object. Adjust the calls accordingly.
 
   * Unlike the default implementation, the standalone objects are **not
     automatically cleaned up** at the time of `anjay_delete()
-    <../api/core_8h.html#a243f18f976bca57b5a7b0714bfb99095>`_. If your code ever
+    <../api/api_generated/function_core_8h_1a243f18f976bca57b5a7b0714bfb99095.html>`_. If your code ever
     cleans up the Anjay object, please make sure to call
     ``standalone_security_object_cleanup()`` and/or
     ``standalone_server_object_cleanup()`` afterwards.

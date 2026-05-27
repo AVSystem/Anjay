@@ -563,13 +563,13 @@ This minimal implementation is enough to make Anjay run, but a number of
 functionalities will not work:
 
 * Attempt to set `anjay_configuration_t::udp_listen_port
-  <../../api/structanjay__configuration.html#acf74549a99ca3ad5aedb227c4b0258ca>`_
+  <../../api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration15udp_listen_portEa>`_
   will result in no connectivity, as the bind operation is not supported.
 * Local port will not be preserved between subsequent connections to the same
   server.
 * CoAP message cache will not work, regardless of value of the
   `anjay_configuration_t::msg_cache_size
-  <../../api/structanjay__configuration.html#a3bb16de58b283370b1ab20698dd4849a>`_
+  <../../api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration14msg_cache_sizeE>`_
   setting.
 * Suspending CoAP downloads when entering offline mode will not work; downloads
   will be aborted instead.

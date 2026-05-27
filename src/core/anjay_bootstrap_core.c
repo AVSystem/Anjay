@@ -1136,6 +1136,15 @@ static void bootstrap_request_response_handler(
                               ")"),
                       AVS_COAP_CODE_STRING(response->header.code),
                       AVS_COAP_CODE_STRING(AVS_COAP_CODE_CHANGED));
+            if (anjay->server_communication_error_cb) {
+                ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, anjay);
+                anjay->server_communication_error_cb(
+                        anjay->server_communication_error_cb_arg,
+                        anjay_locked,
+                        ANJAY_SSID_BOOTSTRAP,
+                        response->header.code);
+                ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
+            }
             _anjay_server_on_server_communication_error(connection.server,
                                                         avs_errno(AVS_EPROTO));
         } else {
@@ -1459,25 +1468,26 @@ static void request_bootstrap_job(avs_sched_t *sched, const void *dummy);
 
 static int schedule_request_bootstrap(anjay_unlocked_t *anjay) {
     avs_time_monotonic_t now = avs_time_monotonic_now();
-    if (!avs_time_monotonic_valid(
-                anjay->bootstrap.client_initiated_bootstrap_last_attempt)) {
-        anjay->bootstrap.client_initiated_bootstrap_last_attempt = now;
-    }
+
+    const avs_time_duration_t max_holdoff =
+            avs_time_duration_from_scalar(ANJAY_MAX_HOLDOFF_TIME, AVS_TIME_S);
+
     if (!avs_time_duration_valid(
                 anjay->bootstrap.client_initiated_bootstrap_holdoff)) {
         anjay->bootstrap.client_initiated_bootstrap_holdoff =
                 AVS_TIME_DURATION_ZERO;
     }
 
-    const avs_time_duration_t MIN_HOLDOFF =
-            avs_time_duration_from_scalar(3, AVS_TIME_S);
-    const avs_time_duration_t MAX_HOLDOFF =
-            avs_time_duration_from_scalar(ANJAY_MAX_HOLDOFF_TIME, AVS_TIME_S);
+    if (!avs_time_monotonic_valid(
+                anjay->bootstrap.client_initiated_bootstrap_last_attempt)) {
+        anjay_log(DEBUG, _("Scheduling Client Initiated Bootstrap"));
+        anjay->bootstrap.client_initiated_bootstrap_last_attempt = now;
+    }
 
     if (avs_time_duration_less(
-                MAX_HOLDOFF,
+                max_holdoff,
                 anjay->bootstrap.client_initiated_bootstrap_holdoff)) {
-        anjay->bootstrap.client_initiated_bootstrap_holdoff = MAX_HOLDOFF;
+        anjay->bootstrap.client_initiated_bootstrap_holdoff = max_holdoff;
         anjay_log(WARNING,
                   _("Holdoff time is bigger then max allowed value, setting "
                     "to ") "%s" _(" seconds"),
@@ -1503,13 +1513,9 @@ static int schedule_request_bootstrap(anjay_unlocked_t *anjay) {
     anjay->bootstrap.client_initiated_bootstrap_holdoff = avs_time_duration_mul(
             anjay->bootstrap.client_initiated_bootstrap_holdoff, 2);
     if (avs_time_duration_less(
-                anjay->bootstrap.client_initiated_bootstrap_holdoff,
-                MIN_HOLDOFF)) {
-        anjay->bootstrap.client_initiated_bootstrap_holdoff = MIN_HOLDOFF;
-    } else if (avs_time_duration_less(
-                       MAX_HOLDOFF,
-                       anjay->bootstrap.client_initiated_bootstrap_holdoff)) {
-        anjay->bootstrap.client_initiated_bootstrap_holdoff = MAX_HOLDOFF;
+                max_holdoff,
+                anjay->bootstrap.client_initiated_bootstrap_holdoff)) {
+        anjay->bootstrap.client_initiated_bootstrap_holdoff = max_holdoff;
     }
     return 0;
 }
@@ -1594,6 +1600,40 @@ static int64_t client_hold_off_time_s(anjay_unlocked_t *anjay) {
     return holdoff_s;
 }
 
+static void add_jitter(avs_crypto_prng_ctx_t *ctx,
+                       avs_time_duration_t *holdoff) {
+    uint32_t random;
+    if (avs_crypto_prng_bytes(ctx, (unsigned char *) &random, sizeof(random))) {
+        anjay_log(WARNING, _("Failed to generate random jitter"));
+        return;
+    }
+    *holdoff = avs_time_duration_fmul(
+            *holdoff,
+            (((double) random / (double) UINT32_MAX)
+             * (ANJAY_HOLDOFF_JITTER_RANDOM_FACTOR - 1.0))
+                    + 1.0);
+}
+
+static void set_holdoff_time_with_jitter(anjay_unlocked_t *anjay) {
+    int64_t holdoff_s = client_hold_off_time_s(anjay);
+
+    const avs_time_duration_t min_holdoff =
+            avs_time_duration_from_scalar(1, AVS_TIME_S);
+
+    if (holdoff_s < 0) {
+        anjay->bootstrap.client_initiated_bootstrap_holdoff = min_holdoff;
+    } else {
+        avs_time_duration_t holdoff =
+                avs_time_duration_from_scalar(holdoff_s, AVS_TIME_S);
+        anjay->bootstrap.client_initiated_bootstrap_holdoff =
+                avs_time_duration_less(holdoff, min_holdoff) ? min_holdoff
+                                                             : holdoff;
+    }
+
+    add_jitter(anjay->prng_ctx.ctx,
+               &anjay->bootstrap.client_initiated_bootstrap_holdoff);
+}
+
 int _anjay_perform_bootstrap_action_if_appropriate(
         anjay_unlocked_t *anjay,
         anjay_server_info_t *bootstrap_server,
@@ -1611,16 +1651,7 @@ int _anjay_perform_bootstrap_action_if_appropriate(
         // will check if the endpoint changed and re-request if so
         if (!avs_time_monotonic_valid(
                     anjay->bootstrap.client_initiated_bootstrap_last_attempt)) {
-            int64_t holdoff_s = client_hold_off_time_s(anjay);
-            if (holdoff_s < 0) {
-                anjay_log(INFO,
-                          _("Client Hold Off Time not set or invalid, not "
-                            "scheduling Client Initiated Bootstrap"));
-                return 0;
-            }
-            anjay_log(DEBUG, _("Scheduling Client Initiated Bootstrap"));
-            anjay->bootstrap.client_initiated_bootstrap_holdoff =
-                    avs_time_duration_from_scalar(holdoff_s, AVS_TIME_S);
+            set_holdoff_time_with_jitter(anjay);
         }
         int result = schedule_request_bootstrap(anjay);
         if (!result) {
@@ -1649,7 +1680,9 @@ void _anjay_bootstrap_cleanup(anjay_unlocked_t *anjay) {
     assert(!anjay->bootstrap.pack_membuf);
 #    endif // ANJAY_WITH_BOOTSTRAP_PACK
     cancel_client_initiated_bootstrap(anjay);
-    cancel_est_sren(anjay);
+    // this is called after unsuccessful sren as well - cancel it basing
+    // on ongoing flag or attempts count?
+    // cancel_est_sren(anjay);
     reset_client_initiated_bootstrap_backoff(&anjay->bootstrap);
     abort_bootstrap(anjay);
     avs_sched_del(&anjay->bootstrap.purge_bootstrap_handle);
@@ -1676,11 +1709,10 @@ int _anjay_schedule_bootstrap_request_unlocked(anjay_unlocked_t *anjay) {
     cancel_client_initiated_bootstrap(anjay);
     cancel_est_sren(anjay);
     anjay->bootstrap.bootstrap_trigger = true;
-    anjay->bootstrap.client_initiated_bootstrap_last_attempt =
-            avs_time_monotonic_now();
-    anjay->bootstrap.client_initiated_bootstrap_holdoff =
-            AVS_TIME_DURATION_ZERO;
+    reset_client_initiated_bootstrap_backoff(&anjay->bootstrap);
+
     if (_anjay_servers_find_active(anjay, ANJAY_SSID_BOOTSTRAP)) {
+        set_holdoff_time_with_jitter(anjay);
         return schedule_request_bootstrap(anjay);
     } else {
         return _anjay_enable_server_unlocked(anjay, ANJAY_SSID_BOOTSTRAP);

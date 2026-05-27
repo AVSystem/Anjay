@@ -80,3 +80,6 @@ dist/
 
 # py-build-cmake cache
 .py-build-cmake_cache
+
+# custom built MbedTLS
+mbedtls

@@ -31,8 +31,8 @@ USAGE
       $(basename "$0") --version 0.1
 
     Second step is to push built image to docker.io
-      docker login docker.io
-      docker push avsystemembedded/anjay-travis:<image_version>
+      docker login registry.avsystem.com
+      docker push registry.avsystem.com/embedded-public/anjay-test-public:<image_version>
       docker logout
 EOF
 }
@@ -64,6 +64,6 @@ build-docker-image() {
 }
 
 for IMAGE_DOCKERFILE in "$SCRIPT_DIR/"*/Dockerfile; do
-    IMAGE_NAME="avsystemembedded/anjay-travis:$(basename "$(dirname "$IMAGE_DOCKERFILE")")-"$IMAGE_VERSION""
+    IMAGE_NAME="registry.avsystem.com/embedded-public/anjay-test-public:$(basename "$(dirname "$IMAGE_DOCKERFILE")")-"$IMAGE_VERSION""
     build-docker-image "$IMAGE_NAME" "$IMAGE_DOCKERFILE"
 done

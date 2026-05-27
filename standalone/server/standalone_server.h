@@ -28,6 +28,8 @@ typedef struct {
     /** Resource: Notification Storing When Disabled or Offline */
     bool notification_storing;
 #ifdef ANJAY_WITH_LWM2M11
+    /** Resource: Initial Registration Delay Timer */
+    const uint32_t *initial_registration_delay_timer;
     /** Resource: Bootstrap on Registration Failure. True if not set. */
     const bool *bootstrap_on_registration_failure;
     /** Resource: Preferred Transport */

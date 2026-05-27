@@ -254,8 +254,7 @@ typedef struct {
 } dynamic_test_def_t;
 
 static dynamic_test_env_t dynamic_test_env(const dynamic_test_def_t def) {
-    dynamic_test_env_t env;
-    memset(&env, 0, sizeof(env));
+    dynamic_test_env_t env = { 0 };
 
     avs_stream_t *payload_stream = avs_stream_membuf_create();
     ASSERT_NOT_NULL(payload_stream);

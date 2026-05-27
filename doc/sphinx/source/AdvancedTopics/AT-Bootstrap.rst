@@ -105,6 +105,14 @@ Bootstrap Server to create the Server Object dynamically.
     }
 
 
+.. important::
+
+    Bootstrap-Write operation that configures the connection to LwM2M Server can
+    overwrite the Bootstrap Account itself. Such operation is a legal mechanism
+    intended to allow Bootstrap Server overwriting Bootstrap Account, and allowing
+    a complete device ownership change.
+
+
 Configure Bootstrap
 ^^^^^^^^^^^^^^^^^^^
 
@@ -116,7 +124,7 @@ The Bootstrap Procedure is considered failed if a LwM2M Client does not receive
 the "Bootstrap-Finish" operation after the last received Bootstrap-Server command
 in a certain period. The LwM2M Specification suggest setting it to the
 value of CoAP Parameter ``EXCHANGE_LIFETIME`` and it is calculated based on 
-`anjay_configuration_t::udp_tx_params <https://docs.avsystem.com/hubfs/Anjay_Docs/api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration13udp_tx_paramsE>`_ or `anjay_configuration_t::coap_tcp_request_timeout <https://docs.avsystem.com/hubfs/Anjay_Docs/api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration24coap_tcp_request_timeoutE>`_.
+`anjay_configuration_t::udp_tx_params <../api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration13udp_tx_paramsE>`_ or `anjay_configuration_t::coap_tcp_request_timeout <../api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration24coap_tcp_request_timeoutE>`_.
 
 The default values are as follows:
  - 247 seconds for UDP
@@ -125,18 +133,64 @@ The default values are as follows:
 The following Bootstrap-related Resources are also implemented in the Anjay's
 build-in Security Object:
 
-- `anjay_security_instance_t::client_holdoff_s <https://docs.avsystem.com/hubfs/Anjay_Docs/api/api_generated/structanjay__security__instance__t.html#_CPPv4N25anjay_security_instance_t16client_holdoff_sE>`_ - the time that Anjay waits
-  before performing a Client Initiated Bootstrap once it determines that it
-  should initiate this bootstrap mode.
+- `anjay_security_instance_t::bootstrap_timeout_s <../api/api_generated/structanjay__security__instance__t.html#_CPPv4N25anjay_security_instance_t19bootstrap_timeout_sE>`_ -
+  if set, Anjay will automatically purge the LwM2M Bootstrap-Server Account after
+  this timeout value if a Bootstrap procedure ends successfully.
+  By default, the Bootstrap-Server Account lifetime is infinite.
+  
+  .. warning::
+     If bootstrap account is purged, there will be no way to change the LwM2M Management Server
+     after this operation, unless it's restored from factory settings. Be careful with
+     this setting, especially when using :doc:`AT-Persistence` feature.
 
-- `anjay_security_instance_t::bootstrap_timeout_s <https://docs.avsystem.com/hubfs/Anjay_Docs/api/api_generated/structanjay__security__instance__t.html#_CPPv4N25anjay_security_instance_t19bootstrap_timeout_sE>`_ - if set, Anjay will automatically
-  purge the LwM2M Bootstrap-Server Account after this timeout value if a Bootstrap
-  procedure ends successfully. By default, the Bootstrap-Server Account lifetime
-  is infinite.
+- legacy Server-Initiated Bootstrap mechanism based on an interpretation of LwM2M 1.0 TS.
+  To learn more, see `anjay_configuration_t::disable_legacy_server_initiated_bootstrap <../api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration41disable_legacy_server_initiated_bootstrapE>`_.
 
-There is also a legacy Server-Initiated Bootstrap mechanism based on an
-interpretation of LwM2M 1.0 TS. To learn more, see
-`anjay_configuration_t::disable_legacy_server_initiated_bootstrap <https://docs.avsystem.com/hubfs/Anjay_Docs/api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration41disable_legacy_server_initiated_bootstrapE>`_.
+.. _bs_holdoff:
+
+Bootstrap Holdoff
+-----------------
+
+There is a dedicated resource in Security Object that defines the time that Client waits
+before performing a Client Initiated Bootstrap (and therefore Server Initiated Bootstrap, since Server Initiated Bootstrap causes
+the LwM2M Client to enter Client Initiated Bootstrap)
+`anjay_security_instance_t::client_holdoff_s <../api/api_generated/structanjay__security__instance__t.html#_CPPv4N25anjay_security_instance_t16client_holdoff_sE>`_.
+It is the initial holdoff and if the Bootstrap procedure fails, this timer is
+increased exponentially, capping at `ANJAY_MAX_HOLDOFF_TIME <../api/api_generated/define_anjay__config_8h_1a49245317e5b5d338be2351ba43734707.html#c.ANJAY_MAX_HOLDOFF_TIME>`_.
+
+There is also `ANJAY_HOLDOFF_JITTER_RANDOM_FACTOR <api/api_generated/define_anjay__config_8h_1ac7870c809a27c09fd2e9d334bdb7956c.html#c.ANJAY_HOLDOFF_JITTER_RANDOM_FACTOR>`_
+option which introduces jitter to prevent multiple clients from bootstrapping simultaneously. This value has no corresponding resource in the data model.
+
+Bootstrap data validation
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+There are several potential issues with data privisioned by LwM2M Bootstrap Server to Anjay.
+Different data integrity and correctness validation is possible and is performed at different moments:
+
+ - When Bootstrap Finish is received, Objects Instances are validated for Mandatory Resources existence and for 
+   specific resources values. Anjay also checks scheme corectness of URI, Binding Mode, Security Mode
+   and credentials type support. `transaction_validate handler <../api/api_generated/structanjay__dm__handlers__t.html#_CPPv4N19anjay_dm_handlers_t20transaction_validateE>`_ will also be called for all other Objets.
+
+   Error detected at this level will cause a negative response to Bootstrap Write or Bootstrap Finish operation.
+ - When a Bootstrap-Write is performed to ``/0`` Security Object, Anjay ensures that only one Bootstrap Account is present.
+
+   Error detected at this level will cause a negative response to Bootstrap Write operation.
+ - Existence of ``/0`` Security and ``/1`` Server Objects Instances is checked.
+
+   Error detected at this level will cause re-bootstrapping with regards to Bootstrap Holdoff timer.
+ - Matching of Security and Server Objects Instances by SSID Resource to create
+
+   Error detected at this level will cause re-bootstrapping with regards to Bootstrap Holdoff timer.
+ - When creating connection context for the management server, Anjay verifies 
+   if the protocol specified in Server URI matches the Security Mode. 
+   (e.g. ``coaps`` protocol and `PSK` mode or ``coap`` protocol and `NoSec` mode)
+
+   Error detected at this level will cause re-bootstrapping with regards to Bootstrap Holdoff timer.
+ - When creating connection context for the management server, Anjay resolves
+   the provisioned server hostname via DNS.
+
+   Error detected at this level will cause re-bootstrapping with regards to Bootstrap Holdoff timer.
+
 
 Coiote LwM2M Server
 ^^^^^^^^^^^^^^^^^^^

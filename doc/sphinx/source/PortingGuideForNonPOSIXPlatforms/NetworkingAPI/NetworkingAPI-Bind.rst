@@ -25,7 +25,7 @@ This tutorial builds up on :doc:`the previous one
 <NetworkingAPI-RemoteHostPort>` and adds support for the bind operation.
 
 This will allow use of the `anjay_configuration_t::udp_listen_port
-<../../api/structanjay__configuration.html#acf74549a99ca3ad5aedb227c4b0258ca>`_
+<../../api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration15udp_listen_portE>`_
 setting, which might be useful e.g. for the LwM2M 1.0-style Server-Initiated
 Bootstrap.
 
@@ -161,7 +161,7 @@ The "get local port" operation may or may not be implemented. It is not
 necessary for the bind operation to work, but if implemented, it will allow
 Anjay to keep ephemeral listening port number consistent across subsequent
 connections to the same server if `anjay_configuration_t::udp_listen_port
-<../../api/structanjay__configuration.html#acf74549a99ca3ad5aedb227c4b0258ca>`_
+<../../api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration15udp_listen_portE>`_
 is not set.
 
 Its implementation mirrors the :ref:`non-posix-networking-api-get-remote-port`

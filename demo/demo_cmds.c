@@ -1513,7 +1513,7 @@ static void cmd_last_registration_time(anjay_demo_t *demo,
     avs_error_t err =
             anjay_get_server_last_registration_time(demo->anjay, ssid, &result);
 
-    if (!avs_is_err(err)) {
+    if (avs_is_ok(err)) {
         demo_log(INFO, "LAST_REGISTRATION_TIME=%s",
                  AVS_TIME_DURATION_AS_STRING(result.since_real_epoch));
     } else {
@@ -1532,7 +1532,7 @@ static void cmd_next_update_time(anjay_demo_t *demo, const char *args_string) {
     avs_error_t err =
             anjay_get_server_next_update_time(demo->anjay, ssid, &result);
 
-    if (!avs_is_err(err)) {
+    if (avs_is_ok(err)) {
         demo_log(INFO, "NEXT_UPDATE_TIME=%s",
                  AVS_TIME_DURATION_AS_STRING(result.since_real_epoch));
     } else {
@@ -1551,7 +1551,7 @@ static void cmd_last_communication_time(anjay_demo_t *demo,
     }
     avs_error_t err = anjay_get_server_last_communication_time(demo->anjay,
                                                                ssid, &result);
-    if (!avs_is_err(err)) {
+    if (avs_is_ok(err)) {
         demo_log(INFO, "LAST_COMMUNICATION_TIME=%s",
                  AVS_TIME_DURATION_AS_STRING(result.since_real_epoch));
     } else {

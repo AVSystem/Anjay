@@ -3513,13 +3513,9 @@ class FirmwareDownloadSameSocketResumptionDownloadAbortInduceByOtherOperation(
         dl_req_get = self.serv.recv()
         self.handle_get(dl_req_get)
 
-        deadline = time.time() + 5
-        while deadline > time.time():
-            num_initial_dtls_hs_packets = self.count_dtls_client_hello_packets()
-            if num_initial_dtls_hs_packets == 5:
-                break
-        else:
-            self.fail('wrong dtls handshake packets count')
+        num_initial_dtls_hs_packets = self.count_dtls_handshake_packets_stable(
+            timeout_s=5, poll_interval_s=0.25, stable_for_s=1.5)
+        self.assertEqual(num_initial_dtls_hs_packets, 5)
 
         # second block request
         dl_req_get = self.serv.recv()
@@ -3546,7 +3542,10 @@ class FirmwareDownloadSameSocketResumptionDownloadAbortInduceByOtherOperation(
         self.assertEqual(1, self.count_icmp_unreachable_packets())
         # Ensure that no more handashakes occurred.
         self.assertEqual(num_initial_dtls_hs_packets,
-                         self.count_dtls_client_hello_packets())
+                         self.count_dtls_handshake_packets_stable(
+                             timeout_s=5,
+                             poll_interval_s=0.25,
+                             stable_for_s=1.5))
 
         # Ensure that the control is given back to the user.
         self.assertTrue(self.get_all_connections_failed())
@@ -3569,15 +3568,12 @@ class FirmwareDownloadSameSocketResumptionCloseSocket(
         dl_req_get = self.serv.recv()
         self.handle_get(dl_req_get)
 
-        deadline = time.time() + 5
-        while deadline > time.time():
-            num_initial_dtls_hs_packets = self.count_dtls_client_hello_packets()
-            if num_initial_dtls_hs_packets == 5:
-                break
-        else:
-            self.fail('wrong dtls handshake packets count')
-
+        # close before counting since it can take a while to dump all packets
         self.serv.close()
+
+        num_initial_dtls_hs_packets = self.count_dtls_handshake_packets_stable(
+            timeout_s=5, poll_interval_s=0.25, stable_for_s=1)
+        self.assertEqual(num_initial_dtls_hs_packets, 5)
 
         # Wait for ICMP port unreachable.
         # Anjay will send a message to the server after ACK_TIMEOUT has passed
@@ -3591,7 +3587,10 @@ class FirmwareDownloadSameSocketResumptionCloseSocket(
         self.assertEqual(1, self.count_icmp_unreachable_packets())
         # Ensure that no more handashakes occurred.
         self.assertEqual(num_initial_dtls_hs_packets,
-                         self.count_dtls_client_hello_packets())
+                         self.count_dtls_handshake_packets_stable(
+                             timeout_s=5,
+                             poll_interval_s=0.25,
+                             stable_for_s=1.5))
 
         # Ensure that the control is given back to the user.
         self.assertTrue(self.get_all_connections_failed())

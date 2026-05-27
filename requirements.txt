@@ -6,7 +6,7 @@
 # See the attached LICENSE file for details.
 
 aiocoap>=0.4
-cbor2>=5.4.2
+cbor2>=5.4.2,<6
 cryptography>=40.0.2
 GitPython>=3.1.18
 linuxdoc==20230827
@@ -24,3 +24,5 @@ sphinx-tabs==3.4.7
 breathe==4.36.0
 exhale==0.3.7
 sphinx-sitemap==2.9.0
+-e tools/test-framework-tools/tools
+-e tests/integration/framework

@@ -64,6 +64,7 @@ typedef struct {
     const char *binding_mode;
 #ifdef ANJAY_WITH_LWM2M11
     const char *sni;
+    uint32_t initial_registration_delay_timer;
     uint32_t retry_count;
     uint32_t retry_timer;
     uint32_t sequence_retry_count;

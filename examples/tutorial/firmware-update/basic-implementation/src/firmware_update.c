@@ -110,8 +110,7 @@ static const anjay_fw_update_handlers_t HANDLERS = {
 const char *ENDPOINT_NAME = NULL;
 
 int fw_update_install(anjay_t *anjay) {
-    anjay_fw_update_initial_state_t state;
-    memset(&state, 0, sizeof(state));
+    anjay_fw_update_initial_state_t state = { 0 };
 
     if (access(FW_UPDATED_MARKER, F_OK) != -1) {
         // marker file exists, it means firmware update succeded!

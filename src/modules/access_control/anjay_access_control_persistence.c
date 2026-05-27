@@ -104,8 +104,7 @@ restore_instances(anjay_unlocked_t *anjay,
     }
     AVS_LIST(access_control_instance_t) *tail = instances_ptr;
     while (count--) {
-        access_control_instance_t instance;
-        memset(&instance, 0, sizeof(instance));
+        access_control_instance_t instance = { 0 };
         if (avs_is_err((err = avs_persistence_u16(restore_ctx,
                                                   &instance.target.oid)))
                 || avs_is_err(

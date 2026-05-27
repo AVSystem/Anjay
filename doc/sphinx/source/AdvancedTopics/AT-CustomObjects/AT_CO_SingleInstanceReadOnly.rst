@@ -190,7 +190,7 @@ Having the Read and List Resources handlers implemented, one can initialize the
       ``resource_read`` for Read operation) is called.
 
    Any of the handlers above may also fail with a specific CoAP error code
-   (see `ANJAY_ERR_* constants <../../api/core_8h.html>`_), aborting the
+   (see `ANJAY_ERR_* constants <../../api/api_generated/file_include_public_anjay_core.h.html#defines>`_), aborting the
    sequence early and - if the Read was triggered by a server request - causing
    the library to respond with returned error code.
 

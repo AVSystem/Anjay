@@ -9,12 +9,16 @@
 
 #include <anjay_init.h>
 
+#include <anjay/dm.h>
+
 #include <avsystem/commons/avs_errno.h>
 #include <avsystem/commons/avs_sched.h>
 
 #include <inttypes.h>
 
 #define ANJAY_SERVERS_INTERNALS
+
+#include "../../anjay_modules/anjay_servers.h"
 
 #include "../anjay_servers_inactive.h"
 #include "../anjay_servers_reload.h"
@@ -121,26 +125,11 @@ static void try_read_server_resource_u32(anjay_server_info_t *server,
     }
 }
 
-typedef struct {
-    uint32_t retry_count;
-    uint32_t retry_timer_s;
-    uint32_t sequence_retry_count;
-    uint32_t sequence_delay_timer_s;
-} communication_retry_params_t;
-
-// NOTE: See "Table: 6.2.1.1.-1 Registration Procedures Default Values", it's
-// where the default values are taken from.
-static const communication_retry_params_t COMMUNICATION_RETRY_PARAMS_DEFAULT = {
-    .retry_count = 5,
-    .retry_timer_s = 60,
-    .sequence_retry_count = 1,
-    .sequence_delay_timer_s = 86400
-};
-
-static communication_retry_params_t
+static anjay_communication_retry_params_t
 query_server_communication_retry_params(anjay_server_info_t *server) {
     assert(server->ssid != ANJAY_SSID_BOOTSTRAP);
-    communication_retry_params_t params = COMMUNICATION_RETRY_PARAMS_DEFAULT;
+    anjay_communication_retry_params_t params =
+            ANJAY_COMMUNICATION_RETRY_PARAMS_DEFAULT;
     try_read_server_resource_u32(server,
                                  ANJAY_DM_RID_SERVER_COMMUNICATION_RETRY_COUNT,
                                  1, &params.retry_count);
@@ -154,6 +143,16 @@ query_server_communication_retry_params(anjay_server_info_t *server) {
             server, ANJAY_DM_RID_SERVER_COMMUNICATION_SEQUENCE_DELAY_TIMER, 0,
             &params.sequence_delay_timer_s);
     return params;
+}
+
+static uint32_t
+query_initial_registration_delay_timer_s(anjay_server_info_t *server) {
+    assert(server->ssid != ANJAY_SSID_BOOTSTRAP);
+    uint32_t delay_s = 0;
+    try_read_server_resource_u32(
+            server, ANJAY_DM_RID_SERVER_INITIAL_REGISTRATION_DELAY_TIMER, 0,
+            &delay_s);
+    return delay_s;
 }
 #endif // ANJAY_WITH_LWM2M11
 
@@ -179,30 +178,38 @@ void _anjay_server_on_failure(anjay_server_info_t *server,
             // When this value is > 0, it means there is an ongoing registration
             // sequence. Otherwise, this whole function was called due to some
             // other communication failure.
-            const communication_retry_params_t params =
+            const anjay_communication_retry_params_t params =
                     query_server_communication_retry_params(server);
             if (server->registration_attempts < params.retry_count) {
-                anjay_log(INFO, _("Registration Retry ") "%" PRIu32 "/%" PRIu32,
-                          server->registration_attempts,
-                          params.retry_count - 1);
-
-                const avs_time_duration_t retry_timer = avs_time_duration_mul(
-                        avs_time_duration_from_scalar(params.retry_timer_s,
-                                                      AVS_TIME_S),
-                        (1 << (server->registration_attempts - 1)));
+                uint32_t registration_retry_time =
+                        params.retry_timer_s
+                        * (1 << (server->registration_attempts - 1));
+                const avs_time_duration_t retry_timer =
+                        avs_time_duration_from_scalar(registration_retry_time,
+                                                      AVS_TIME_S);
                 if (!avs_time_duration_valid(retry_timer)) {
                     anjay_log(WARNING, _("Calculated retry time overflowed. "
                                          "Assuming infinity"));
                 }
+
+                anjay_log(INFO,
+                          _("Registration Retry ") "%" PRIu32 "/%" PRIu32 _(
+                                  " scheduled in ") "%" PRIu32 _(" seconds"),
+                          server->registration_attempts, params.retry_count - 1,
+                          registration_retry_time);
+
                 server->reactivate_time =
                         avs_time_real_add(avs_time_real_now(), retry_timer);
                 deactivate_server(server);
                 return;
             } else if (server->registration_sequences_performed + 1
                        < params.sequence_retry_count) {
-                anjay_log(INFO, _("Sequence Retry ") "%" PRIu32 "/%" PRIu32,
+                anjay_log(INFO,
+                          _("Sequence Retry ") "%" PRIu32 "/%" PRIu32 _(
+                                  " scheduled in ") "%" PRIu32 _(" seconds"),
                           server->registration_sequences_performed + 1,
-                          params.sequence_retry_count - 1);
+                          params.sequence_retry_count - 1,
+                          params.sequence_delay_timer_s);
 
                 ++server->registration_sequences_performed;
                 server->registration_attempts = 0;
@@ -573,6 +580,23 @@ int _anjay_server_sched_activate(anjay_server_info_t *server) {
                 ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_EXPLICIT_TIMEOUT;
         return 0;
     } else {
+#ifdef ANJAY_WITH_LWM2M11
+        // no need to check SSID - initial_registration_delay_pending
+        // is set only for regular (management) servers
+        uint32_t initial_registration_delay_s = 0;
+        if (server->initial_registration_delay_pending) {
+            initial_registration_delay_s =
+                    query_initial_registration_delay_timer_s(server);
+            server->reactivate_time = avs_time_real_add(
+                    avs_time_real_now(),
+                    avs_time_duration_from_scalar(initial_registration_delay_s,
+                                                  AVS_TIME_S));
+            anjay_log(INFO,
+                      _("Scheduling enabling server SSID ") "%" PRIu16 _(
+                              " in ") "%" PRIu32 _(" seconds"),
+                      server->ssid, initial_registration_delay_s);
+        }
+#endif // ANJAY_WITH_LWM2M11
         return _anjay_schedule_refresh_server(
                 server, avs_time_real_diff(server->reactivate_time,
                                            avs_time_real_now()));
@@ -655,6 +679,10 @@ _anjay_servers_create_inactive(anjay_unlocked_t *anjay, anjay_ssid_t ssid) {
             anjay->lwm2m_version_config.maximum_version;
 #else  // ANJAY_WITH_LWM2M11
             ANJAY_LWM2M_VERSION_1_0;
+#endif // ANJAY_WITH_LWM2M11
+#ifdef ANJAY_WITH_LWM2M11
+    new_server->initial_registration_delay_pending =
+            (ssid != ANJAY_SSID_BOOTSTRAP);
 #endif // ANJAY_WITH_LWM2M11
 #ifdef ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
     new_server->registration_info.last_registration_time =

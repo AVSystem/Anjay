@@ -75,8 +75,7 @@ static int stats_getter(avs_net_socket_interface_name_t *if_name,
 }
 
 static uint64_t first_socket_stats(anjay_t *anjay, const char *stats) {
-    avs_net_socket_interface_name_t if_name;
-    memset(&if_name, 0, sizeof(if_name));
+    avs_net_socket_interface_name_t if_name = { 0 };
     if (ifname_for_first_socket(anjay, &if_name)) {
         return 0;
     }

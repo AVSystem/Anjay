@@ -14,6 +14,7 @@
 #    include <inttypes.h>
 #    include <string.h>
 
+#    include <anjay/dm.h>
 #    include <anjay/server.h>
 
 #    include <anjay_modules/anjay_bootstrap.h>
@@ -79,6 +80,10 @@ static const struct {
     {
         .rid = SERV_RES_LAST_BOOTSTRAPPED,
         .kind = ANJAY_DM_RES_R
+    },
+    {
+        .rid = SERV_RES_INITIAL_REGISTRATION_DELAY_TIMER,
+        .kind = ANJAY_DM_RES_RW
     },
     {
         .rid = SERV_RES_BOOTSTRAP_ON_REGISTRATION_FAILURE,
@@ -219,6 +224,18 @@ static int add_instance(server_repr_t *repr,
     new_instance->present_resources[SERV_RES_REGISTRATION_UPDATE_TRIGGER] =
             true;
 #    ifdef ANJAY_WITH_LWM2M11
+
+    new_instance->present_resources[SERV_RES_INITIAL_REGISTRATION_DELAY_TIMER] =
+            true;
+    if (instance->initial_registration_delay_timer) {
+        new_instance->initial_registration_delay_timer =
+                *instance->initial_registration_delay_timer;
+    } else {
+        new_instance->initial_registration_delay_timer =
+                ANJAY_COMMUNICATION_RETRY_PARAMS_DEFAULT
+                        .initial_registration_delay_timer_s;
+    }
+
 #        ifdef ANJAY_WITH_BOOTSTRAP
     new_instance->present_resources[SERV_RES_BOOTSTRAP_REQUEST_TRIGGER] = true;
     new_instance
@@ -229,36 +246,52 @@ static int add_instance(server_repr_t *repr,
             instance->bootstrap_on_registration_failure
                     ? *instance->bootstrap_on_registration_failure
                     : true;
-    if (instance->communication_retry_count) {
-        new_instance
-                ->present_resources[SERV_RES_SERVER_COMMUNICATION_RETRY_COUNT] =
-                true;
-        new_instance->server_communication_retry_count =
-                *instance->communication_retry_count;
-    }
-    if (instance->communication_retry_timer) {
-        new_instance
-                ->present_resources[SERV_RES_SERVER_COMMUNICATION_RETRY_TIMER] =
-                true;
-        new_instance->server_communication_retry_timer =
-                *instance->communication_retry_timer;
-    }
+
     if (instance->preferred_transport) {
         new_instance->preferred_transport = instance->preferred_transport;
         new_instance->present_resources[SERV_RES_PREFERRED_TRANSPORT] = true;
     }
+
+    new_instance->present_resources[SERV_RES_SERVER_COMMUNICATION_RETRY_COUNT] =
+            true;
+    if (instance->communication_retry_count) {
+        new_instance->server_communication_retry_count =
+                *instance->communication_retry_count;
+    } else {
+        new_instance->server_communication_retry_count =
+                ANJAY_COMMUNICATION_RETRY_PARAMS_DEFAULT.retry_count;
+    }
+
+    new_instance->present_resources[SERV_RES_SERVER_COMMUNICATION_RETRY_TIMER] =
+            true;
+    if (instance->communication_retry_timer) {
+        new_instance->server_communication_retry_timer =
+                *instance->communication_retry_timer;
+    } else {
+        new_instance->server_communication_retry_timer =
+                ANJAY_COMMUNICATION_RETRY_PARAMS_DEFAULT.retry_timer_s;
+    }
+
+    new_instance->present_resources
+            [SERV_RES_SERVER_COMMUNICATION_SEQUENCE_RETRY_COUNT] = true;
     if (instance->communication_sequence_retry_count) {
-        new_instance->present_resources
-                [SERV_RES_SERVER_COMMUNICATION_SEQUENCE_RETRY_COUNT] = true;
         new_instance->server_communication_sequence_retry_count =
                 *instance->communication_sequence_retry_count;
+    } else {
+        new_instance->server_communication_sequence_retry_count =
+                ANJAY_COMMUNICATION_RETRY_PARAMS_DEFAULT.sequence_retry_count;
     }
+
+    new_instance->present_resources
+            [SERV_RES_SERVER_COMMUNICATION_SEQUENCE_DELAY_TIMER] = true;
     if (instance->communication_sequence_delay_timer) {
-        new_instance->present_resources
-                [SERV_RES_SERVER_COMMUNICATION_SEQUENCE_DELAY_TIMER] = true;
         new_instance->server_communication_sequence_delay_timer =
                 *instance->communication_sequence_delay_timer;
+    } else {
+        new_instance->server_communication_sequence_delay_timer =
+                ANJAY_COMMUNICATION_RETRY_PARAMS_DEFAULT.sequence_delay_timer_s;
     }
+
 #        ifdef ANJAY_WITH_SEND
     new_instance->present_resources[SERV_RES_MUTE_SEND] = true;
     new_instance->mute_send = instance->mute_send;
@@ -402,6 +435,9 @@ static int serv_read(anjay_unlocked_t *anjay,
         return _anjay_ret_bool_unlocked(
                 ctx, inst->bootstrap_on_registration_failure);
 #        endif // ANJAY_WITH_BOOTSTRAP
+    case SERV_RES_INITIAL_REGISTRATION_DELAY_TIMER:
+        return _anjay_ret_u64_unlocked(ctx,
+                                       inst->initial_registration_delay_timer);
     case SERV_RES_SERVER_COMMUNICATION_RETRY_COUNT:
         return _anjay_ret_u64_unlocked(ctx,
                                        inst->server_communication_retry_count);
@@ -492,6 +528,10 @@ static int serv_write(anjay_unlocked_t *anjay,
                 ctx, &inst->bootstrap_on_registration_failure);
         break;
 #        endif // ANJAY_WITH_BOOTSTRAP
+    case SERV_RES_INITIAL_REGISTRATION_DELAY_TIMER:
+        retval = _anjay_get_u32_unlocked(
+                ctx, &inst->initial_registration_delay_timer);
+        break;
     case SERV_RES_SERVER_COMMUNICATION_RETRY_COUNT:
         if (!(retval = _anjay_get_u32_unlocked(
                       ctx, &inst->server_communication_retry_count))

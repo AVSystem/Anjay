@@ -93,7 +93,7 @@ Default (D)TLS version
 ^^^^^^^^^^^^^^^^^^^^^^
 
 When the `anjay_configuration_t::dtls_version
-<../api/structanjay__configuration.html#ab32477e7370a36e02db5b7e7ccbdd89d>`_
+<../api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration12dtls_versionE>`_
 field is set to ``AVS_NET_SSL_VERSION_DEFAULT`` (which includes the case of
 zero-initialization), Anjay 3.0 and earlier automatically mapped this setting to
 ``AVS_NET_SSL_VERSION_TLSv1_2`` to ensure that (D)TLS 1.2 is used as mandated by
@@ -150,6 +150,21 @@ limited to **20 seconds by default**.
 
 This behavior can be customized at build time using the ``MAX_HOLDOFF_TIME``
 macro.
+
+Changing Server Initiated Bootstrap behavior
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Previously, Anjay did not use the Client Hold Off Time resource (``/1/x/11``)
+during Server Initiated Bootstrap. This was because the description of
+``/1/x/11`` states that its value should be used during Client Initiated
+Bootstrap.
+
+The LwM2M specification also states that Server Initiated Bootstrap causes
+the LwM2M Client to enter Client Initiated Bootstrap. For consistency with
+this behavior, Anjay now applies the Client Hold Off Time resource in this
+scenario as well.
+
+To avoid additional delay, adjust resource ``/1/x/11`` as needed.
 
 Changes in avs_coap
 -------------------
@@ -376,3 +391,19 @@ Python environment isolation
 All Python-based tools (e.g. integration tests) must be executed within a
 Python virtual environment. See :doc:`/Tools/VirtualEnvironments` for more
 information.
+
+Dropping built-in support for TinyDTLS as a crypto backend
+----------------------------------------------------------
+
+Built-in support for TinyDTLS as a (D)TLS backend has been removed.
+
+In previous versions of Anjay, TinyDTLS could be selected as a lightweight
+crypto backend, primarily intended for constrained environments. However, due
+to its limited feature set, lack of ongoing maintenance, and incompatibility
+with newer security requirements and LwM2M specifications, it is no longer
+supported.
+
+Users are now required to use one of the supported and actively maintained
+(D)TLS backends, such as Mbed TLS or OpenSSL (via avs_commons abstraction
+layer) or creating there own
+:doc:`Custom (D)TLS layer <../PortingGuideForNonPOSIXPlatforms/CustomTLS>`.

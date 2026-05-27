@@ -22,8 +22,7 @@ static int decode_value(anjay_json_like_decoder_t *decoder);
 
 static int decode_number(anjay_json_like_decoder_t *decoder,
                          anjay_json_like_value_type_t type) {
-    anjay_json_like_number_t number;
-    memset(&number, 0, sizeof(number));
+    anjay_json_like_number_t number = { 0 };
     if (_anjay_json_like_decoder_number(decoder, &number)) {
         return -1;
     }

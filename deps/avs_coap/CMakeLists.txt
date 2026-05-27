@@ -364,7 +364,10 @@ if(WITH_TEST)
                                   INCLUDES ${PUBLIC_INCLUDES})
 endif()
 
-add_subdirectory(doc)
+if (WITH_DOCS)
+    add_subdirectory(doc)
+endif()
+
 if(IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/deps/avs_commons")
     add_subdirectory(examples)
 endif()

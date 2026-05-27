@@ -503,7 +503,8 @@ setup_register_request_options(avs_coap_options_t *opts,
 }
 
 static anjay_registration_result_t
-check_register_response(const avs_coap_response_header_t *response,
+check_register_response(const anjay_server_info_t *server,
+                        const avs_coap_response_header_t *response,
                         AVS_LIST(const anjay_string_t) *out_endpoint_path) {
     if (response->code != AVS_COAP_CODE_CREATED) {
         anjay_log(WARNING,
@@ -511,6 +512,17 @@ check_register_response(const avs_coap_response_header_t *response,
                   AVS_COAP_CODE_STRING(response->code),
                   AVS_COAP_CODE_STRING(AVS_COAP_CODE_CREATED));
         assert(response->code != 0);
+
+        if (server->anjay->server_communication_error_cb) {
+            ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, server->anjay);
+            server->anjay->server_communication_error_cb(
+                    server->anjay->server_communication_error_cb_arg,
+                    anjay_locked,
+                    server->ssid,
+                    response->code);
+            ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
+        }
+
         return response->code == AVS_COAP_CODE_PRECONDITION_FAILED
                        ? ANJAY_REGISTRATION_ERROR_FALLBACK_REQUESTED
                        : ANJAY_REGISTRATION_ERROR_REJECTED;
@@ -597,9 +609,10 @@ receive_register_response(avs_coap_ctx_t *coap,
                           avs_coap_client_request_state_t request_state,
                           const avs_coap_client_async_response_t *response,
                           avs_error_t err,
-                          void *state_) {
+                          void *server_) {
+    anjay_server_info_t *server = (anjay_server_info_t *) server_;
     anjay_registration_async_exchange_state_t *state =
-            (anjay_registration_async_exchange_state_t *) state_;
+            &server->registration_exchange_state;
     anjay_registration_result_t result = ANJAY_REGISTRATION_ERROR_OTHER;
     AVS_LIST(const anjay_string_t) endpoint_path = NULL;
     if (request_state != AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT) {
@@ -614,7 +627,8 @@ receive_register_response(avs_coap_ctx_t *coap,
         // fall-through
 
     case AVS_COAP_CLIENT_REQUEST_OK:
-        result = check_register_response(&response->header, &endpoint_path);
+        result = check_register_response(server, &response->header,
+                                         &endpoint_path);
         break;
 
     case AVS_COAP_CLIENT_REQUEST_FAIL: {
@@ -716,14 +730,16 @@ static void send_register(anjay_server_info_t *server,
                          coap, &server->registration_exchange_state.exchange_id,
                          &request, dm_payload_writer,
                          &server->registration_exchange_state,
-                         receive_register_response,
-                         &server->registration_exchange_state)))) {
+                         receive_register_response, server)))) {
         anjay_log(ERROR, _("could not send Register: ") "%s",
                   AVS_COAP_STRERROR(err));
         _anjay_server_on_updated_registration(server, map_coap_error(err), err);
     } else {
         anjay_log(INFO, _("Register sent"));
         server->registration_info.update_forced = false;
+#ifdef ANJAY_WITH_LWM2M11
+        server->initial_registration_delay_pending = false;
+#endif // ANJAY_WITH_LWM2M11
 #ifdef ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
         _anjay_server_set_last_communication_time(server);
 #endif // ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
@@ -824,7 +840,8 @@ setup_update_request_options(anjay_unlocked_t *anjay,
 }
 
 static anjay_registration_result_t
-check_update_response(const avs_coap_response_header_t *response) {
+check_update_response(const anjay_server_info_t *server,
+                      const avs_coap_response_header_t *response) {
     if (response->code == AVS_COAP_CODE_CHANGED) {
         anjay_log(INFO, _("registration successfully updated"));
         return ANJAY_REGISTRATION_SUCCESS;
@@ -845,11 +862,22 @@ check_update_response(const avs_coap_response_header_t *response) {
          * case retransmission may succeed, or an unexpected non-error
          * response. However, as we don't do retransmissions, degenerating
          * to Register seems the best thing we can do. */
-        anjay_log(DEBUG,
+        anjay_log(WARNING,
                   _("Update rejected: ") "%s" _(" (expected ") "%s" _(")"),
                   AVS_COAP_CODE_STRING(response->code),
                   AVS_COAP_CODE_STRING(AVS_COAP_CODE_CHANGED));
         assert(response->code != 0);
+
+        if (server->anjay->server_communication_error_cb) {
+            ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, server->anjay);
+            server->anjay->server_communication_error_cb(
+                    server->anjay->server_communication_error_cb_arg,
+                    anjay_locked,
+                    server->ssid,
+                    response->code);
+            ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
+        }
+
         return ANJAY_REGISTRATION_ERROR_REJECTED;
     }
 }
@@ -934,7 +962,7 @@ receive_update_response(avs_coap_ctx_t *coap,
         // fall-through
 
     case AVS_COAP_CLIENT_REQUEST_OK:
-        result = check_update_response(&response->header);
+        result = check_update_response(server, &response->header);
         break;
 
     case AVS_COAP_CLIENT_REQUEST_FAIL: {

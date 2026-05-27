@@ -64,6 +64,45 @@ class CancellingConfirmableNotifications(test_suite.Lwm2mSingleServerTest,
         self.assertNotEqual(notify1.content, notify2.content)
         self.serv.send(Lwm2mReset.matching(notify2)())
 
+class ConfirmableNotificationAfter24Hours(test_suite.Lwm2mSingleServerTest,
+                                           test_suite.Lwm2mDmOperations):
+    def setUp(self):
+        super().setUp(lifetime=60 * 60 * 24 + 1000)
+
+    def runTest(self):
+        self.create_instance(self.serv, oid=OID.Test, iid=0)
+
+        observe = self.observe(self.serv, oid=OID.Test,
+                               iid=0, rid=RID.Test.Counter)
+
+        self.execute_resource(self.serv, oid=OID.Test,
+                              iid=0, rid=RID.Test.IncrementCounter)
+
+        notify1 = self.serv.recv()
+        self.assertIsInstance(notify1, Lwm2mNotify)
+        self.assertEqual(bytes(notify1.token), bytes(observe.token))
+        self.assertEqual(notify1.type, coap.Type.NON_CONFIRMABLE)
+
+        # after this time Anjay should send a confirmable notification instead of non-confirmable
+        self.advance_demo_time(60 * 60 * 24)
+
+        self.execute_resource(self.serv, oid=OID.Test,
+                              iid=0, rid=RID.Test.IncrementCounter)
+
+        notify2 = self.serv.recv()
+        self.assertIsInstance(notify2, Lwm2mNotify)
+        self.assertEqual(bytes(notify2.token), bytes(observe.token))
+        self.assertEqual(notify2.type, coap.Type.CONFIRMABLE)
+        self.serv.send(Lwm2mEmpty.matching(notify2)())
+
+        # next notification should be a non-confirmable
+        self.execute_resource(self.serv, oid=OID.Test,
+                              iid=0, rid=RID.Test.IncrementCounter)
+
+        notify3 = self.serv.recv()
+        self.assertIsInstance(notify3, Lwm2mNotify)
+        self.assertEqual(bytes(notify3.token), bytes(observe.token))
+        self.assertEqual(notify3.type, coap.Type.NON_CONFIRMABLE)
 
 class ClientInitiatedNotificationCancellation:
     class Test(test_suite.Lwm2mDmOperations):

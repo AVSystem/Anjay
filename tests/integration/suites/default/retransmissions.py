@@ -41,6 +41,8 @@ class RetransmissionTest:
                     self.tx_params().first_retransmission_timeout()),
                 '--dtls-hs-retry-wait-max', str(
                     self.tx_params().last_retransmission_timeout()),
+                '--retry-count', str(1),
+                '--sequence-retry-count', str(0),
             ]
             if self.CONFIRMABLE_NOTIFICATIONS:
                 extra_cmdline_args += ['--confirmable-notifications']
@@ -188,11 +190,11 @@ class DtlsRegisterFailsOnIcmpTest(test_suite.PcapEnabledTest,
 
     def runTest(self):
         self.assertDemoRegisters(respond=False)
-        # Give dumpcap a little bit of time to write to dump file.
-        time.sleep(self.ACK_TIMEOUT / 2)
-        num_initial_dtls_hs_packets = self.count_dtls_client_hello_packets()
         # Close socket to induce ICMP port unreachable.
         self.serv.close()
+
+        num_initial_dtls_hs_packets = self.count_dtls_handshake_packets_stable(
+            timeout_s=5, poll_interval_s=0.25, stable_for_s=1.5)
 
         # Wait for ICMP port unreachable.
         self.wait_until_icmp_unreachable_count(
@@ -203,7 +205,10 @@ class DtlsRegisterFailsOnIcmpTest(test_suite.PcapEnabledTest,
         self.assertEqual(1, self.count_icmp_unreachable_packets())
         # Ensure that no more dtls handshake messages occurred.
         self.assertEqual(num_initial_dtls_hs_packets,
-                         self.count_dtls_client_hello_packets())
+                         self.count_dtls_handshake_packets_stable(
+                             timeout_s=5,
+                             poll_interval_s=0.25,
+                             stable_for_s=1.5))
 
         # Ensure that the control is given back to the user.
         self.assertTrue(self.get_all_connections_failed())
@@ -380,9 +385,10 @@ class UpdateFailsOnIcmpTest:
             self.write_resource(self.serv, oid=OID.Server, iid=1, rid=RID.Server.Lifetime,
                                 content=str(new_lifetime))
             self.assertDemoUpdatesRegistration(lifetime=new_lifetime)
-            # Give dumpcap a little bit of time to write to dump file.
-            time.sleep(self.ACK_TIMEOUT)
-            num_initial_dtls_hs_packets = self.count_dtls_client_hello_packets()
+
+            num_initial_dtls_hs_packets = \
+                self.count_dtls_handshake_packets_stable(
+                    timeout_s=5, poll_interval_s=0.25, stable_for_s=1.5)
 
             self.serv.close()
 
@@ -394,7 +400,10 @@ class UpdateFailsOnIcmpTest:
             self.assertEqual(1, self.count_icmp_unreachable_packets())
             # Ensure that no more dtls handshake messages occurred.
             self.assertEqual(num_initial_dtls_hs_packets,
-                             self.count_dtls_client_hello_packets())
+                             self.count_dtls_handshake_packets_stable(
+                                 timeout_s=5,
+                                 poll_interval_s=0.25,
+                                 stable_for_s=1.5))
 
             # Ensure that the control is given back to the user.
             self.assertTrue(self.get_all_connections_failed())
@@ -504,11 +513,11 @@ class DtlsRequestBootstrapFailsOnIcmpTest(test_suite.PcapEnabledTest,
         self.serv.listen()
         self.bootstrap_server.listen()
         pkt = self.assertDemoRegisters(respond=False)
-        # Give dumpcap a little bit of time to write to dump file.
-        time.sleep(self.ACK_TIMEOUT / 2)
-        num_initial_dtls_hs_packets = self.count_dtls_client_hello_packets()
         # Close the socket to induce ICMP port unreachable
         self.bootstrap_server.close()
+
+        num_initial_dtls_hs_packets = self.count_dtls_handshake_packets_stable(
+            timeout_s=5, poll_interval_s=0.25, stable_for_s=1.5)
 
         # respond with Forbidden to Register so that client falls back to Bootstrap
         self.serv.send(Lwm2mErrorResponse.matching(pkt)
@@ -523,7 +532,10 @@ class DtlsRequestBootstrapFailsOnIcmpTest(test_suite.PcapEnabledTest,
         self.assertEqual(1, self.count_icmp_unreachable_packets())
         # Ensure that no more dtls handshake messages occurred.
         self.assertEqual(num_initial_dtls_hs_packets,
-                         self.count_dtls_client_hello_packets())
+                         self.count_dtls_handshake_packets_stable(
+                             timeout_s=5,
+                             poll_interval_s=0.25,
+                             stable_for_s=1.5))
 
         # Ensure that the control is given back to the user.
         self.assertTrue(self.get_all_connections_failed())
@@ -607,9 +619,8 @@ class NotificationDtlsFailsOnIcmpTest(test_suite.PcapEnabledTest,
         # force an Update so that change to the data model does not get notified later
         self.communicate('send-update')
         self.assertDemoUpdatesRegistration(content=ANY)
-        # Give dumpcap a little bit of time to write to dump file.
-        time.sleep(self.ACK_TIMEOUT / 2)
-        num_initial_dtls_hs_packets = self.count_dtls_client_hello_packets()
+        num_initial_dtls_hs_packets = self.count_dtls_handshake_packets_stable(
+            timeout_s=5, poll_interval_s=0.25, stable_for_s=1.5)
 
         self.observe(self.serv, oid=OID.Test, iid=1, rid=RID.Test.Timestamp)
 
@@ -621,7 +632,10 @@ class NotificationDtlsFailsOnIcmpTest(test_suite.PcapEnabledTest,
         self.assertEqual(1, self.count_icmp_unreachable_packets())
         # Ensure that no more dtls handshake messages occurred.
         self.assertEqual(num_initial_dtls_hs_packets,
-                         self.count_dtls_client_hello_packets())
+                         self.count_dtls_handshake_packets_stable(
+                             timeout_s=5,
+                             poll_interval_s=0.25,
+                             stable_for_s=1.5))
 
         # Ensure that the control is given back to the user.
         self.assertTrue(self.get_all_connections_failed())

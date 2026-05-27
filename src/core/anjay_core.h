@@ -143,6 +143,9 @@ struct
     void *ssl_error_cb_arg;
 #endif // ANJAY_WITH_SSL_ERROR_API
 
+    anjay_server_communication_error_cb_t *server_communication_error_cb;
+    void *server_communication_error_cb_arg;
+
 #ifdef ANJAY_WITH_SEND
     anjay_sender_t sender;
 #endif // ANJAY_WITH_SEND

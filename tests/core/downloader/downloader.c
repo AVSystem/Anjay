@@ -1160,8 +1160,7 @@ AVS_UNIT_TEST(downloader, renegotiation_after_first_packet) {
             SIMPLE_ENV.mocksock, "127.0.0.1", "5683",
             .and_then = expect_renegotiation_after_first_packet);
 
-    on_next_block_args_t args;
-    memset(&args, 0, sizeof(args));
+    on_next_block_args_t args = { 0 };
 
     // We request as much as we can (i.e. 64 bytes due to limit of
     // in_buffer_size)
@@ -1199,8 +1198,7 @@ static void expect_resumption_at_some_offset(avs_net_socket_t *socket,
     assert(socket == SIMPLE_ENV.mocksock);
     size_t offset = (uintptr_t) offset_;
 
-    on_next_block_args_t args;
-    memset(&args, 0, sizeof(args));
+    on_next_block_args_t args = { 0 };
 
     enum { BLOCK_SIZE = 32 };
 
@@ -1293,8 +1291,7 @@ AVS_UNIT_TEST(downloader, resumption_at_some_offset) {
 AVS_UNIT_TEST(downloader, resumption_without_etag_and_block_estimation) {
     setup_simple("coap://127.0.0.1:5683");
 
-    on_next_block_args_t args;
-    memset(&args, 0, sizeof(args));
+    on_next_block_args_t args = { 0 };
 
     size_t new_capacity = 64 + // max 64B block size
                           12 + // CoAP header
@@ -1343,8 +1340,7 @@ AVS_UNIT_TEST(downloader, resumption_with_etag_and_block_estimation) {
 
     setup_simple_with_etag("coap://127.0.0.1:5683", etag);
 
-    on_next_block_args_t args;
-    memset(&args, 0, sizeof(args));
+    on_next_block_args_t args = { 0 };
 
     size_t new_capacity = 64 + // max 64B block size
                           12 + // CoAP header

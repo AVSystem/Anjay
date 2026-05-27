@@ -86,8 +86,7 @@ Its only external dependency is the open source
 `AVSystem Commons Library <https://github.com/AVSystem/avs_commons>`_. That
 library in turn may additionally depend either on
 `OpenSSL <https://www.openssl.org/>`_ or `Mbed TLS <https://www.trustedfirmware.org/projects/mbed-tls/>`_
-or `TinyDTLS <https://projects.eclipse.org/projects/iot.tinydtls>`_ for DTLS
-support.
+for DTLS support.
 
 To build Anjay from source, `CMake <https://www.cmake.org/>`_ version 3.16 or
 newer is necessary.

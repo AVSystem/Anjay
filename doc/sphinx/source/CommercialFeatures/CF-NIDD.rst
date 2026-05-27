@@ -117,8 +117,8 @@ with the modem proxy and create an NIDD driver for communication.
    More information about the needed functions can be found here:
 
 
-   * `NIDD callback functions <../api/nidd_8h.html>`_
-   * `NIDD driver structure <../api/structanjay__nidd__driver__struct.html>`_
+   * `NIDD callback functions <../api/api_generated/file_include_public_anjay_nidd.h.html>`_
+   * `NIDD driver structure <../api/api_generated/structanjay__nidd__driver__struct.html>`_
 
 This function calls ``anjay_bg96_nidd_driver_create(...)`` function that fills
 ``anjay_nidd_driver_t`` structure with callback functions used to integrate with

@@ -129,7 +129,7 @@ solution is to utilize Anjay's internal scheduler.
 
 Before calling ``anjay_event_loop_run()``, our application extracts the
 scheduler object by calling `anjay_get_scheduler()
-<../api/core_8h.html#abb564689d6abd23010b5782bf4967819>`_ and schedules a
+<../api/api_generated/function_core_8h_1abb848d235da740cd483aa931292a4e29.html>`_ and schedules a
 specially crafted ``notify_job()`` function to run, using `AVS_SCHED_DELAYED()
 <https://github.com/AVSystem/avs_commons/blob/2998769a4314f9b609951218dec85cb53b019775/include_public/avsystem/commons/avs_sched.h#L322>`_.
 To run the function periodically, this call to ``AVS_SCHED_DELAYED()`` is in

@@ -13,6 +13,8 @@ RUN apt-get update && \
         libpython3-dev libssl-dev python3-pip clang-tools valgrind opensc \
         libengine-pkcs11-openssl docker.io nodejs curl jq automake python3-venv
 COPY requirements.txt .
+COPY tools/test-framework-tools/tools/ ./tools/test-framework-tools/tools
+COPY tests/integration/framework/ ./tests/integration/framework
 RUN python3 -m venv /venv
 RUN . /venv/bin/activate && \
     pip install --upgrade pip && \

@@ -98,10 +98,10 @@ option.
 Core Persistence feature introduces two functions:
 
 * `anjay_new_from_core_persistence()
-  <../api/core_8h.html#a6fc17768db5909343831fc04a1dbd8c3>`_, which instantiates
+  <../api/api_generated/function_core_8h_1a6fc17768db5909343831fc04a1dbd8c3.html>`_, which instantiates
   Anjay using previously saved client state,
 * `anjay_delete_with_core_persistence()
-  <../api/core_8h.html#a1ad2e0995f6ba822c300ccab819e4526>`_, which deinitializes
+  <../api/api_generated/function_core_8h_1a1ad2e0995f6ba822c300ccab819e4526.html>`_, which deinitializes
   Anjay and attempts to save its state to given stream.
 
 Usage example
@@ -146,7 +146,7 @@ In case any core persistence data is available, we'll try to use that to
 instantiate Anjay and possibly resume our connection to the server. If the
 persistence file is not accessible or an attempt to use it is unsuccessful, we
 should fall back to normal `anjay_new()
-<../api/core_8h.html#a077b9b3db59c5b4539271e190508c520>`_ call.
+<../api/api_generated/function_core_8h_1a077b9b3db59c5b4539271e190508c520.html>`_ call.
 
 .. highlight:: c
 .. snippet-source:: examples/commercial-features/CF-CorePersistence/src/main.c
@@ -176,7 +176,7 @@ should fall back to normal `anjay_new()
 
 Similarly, if core persistence file is not accessible due to some error, we
 want to resort to default `anjay_delete()
-<../api/core_8h.html#a243f18f976bca57b5a7b0714bfb99095>`_ call.
+<../api/api_generated/function_core_8h_1a243f18f976bca57b5a7b0714bfb99095.html>`_ call.
 
 .. highlight:: c
 .. snippet-source:: examples/commercial-features/CF-CorePersistence/src/main.c

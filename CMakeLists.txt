@@ -8,7 +8,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(anjay C)
-set(ANJAY_VERSION "23f4cd115" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "3.14.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -22,7 +22,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(CheckFunctionExists)
 
-if(WITH_DEMO OR WITH_INTEGRATION_TESTS)
+if(WITH_INTEGRATION_TESTS)
     # ensure Python venv is active
     include(cmake/requirePython3venv.cmake)
 endif()
@@ -49,6 +49,11 @@ set(CMAKE_REQUIRED_INCLUDES)
 set(DLSYM_LIBRARY "${DETECTED_DLSYM_LIBRARY}" CACHE STRING "Name of the library containing dlsym() symbol")
 
 include(CMakeDependentOption)
+# Shared helper that checks the selected Mbed TLS headers for
+# MBEDTLS_USE_PSA_CRYPTO. It is reused here, in avs_commons and in the small
+# CMake probe called from devconfig.
+include(
+    ${CMAKE_CURRENT_LIST_DIR}/deps/avs_commons/cmake/CheckMbedTlsPsaCrypto.cmake)
 
 # compilation flags
 set(CMAKE_C_STANDARD 99)
@@ -101,6 +106,9 @@ set(ANJAY_DEFAULT_SEND_FORMAT AVS_COAP_FORMAT_NONE CACHE STRING
 
 set(MAX_HOLDOFF_TIME 20 CACHE STRING
     "Upper limit for the Hold Off Time for the Bootstrap connection.")
+
+set(HOLDOFF_JITTER_RANDOM_FACTOR 1.5 CACHE STRING
+    "Random factor applied to the Hold Off Time for client initiated Bootstrap (delay is multiplied by a random value in [1.0, this value]).")
 
 ################# FEATURES THAT REQUIRE LIBRARY CONFIGURATION ##################
 
@@ -182,14 +190,13 @@ if(WITH_LOCAL_AVS_COMMONS)
     read_avs_commons_compile_time_option(AVS_COMMONS_NET_WITH_POSIX_AVS_SOCKET)
     set(WITH_POSIX_AVS_SOCKET "${AVS_COMMONS_NET_WITH_POSIX_AVS_SOCKET}")
 else()
-    set(_DTLS_BACKENDS "mbedtls" "openssl" "tinydtls" "custom")
+    set(_DTLS_BACKENDS "mbedtls" "openssl" "custom")
     set(DTLS_BACKEND "mbedtls" CACHE STRING "DTLS backend to use; possible values: <empty> ${_DTLS_BACKENDS}")
 
     # Reset enabled backends first, to avoid issues with CMakeCache
     set(WITH_CUSTOM_TLS OFF CACHE INTERNAL "")
     set(WITH_MBEDTLS OFF CACHE INTERNAL "")
     set(WITH_OPENSSL OFF CACHE INTERNAL "")
-    set(WITH_TINYDTLS OFF CACHE INTERNAL "")
 
     string(TOLOWER "${DTLS_BACKEND}" _DTLS_BACKEND_LOWERCASE)
     if(_DTLS_BACKEND_LOWERCASE STREQUAL "mbedtls")
@@ -198,8 +205,6 @@ else()
         set(OPENSSL_CUSTOM_CIPHERS_ENABLED ON CACHE INTERNAL "")
         set(WITH_OPENSSL ON CACHE INTERNAL "")
         set(WITH_OPENSSL_CUSTOM_CIPHERS "ECDHE-ECDSA-AES128-CCM8:PSK-AES128-CCM8" CACHE INTERNAL "")
-    elseif(_DTLS_BACKEND_LOWERCASE STREQUAL "tinydtls")
-        set(WITH_TINYDTLS ON CACHE INTERNAL "")
     elseif(_DTLS_BACKEND_LOWERCASE STREQUAL "custom")
         set(WITH_CUSTOM_TLS ON CACHE INTERNAL "")
     elseif(NOT _DTLS_BACKEND_LOWERCASE STREQUAL "")
@@ -213,6 +218,7 @@ else()
     else()
         set(SSL_ERROR_API_DEFAULT OFF)
     endif()
+
 endif()
 
 option(WITH_AVS_COAP_TCP "Enable CoAP over TCP support" "${WITH_LWM2M11}")
@@ -816,24 +822,45 @@ endif()
 
 ################# STATIC ANALYSIS ##############################################
 
-cmake_dependent_option(WITH_STATIC_ANALYSIS "Perform static analysis of the codebase on `make check`" OFF WITH_TEST OFF)
-if(WITH_STATIC_ANALYSIS)
-    find_program(SCAN_BUILD_BINARY scan-build)
-    if(NOT SCAN_BUILD_BINARY)
-        # some systems only have scan-build-x.y, where x.y is the version of LLVM
-        # let's try that
-        find_program(CLANG_BINARY clang)
-        if(CLANG_BINARY)
-            avs_temp_name(_fname)
-            file(WRITE ${_fname} "__clang_major__ __clang_minor__")
-            execute_process(COMMAND "${CLANG_BINARY}" -E -P -x c ${_fname}
-                            OUTPUT_VARIABLE CLANG_VERSION_OUTPUT
-                            OUTPUT_STRIP_TRAILING_WHITESPACE)
-            file(REMOVE ${_fname})
-            string(REPLACE " " "." CLANG_VERSION_OUTPUT "${CLANG_VERSION_OUTPUT}")
-            find_program(SCAN_BUILD_BINARY "scan-build-${CLANG_VERSION_OUTPUT}")
-        endif()
+if(APPLE)
+    execute_process(
+        COMMAND brew --prefix llvm
+        OUTPUT_VARIABLE HOMEBREW_LLVM_PREFIX
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET)
+endif()
+
+if(NOT SCAN_BUILD_BINARY)
+    # Let CMake auto-enable static analysis only when scan-build is available.
+    # On macOS, also check Homebrew LLVM installs outside PATH.
+    find_program(SCAN_BUILD_BINARY scan-build
+                 HINTS "${HOMEBREW_LLVM_PREFIX}/bin")
+endif()
+if(NOT SCAN_BUILD_BINARY)
+    # some systems only have scan-build-x.y, where x.y is the version of LLVM
+    # let's try that
+    find_program(CLANG_BINARY clang)
+    if(CLANG_BINARY)
+        avs_temp_name(_fname)
+        file(WRITE ${_fname} "__clang_major__ __clang_minor__")
+        execute_process(COMMAND "${CLANG_BINARY}" -E -P -x c ${_fname}
+                        OUTPUT_VARIABLE CLANG_VERSION_OUTPUT
+                        OUTPUT_STRIP_TRAILING_WHITESPACE)
+        file(REMOVE ${_fname})
+        string(REPLACE " " "." CLANG_VERSION_OUTPUT "${CLANG_VERSION_OUTPUT}")
+        find_program(SCAN_BUILD_BINARY "scan-build-${CLANG_VERSION_OUTPUT}")
     endif()
+endif()
+
+if(SCAN_BUILD_BINARY)
+    set(WITH_STATIC_ANALYSIS_DEFAULT ON)
+else()
+    set(WITH_STATIC_ANALYSIS_DEFAULT OFF)
+endif()
+cmake_dependent_option(WITH_STATIC_ANALYSIS
+                       "Perform static analysis of the codebase on `make check`"
+                       "${WITH_STATIC_ANALYSIS_DEFAULT}" WITH_TEST OFF)
+if(WITH_STATIC_ANALYSIS)
     if(NOT SCAN_BUILD_BINARY)
         message(FATAL_ERROR "scan-build not found; specify path with -DSCAN_BUILD_BINARY or disable static analysis with -DWITH_STATIC_ANALYSIS=OFF")
     else()

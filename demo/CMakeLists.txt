@@ -115,13 +115,18 @@ if(WITH_DEMO_TRAFFIC_INTERCEPTOR)
 endif()
 
 
-### FindPython3
-if(NOT TARGET Python3::Interpreter)
-    include(../cmake/requirePython3venv.cmake)
-endif()
+set(_is_venv "")
+include(../cmake/checkPython3venv.cmake)
+is_venv_available(_is_venv)
 
-add_custom_target(demo_firmware
-                  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../tests/integration/framework/framework/create_package.py
-                          -i ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/demo
-                          -o ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/demo.fw-pkg
-                  DEPENDS demo)
+message("Python venv available: ${_is_venv}")
+
+if (_is_venv STREQUAL "True")
+    add_custom_target(demo_firmware
+                      COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../tests/integration/framework/framework/create_package.py
+                              -i ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/demo
+                              -o ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/demo.fw-pkg
+                      DEPENDS demo)
+else()
+    message(WARNING "Python venv is not available. Skipping demo firmware update package creation.")
+endif()

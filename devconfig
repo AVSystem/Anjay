@@ -29,8 +29,8 @@ EXTRA_FLAGS=()
 MODULE_DYNAMIC_LIBS='ON'
 MODULE_STATIC_LIBS='ON'
 DTLS_BACKEND="mbedtls"
-WITH_STATIC_ANALYSIS='ON'
 WITH_EXAMPLES='ON'
+WITH_AVS_CRYPTO_PKI_ENGINE_EXPLICIT='OFF'
 
 if valgrind --version >/dev/null 2>/dev/null; then
     WITH_VALGRIND=ON
@@ -50,6 +50,29 @@ fi
 CMAKE_COMMAND=cmake
 which cmake3 &>/dev/null && CMAKE_COMMAND=cmake3
 
+# Ask a tiny standalone CMake project which concrete crypto-engine backend is
+# available for the current flags. It writes one word to backend.txt:
+# "pkcs11", "psa" or "none".
+probe_crypto_engine_backend() {
+    local probe_dir
+    local backend
+
+    probe_dir="$(mktemp -d)"
+    if ! "${CMAKE_COMMAND}" \
+            -S "${SCRIPT_DIR}/cmake/probe_crypto_engine_backend" \
+            -B "$probe_dir" \
+            -DDTLS_BACKEND="${DTLS_BACKEND}" \
+            "${EXTRA_FLAGS[@]}" >/dev/null 2>&1; then
+        rm -rf "$probe_dir"
+        echo "none"
+        return 0
+    fi
+
+    backend="$(cat "$probe_dir/backend.txt" 2>/dev/null || echo none)"
+    rm -rf "$probe_dir"
+    echo "${backend:-none}"
+}
+
 # argument parsing
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -68,9 +91,6 @@ while [ $# -gt 0 ]; do
         '--with-openssl')
             DTLS_BACKEND="openssl"
             ;;
-        '--with-tinydtls')
-            DTLS_BACKEND="tinydtls"
-            ;;
         '--without-dtls')
             DTLS_BACKEND=
             ;;
@@ -87,7 +107,7 @@ while [ $# -gt 0 ]; do
             WITH_VALGRIND=OFF
             ;;
         '--without-analysis')
-            WITH_STATIC_ANALYSIS=OFF
+            EXTRA_FLAGS=(-D WITH_STATIC_ANALYSIS=OFF "${EXTRA_FLAGS[@]}")
             ;;
         '--no-examples')
             WITH_EXAMPLES=OFF
@@ -110,6 +130,10 @@ while [ $# -gt 0 ]; do
             else
                 EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="$1"
             fi
+            ;;
+        -DWITH_AVS_CRYPTO_PKI_ENGINE=*)
+            WITH_AVS_CRYPTO_PKI_ENGINE_EXPLICIT=ON
+            EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="$1"
             ;;
         *)
             EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="$1"
@@ -150,8 +174,6 @@ else
 
 fi
 
-# Not placing it in dockerfile to allow easier updates and ci runs
-# without rebuilding the images
 python3 -m pip install -e $SCRIPT_DIR/tools/test-framework-tools/tools
 python3 -m pip install -e $SCRIPT_DIR/tests/integration/framework
 
@@ -169,7 +191,6 @@ ${CMAKE_COMMAND} \
     -D WITH_VALGRIND=${WITH_VALGRIND} \
     -D WITH_INTEGRATION_TESTS=ON \
     -D WITH_DOC_CHECK=ON \
-    -D WITH_STATIC_ANALYSIS=${WITH_STATIC_ANALYSIS} \
     -D WITH_MODULE_advanced_fw_update=ON \
     -D WITH_MODULE_sw_mgmt=ON \
     -D DTLS_BACKEND="${DTLS_BACKEND}" \

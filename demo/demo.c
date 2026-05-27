@@ -45,6 +45,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <avsystem/coap/code.h>
 #include <avsystem/commons/avs_base64.h>
 #include <avsystem/commons/avs_stream_file.h>
 
@@ -207,12 +208,24 @@ static int server_object_reload(anjay_demo_t *demo) {
                     .binding = server->binding_mode,
                     .notification_storing = true,
 #ifdef ANJAY_WITH_LWM2M11
-                    .communication_retry_count = &server->retry_count,
-                    .communication_retry_timer = &server->retry_timer,
+                    .initial_registration_delay_timer =
+                            (server->initial_registration_delay_timer > 0
+                                     ? &server->initial_registration_delay_timer
+                                     : NULL),
+                    .communication_retry_count =
+                            (server->retry_count > 0 ? &server->retry_count
+                                                     : NULL),
+                    .communication_retry_timer =
+                            (server->retry_timer > 0 ? &server->retry_timer
+                                                     : NULL),
                     .communication_sequence_retry_count =
-                            &server->sequence_retry_count,
+                            (server->sequence_retry_count > 0
+                                     ? &server->sequence_retry_count
+                                     : NULL),
                     .communication_sequence_delay_timer =
-                            &server->sequence_delay_timer,
+                            (server->sequence_delay_timer > 0
+                                     ? &server->sequence_delay_timer
+                                     : NULL),
                     .preferred_transport = '\0',
 #endif // ANJAY_WITH_LWM2M11
                 };
@@ -558,6 +571,18 @@ static void ssl_error_callback(void *demo_,
 }
 #endif // ANJAY_WITH_SSL_ERROR_API
 
+static void server_communication_error_callback(void *demo_,
+                                                anjay_t *anjay,
+                                                anjay_ssid_t ssid,
+                                                uint8_t code) {
+    (void) demo_;
+    (void) anjay;
+    demo_log(ERROR,
+             "Server Communication error from server with SSID=%" PRIu16
+             ": code=%s",
+             ssid, AVS_COAP_CODE_STRING(code));
+}
+
 static void confirmable_notification_status_callback(
         anjay_t *anjay,
         anjay_ssid_t ssid,
@@ -689,6 +714,8 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         .ssl_error_cb = ssl_error_callback,
         .ssl_error_cb_arg = demo,
 #endif // ANJAY_WITH_SSL_ERROR_API
+        .server_communication_error_cb = server_communication_error_callback,
+        .server_communication_error_cb_arg = demo,
 #ifdef ANJAY_WITH_DOWNLOADER
         .coap_downloader_retry_count =
                 cmdline_args->coap_downloader_retry_count,

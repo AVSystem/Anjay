@@ -745,8 +745,7 @@ _anjay_get_trust_store(anjay_unlocked_t *anjay,
 
 anjay_security_config_t
 _anjay_security_config_pkix_unlocked(anjay_unlocked_t *anjay) {
-    avs_net_certificate_info_t cert_info;
-    memset(&cert_info, 0, sizeof(cert_info));
+    avs_net_certificate_info_t cert_info = { 0 };
     const anjay_trust_store_t *trust_store =
             _anjay_get_trust_store(anjay, 0, ANJAY_SECURITY_CERTIFICATE);
     if (trust_store) {
@@ -781,8 +780,7 @@ void _anjay_find_matching_coap_context_and_socket(
         const char *raw_url,
         avs_coap_ctx_t **out_coap,
         avs_net_socket_t **out_socket) {
-    security_or_socket_info_t info;
-    memset(&info, 0, sizeof(info));
+    security_or_socket_info_t info = { 0 };
     try_get_info_from_dm(anjay, raw_url, &info,
                          try_security_instance_get_coap_and_socket);
 

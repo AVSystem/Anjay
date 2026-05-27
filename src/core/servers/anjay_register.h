@@ -40,7 +40,7 @@ typedef enum {
      */
     ANJAY_REGISTRATION_ERROR_FALLBACK_REQUESTED,
     /** Other failure */
-    ANJAY_REGISTRATION_ERROR_OTHER
+    ANJAY_REGISTRATION_ERROR_OTHER,
 } anjay_registration_result_t;
 
 /**

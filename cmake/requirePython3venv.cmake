@@ -6,18 +6,15 @@
 # See the attached LICENSE file for details.
 
 include_guard(GLOBAL)
-set(Python_FIND_FRAMEWORK LAST)
-set(Python3_FIND_VIRTUALENV ONLY)
-find_package(Python3 3.8 REQUIRED COMPONENTS Interpreter)
 
-execute_process(
-    COMMAND "${Python3_EXECUTABLE}" -c "import sys; print(sys.base_prefix != sys.prefix)"
-    OUTPUT_VARIABLE _is_venv
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
+include(${CMAKE_CURRENT_LIST_DIR}/checkPython3venv.cmake)
+
+set(_is_venv "")
+is_venv_available(_is_venv)
 
 if(NOT _is_venv STREQUAL "True")
     message(FATAL_ERROR
-    "Python3_EXECUTABLE=${Python3_EXECUTABLE} is not from a virtualenv.\n"
+    "Python3_EXECUTABLE is not from a virtualenv.\n"
     "Activate your .venv or pass -DPython3_EXECUTABLE=/path/to/.venv/bin/python")
 endif()
 

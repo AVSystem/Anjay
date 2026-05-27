@@ -1169,6 +1169,47 @@ class PcapEnabledTest(Lwm2mTest):
                 result += 1
         return result
 
+    def _count_packets_stable(self, condition: lambda pkts: True,
+                              timeout_s=None, poll_interval_s=0.1,
+                              stable_for_s=0.5):
+        if timeout_s is None:
+            timeout_s = self.DEFAULT_MSG_TIMEOUT
+
+        deadline = time.time() + timeout_s
+        stable_deadline = None
+        last_count = None
+        last_exception = None
+
+        while True:
+            try:
+                count = self._count_packets(condition)
+                last_exception = None
+            except (FileNotFoundError, ValueError, EOFError,
+                    dpkt.dpkt.NeedData) as e:
+                count = None
+                last_exception = e
+
+            now = time.time()
+            if count is not None and count == last_count:
+                if stable_deadline is None:
+                    stable_deadline = now + stable_for_s
+                elif now >= stable_deadline:
+                    return count
+            else:
+                stable_deadline = None
+                last_count = count
+
+            if now >= deadline:
+                if last_exception is not None:
+                    raise TimeoutError(
+                        'Packet count did not stabilize before timeout; '
+                        'last parse error: %r' % (last_exception,))
+                raise TimeoutError(
+                    'Packet count did not stabilize before timeout; '
+                    'last observed count: %r' % (last_count,))
+
+            time.sleep(poll_interval_s)
+
     @staticmethod
     def is_icmp_unreachable(pkt):
         return isinstance(pkt, dpkt.ip.IP) \
@@ -1176,7 +1217,7 @@ class PcapEnabledTest(Lwm2mTest):
             and isinstance(pkt.data.data, dpkt.icmp.ICMP.Unreach)
 
     @staticmethod
-    def is_dtls_client_hello(pkt):
+    def is_dtls_handshake_packet(pkt):
         header = b'\x16'  # Content Type: Handshake
         header += b'\xfe\xfd'  # Version: DTLS 1.2
         header += b'\x00\x00'  # Epoch: 0
@@ -1200,8 +1241,17 @@ class PcapEnabledTest(Lwm2mTest):
     def count_icmp_unreachable_packets(self):
         return self._count_packets(PcapEnabledTest.is_icmp_unreachable)
 
-    def count_dtls_client_hello_packets(self):
-        return self._count_packets(PcapEnabledTest.is_dtls_client_hello)
+    def count_dtls_handshake_packets(self):
+        return self._count_packets(PcapEnabledTest.is_dtls_handshake_packet)
+
+    def count_dtls_handshake_packets_stable(self, timeout_s=None,
+                                            poll_interval_s=0.1,
+                                            stable_for_s=0.5):
+        return self._count_packets_stable(
+            PcapEnabledTest.is_dtls_handshake_packet,
+            timeout_s=timeout_s,
+            poll_interval_s=poll_interval_s,
+            stable_for_s=stable_for_s)
 
     def wait_until_icmp_unreachable_count(self, value, timeout_s=None, step_s=0.1):
         def count_of_icmps_is_expected(pkts):

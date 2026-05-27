@@ -348,6 +348,7 @@
  * Enable support for Enrollment over Secure Transport.
  *
  * Requires <c>ANJAY_WITH_BOOTSTRAP</c> to be enabled.
+ * Requires <c>ANJAY_WITH_LWM2M11</c> to be enabled.
  *
  * IMPORTANT: Only available as part of the EST commercial feature. Ignored in
  * the open source version.
@@ -704,7 +705,7 @@
 #cmakedefine ANJAY_WITH_LWM2M_GATEWAY
 
 /**
- * Maximum holdoff time in seconds.
+ * Maximum Hold Off Time in seconds.
  *
  * This parameter defines an upper limit on the Hold Off Time as specified in
  * the LwM2M Security Object (Object ID: 0, Resource ID: 11). The Hold Off Time
@@ -721,6 +722,24 @@
  * The default value defined in CMake build scripts is 20.
  */
 #define ANJAY_MAX_HOLDOFF_TIME @MAX_HOLDOFF_TIME@
+
+/**
+ * Random factor applied to the Hold Off Time when scheduling a client initiated
+ * Bootstrap request.
+ *
+ * Before each bootstrap attempt, the Hold Off Time is multiplied by a random
+ * value distributed in the range [1.0, this parameter] (the random value is
+ * generated only on the first attempt and is then used to compute subsequent
+ * Hold Off Times). This introduces jitter to prevent multiple clients from
+ * bootstrapping simultaneously.
+ *
+ * The resulting delay is still capped at <c>ANJAY_MAX_HOLDOFF_TIME</c>.
+ *
+ * If editing this file manually, <c>@HOLDOFF_JITTER_RANDOM_FACTOR@</c> shall be
+ * replaced with a floating-point literal greater than or equal to 1.0.
+ * The default value defined in CMake build scripts is 1.5.
+ */
+#define ANJAY_HOLDOFF_JITTER_RANDOM_FACTOR @HOLDOFF_JITTER_RANDOM_FACTOR@
 
 /**
  * Enable support for optional resources of the Firmware Update object

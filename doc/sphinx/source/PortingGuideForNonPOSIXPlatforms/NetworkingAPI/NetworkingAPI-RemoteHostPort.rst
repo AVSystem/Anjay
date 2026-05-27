@@ -26,7 +26,7 @@ adds support for the "get remote host" and "get remote port" operations.
 
 This will allow CoAP response cache to work and the
 `anjay_configuration_t::msg_cache_size
-<../../api/structanjay__configuration.html#a3bb16de58b283370b1ab20698dd4849a>`_
+<../../api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration14msg_cache_sizeE>`_
 configuration option to be properly respected.
 
 This is necessary because the response cache is shared between all the server

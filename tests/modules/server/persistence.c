@@ -81,6 +81,8 @@ static void assert_instances_equal(const server_instance_t *a,
     AVS_UNIT_ASSERT_EQUAL(a->last_alert, b->last_alert);
     AVS_UNIT_ASSERT_EQUAL(a->last_bootstrapped_timestamp,
                           b->last_bootstrapped_timestamp);
+    AVS_UNIT_ASSERT_EQUAL(a->initial_registration_delay_timer,
+                          b->initial_registration_delay_timer);
     AVS_UNIT_ASSERT_EQUAL(a->bootstrap_on_registration_failure,
                           b->bootstrap_on_registration_failure);
     AVS_UNIT_ASSERT_EQUAL(a->server_communication_retry_count,
@@ -186,6 +188,7 @@ AVS_UNIT_TEST(server_persistence, nonempty_store_restore) {
         .binding = "UQ",
         .notification_storing = true,
 #ifdef ANJAY_WITH_LWM2M11
+        .initial_registration_delay_timer = &(uint32_t) { 17 },
         .bootstrap_on_registration_failure = &(bool) { false },
         .preferred_transport = 'U',
         .mute_send = true,
@@ -211,11 +214,14 @@ AVS_UNIT_TEST(server_persistence, nonempty_store_restore) {
         .lifetime = 9001,
         .notification_storing = true,
 #ifdef ANJAY_WITH_LWM2M11
+        .initial_registration_delay_timer = 17,
         .bootstrap_on_registration_failure = false,
         .preferred_transport = 'U',
 #    ifdef ANJAY_WITH_SEND
         .mute_send = true,
 #    endif // ANJAY_WITH_SEND
+        .server_communication_retry_count = 5,
+        .server_communication_retry_timer = 60,
         .server_communication_sequence_retry_count = 2,
         .server_communication_sequence_delay_timer = 10,
 #endif // ANJAY_WITH_LWM2M11
@@ -229,8 +235,11 @@ AVS_UNIT_TEST(server_persistence, nonempty_store_restore) {
             [SERV_RES_BINDING] = true,
             [SERV_RES_REGISTRATION_UPDATE_TRIGGER] = true,
 #ifdef ANJAY_WITH_LWM2M11
+            [SERV_RES_INITIAL_REGISTRATION_DELAY_TIMER] = true,
             [SERV_RES_BOOTSTRAP_REQUEST_TRIGGER] = true,
             [SERV_RES_BOOTSTRAP_ON_REGISTRATION_FAILURE] = true,
+            [SERV_RES_SERVER_COMMUNICATION_RETRY_COUNT] = true,
+            [SERV_RES_SERVER_COMMUNICATION_RETRY_TIMER] = true,
             [SERV_RES_SERVER_COMMUNICATION_SEQUENCE_RETRY_COUNT] = true,
             [SERV_RES_SERVER_COMMUNICATION_SEQUENCE_DELAY_TIMER] = true,
             [SERV_RES_PREFERRED_TRANSPORT] = true,

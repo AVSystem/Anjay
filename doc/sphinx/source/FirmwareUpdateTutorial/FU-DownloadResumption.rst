@@ -147,7 +147,7 @@ the state from persistent storage:
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/firmware-update/download-resumption/src/firmware_update.c
-    :emphasize-lines: 1, 10-117, 123-128
+    :emphasize-lines: 1, 10-116, 122-127
 
     #define _DEFAULT_SOURCE // for fileno()
     #include "./firmware_update.h"
@@ -221,8 +221,7 @@ the state from persistent storage:
     }
 
     static int restore_download_state(download_state_t *out_state) {
-        download_state_t data;
-        memset(&data, 0, sizeof(data));
+        download_state_t data = { 0 };
 
         FILE *fp = fopen(FW_DOWNLOAD_STATE_NAME, "rb");
         if (!fp) {
@@ -460,8 +459,7 @@ at initialization stage, and before installing the firmware update module in Anj
     :emphasize-lines: 9-23
 
     int fw_update_install(anjay_t *anjay) {
-        anjay_fw_update_initial_state_t state;
-        memset(&state, 0, sizeof(state));
+        anjay_fw_update_initial_state_t state = { 0 };
 
         if (access(FW_UPDATED_MARKER, F_OK) != -1) {
             // marker file exists, it means firmware update succeded!

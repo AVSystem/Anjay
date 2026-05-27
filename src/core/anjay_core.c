@@ -50,7 +50,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "23f4cd115"
+#    define ANJAY_VERSION "3.14.0"
 #endif // ANJAY_VERSION
 
 #ifdef ANJAY_WITH_LWM2M11
@@ -153,6 +153,14 @@ static int init_anjay(anjay_unlocked_t *anjay,
         anjay->ssl_error_cb_arg = config->ssl_error_cb_arg;
     }
 #endif // ANJAY_WITH_SSL_ERROR_API
+
+    anjay->server_communication_error_cb =
+            config->server_communication_error_cb;
+
+    if (anjay->server_communication_error_cb) {
+        anjay->server_communication_error_cb_arg =
+                config->server_communication_error_cb_arg;
+    }
 
     anjay->socket_config = config->socket_config;
     anjay->udp_listen_port = config->udp_listen_port;

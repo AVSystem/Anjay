@@ -1271,6 +1271,27 @@ typedef enum {
 
 typedef uint16_t anjay_access_mask_t;
 
+#ifdef ANJAY_WITH_LWM2M11
+typedef struct {
+    uint32_t initial_registration_delay_timer_s;
+    uint32_t retry_count;
+    uint32_t retry_timer_s;
+    uint32_t sequence_retry_count;
+    uint32_t sequence_delay_timer_s;
+} anjay_communication_retry_params_t;
+
+// NOTE: See "Table: 6.2.1.1.-1 Registration Procedures Default Values", it's
+// where the default values are taken from.
+static const anjay_communication_retry_params_t
+        ANJAY_COMMUNICATION_RETRY_PARAMS_DEFAULT = {
+            .initial_registration_delay_timer_s = 0,
+            .retry_count = 5,
+            .retry_timer_s = 60,
+            .sequence_retry_count = 1,
+            .sequence_delay_timer_s = 86400
+        };
+#endif // ANJAY_WITH_LWM2M11
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

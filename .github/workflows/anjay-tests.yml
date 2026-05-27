@@ -10,7 +10,7 @@ on: [push]
 jobs:
   ubuntu2204-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:ubuntu-22.04-3.0
+    container: registry.avsystem.com/embedded-public/anjay-test-public:ubuntu-22.04-3.1
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
@@ -56,7 +56,7 @@ jobs:
 
   ubuntu2404-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:ubuntu-24.04-3.0
+    container: registry.avsystem.com/embedded-public/anjay-test-public:ubuntu-24.04-3.1
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
@@ -100,9 +100,55 @@ jobs:
             CXX: clang++-19
             MEM_CHECK_TOOL: --with-valgrind
 
+  ubuntu2604-compilers-test:
+    runs-on: ubuntu-latest
+    container: registry.avsystem.com/embedded-public/anjay-test-public:ubuntu-26.04-1.0
+    env:
+      CC: ${{ matrix.CC }}
+      CXX: ${{ matrix.CXX }}
+      MEM_CHECK_TOOL: ${{ matrix.MEM_CHECK_TOOL }}
+    steps:
+      # NOTE: workaround for https://github.com/actions/checkout/issues/760
+      - run: git config --global safe.directory '*'
+      # NOTE: v2 requires Git 2.18 for submodules, it's not present in the image
+      - uses: actions/checkout@v1
+        with:
+          submodules: recursive
+      - run: apt-get update
+      - run: apt-get -y install $CC $CXX
+      - run: ./devconfig $MEM_CHECK_TOOL --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_IPV6=OFF
+      - run: |
+          . /venv/bin/activate
+          env CC=gcc LC_ALL=C.UTF-8 make -j
+      - run: |
+          . /venv/bin/activate
+          env CC=gcc LC_ALL=C.UTF-8 make check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - CC: gcc-14
+            CXX: g++-14
+            MEM_CHECK_TOOL: --with-valgrind
+          - CC: gcc-15
+            CXX: g++-15
+            MEM_CHECK_TOOL: --with-valgrind
+          - CC: gcc-16
+            CXX: g++-16
+            MEM_CHECK_TOOL: --with-valgrind
+          - CC: clang-19
+            CXX: clang++-19
+            MEM_CHECK_TOOL: --with-valgrind
+          - CC: clang-20
+            CXX: clang++-20
+            MEM_CHECK_TOOL: --with-valgrind
+          - CC: clang-21
+            CXX: clang++-21
+            MEM_CHECK_TOOL: --with-valgrind
+
   rockylinux9-compilers-test:
     runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:rockylinux-9-3.0
+    container: registry.avsystem.com/embedded-public/anjay-test-public:rockylinux-9-3.1
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
@@ -133,6 +179,39 @@ jobs:
           - CC: clang
             CXX: clang++
 
+  rockylinux10-compilers-test:
+    runs-on: ubuntu-latest
+    container: registry.avsystem.com/embedded-public/anjay-test-public:rockylinux-10-1.0
+    env:
+      CC: ${{ matrix.CC }}
+      CXX: ${{ matrix.CXX }}
+    steps:
+      # NOTE: workaround for https://github.com/actions/checkout/issues/760
+      - run: git config --global safe.directory '*'
+      # NOTE: v2 requires Git 2.18 for submodules, it's not present in the image
+      - uses: actions/checkout@v1
+        with:
+          submodules: recursive
+      - run: dnf update -y --nobest
+      - run: dnf install -y $CC
+      # Solve issues with EPERM when running dumpcap
+      - run: setcap -r $(which dumpcap)
+      - run: ./devconfig --with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_IPV6=OFF
+      - run: |
+          . /venv/bin/activate
+          env CC=gcc LC_ALL=C.UTF-8 make -j
+      - run: |
+          . /venv/bin/activate
+          env CC=gcc LC_ALL=C.UTF-8 make check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - CC: gcc
+            CXX: g++
+          - CC: clang
+            CXX: clang++
+
   macOS-test:
     runs-on: "${{ matrix.RUNNER }}"
     steps:
@@ -142,7 +221,7 @@ jobs:
           submodules: recursive
       - run: brew update
       # NOTE: try the brew install command twice to work around "brew link" errors
-      - run: INSTALL_CMD="brew install python3 openssl"; $INSTALL_CMD || $INSTALL_CMD
+      - run: INSTALL_CMD="brew install python3 expat openssl"; $INSTALL_CMD || $INSTALL_CMD
       # NOTE: Some tests don't pass on mbedTLS 3.6.2 now, so we need to install an older version
       #       Homebrew only specifiers major version of mbedTLS, so let's pin the version to 3.6.0 manually
       - run: curl -f https://raw.githubusercontent.com/Homebrew/homebrew-core/219dabf6cab172fb8b62b4d8598e016e190c3c20/Formula/m/mbedtls.rb > /tmp/mbedtls.rb
@@ -159,7 +238,9 @@ jobs:
       - run: brew pin mbedtls
       # NOTE: The above command may have installed a new version of Python, that's why we launch it weirdly
       # NOTE: We manualy create env since devconfig does not use /usr/bin/env python3
-      - run: /usr/bin/env python3 -m venv venv
+      - run: |
+          export DYLD_LIBRARY_PATH="/opt/homebrew/opt/expat/lib:${DYLD_LIBRARY_PATH:-}"
+          /usr/bin/env python3 -m venv venv
       - run: env JAVA_HOME="$JAVA_HOME_17_X64" ./devconfig --with-asan --without-analysis --no-examples -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_IPV6=OFF -DMBEDTLS_ROOT_DIR=/opt/homebrew/opt/mbedtls
       - run: |
           . venv/bin/activate

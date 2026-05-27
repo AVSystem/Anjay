@@ -383,7 +383,7 @@ The implementation is presented below. Changes made since
 :doc:`last time <FU-BasicImplementation>` are highlighted:
 
 .. snippet-source:: examples/tutorial/firmware-update/secure-downloads/src/firmware_update.c
-    :emphasize-lines: 11-12, 106-133, 141, 155-157
+    :emphasize-lines: 11-12, 106-133, 141, 154-156
 
     #include "./firmware_update.h"
 
@@ -531,8 +531,7 @@ The implementation is presented below. Changes made since
     const char *ENDPOINT_NAME = NULL;
 
     int fw_update_install(anjay_t *anjay) {
-        anjay_fw_update_initial_state_t state;
-        memset(&state, 0, sizeof(state));
+        anjay_fw_update_initial_state_t state = { 0 };
 
         if (access(FW_UPDATED_MARKER, F_OK) != -1) {
             // marker file exists, it means firmware update succeded!

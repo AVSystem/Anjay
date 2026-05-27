@@ -134,8 +134,7 @@ int interceptor_init(const char *socket_path, const char *endpoint_name) {
     if (fd < 0) {
         return -1;
     }
-    struct sockaddr_un addr;
-    memset(&addr, 0, sizeof(addr));
+    struct sockaddr_un addr = { 0 };
     addr.sun_family = AF_UNIX;
     strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path) - 1);
     errno = 0;

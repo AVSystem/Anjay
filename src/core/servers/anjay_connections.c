@@ -497,8 +497,7 @@ recreate_socket(anjay_unlocked_t *anjay,
     // At this point, inout_info has "global" settings filled,
     // but transport-specific (i.e. UDP or SMS) fields are not
     anjay_security_config_t security_config;
-    anjay_security_config_cache_t security_config_cache;
-    memset(&security_config_cache, 0, sizeof(security_config_cache));
+    anjay_security_config_cache_t security_config_cache = { 0 };
     avs_error_t err;
     {
         err = _anjay_connection_security_generic_get_config(

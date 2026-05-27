@@ -136,7 +136,7 @@ When using HSM to store the Security objects, they shouldn't be stored in the
 application memory, so they can't be kept in the buffers in the security object
 instances, so some other kind of structures is needed for them. For this purpose
 an additional set of fields, which are able to store them, was introduced in
-`anjay_security_instance_t <../api/structanjay__security__instance__t.html>`_
+`anjay_security_instance_t <../api/api_generated/structanjay__security__instance__t.html>`_
 (to make them available ``ANJAY_WITH_SECURITY_STRUCTURED`` macro must be
 defined):
 
@@ -188,11 +188,9 @@ instance of the Security object:
   descriptor used later on to load pre-shared key identity from the engine.
 
 
-One may notice that the first two of them (as well as first two mentioned
-`anjay_security_instance_t <../api/structanjay__security__instance__t.html>`_
-fields) are used when the connection is secured using PKI, while the latter are
-used with PSK. Let's see how they work with a Security object instance in PKI
-mode in the PKCS11 example:
+One may notice that the first two of them are used when the connection is
+secured using PKI, while the latter are used with PSK. Let's see how they work
+with a Security object instance in PKI mode in the PKCS11 example:
 
 .. highlight:: c
 .. snippet-source:: examples/commercial-features/CF-PKCS11/src/main.c
@@ -344,11 +342,11 @@ Use the HSM in the implicit way
 
 An alternative, and probably more elegant, approach to store and use credentials
 on HSM is to use the function `anjay_security_object_install_with_hsm
-<../api/security_8h.html#ad7cf8eb206cabb407aad57777dc0a144>`_ to install the
+<../api/api_generated/function_security_8h_1ad7cf8eb206cabb407aad57777dc0a144.html>`_ to install the
 Security object and then use it in the same way as the standard one - it will
 move the provided credentials to HSM memory. This function, comparing to default
 `anjay_security_object_install
-<../api/security_8h.html#a5fffaeedfc5c2933e58ac1446fd0401d>`_, needs an
+<../api/api_generated/function_security_8h_1a5fffaeedfc5c2933e58ac1446fd0401d.html>`_, needs an
 additional argument - ``hsm_config`` which is basically a set of callbacks (and
 their arguments) required to generate the HSM adresses for new HSM objects:
 

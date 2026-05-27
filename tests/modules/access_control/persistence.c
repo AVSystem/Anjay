@@ -75,8 +75,7 @@ static bool aco_equal(access_control_t *a, access_control_t *b) {
 }
 
 static anjay_t *ac_test_create_fake_anjay(void) {
-    anjay_configuration_t fake_config;
-    memset(&fake_config, 0, sizeof(fake_config));
+    anjay_configuration_t fake_config = { 0 };
     fake_config.endpoint_name = "fake";
     anjay_t *fake_anjay = anjay_new(&fake_config);
     AVS_UNIT_ASSERT_NOT_NULL(fake_anjay);

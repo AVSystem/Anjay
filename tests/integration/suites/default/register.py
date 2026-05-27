@@ -9,6 +9,7 @@
 
 import concurrent.futures
 import os
+import re
 import socket
 import unittest
 
@@ -579,7 +580,191 @@ class RegisterTest(RegisterUdp.TestCase):
 
         with self.assertRaises(socket.timeout, msg='unexpected message'):
             print(self.serv.recv(timeout_s=6))
-            
+
+
+class InitialRegistrationDelayTest(RegisterUdp.TestCase):
+    INITIAL_REGISTRATION_DELAY_S = 5
+    RETRY_TIMER_S = 2
+    INITIAL_REGISTRATION_DELAY_LOG = \
+        b'Scheduling enabling server SSID 1 in 5 seconds'
+
+    def setUp(self):
+        super().setUp(
+            maximum_version='1.1',
+            extra_cmdline_args=[
+                '--initial-registration-delay-timer',
+                str(self.INITIAL_REGISTRATION_DELAY_S),
+                '--retry-count', '2',
+                '--retry-timer', str(self.RETRY_TIMER_S)
+            ])
+
+    def runTest(self):
+        # no communication for the Initial Registration Delay time
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=self.INITIAL_REGISTRATION_DELAY_S - 1)
+
+        log_offset, match = self.read_log_until_match(
+            self.INITIAL_REGISTRATION_DELAY_LOG, timeout_s=1, alt_offset=0)
+        self.assertIsNotNone(match)
+
+        register = self.assertDemoRegisters(
+            version='1.1', timeout_s=2, respond=False)
+        self.serv.send(Lwm2mErrorResponse.matching(register)(
+            coap.Code.RES_UNAUTHORIZED))
+
+        # The timer is not applied for retries
+        self.assertDemoRegisters(
+            version='1.1', timeout_s=self.RETRY_TIMER_S + 1)
+
+        self.communicate('send-update')
+        update = self.assertDemoUpdatesRegistration(
+            timeout_s=2, respond=False)
+        self.serv.send(Lwm2mErrorResponse.matching(update)(
+            coap.Code.RES_NOT_FOUND))
+
+        # The timer is not applied for re-registers
+        self.assertDemoRegisters(version='1.1', timeout_s=2)
+
+        _, match = self.read_log_until_match(
+            self.INITIAL_REGISTRATION_DELAY_LOG, timeout_s=0,
+            alt_offset=log_offset)
+        self.assertIsNone(match)
+
+
+class InitialRegistrationDelayUpdateTimeoutTest(RegisterUdp.TestCase):
+    INITIAL_REGISTRATION_DELAY_S = 5
+    INITIAL_REGISTRATION_DELAY_LOG = \
+        b'Scheduling enabling server SSID 1 in 5 seconds'
+
+    def setUp(self):
+        super().setUp(
+            maximum_version='1.1',
+            extra_cmdline_args=[
+                '--initial-registration-delay-timer',
+                str(self.INITIAL_REGISTRATION_DELAY_S),
+                '--ack-random-factor', '1',
+                '--ack-timeout', '1',
+                '--max-retransmit', '0'
+            ])
+
+    def runTest(self):
+        # The first Register shall be delayed by Initial Registration Delay
+        # Timer.
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=self.INITIAL_REGISTRATION_DELAY_S - 1)
+
+        log_offset, match = self.read_log_until_match(
+            self.INITIAL_REGISTRATION_DELAY_LOG, timeout_s=1, alt_offset=0)
+        self.assertIsNotNone(match)
+
+        self.assertDemoRegisters(version='1.1', timeout_s=2)
+
+        self.communicate('send-update')
+        self.assertDemoUpdatesRegistration(timeout_s=2, respond=False)
+
+        # No response to Update makes the client fall back to Register after
+        # the CoAP exchange times out. Initial Registration Delay Timer shall
+        # not be applied to this re-registration.
+        self.assertDemoRegisters(version='1.1',
+                                 timeout_s=self.INITIAL_REGISTRATION_DELAY_S - 1)
+
+        _, match = self.read_log_until_match(
+            self.INITIAL_REGISTRATION_DELAY_LOG, timeout_s=0,
+            alt_offset=log_offset)
+        self.assertIsNone(match)
+
+
+class InitialRegistrationDelayMultipleServersTest(Register.TestCase,
+                                                  test_suite.Lwm2mTest):
+    INITIAL_REGISTRATION_DELAY_S = 5
+
+    def initial_registration_delay_log(self, ssid, delay_s):
+        return ('Scheduling enabling server SSID %d in %d seconds'
+                % (ssid, delay_s)).encode()
+
+    def setUp(self):
+        super().setUp(
+            servers=2,
+            maximum_version='1.1',
+            extra_cmdline_args=[
+                # Options added after all --server-uri arguments are applied
+                # to the last configured server. This leaves SSID 1 with the
+                # default Initial Registration Delay Timer value of 0 and sets
+                # a nonzero delay only for SSID 2.
+                '--initial-registration-delay-timer',
+                str(self.INITIAL_REGISTRATION_DELAY_S)
+            ])
+
+    def runTest(self):
+        # SSID 1 is bound to self.servers[0]. It uses the default delay of
+        # 0 seconds, so the client shall contact it immediately. This is checked
+        # before waiting on the delayed server to make the expected order of
+        # first registrations explicit.
+        self.assertDemoRegisters(self.servers[0], version='1.1', timeout_s=2)
+
+        _, match = self.read_log_until_match(
+            self.initial_registration_delay_log(ssid=1, delay_s=0),
+            timeout_s=1, alt_offset=0)
+        self.assertIsNotNone(match)
+
+        # SSID 2 is bound to self.servers[1]. It has an explicit Initial
+        # Registration Delay Timer, so the client shall not send Register there
+        # while the delay is still running.
+        with self.assertRaises(socket.timeout):
+            self.servers[1].recv(timeout_s=self.INITIAL_REGISTRATION_DELAY_S - 2)
+
+        _, match = self.read_log_until_match(
+            self.initial_registration_delay_log(ssid=2,
+                                                delay_s=self.INITIAL_REGISTRATION_DELAY_S),
+            timeout_s=1, alt_offset=0)
+        self.assertIsNotNone(match)
+
+        # After the delay expires, self.servers[1] shall finally receive the
+        # first Register. If the implementation accidentally used a global flag
+        # or timer, this per-server distinction would be lost.
+        self.assertDemoRegisters(self.servers[1], version='1.1', timeout_s=2)
+
+
+class RegisterRejectLogsClientErrorResponse(RegisterUdp.TestCase):
+    # regex to match Anjay log
+    REGISTER_REJECTED_REGEX = re.compile(
+        rb'server responded with (\d\.\d{2} [^)\n]+) \(expected 2\.01 Created\)')
+
+    def setUp(self):
+        super().setUp(extra_cmdline_args=[
+            '--retry-count', '1',
+            '--sequence-retry-count', '0'
+        ])
+
+    def runTest(self):
+        def check(code: coap.Code, trigger_register=False):
+            if trigger_register:
+                self.communicate('enable-server 1')
+
+            req = self.assertDemoRegisters(respond=False)
+            self.serv.send(Lwm2mErrorResponse.matching(req)(code))
+
+            assert_server_communication_error_logs(
+                self, self.REGISTER_REJECTED_REGEX, 1, code)
+
+            # give demo a second to process everything; the log above is printed
+            # before the response is fully handled internally
+            time.sleep(1)
+
+        # check all possible client (4.xx) errors
+        for detail in range(16):
+            if detail == 13:
+                # ignore Request Entity Too Large
+                continue
+            check(coap.Code(4, detail), trigger_register=(detail != 0))
+
+        # check all possible server (5.xx) errors
+        for detail in range(6):
+            check(coap.Code(5, detail), trigger_register=True)
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
 
 class RegisterCheckOngoingRegistrations(RegisterUdp.TestCase):
     def runTest(self):
@@ -786,3 +971,70 @@ class Lwm2m11BindingSemantics(bootstrap_client.BootstrapTest.Test):
 
     def tearDown(self):
         super().tearDown(deregister_servers=[self.serv])
+
+
+class RegisterVersionSemanticAfterBootstrapFallback(
+        bootstrap_client.BootstrapTest.Test):
+    def setUp(self):
+        super().setUp(minimum_version='1.0',
+                      maximum_version='1.1',
+                      legacy_server_initiated_bootstrap_allowed=False)
+
+    def _perform_bootstrap_lwm2m11(self):
+        self.assertDemoRequestsBootstrap(
+            preferred_content_format=coap.ContentFormat.APPLICATION_LWM2M_SENML_CBOR)
+        self.add_server(
+            server_iid=1,
+            security_iid=2,
+            server_uri='coap://127.0.0.1:%d' % self.serv.get_listen_port())
+        self.perform_bootstrap_finish()
+
+    def runTest(self):
+        # Initial client-initiated bootstrap
+        self._perform_bootstrap_lwm2m11()
+
+        first_register_req = self.assertDemoRegisters(
+            self.serv, version='1.1', respond=False)
+        self.serv.send(Lwm2mCreated.matching(first_register_req)(
+            location=self.DEFAULT_REGISTER_ENDPOINT))
+
+        # Trigger server-initiated bootstrap
+        self.execute_resource(self.serv, OID.Server, 1,
+                              RID.Server.RequestBootstrapTrigger)
+        self._perform_bootstrap_lwm2m11()
+
+        second_register_req = self.assertDemoRegisters(
+            self.serv, version='1.1', respond=False)
+        self.serv.send(Lwm2mCreated.matching(second_register_req)(
+            location=self.DEFAULT_REGISTER_ENDPOINT))
+
+        # confirm that the payload is not build in lwm2m 1.0 semantic
+        self.assertEqual(
+            first_register_req.content,
+            second_register_req.content)
+        # ;ver="1.1" is lwm2m 1.0 semantic, ;ver=1.1 is lwm2m 1.1 semantic
+        self.assertIn(b'</10>;ver=1.', second_register_req.content)
+
+        # Trigger another server-initiated bootstrap
+        self.execute_resource(self.serv, OID.Server, 1,
+                              RID.Server.RequestBootstrapTrigger)
+        self._perform_bootstrap_lwm2m11()
+
+        # This time reject the registration with Precondition Failed to trigger
+        # fallback to lwm2m 1.0
+        third_register_req = self.assertDemoRegisters(
+            self.serv, version='1.1', respond=False)
+        self.assertEqual(
+            first_register_req.content,
+            third_register_req.content)
+        self.serv.send(
+            Lwm2mErrorResponse.matching(third_register_req)(
+                coap.Code.RES_PRECONDITION_FAILED))
+
+        # Next registration attempt should be with lwm2m 1.0 set
+        fourth_register_req = self.assertDemoRegisters(
+            self.serv, version='1.0', respond=False)
+        self.serv.send(Lwm2mCreated.matching(fourth_register_req)(
+            location=self.DEFAULT_REGISTER_ENDPOINT))
+        # confirm that the payload is also build in lwm2m 1.0 semantic
+        self.assertIn(b'</10>;ver="1.', fourth_register_req.content)

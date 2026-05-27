@@ -1,5 +1,46 @@
 # Changelog
 
+## 3.14.0 (May 27th, 2026)
+
+### BREAKING CHANGES
+
+- Removed built-in support for TinyDTLS as a security backend.
+- Enrollment over Secure Transport (EST) now requires Anjay to be compiled
+  with LwM2M 1.1 support.
+
+### Features
+- EST Re-Enrollment is now automatically rescheduled in case of failure with
+  regards to anjay_est_reenroll_config_t::sren_attempts_count
+- Added an experimental server connection error callback.
+- Added random jitter to the client-initiated Bootstrap Hold-Off Time to
+  prevent multiple clients from bootstrapping simultaneously (configurable via
+  `ANJAY_HOLDOFF_JITTER_RANDOM_FACTOR`).
+- Implemented /1/x/14 Initial Registration Delay Timer resource.
+
+### Improvements
+- Made the demo client build independent of creating a Python virtual
+  environment.
+
+### Bugfixes
+- Fixed a bug in Anjay's reaction to a failed EST Simple Re-enrollment (SREN)
+  operation. If the EST server responded with an error (or did not respond at
+  all), Anjay deleted it's certificate and failed to communicate with LwM2M
+  Management Server even though the certificate from Simple Enrollment (SEN)
+  might have been still valid. Now Anjay has a retry policy for SREN operation
+  (by default 10 attempts evenly distributed in time) and only if all of them
+  fail, it fallbacks to the Bootstrap Server with factory certificate and
+  performs EST SEN operation again.
+- Fixed incorrect Register payload version semantics after Bootstrap Trigger.
+- Fixed an issue where the Client Hold-Off Time resource (/0/x/11) value was
+  not used when the Bootstrap-Request Trigger resource (/1/x/9) was executed.
+- Fixed a possible crash in Observe notification handling when
+  `stored_notification_limit` was reached while another notification was being
+  sent. In such cases, Anjay could attempt to drop an in-progress notification,
+  which could lead to an assertion failure during payload serialization. Anjay
+  now drops the newly generated excess notification instead, leaving the
+  in-progress notification intact.
+
+
 ## 3.13.1 (April 2nd, 2026)
 
 ### Bugfixes

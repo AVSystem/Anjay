@@ -105,23 +105,23 @@ Create a ``main.c`` file in the ``src/`` directory with the following content:
     clear to you.
 
 First, we call the `anjay_new()
-<../api/core_8h.html#a9d95a5005ff7c3b1d76573616c57d4cc>`_ function that
+<../api/api_generated/function_core_8h_1a077b9b3db59c5b4539271e190508c520.html>`_ function that
 initializes the client. It needs to be passed an `anjay_configuration_t
-<../api/structanjay__configuration.html>`_ structure that contains basic runtime
+<../api/api_generated/structanjay__configuration.html>`_ structure that contains basic runtime
 configuration of the client.
 
 The example code above configures the basic values that are most essential:
 
 * `endpoint_name
-  <../api/structanjay__configuration.html#aafab5578aa377788d6208d5ea6dc2da9>`_
+  <../api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration13endpoint_nameE>`_
   sets the Endpoint Client Name - see :ref:`clients-and-servers`.
 * `in_buffer_size
-  <../api/structanjay__configuration.html#a0be70dc47a294104527cac8e84786f02>`_
+  <../api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration14in_buffer_sizeE>`_
   and `out_buffer_size
-  <../api/structanjay__configuration.html#a44513f6007ea6db2c75a517dbfa77df4>`_
+  <../api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration15out_buffer_sizeE>`_
   control sizes of the buffers used for network communication.
 * `msg_cache_size
-  <../api/structanjay__configuration.html#a3bb16de58b283370b1ab20698dd4849a>`_
+  <../api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration14msg_cache_sizeE>`_
   sets the size of the message cache - this is not strictly necessary for the
   client to work, but it is used to internally cache responses so that
   retransmitted packets are properly handled as duplicates. The bigger this
@@ -129,7 +129,7 @@ The example code above configures the basic values that are most essential:
   retransmissions.
 
 After initializing the library, `anjay_event_loop_run()
-<../api/core_8h.html#a95c229caf3ee8ce7de556256f4307507>`_ is called. This
+<../api/api_generated/function_core_8h_1a95c229caf3ee8ce7de556256f4307507.html>`_ is called. This
 function doesn't return unless there is a fatal error, instead acting as the
 main loop of the LwM2M client.
 

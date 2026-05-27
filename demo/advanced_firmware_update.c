@@ -52,8 +52,7 @@ static void fix_fw_meta_endianness(advanced_fw_metadata_t *meta) {
 static int read_fw_meta_from_file(FILE *f,
                                   advanced_fw_metadata_t *out_metadata,
                                   uint32_t *out_metadata_len) {
-    advanced_fw_metadata_t m;
-    memset(&m, 0, sizeof(m));
+    advanced_fw_metadata_t m = { 0 };
 
     if (fread(m.magic, sizeof(m.magic), 1, f) != 1
             || fread(&m.header_ver, sizeof(m.header_ver), 1, f) != 1
@@ -87,8 +86,7 @@ static int read_fw_meta_from_file(FILE *f,
 static int
 handle_multipackage(FILE *f,
                     advanced_fw_multipkg_metadata_t *out_multiple_metadata) {
-    advanced_fw_multipkg_metadata_t mm;
-    memset(&mm, 0, sizeof(mm));
+    advanced_fw_multipkg_metadata_t mm = { 0 };
 
     if (fread(mm.magic, sizeof(mm.magic), 1, f) != 1
             || fread(&mm.header_ver, sizeof(mm.header_ver), 1, f) != 1) {
@@ -614,8 +612,7 @@ advanced_firmware_update_persistence_file_data_t
 advanced_firmware_update_read_persistence_file(const char *path) {
     (void) path;
     demo_log(WARNING, "Persistence not compiled in");
-    persistence_file_data_t retval;
-    memset(&retval, 0, sizeof(retval));
+    persistence_file_data_t retval = { 0 };
     return retval;
 }
 

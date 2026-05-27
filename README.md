@@ -109,7 +109,6 @@ Some features, such as support for EST, SMS binding or HSM's are [available comm
 - Supported TLS backends:
     - mbed TLS
     - OpenSSL
-    - tinydtls
 
 - Supported platforms:
     - any Unix-like operating system, such as Linux (including Android), macOS and BSD family
@@ -154,7 +153,7 @@ More details about OMA LwM2M: [Brief introduction to LwM2M](https://docs.avsyste
 
 If you want to use Anjay on Zephyr OS, FreeRTOS, Azure RTOS, or RPI Pico W check our demo
 applications available in other repositories:
-- [Anjay-zephyr-client](https://github.com/AVSystem/Anjay-zephyr-client) (uses [Anjay-zephyr](https://github.com/AVSystem/Anjay-zephyr) integration layer)
+- [Anjay-zephyr-demo](https://github.com/AVSystem/Anjay-zephyr-demo) (uses [Anjay-zephyr-module](https://github.com/AVSystem/Anjay-zephyr-module) integration layer)
 - [Anjay-freertos-client](https://github.com/AVSystem/Anjay-freertos-client)
 - [Anjay-pico-client](https://github.com/AVSystem/Anjay-pico-client) (uses FreeRTOS Kernel)
 
@@ -172,7 +171,6 @@ There are also archived, not actively maintained Anjay demos and integrations:
 -   If DTLS support is enabled, at least one of:
     -   [OpenSSL 1.1+](https://www.openssl.org/),
     -   [mbed TLS 2.0+](https://www.trustedfirmware.org/projects/mbed-tls/),
-    -   [tinydtls 0.9+](https://projects.eclipse.org/projects/iot.tinydtls),
 -   Optional dependencies (required for tests):
     -   [CMake 3.22+](https://cmake.org/) - non-mandatory, but preferred build system,
     -   C++ compiler with C++11 support,
@@ -223,6 +221,8 @@ git clone https://github.com/AVSystem/Anjay.git \
 ```
 <!-- compile_instruction_end -->
 
+**NOTE**: When CMake configuration is done without Python Virtual Environment activated, client Firmware Update package won't be build. To enable building of firmware package, please follow [Python Virtual Environments](#python-virtual-environments) first.
+
 **NOTE**: On some older systems like CentOS 7, you may need to use `cmake3` instead of `cmake`.
 
 **NOTE**: We strongly recommend replacing `$(hostname)` with some actual unique hostname. Please see the [documentation](https://docs.avsystem.com/hubfs/Anjay_Docs/LwM2M.html#clients-and-servers) for information on preferred endpoint name formats. Note that with the Coiote IoT Device Management platform, you will need to enter the endpoint name into the server UI first.
@@ -245,7 +245,7 @@ The preferred way of building Anjay is to use CMake.
 
 By default demo client compiles with DTLS enabled and uses `mbedtls` as a DTLS provider,
 but you may choose other DTLS backends currently supported by setting `DTLS_BACKEND` in
-a CMake invocation to one of the following DTLS backends: `openssl`, `mbedtls` or `tinydtls`:
+a CMake invocation to one of the following DTLS backends: `openssl` or `mbedtls`:
 
 ``` sh
 cmake . -DDTLS_BACKEND="mbedtls" && make -j
@@ -315,10 +315,28 @@ Contributions are welcome! See our [contributing guide](CONTRIBUTING.rst).
 
 # Building documentation
 
-Make sure, both Doxygen and Sphinx are installed on your system, then type:
+Building documentation requires several Python packages listed in `requirements.txt`. Recommended way is to use
+Python Virtual Environment, please follow [Python Virtual Environments](#python-virtual-environments) first.
 
-``` sh
+```
 cmake . && make doc
 ```
 
-the documentation will be available under `output/doc/doxygen` and `output/doc/sphinx`.
+the documentation will be available under `output/doc/sphinx/html`. Doxygen documentation is also converted
+into spihnx format.
+
+# Python Virtual Environments
+Anjay utils consists of multiple Python scripts. To be compliant with PEP868 we enforce usage of Virtual Environments. To configure one in anjay directory follow this steps:
+
+```sh
+python3 -m venv venv
+source venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+or simply run
+
+```sh
+./devconfig
+```

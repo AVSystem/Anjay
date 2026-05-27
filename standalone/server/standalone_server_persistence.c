@@ -37,7 +37,12 @@ typedef enum {
     /**
      * New resource: Trigger
      */
-    PERSISTENCE_VERSION_3
+    PERSISTENCE_VERSION_3,
+
+    /**
+     * New resource: 14 - Initial Registration Delay Timer
+     */
+    PERSISTENCE_VERSION_4
 } server_persistence_version_t;
 
 typedef char magic_t[4];
@@ -45,6 +50,7 @@ static const magic_t MAGIC_V0 = { 'S', 'R', 'V', PERSISTENCE_VERSION_0 };
 static const magic_t MAGIC_V1 = { 'S', 'R', 'V', PERSISTENCE_VERSION_1 };
 static const magic_t MAGIC_V2 = { 'S', 'R', 'V', PERSISTENCE_VERSION_2 };
 static const magic_t MAGIC_V3 = { 'S', 'R', 'V', PERSISTENCE_VERSION_3 };
+static const magic_t MAGIC_V4 = { 'S', 'R', 'V', PERSISTENCE_VERSION_4 };
 
 static avs_error_t handle_v0_v1_sized_fields(avs_persistence_context_t *ctx,
                                              server_instance_t *element) {
@@ -287,8 +293,34 @@ static avs_error_t handle_v3_sized_fields(avs_persistence_context_t *ctx,
     return err;
 }
 
-static avs_error_t handle_v1_v2_v3_binding_mode(avs_persistence_context_t *ctx,
-                                                server_instance_t *element) {
+static avs_error_t handle_v4_sized_fields(avs_persistence_context_t *ctx,
+                                          server_instance_t *element) {
+    avs_error_t err;
+    (void) (avs_is_err((err = handle_v3_sized_fields(ctx, element)))
+            || avs_is_err((
+                       err = avs_persistence_bool(
+                               ctx,
+#    ifdef ANJAY_WITH_LWM2M11
+                               &element->present_resources
+                                        [SERV_RES_INITIAL_REGISTRATION_DELAY_TIMER]
+#    else  // ANJAY_WITH_LWM2M11
+                               &(bool) { false }
+#    endif // ANJAY_WITH_LWM2M11
+                               )))
+            || avs_is_err((err = avs_persistence_u32(
+                                   ctx,
+#    ifdef ANJAY_WITH_LWM2M11
+                                   &element->initial_registration_delay_timer
+#    else  // ANJAY_WITH_LWM2M11
+                                   &(uint32_t) { 0 }
+#    endif // ANJAY_WITH_LWM2M11
+                                   ))));
+    return err;
+}
+
+static avs_error_t
+handle_v1_v2_v3_v4_binding_mode(avs_persistence_context_t *ctx,
+                                server_instance_t *element) {
     avs_error_t err = avs_persistence_bytes(ctx, element->binding.data,
                                             sizeof(element->binding.data));
     if (avs_is_err(err)) {
@@ -367,7 +399,7 @@ static avs_error_t server_instance_persistence_handler(
     server_persistence_version_t *version =
             (server_persistence_version_t *) version_;
     AVS_ASSERT(avs_persistence_direction(ctx) != AVS_PERSISTENCE_STORE
-                       || *version == PERSISTENCE_VERSION_3,
+                       || *version == PERSISTENCE_VERSION_4,
                "persistence storing is impossible in legacy mode");
 
     // Ensure every field initialized regardless of persistence version
@@ -383,18 +415,23 @@ static avs_error_t server_instance_persistence_handler(
         break;
     case PERSISTENCE_VERSION_1:
         (void) (avs_is_err((err = handle_v0_v1_sized_fields(ctx, element)))
-                || avs_is_err(
-                           (err = handle_v1_v2_v3_binding_mode(ctx, element))));
+                || avs_is_err((err = handle_v1_v2_v3_v4_binding_mode(
+                                       ctx, element))));
         break;
     case PERSISTENCE_VERSION_2:
         (void) (avs_is_err((err = handle_v2_sized_fields(ctx, element)))
-                || avs_is_err(
-                           (err = handle_v1_v2_v3_binding_mode(ctx, element))));
+                || avs_is_err((err = handle_v1_v2_v3_v4_binding_mode(
+                                       ctx, element))));
         break;
     case PERSISTENCE_VERSION_3:
         (void) (avs_is_err((err = handle_v3_sized_fields(ctx, element)))
-                || avs_is_err(
-                           (err = handle_v1_v2_v3_binding_mode(ctx, element))));
+                || avs_is_err((err = handle_v1_v2_v3_v4_binding_mode(
+                                       ctx, element))));
+        break;
+    case PERSISTENCE_VERSION_4:
+        (void) (avs_is_err((err = handle_v4_sized_fields(ctx, element)))
+                || avs_is_err((err = handle_v1_v2_v3_v4_binding_mode(
+                                       ctx, element))));
         break;
     default:
         AVS_UNREACHABLE("invalid enum value");
@@ -413,10 +450,10 @@ standalone_server_object_persist(const anjay_dm_object_def_t *const *obj_ptr,
         avs_persistence_context_t persist_ctx =
                 avs_persistence_store_context_create(out_stream);
         if (avs_is_ok((err = avs_persistence_bytes(&persist_ctx,
-                                                   (void *) (intptr_t) MAGIC_V3,
-                                                   sizeof(MAGIC_V3))))) {
+                                                   (void *) (intptr_t) MAGIC_V4,
+                                                   sizeof(MAGIC_V4))))) {
             server_persistence_version_t persistence_version =
-                    PERSISTENCE_VERSION_3;
+                    PERSISTENCE_VERSION_4;
             err = avs_persistence_list(
                     &persist_ctx,
                     (AVS_LIST(void) *) (repr->in_transaction
@@ -450,6 +487,10 @@ static int check_magic_header(magic_t magic_header,
     }
     if (!memcmp(magic_header, MAGIC_V3, sizeof(magic_t))) {
         *out_version = PERSISTENCE_VERSION_3;
+        return 0;
+    }
+    if (!memcmp(magic_header, MAGIC_V4, sizeof(magic_t))) {
+        *out_version = PERSISTENCE_VERSION_4;
         return 0;
     }
     return -1;

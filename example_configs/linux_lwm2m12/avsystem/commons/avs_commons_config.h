@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2026 AVSystem <avsystem@avsystem.com>
+ * AVSystem Commons library
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under AVSystem Commons library - Non-Commercial License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef AVS_COMMONS_CONFIG_H
@@ -253,12 +246,10 @@
  *
  * mbed TLS is the main development backend, and is preferred as such. OpenSSL
  * backend supports most functionality as well, but is not as thoroughly tested.
- * TinyDTLS support is only rudimentary.
  */
 /**@{*/
 #define AVS_COMMONS_WITH_MBEDTLS
 /* #undef AVS_COMMONS_WITH_OPENSSL */
-/* #undef AVS_COMMONS_WITH_TINYDTLS */
 
 /**
  * Enable support for custom TLS socket implementation.
@@ -286,19 +277,14 @@
  * If the TLS backend is either mbed TLS or OpenSSL, enables APIs related to
  * public-key cryptography.
  *
- * Public-key cryptography is not currently supported with TinyDTLS.
- *
  * It also enables support for X.509 certificates in avs_net, if that module is
  * also enabled.
  */
 #define AVS_COMMONS_WITH_AVS_CRYPTO_PKI
 
 /**
- * If the TLS backend is either mbed TLS, OpenSSL or TinyDTLS, enables support
+ * If the TLS backend is either mbed TLS or OpenSSL, enables support
  * of pre-shared key security.
- *
- * PSK is the only supported security mode for the TinyDTLS backend, so this
- * option MUST be enabled to utilize it.
  *
  * It also enables support for pre-shared key security in avs_net, if that
  * module is also enabled.
@@ -341,8 +327,6 @@
  *   - <c>_avs_crypto_openssl_engine_load_certs()</c>
  *   - <c>_avs_crypto_openssl_engine_load_crls()</c>
  *   - <c>_avs_crypto_openssl_engine_load_private_key()</c>
- *
- * External PKI engines are NOT supported in the TinyDTLS backend.
  */
 /* #undef AVS_COMMONS_WITH_AVS_CRYPTO_PKI_ENGINE */
 
@@ -365,8 +349,6 @@
  *   - <c>_avs_crypto_mbedtls_engine_initialize_global_state()</c>
  *   - <c>_avs_crypto_mbedtls_engine_cleanup_global_state()</c>
  *   - <c>_avs_crypto_mbedtls_engine_load_psk_key()</c>
- *
- * External PSK engines are NOT supported in the OpenSSL and TinyDTLS backend.
  */
 /* #undef AVS_COMMONS_WITH_AVS_CRYPTO_PSK_ENGINE */
 
@@ -631,7 +613,7 @@
 /**
  * If the TLS backend is set to OpenSSL, enables support for DTLS.
  *
- * DTLS is always enabled for the mbed TLS and TinyDTLS backends.
+ * DTLS is always enabled for the mbed TLS backend.
  */
 /* #undef AVS_COMMONS_NET_WITH_DTLS */
 
@@ -695,8 +677,6 @@
 /**
  * If the TLS backend is either mbed TLS or OpenSSL, enables support for (D)TLS
  * session persistence.
- *
- * Session persistence is not currently supported for the TinyDTLS backend.
  */
 #define AVS_COMMONS_NET_WITH_TLS_SESSION_PERSISTENCE
 /**@}*/

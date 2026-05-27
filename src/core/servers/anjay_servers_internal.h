@@ -187,6 +187,14 @@ struct anjay_server_info_struct {
      */
     bool refresh_failed;
 
+#ifdef ANJAY_WITH_LWM2M11
+    /**
+     * True for newly created regular server entries until the first Register
+     * request is successfully sent.
+     */
+    bool initial_registration_delay_pending;
+#endif // ANJAY_WITH_LWM2M11
+
     /**
      * Number of attempted (potentially) failed registrations. It is incremented
      * in send_register() (and also _anjay_server_on_refreshed() in case of

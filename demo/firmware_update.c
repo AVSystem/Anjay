@@ -89,8 +89,7 @@ static void fix_fw_meta_endianness(fw_metadata_t *meta) {
 }
 
 static int read_fw_meta_from_file(FILE *f, fw_metadata_t *out_metadata) {
-    fw_metadata_t m;
-    memset(&m, 0, sizeof(m));
+    fw_metadata_t m = { 0 };
 
     if (fread(m.magic, sizeof(m.magic), 1, f) != 1
             || fread(&m.header_ver, sizeof(m.header_ver), 1, f) != 1
@@ -661,8 +660,7 @@ typedef struct {
 #if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
         && defined(AVS_COMMONS_STREAM_WITH_FILE)
 static persistence_file_data_t read_persistence_file(const char *path) {
-    persistence_file_data_t data;
-    memset(&data, 0, sizeof(data));
+    persistence_file_data_t data = { 0 };
     avs_stream_t *stream = NULL;
     int8_t result8 = (int8_t) ANJAY_FW_UPDATE_INITIAL_NEUTRAL;
     if ((stream = avs_stream_file_create(path, AVS_STREAM_FILE_READ))) {
@@ -721,8 +719,7 @@ static persistence_file_data_t read_persistence_file(const char *path) {
 static persistence_file_data_t read_persistence_file(const char *path) {
     (void) path;
     demo_log(WARNING, "Persistence not compiled in");
-    persistence_file_data_t retval;
-    memset(&retval, 0, sizeof(retval));
+    persistence_file_data_t retval = { 0 };
     return retval;
 }
 #endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&

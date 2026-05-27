@@ -91,9 +91,8 @@ AVS_UNIT_TEST(parse_headers, split_query_string) {
 #define TEST_PARSE_ATTRIBUTE_SUCCESS(Key, Value, ExpectedField,         \
                                      ExpectedHasField, ExpectedValue)   \
     do {                                                                \
-        anjay_request_attributes_t attrs;                               \
+        anjay_request_attributes_t attrs = { 0 };                       \
         int8_t depth = -1;                                              \
-        memset(&attrs, 0, sizeof(attrs));                               \
         ASSERT_OK(PARSE_QUERY_WRAPPED(&attrs, &depth, (Key), (Value))); \
         ASSERT_EQ(depth, -1);                                           \
         ASSERT_EQ(attrs.values.ExpectedField, (ExpectedValue));         \
@@ -107,9 +106,8 @@ AVS_UNIT_TEST(parse_headers, split_query_string) {
 
 #define TEST_PARSE_ATTRIBUTE_FAIL(Key, Value)                             \
     do {                                                                  \
-        anjay_request_attributes_t attrs;                                 \
+        anjay_request_attributes_t attrs = { 0 };                         \
         int8_t depth = -1;                                                \
-        memset(&attrs, 0, sizeof(attrs));                                 \
         ASSERT_FAIL(PARSE_QUERY_WRAPPED(&attrs, &depth, (Key), (Value))); \
     } while (0);
 
@@ -248,8 +246,7 @@ static avs_coap_request_header_t *header_with_string_opts(
 AVS_UNIT_TEST(parse_headers, parse_attributes) {
     anjay_request_attributes_t attrs;
     int8_t depth;
-    anjay_request_attributes_t empty_attrs;
-    memset(&empty_attrs, 0, sizeof(empty_attrs));
+    anjay_request_attributes_t empty_attrs = { 0 };
     empty_attrs.values = ANJAY_DM_R_ATTRIBUTES_EMPTY;
     anjay_request_attributes_t expected_attrs;
     header_with_opts_storage_t header_storage;
@@ -348,8 +345,7 @@ AVS_UNIT_TEST(parse_headers, parse_attributes) {
 #ifdef ANJAY_WITH_LWM2M12
 AVS_UNIT_TEST(parse_headers, parse_depth) {
     anjay_request_attributes_t attrs;
-    anjay_request_attributes_t empty_attrs;
-    memset(&empty_attrs, 0, sizeof(empty_attrs));
+    anjay_request_attributes_t empty_attrs = { 0 };
     empty_attrs.values = ANJAY_DM_R_ATTRIBUTES_EMPTY;
     int8_t depth;
     header_with_opts_storage_t header_storage;
@@ -649,8 +645,7 @@ AVS_UNIT_TEST(parse_headers, parse_uri_with_lwm2m_gateway_support) {
 #endif // ANJAY_WITH_LWM2M_GATEWAY
 
 AVS_UNIT_TEST(parse_headers, parse_action) {
-    anjay_request_t request;
-    memset(&request, 0, sizeof(request));
+    anjay_request_t request = { 0 };
     request.content_format = AVS_COAP_FORMAT_NONE;
     request.request_code = AVS_COAP_CODE_GET;
 

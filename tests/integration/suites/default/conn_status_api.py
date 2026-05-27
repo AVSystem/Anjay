@@ -510,10 +510,15 @@ class ReportsErrorIfRegistrationFailsDueToNetworkIssues(ConnStatusAPI.AutoRegDer
                                                         test_suite.PcapEnabledTest,
                                                         test_suite.Lwm2mDtlsSingleServerTest):
     RETRY_COUNT = 3
+    RETRY_TIMER = 1
+    SEQUENCE_RETRY_COUNT = 1
     MAX_RETRANSMIT = 1
 
     def setUp(self):
-        extra_cmdline_args = ['--retry-count', str(self.RETRY_COUNT), '--max-retransmit',
+        extra_cmdline_args = ['--retry-count', str(self.RETRY_COUNT),
+                              '--retry-timer', str(self.RETRY_TIMER),
+                              '--sequence-retry-count', str(self.SEQUENCE_RETRY_COUNT),
+                              '--max-retransmit',
                               str(self.MAX_RETRANSMIT), '--ack-timeout', str(1)]
         super().setUp(extra_cmdline_args=extra_cmdline_args, auto_register=False)
 
@@ -524,9 +529,11 @@ class ReportsErrorIfRegistrationFailsDueToNetworkIssues(ConnStatusAPI.AutoRegDer
         for i in range(self.MAX_RETRANSMIT + 1):
             self.assertDemoRegisters(respond=False, timeout_s=5, initial=i == 0, first_attempt=i == 0)
 
-        num_initial_dtls_hs_packets = self.count_dtls_client_hello_packets()
         # Close socket to induce ICMP port unreachable.
         self.serv.close()
+
+        num_initial_dtls_hs_packets = self.count_dtls_handshake_packets_stable(
+            timeout_s=5, poll_interval_s=0.25, stable_for_s=1.5)
 
         # Wait for ICMP port unreachable.
         self.wait_until_icmp_unreachable_count(1, timeout_s=5)
@@ -541,7 +548,10 @@ class ReportsErrorIfRegistrationFailsDueToNetworkIssues(ConnStatusAPI.AutoRegDer
         self.assertEqual(1, self.count_icmp_unreachable_packets())
         # Ensure that only one more dtls handshake messages occurred.
         self.assertEqual(num_initial_dtls_hs_packets + 1,
-                         self.count_dtls_client_hello_packets())
+                         self.count_dtls_handshake_packets_stable(
+                             timeout_s=5,
+                             poll_interval_s=0.25,
+                             stable_for_s=1.5))
 
         # Ensure that the control is given back to the user.
         self.assertTrue(self.get_all_connections_failed())
@@ -552,10 +562,15 @@ class ReportsRegFailureIfConnectionErrorIsRegFailure(ConnStatusAPI.AutoRegDeregT
                                                      test_suite.PcapEnabledTest,
                                                      test_suite.Lwm2mDtlsSingleServerTest):
     RETRY_COUNT = 3
+    RETRY_TIMER = 1
+    SEQUENCE_RETRY_COUNT = 1
     MAX_RETRANSMIT = 1
 
     def setUp(self):
-        extra_cmdline_args = ['--retry-count', str(self.RETRY_COUNT), '--max-retransmit',
+        extra_cmdline_args = ['--retry-count', str(self.RETRY_COUNT),
+                              '--retry-timer', str(self.RETRY_TIMER),
+                              '--sequence-retry-count', str(self.SEQUENCE_RETRY_COUNT),
+                              '--max-retransmit',
                               str(self.MAX_RETRANSMIT), '--ack-timeout', str(1),
                               '--connection-error-is-registration-failure']
         super().setUp(extra_cmdline_args=extra_cmdline_args, auto_register=False)
@@ -567,9 +582,11 @@ class ReportsRegFailureIfConnectionErrorIsRegFailure(ConnStatusAPI.AutoRegDeregT
         for i in range(self.MAX_RETRANSMIT + 1):
             self.assertDemoRegisters(respond=False, timeout_s=5, initial=i == 0, first_attempt=i == 0)
 
-        num_initial_dtls_hs_packets = self.count_dtls_client_hello_packets()
         # Close socket to induce ICMP port unreachable.
         self.serv.close()
+
+        num_initial_dtls_hs_packets = self.count_dtls_handshake_packets_stable(
+            timeout_s=5, poll_interval_s=0.25, stable_for_s=1.5)
 
         # Wait for ICMP port unreachable.
         self.wait_until_icmp_unreachable_count(1, timeout_s=5)
@@ -590,7 +607,10 @@ class ReportsRegFailureIfConnectionErrorIsRegFailure(ConnStatusAPI.AutoRegDeregT
         self.assertEqual(2, self.count_icmp_unreachable_packets())
         # Ensure that only one more dtls handshake messages occurred.
         self.assertEqual(num_initial_dtls_hs_packets + 2,
-                         self.count_dtls_client_hello_packets())
+                         self.count_dtls_handshake_packets_stable(
+                             timeout_s=5,
+                             poll_interval_s=0.25,
+                             stable_for_s=1.5))
 
         self.assertStatusChanges([ConnStatusAPI.Status.REG_FAILURE])
 
