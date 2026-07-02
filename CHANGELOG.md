@@ -1,5 +1,21 @@
 # Changelog
 
+## 3.14.1 (July 2nd, 2026)
+
+### Improvements
+- Improved certificate validation by adding date validation for certificates
+  received during the EST /cacerts operation.
+- Errors during EST /cacerts operation increment counter of re-enrollment
+  attempts.
+
+### Bufixes
+- Fixed a bug where calling `./demo --help=full` caused an assertion
+- Fix a bug with processing PKCS7 encodded response during EST reenroll request.
+- Fix a bug with race condition between bootstrap and EST reenroll when using high 
+  SREN usage percentage
+- Fix a bug with calculating a next EST /sren attemp based on a certificate
+  which was considered invalid and rejected.
+
 ## 3.14.0 (May 27th, 2026)
 
 ### BREAKING CHANGES

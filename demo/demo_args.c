@@ -432,6 +432,10 @@ static void print_help_short(const char *progname) {
                    "certificate (DER) (cert"
                    ").");
     format_wrapped(2, screen,
+                   "  -P, --server-public-key-file <file>     Server public "
+                   "key (DER) (cert"
+                   ").");
+    format_wrapped(2, screen,
                    "  -K, --key-file <file>                   Private key "
                    "(DER/PKCS#8) (cert"
                    ").");
@@ -1254,11 +1258,13 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
 #endif // ANJAY_WITH_DOWNLOADER
 #ifdef ANJAY_WITH_LWM2M11
         {"certificate-usage", required_argument, 0, 351},
-        {"initial-registration-delay-timer", required_argument, 0, 358},
 #endif // ANJAY_WITH_LWM2M11
 #ifdef WITH_DEMO_TRAFFIC_INTERCEPTOR
 { "traffic_interceptor_path", required_argument, 0, 357 },
 #endif// WITH_DEMO_TRAFFIC_INTERCEPTOR
+#ifdef ANJAY_WITH_LWM2M11
+        { "initial-registration-delay-timer", required_argument, 0, 358 },
+#endif // ANJAY_WITH_LWM2M11
         { 0, 0, 0, 0 }
         // clang-format on
     };
@@ -2327,6 +2333,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
 #ifdef WITH_DEMO_TRAFFIC_INTERCEPTOR
         case 357: {
             parsed_args->traffic_intercept_path = optarg;
+            break;
         }
 #endif // WITH_DEMO_TRAFFIC_INTERCEPTOR
 #ifdef ANJAY_WITH_LWM2M11

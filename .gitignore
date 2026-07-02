@@ -83,3 +83,8 @@ dist/
 
 # custom built MbedTLS
 mbedtls
+
+# keep this directory and all of its contents tracked
+# needed in case of submodule inlining
+!deps/
+!deps/**

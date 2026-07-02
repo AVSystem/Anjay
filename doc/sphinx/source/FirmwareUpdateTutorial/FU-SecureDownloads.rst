@@ -21,6 +21,7 @@ of credentials required to establishing the secure connection.
 In this chapter, we will focus on methods of credentials configuration for
 **PULL** mode transfers.
 
+.. _two_ways:
 Two ways of security configuration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -219,14 +220,62 @@ is:
         bool rebuild_client_cert_chain;
     } avs_net_certificate_info_t;
 
-To populate it properly, we're gonna need at least two pieces of information
-from the following list:
+To populate it properly, first decide which certificate-related parts of the
+firmware download connection are actually needed. The management connection
+security mode (i.e. certificate-based or PSK) does not by itself decide
+which certificate fields are required for firmware downloads. What matters is
+how the firmware download server authenticates itself, and whether that server
+also requires the client to authenticate with a certificate.
 
-- Trusted Certificates, also known as CA / Root certificates (required only
-  if we intend to verify certificates presented to us by the Server; although
-  it's optional it is **highly recommended**),
-- Client Certificate, which is **required**,
-- Client Private Key, which is also **required**.
+There are three certificate-related fields to consider:
+
+- ``trusted_certs`` define trust anchors used to verify the certificate chain
+  presented by the firmware download server.
+  They are used when ``server_cert_validation`` is set to true. This
+  field needs to be provided in the firmware download security configuration
+  when a CoAPS or HTTPS firmware download uses server certificate validation and
+  no matching Security Object instance (see :ref:`two_ways`) or trust store 
+  already provides the required trust anchors (see :ref:`below <firmware_update_trust_stores>`). 
+  Server certificate validation is optional from the API perspective, but **highly recommended**.
+- ``client_cert`` is the certificate chain presented by Anjay to the
+  firmware download server. This field is needed only if the firmware download
+  server requires client authentication. In that case, it may
+  come from a matching Security Object configuration, or it may be returned from
+  ``get_security_config``. It is not needed for ordinary CoAPS or HTTPS
+  downloads where only the server is authenticated.
+- ``client_key`` is the private key matching Client Certificate. It is
+  needed whenever Client Certificate is configured, and it needs to be available
+  from the same security configuration.
+
+.. _trust_store_certs: ../api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration17trust_store_certsE
+.. _trust_store_crls: ../api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration16trust_store_crlsE
+.. _use_system_trust_store: ../api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration22use_system_trust_storeE
+.. _anjay_security_config_pkix: ../api/api_generated/function_core_8h_1a4ccd37c26433e3dc1e146b3c3f5b29ee.html
+.. _anjay_security_config_from_dm: ../api/api_generated/function_core_8h_1ac53bd86289a4bcaa70237f8ba7450cd7.html
+
+.. _firmware_update_trust_stores:
+
+.. note::
+
+    The global trust store means the Anjay-level trust store configured in
+    ``anjay_configuration_t`` using trust_store_certs_ and
+    trust_store_crls_. 
+    
+    The system trust store is the platform or TLS backend trust store. It is
+    currently supported only by the OpenSSL backend. If
+    ``ignore_system_trust_store`` is false, OpenSSL uses its default verification
+    paths in addition to ``trusted_certs``. The Mbed TLS backend ignores this
+    setting.
+    The `anjay_configuration_t::use_system_trust_store <use_system_trust_store_>`_
+    field controls whether the system trust store may also be used.
+
+    If ``get_security_config`` is implemented, the global trust store is not
+    added automatically. When ``server_cert_validation`` is true, the server is
+    verified using ``trusted_certs`` returned by the callback and, if supported,
+    the system trust store. To use Anjay's global trust store
+    from a custom callback, return `anjay_security_config_pkix() <anjay_security_config_pkix_>`_ explicitly,
+    or call `anjay_security_config_from_dm() <anjay_security_config_from_dm_>`_ to use a matching Security Object
+    configuration.
 
 Each of them come in variety of formats (text, binary, etc.) that need to
 be loaded and parsed. In most scenarios however, the API provided by `avs_commons`

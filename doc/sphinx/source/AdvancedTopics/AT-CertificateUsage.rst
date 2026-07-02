@@ -8,9 +8,9 @@
 
 Certificate Usage
 =================
-
-The Certificate Usage resource in the LwM2M Security Object defines how Anjay
-interprets and applies the Server Public Key resource. This setting decides whether
+The `Certificate Usage <https://www.openmobilealliance.org/release/LightweightM2M/V1_2-20201110-A/HTML-Version/OMA-TS-LightweightM2M_Transport-V1_2-20201110-A.html#5-2-9-7-0-5297-Certificate-Usage-Field>`_
+resource in the LwM2M Security Object defines how Anjay interprets
+and applies the Server Public Key resource. This setting decides whether
 the certificate provided in the Security Object is used as a trust anchor, as
 the exact server certificate, or in some other way.
 
@@ -54,7 +54,8 @@ the TLS/DTLS handshake, depending on this setting, Anjay behaves as follows:
     **leaf** to that **anchor** using the certificates received in the handshake.
 
     - The **local trust store is not required** and is **ignored** for the accept/reject decision when a DANE anchor is present.
-    - The "Server Public Key" **must be a CA/root**. A leaf value is invalid for usage 2.
+    - The "Server Public Key" **must be a CA/root**. Using a leaf certificate
+      is invalid for certificate usage set to 2.
 
     .. note::
 

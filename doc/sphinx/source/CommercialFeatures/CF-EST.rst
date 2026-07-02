@@ -83,7 +83,7 @@ The following features are implemented:
 
 .. note::
 
-    Cerificates re-enrolment is based on certificate renewal, not rekeying, according to
+    Cerificates re-enrollment is based on certificate renewal, not rekeying, according to
     `4.2.2. Simple Re-enrollment of Clients chapter of RFC 7030 Enrollment over Secure Transport. <https://datatracker.ietf.org/doc/html/rfc7030#section-4.2.2_>`_.
     This means that for each re-enrollment Anjay sends a CSR for the same public key.
     If re-enrollment fails, Anjay purges the private key. With the next enrollment
