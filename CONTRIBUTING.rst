@@ -122,10 +122,7 @@ Running tests on CentOS 7 or later: ::
     sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.5 0
     sudo python3 -m pip install -r requirements.txt
 
-    # Configure and run check target
-    # NOTE: clang-3.4 static analyzer (default version for CentOS) gives false
-    # positives. --without-analysis flag disables static analysis.
-    ./devconfig --without-analysis -DPython_ADDITIONAL_VERSIONS=3.5 && make check
+    ./devconfig -DPython_ADDITIONAL_VERSIONS=3.5 && make check
 
 Running tests on macOS Sierra or later: ::
 
@@ -134,7 +131,4 @@ Running tests on macOS Sierra or later: ::
     pip3 install -r requirements.txt
 
     # Configure and run check target:
-    # if the scan-build script is located somewhere else, then you need to
-    # specify a different SCAN_BUILD_BINARY. Below, we are assumming scan-build
-    # comes from an llvm package, installed via homebrew.
-    ./devconfig -DSCAN_BUILD_BINARY=/usr/local/Cellar/llvm/*/bin/scan-build && make check
+    ./devconfig && make check

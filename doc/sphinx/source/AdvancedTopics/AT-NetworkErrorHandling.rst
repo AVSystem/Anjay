@@ -250,8 +250,14 @@ preconditions are met:
 Otherwise, further communication with the server with which the operation failed
 will be aborted. This may cause `anjay_all_connections_failed() <../api/api_generated/function_core_8h_1a4329b620520c565fd61b526ba760e59f.html>`_
 to start returning ``true`` if that was the last operational connection.
-Connection can be retried by calling `anjay_enable_server() <../api/api_generated/function_core_8h_1abc4b554e51a56da874238f3e64bff074.html>`_
-or `anjay_transport_schedule_reconnect() <../api/api_generated/function_core_8h_1ad895be5694083d015ffcd8d0b87d0b2a.html>`_.
+
+If Anjay is compiled with LwM2M 1.1 or 1.2 support, Client-Initiated
+Bootstrap can be explicitly retried by calling
+`anjay_schedule_bootstrap_request() <../api/api_generated/function_core_8h_1ab6c56dff37c3279fde3d0b9068cdb8f8.html>`_.
+This also re-enables an inactive Bootstrap Server.
+
+Alternatively, `anjay_transport_schedule_reconnect() <../api/api_generated/function_core_8h_1ad895be5694083d015ffcd8d0b87d0b2a.html>`_
+can be used to reset the failure state and retry connections over the affected transport.
 
 
 Other error conditions
@@ -293,6 +299,9 @@ Other error conditions
          <../api/api_generated/function_core_8h_1a4329b620520c565fd61b526ba760e59f.html>`_ will start
          returning ``true``. Operation can be restored by calling
          `anjay_transport_schedule_reconnect()
-         <../api/api_generated/function_core_8h_1ad895be5694083d015ffcd8d0b87d0b2a.html>`_ or
-         `anjay_enable_server()
-         <../api/api_generated/function_core_8h_1abc4b554e51a56da874238f3e64bff074.html>`_.
+         <../api/api_generated/function_core_8h_1ad895be5694083d015ffcd8d0b87d0b2a.html>`_.
+         If a Bootstrap Server Account exists and Anjay is compiled with
+         LwM2M 1.1 or 1.2 support, a new Client-Initiated Bootstrap attempt
+         can instead be explicitly requested by calling
+         `anjay_schedule_bootstrap_request()
+         <../api/api_generated/function_core_8h_1ab6c56dff37c3279fde3d0b9068cdb8f8.html>`_.

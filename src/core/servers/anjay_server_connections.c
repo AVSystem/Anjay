@@ -375,7 +375,6 @@ void _anjay_connection_suspend(anjay_connection_ref_t conn_ref) {
     avs_net_socket_t *socket = _anjay_connection_internal_get_socket(conn);
     cancel_exchanges(conn_ref);
     if (socket) {
-        avs_net_socket_shutdown(socket);
         avs_net_socket_close(socket);
     }
 }
@@ -504,6 +503,7 @@ void _anjay_connections_flush_notifications(anjay_connections_t *connections) {
     }
 }
 
+#ifdef WITH_AVS_COAP_UDP
 typedef struct {
     const avs_coap_udp_tx_params_t *tx_params;
     anjay_transport_set_t transport_set;
@@ -556,12 +556,12 @@ anjay_update_transport_tx_params(anjay_t *anjay_locked,
 
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
 
-#ifdef WITH_AVS_COAP_UDP
+#    ifdef WITH_AVS_COAP_UDP
     if (transport_set.udp) {
         anjay->udp_tx_params = *tx_params;
         err = AVS_OK;
     }
-#endif // WITH_AVS_COAP_UDP
+#    endif // WITH_AVS_COAP_UDP
 
     if (avs_is_err(err)) {
         anjay_log(ERROR, _("no transport for which transmission parameters "
@@ -578,6 +578,7 @@ anjay_update_transport_tx_params(anjay_t *anjay_locked,
     ANJAY_MUTEX_UNLOCK(anjay_locked);
     return err;
 }
+#endif // WITH_AVS_COAP_UDP
 
 typedef struct {
     avs_time_duration_t exchange_update_timeout;

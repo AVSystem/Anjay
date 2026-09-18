@@ -1,5 +1,51 @@
 # Changelog
 
+## 3.15.0 (September 18th, 2026)
+
+### BREAKING CHANGES
+- Anjay no longer falls back to all ciphersuites supported by the TLS backend when
+  neither `/0/x/16` nor `default_tls_ciphersuites` is configured. A minimal secure
+  default allowlist is used instead. Applications that require legacy ciphersuites
+  must configure them explicitly.
+- `anj_configuration_t::msg_cache_size` is now pointer instead of plain variable. 
+  Cache size is set to 4000 bytes by default when pointer is set to `NULL`.
+- By default Anjay will not allow using nosec connection unless
+  `ANJAY_WITH_UNSECURE_CONNECTIONS` is used.
+- Changed the default minimum DTLS/TLS version to 1.2 in the Mbed TLS and
+  OpenSSL integrations, disabling older protocol versions by default. Added the
+  `AVS_COMMONS_WITH_LEGACY_SSL_VERSIONS` configuration option to re-enable support
+  for legacy DTLS/TLS versions.
+- For Certificate Usage set to 2 (Trust anchor assertion) or 3 (Domain-issued
+  certificate) Anjay will block the connection to server if no Server Certificate
+  and no Trust Store is available unless `ANJAY_WITH_UNSECURE_CONNECTIONS` is used.
+- `anjay_event_loop_run_with_error_handling()` no longer performs a
+  transport-wide reconnect when all configured LwM2M servers are unreachable. It
+  now schedules reconnects for individual Server Object instances, so ongoing
+  downloads using dedicated downloader sockets are no longer reconnected as a
+  side effect.
+
+### Improvements
+- Removed internal usage of the `avs_net_socket_shutdown()` operation. Anjay now
+  closes sockets directly when suspending connections.
+- Anjay won't allow for a HTTPS-to-HTTP downgrade during redirections while
+  downloading FOTA image.
+- Added handling EST errors as Bootstrap Procedure errors, so they result in
+  Client Holdoff incrementing instead of fatal error.
+
+### Bugfixes
+- Fix a null pointer dereference in `anjay_server_get_ssids` and `anjay_server_object_set_lifetime`
+- anjay_enable_server(), anjay_disable_server(), anjay_disable_server_with_timeout()
+  and anjay_server_schedule_reconnect() functions now fail when called with
+  ssid == ANJAY_SSID_BOOTSTRAP, as intended.
+- Fix a problem where `anjay_get_server_last_registration_time()` returned an
+  incorrect value after restoring state from core persistence.
+- Anjay will now fallback to factory bootstrap certificate if reenrollment is
+  disabled and the device certificate is no longer valid.
+- Fixed a bug where a client registered in version 1.0 tried to handle composite operations.
+- Fixed CoAP downloads with retry enabled so API-triggered reconnects, such as
+  anjay_transport_schedule_reconnect() and anjay_fw_update_pull_reconnect(), no
+  longer discard pending retry attempts if the immediate reconnect fails.
+
 ## 3.14.1 (July 2nd, 2026)
 
 ### Improvements

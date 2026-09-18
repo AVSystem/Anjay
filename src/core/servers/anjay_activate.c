@@ -86,7 +86,6 @@ static int deactivate_server(anjay_server_info_t *server) {
         anjay_log(ERROR, _("could not reschedule server reactivation"));
 #ifdef ANJAY_WITH_CONN_STATUS_API
         _anjay_check_server_connection_status(server);
-        _anjay_set_server_suspending_flag(server->anjay, server->ssid, false);
 #endif // ANJAY_WITH_CONN_STATUS_API
         AVS_LIST(anjay_server_info_t) *server_ptr =
                 _anjay_servers_find_ptr(&server->anjay->servers, server->ssid);
@@ -451,11 +450,8 @@ void _anjay_server_on_updated_registration(anjay_server_info_t *server,
     case ANJAY_REGISTRATION_SUCCESS:
         server->reactivate_time = AVS_TIME_REAL_INVALID;
         server->refresh_failed = false;
-#ifdef ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
-        server->registration_info.last_registration_time = avs_time_real_now();
-#endif // ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
-       // Failure to handle Bootstrap state is not a failure of the
-       // Register operation - hence, not checking return value.
+        // Failure to handle Bootstrap state is not a failure of the
+        // Register operation - hence, not checking return value.
         _anjay_bootstrap_notify_regular_connection_available(server->anjay);
         _anjay_connections_flush_notifications(&server->connections);
 #ifdef ANJAY_WITH_SEND
@@ -758,6 +754,7 @@ static int disable_server_impl(anjay_unlocked_t *anjay,
         server->reactivate_time =
                 avs_time_real_add(avs_time_real_now(), timeout);
     }
+
     return 0;
 }
 
@@ -768,18 +765,25 @@ static int disable_server_impl(anjay_unlocked_t *anjay,
  * does the deactivation procedure work.
  */
 int anjay_disable_server(anjay_t *anjay_locked, anjay_ssid_t ssid) {
-    int result = -1;
-    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
-#ifdef ANJAY_WITH_CONN_STATUS_API
-    anjay_server_info_t *server = _anjay_servers_find(anjay, ssid);
-    if (server) {
-        _anjay_set_server_suspending_flag(server->anjay, server->ssid, true);
+    if (ssid == ANJAY_SSID_BOOTSTRAP) {
+        return -1;
     }
-#endif // ANJAY_WITH_CONN_STATUS_API
+
+    int result = -1;
+
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     result = disable_server_impl(
             anjay, ssid, ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_TIMEOUT_FROM_DM,
             "ANJAY_SERVER_NEXT_ACTION_DISABLE_WITH_TIMEOUT_FROM_DM",
             AVS_TIME_DURATION_INVALID);
+
+#ifdef ANJAY_WITH_CONN_STATUS_API
+    anjay_server_info_t *server = _anjay_servers_find(anjay, ssid);
+    if (!result && server) {
+        _anjay_set_server_suspending_flag(server->anjay, server->ssid, true);
+    }
+#endif // ANJAY_WITH_CONN_STATUS_API
+
     ANJAY_MUTEX_UNLOCK(anjay_locked);
     return result;
 }
@@ -815,16 +819,22 @@ int _anjay_schedule_disable_server_with_explicit_timeout_unlocked(
 int anjay_disable_server_with_timeout(anjay_t *anjay_locked,
                                       anjay_ssid_t ssid,
                                       avs_time_duration_t timeout) {
+    if (ssid == ANJAY_SSID_BOOTSTRAP) {
+        return -1;
+    }
+
     int result = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    result = _anjay_schedule_disable_server_with_explicit_timeout_unlocked(
+            anjay, ssid, timeout);
+
 #ifdef ANJAY_WITH_CONN_STATUS_API
     anjay_server_info_t *server = _anjay_servers_find(anjay, ssid);
-    if (server) {
+    if (!result && server) {
         _anjay_set_server_suspending_flag(server->anjay, server->ssid, true);
     }
 #endif // ANJAY_WITH_CONN_STATUS_API
-    result = _anjay_schedule_disable_server_with_explicit_timeout_unlocked(
-            anjay, ssid, timeout);
+
     ANJAY_MUTEX_UNLOCK(anjay_locked);
     return result;
 }
@@ -859,6 +869,10 @@ int _anjay_enable_server_unlocked(anjay_unlocked_t *anjay, anjay_ssid_t ssid) {
 }
 
 int anjay_enable_server(anjay_t *anjay_locked, anjay_ssid_t ssid) {
+    if (ssid == ANJAY_SSID_BOOTSTRAP) {
+        anjay_log(WARNING, _("invalid SSID: ") "%" PRIu16, ssid);
+        return -1;
+    }
     int result = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     result = _anjay_enable_server_unlocked(anjay, ssid);
@@ -867,7 +881,7 @@ int anjay_enable_server(anjay_t *anjay_locked, anjay_ssid_t ssid) {
 }
 
 int anjay_server_schedule_reconnect(anjay_t *anjay_locked, anjay_ssid_t ssid) {
-    if (ssid == ANJAY_SSID_ANY) {
+    if (ssid == ANJAY_SSID_ANY || ssid == ANJAY_SSID_BOOTSTRAP) {
         anjay_log(WARNING, _("invalid SSID: ") "%" PRIu16, ssid);
         return -1;
     }

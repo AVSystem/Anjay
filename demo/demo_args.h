@@ -42,14 +42,18 @@ typedef struct cmdline_args {
     uint16_t udp_listen_port;
     avs_net_ssl_version_t dtls_version;
     server_connection_args_t connection_args;
-    const char *location_csv;
-    time_t location_update_frequency_s;
+    double latitude;
+    double longitude;
+    bool location_values_provided;
+    cell_connectivity_diagnostics_args_t cell_connectivity_diagnostics_args;
+    int32_t network_bearer;
+    int32_t location_area_code;
 #ifdef ANJAY_WITH_MODULE_ACCESS_CONTROL
     AVS_LIST(access_entry_t) access_entries;
 #endif // ANJAY_WITH_MODULE_ACCESS_CONTROL
     int32_t inbuf_size;
     int32_t outbuf_size;
-    int32_t msg_cache_size;
+    size_t msg_cache_size;
     bool confirmable_notifications;
     bool disable_stdin;
 #ifdef ANJAY_WITH_DOWNLOADER

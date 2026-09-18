@@ -92,3 +92,37 @@ This is used in the reference implementation - it is generally a wrapper for the
         result.since_monotonic_epoch.nanoseconds = (int32_t) system_value.tv_nsec;
         return result;
     }
+
+
+Real-time clock synchronization
+-------------------------------
+
+The application is responsible for initializing and periodically synchronizing
+the real-time clock returned by ``avs_time_real_now()``. Without periodic
+synchronization, clock drift may cause the reported calendar time to become
+increasingly inaccurate during long device operation.
+
+There is no universal synchronization interval suitable for every device. The
+application should select it based on:
+
+* the expected worst-case drift of the clock source,
+* environmental conditions that may affect the clock,
+* the accuracy of the synchronization source,
+* the maximum time error acceptable for the application.
+
+A typical application may synchronize the clock:
+
+* during device startup,
+* after network connectivity is restored,
+* periodically during normal operation,
+* before an operation that requires reliable calendar time.
+
+The selected policy should reflect the actual security and operational
+requirements of the device rather than use an unnecessarily short fixed
+interval.
+
+Synchronizing the real-time clock may adjust the value returned by
+``avs_time_real_now()``, including moving it backwards. Such adjustments MUST
+NOT cause values returned by ``avs_time_monotonic_now()`` to decrease. The
+monotonic clock is used for measuring durations and scheduling operations and
+must remain independent of discontinuous real-time clock corrections.

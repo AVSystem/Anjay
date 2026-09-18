@@ -124,7 +124,6 @@ void _anjay_downloader_abort_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr,
 
     call_on_download_finished(*ctx_ptr, status);
 
-    avs_sched_del(&(*ctx_ptr)->common.reconnect_job_handle);
     cleanup_transfer(ctx_ptr);
 }
 
@@ -263,16 +262,25 @@ static uintptr_t find_free_id(anjay_downloader_t *dl) {
 #        error "ANJAY_WITH_DOWNLOADER is enabled but no transport selected. Please enable at least one of ANJAY_WITH_HTTP_DOWNLOAD or ANJAY_WITH_COAP_DOWNLOAD"
 #    endif // ANJAY_WITH_HTTP_DOWNLOAD || ANJAY_WITH_COAP_DOWNLOAD
 
-#    ifdef ANJAY_WITH_HTTP_DOWNLOAD
+#    if defined(ANJAY_WITH_HTTP_DOWNLOAD) \
+            || !defined(ANJAY_WITH_UNSECURE_CONNECTIONS)
 static bool starts_with(const char *haystack, const char *needle) {
     return avs_strncasecmp(haystack, needle, strlen(needle)) == 0;
 }
-#    endif // ANJAY_WITH_HTTP_DOWNLOAD
+#    endif // ANJAY_WITH_HTTP_DOWNLOAD || !ANJAY_WITH_UNSECURE_CONNECTIONS
 
 static avs_error_t find_downloader_ctx_constructor(
         const char *url,
         anjay_downloader_ctx_constructor_t **out_constructor,
         anjay_socket_transport_t *out_transport) {
+#    ifndef ANJAY_WITH_UNSECURE_CONNECTIONS
+    if (starts_with(url, "http://") || starts_with(url, "coap://")
+            || starts_with(url, "coap+tcp://")) {
+        dl_log(ERROR, _("insecure download protocol disabled: ") "%s", url);
+        *out_constructor = NULL;
+        return avs_errno(AVS_EPROTONOSUPPORT);
+    }
+#    endif // ANJAY_WITH_UNSECURE_CONNECTIONS
 #    ifdef ANJAY_WITH_COAP_DOWNLOAD
     const anjay_transport_info_t *transport_info =
             _anjay_transport_info_by_uri_scheme(url);
@@ -402,11 +410,12 @@ void _anjay_downloader_reconnect_job(avs_sched_t *sched, const void *id_ptr) {
     ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
-int _anjay_downloader_sched_reconnect_ctx(anjay_download_ctx_t *ctx) {
-    return AVS_SCHED_NOW(_anjay_downloader_get_anjay(ctx->common.dl)->sched,
-                         &ctx->common.reconnect_job_handle,
-                         _anjay_downloader_reconnect_job, &ctx->common.id,
-                         sizeof(ctx->common.id));
+static int sched_reconnect_ctx(anjay_download_ctx_t *ctx) {
+    assert(ctx);
+    assert(ctx->common.vtable);
+    assert(ctx->common.vtable->schedule_reconnect);
+    return ctx->common.vtable->schedule_reconnect(ctx,
+                                                  avs_time_monotonic_now());
 }
 
 int _anjay_downloader_sched_reconnect_by_handle(
@@ -424,7 +433,7 @@ int _anjay_downloader_sched_reconnect_by_handle(
     if (_anjay_socket_transport_included(
                 _anjay_downloader_get_anjay(dl)->online_transports,
                 get_ctx_socket_transport(*ctx_ptr))) {
-        return _anjay_downloader_sched_reconnect_ctx(*ctx_ptr);
+        return sched_reconnect_ctx(*ctx_ptr);
     }
     return 0;
 }
@@ -485,7 +494,7 @@ int _anjay_downloader_sched_reconnect_by_transports(
     AVS_LIST_FOREACH(ctx, dl->downloads) {
         if (_anjay_socket_transport_included(transport_set,
                                              get_ctx_socket_transport(ctx))) {
-            int partial_result = _anjay_downloader_sched_reconnect_ctx(ctx);
+            int partial_result = sched_reconnect_ctx(ctx);
             if (!result && partial_result) {
                 result = partial_result;
             }
@@ -500,33 +509,29 @@ int _anjay_downloader_sync_online_transports(anjay_downloader_t *dl) {
     AVS_LIST_FOREACH(ctx, dl->downloads) {
 
         /**
-         * This condition implements the XOR logic;
-         * if the downloader transport is not included in the
-         * online_transports while the socket is online, or if the
-         * downloader transport is included in the online_transports
-         * while the socket is offline, then call
-         * _anjay_downloader_sched_reconnect_ctx() to synchronize
-         * the downloader transport and suspend or reconnect the
+         * This condition implements the XOR logic; if the downloader transport
+         * is not included in the online_transports while the socket is online,
+         * or if the downloader transport is included in the online_transports
+         * while the socket is offline, then call sched_reconnect_ctx() to
+         * synchronize the downloader transport and suspend or reconnect the
          * download.
          */
         if (_anjay_socket_transport_included(
                     _anjay_downloader_get_anjay(dl)->online_transports,
                     get_ctx_socket_transport(ctx))
                 /**
-                 * The reason why we need a callback here instead
-                 * of a simple call to _anjay_socket_is_online()
-                 * is that there is an additional mechanism to
-                 * handle CoAP downloader retries (the user can
-                 * enable it by modifying the
-                 * coap_downloader_retry_count variable). For
-                 * example, when Anjay enters offline mode, the
-                 * suspend callback should be called if a retry
-                 * is in progress - even if the socket is already
-                 * offline - to cancel any scheduled retry job.
+                 * The reason why we need a callback here instead of a simple
+                 * call to _anjay_socket_is_online() is that there is an
+                 * additional mechanism to handle CoAP downloader retries (the
+                 * user can enable it by modifying the
+                 * coap_downloader_retry_count variable). For example, when
+                 * Anjay enters offline mode, the suspend callback should be
+                 * called if a retry is in progress - even if the socket is
+                 * already offline - to cancel any scheduled retry job.
                  */
                 != ctx->common.vtable->is_socket_online_or_retry_in_progress(
                            ctx)) {
-            int partial_result = _anjay_downloader_sched_reconnect_ctx(ctx);
+            int partial_result = sched_reconnect_ctx(ctx);
             if (!result && partial_result) {
                 result = partial_result;
             }

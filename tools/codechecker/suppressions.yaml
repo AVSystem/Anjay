@@ -1,0 +1,34 @@
+$version: 1
+# Globally disabled in tools/codechecker/standard_analysis/config.json:
+# - performance: too noisy
+# - clang-diagnostic-reserved-macro-identifier: we use _identifier intentionaly
+# - clang-diagnostic-reserved-identifier: same naming convention issue as above.
+# - clang-diagnostic-format-nonliteral: logging and wrapper APIs intentionally
+#   pass format strings through non-literal variables.
+# - bugprone-implicit-widening-of-multiplication-result: noisy in size/count
+#   calculations where existing types and bounds are intentional.
+# - bugprone-casting-through-void: AVS_LIST macros
+# - bugprone-suspicious-semicolon: AVS_LIST macros
+# - bugprone-sizeof-expression: AVS_CONTAINER_OF macro
+# - infer-pulse-uninitialized-value: noisy, low impact
+# - infer-dead-store: noisy, low impact
+rules:
+  - filters:
+      filepath: "*/deps/avs_commons/src/rbtree/avs_rbtree.c"
+      checker_name: infer-mutual-recursion-cycle
+    actions:
+      review_status: suppress
+      reason: Known acceptable recursive red-black tree traversal.
+
+  - filters:
+      filepath: "*/deps/avs_commons/src/list/avs_list.c"
+      checker_name: infer-mutual-recursion-cycle
+    actions:
+      review_status: suppress
+      reason: Known acceptable recursive list sort and merge helpers.
+
+  - filters:
+      report_hash: b85851b34789e35c6acfa1a4aaf65382
+    actions:
+      review_status: false_positive
+      reason: This report is false positive.

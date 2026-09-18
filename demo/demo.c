@@ -673,7 +673,7 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         .dtls_version = cmdline_args->dtls_version,
         .in_buffer_size = (size_t) cmdline_args->inbuf_size,
         .out_buffer_size = (size_t) cmdline_args->outbuf_size,
-        .msg_cache_size = (size_t) cmdline_args->msg_cache_size,
+        .msg_cache_size = &cmdline_args->msg_cache_size,
 #ifndef IP_MTU
         .socket_config = {
             .forced_mtu = 1492
@@ -716,11 +716,11 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
 #endif // ANJAY_WITH_SSL_ERROR_API
         .server_communication_error_cb = server_communication_error_callback,
         .server_communication_error_cb_arg = demo,
-#ifdef ANJAY_WITH_DOWNLOADER
+#ifdef ANJAY_WITH_COAP_DOWNLOAD
         .coap_downloader_retry_count =
                 cmdline_args->coap_downloader_retry_count,
         .coap_downloader_retry_delay = cmdline_args->coap_downloader_retry_delay
-#endif // ANJAY_WITH_DOWNLOADER
+#endif // ANJAY_WITH_COAP_DOWNLOAD
     };
 
 #ifdef ANJAY_WITH_LWM2M11
@@ -800,9 +800,21 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
                     || add_installed_object_update_handler(
                                demo, temperature_update_handler)
 #endif // ANJAY_WITH_MODULE_IPSO_OBJECTS
-                    || install_object(demo, location_object_create(), NULL,
-                                      location_notify_time_dependent,
-                                      location_object_release)
+                    || install_object(
+                               demo,
+                               location_object_create(
+                                       cmdline_args->latitude,
+                                       cmdline_args->longitude,
+                                       cmdline_args->location_values_provided),
+                               NULL, location_notify_time_dependent,
+                               location_object_release)
+                    || install_object(
+                               demo,
+                               cell_connectivity_diagnostics_object_create(
+                                       &cmdline_args
+                                                ->cell_connectivity_diagnostics_args),
+                               NULL, NULL,
+                               cell_connectivity_diagnostics_object_release)
                     || install_object(demo, apn_conn_profile_object_create(),
                                       apn_conn_profile_get_instances, NULL,
                                       apn_conn_profile_object_release)
@@ -813,8 +825,11 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
                     || install_object(
                                demo, cell_connectivity_object_create(demo),
                                NULL, NULL, cell_connectivity_object_release)
-                    || install_object(demo, cm_object_create(), NULL,
-                                      cm_notify_time_dependent,
+                    || install_object(demo,
+                                      cm_object_create(
+                                              cmdline_args->network_bearer,
+                                              cmdline_args->location_area_code),
+                                      NULL, cm_notify_time_dependent,
                                       cm_object_release)
                     || install_object(demo, cs_object_create(), NULL, NULL,
                                       cs_object_release)
@@ -854,13 +869,6 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         }
     }
 #endif // ANJAY_WITH_LWM2M_GATEWAY
-
-    if (cmdline_args->location_csv
-            && location_open_csv(demo_find_object(demo, DEMO_OID_LOCATION),
-                                 cmdline_args->location_csv,
-                                 cmdline_args->location_update_frequency_s)) {
-        return -1;
-    }
 
     bool dm_persistence_restored = false;
 #if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
@@ -924,9 +932,11 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
     if (firmware_update_install(demo->anjay, &demo->fw_update,
                                 cmdline_args->fw_updated_marker_path,
                                 fw_security_info_ptr,
+#    ifdef ANJAY_WITH_COAP_DOWNLOAD
                                 cmdline_args->fwu_tx_params_modified
                                         ? &cmdline_args->fwu_tx_params
                                         : NULL,
+#    endif // ANJAY_WITH_COAP_DOWNLOAD
                                 cmdline_args->fwu_tcp_request_timeout,
                                 cmdline_args->fw_update_delayed_result,
                                 cmdline_args->prefer_same_socket_downloads,
@@ -946,9 +956,11 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
                 demo->advanced_fw_update_logic_table,
                 cmdline_args->advanced_fw_updated_marker_path,
                 advanced_fw_security_info_ptr,
+#    ifdef ANJAY_WITH_COAP_DOWNLOAD
                 cmdline_args->advanced_fwu_tx_params_modified
                         ? &cmdline_args->advanced_fwu_tx_params
                         : NULL,
+#    endif // ANJAY_WITH_COAP_DOWNLOAD
                 cmdline_args->advanced_fwu_tcp_request_timeout,
                 cmdline_args->advanced_fw_update_delayed_result,
                 cmdline_args->prefer_same_socket_downloads,
@@ -972,9 +984,11 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
 #    ifdef ANJAY_WITH_DOWNLOADER
                 ,
                 sw_mgmt_security_info_ptr,
+#        ifdef ANJAY_WITH_COAP_DOWNLOAD
                 cmdline_args->sw_mgmt_tx_params_modified
                         ? &cmdline_args->sw_mgmt_tx_params
                         : NULL,
+#        endif // ANJAY_WITH_COAP_DOWNLOAD
                 &cmdline_args->sw_mgmt_tcp_request_timeout,
                 cmdline_args->sw_mgmt_auto_suspend
 #    endif // ANJAY_WITH_DOWNLOADER

@@ -35,6 +35,10 @@
 #    include "tests/core/bootstrap_mock.h"
 #endif // ANJAY_TEST
 
+#define ANJAY_BOOTSTRAP_SOURCE
+
+#include "anjay_servers_reload.h"
+
 VISIBILITY_SOURCE_BEGIN
 
 #ifdef ANJAY_WITH_BOOTSTRAP
@@ -789,6 +793,7 @@ static int bootstrap_finish(anjay_connection_ref_t bootstrap_connection) {
     if (result) {
         return result;
     }
+    anjay_log(INFO, _("Bootstrap Finish received"));
     return bootstrap_finish_impl(anjay, bootstrap_connection,
                                  BOOTSTRAP_FINISH_PERFORM_TIMEOUT
                                          | BOOTSTRAP_FINISH_DISABLE_SERVER);

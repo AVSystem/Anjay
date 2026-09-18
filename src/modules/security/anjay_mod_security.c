@@ -375,7 +375,7 @@ find_cipher_instance(AVS_LIST(sec_cipher_instance_t) instances,
                      anjay_riid_t riid) {
     AVS_LIST(sec_cipher_instance_t) *it =
             find_cipher_instance_insert_ptr(&instances, riid);
-    if (it && (*it)->riid == riid) {
+    if (it && *it && (*it)->riid == riid) {
         return *it;
     }
     return NULL;

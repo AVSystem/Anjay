@@ -67,7 +67,7 @@ def find_unused_code(jobs, ignores):
         subprocess.run([os.path.join(PROJECT_ROOT, 'devconfig'), '--without-memcheck',
                         '-DCMAKE_C_FLAGS=-ffunction-sections -fdata-sections',
                         '-DCMAKE_EXE_LINKER_FLAGS=-Wl,--gc-sections -Wl,--print-gc-sections -Wl,--gc-keep-exported',
-                        '-DWITH_AVS_CRYPTO_PKI_ENGINE=OFF', '-DWITH_STATIC_ANALYSIS=OFF'],
+                        '-DWITH_AVS_CRYPTO_PKI_ENGINE=OFF'],
                        stdout=out, stderr=out, check=True)
 
     with open('CMakeCache.txt', 'r') as f:

@@ -229,7 +229,6 @@ avs_error_t _anjay_socket_cleanup(anjay_unlocked_t *anjay,
                                   avs_net_socket_t **socket) {
     assert(socket);
     if (*socket) {
-        avs_net_socket_shutdown(*socket);
 #ifdef ANJAY_WITH_NET_STATS
         anjay->closed_connections_stats.socket_stats.bytes_sent +=
                 get_socket_stats(*socket, NET_STATS_BYTES_SENT);

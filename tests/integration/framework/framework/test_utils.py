@@ -124,6 +124,7 @@ class OID:
     Temperature = 3303
     Accelerometer = 3313
     PushButton = 3347
+    CellularConnectivityDiagnostics = 10511
     Test = 33605
     ExtDevInfo = 33606
     IpPing = 33607
@@ -471,6 +472,17 @@ class RID:
         LogData = 4014
         LogDataFormat = 4015
 
+    class CelluralConnectivityDiagnostics:
+        MMC = 0
+        MNC = 1
+        CellId = 2
+        OperatorNanme = 5
+        RoamingStatus = 6
+        RSRP = 8
+        RSRQ = 9
+        RSSI = 10
+        SINR = 11
+
 
 class Lwm2mResourcePathHelper:
     @classmethod
@@ -544,6 +556,8 @@ class ResPath:
         RID.ExtDevInfo, oid=OID.ExtDevInfo)
     IpPing = Lwm2mResourcePathHelper.from_rid_object(
         RID.IpPing, oid=OID.IpPing)
+    CellularConnectivityDiagnostics = Lwm2mResourcePathHelper.from_rid_object(
+        RID.CelluralConnectivityDiagnostics, oid=OID.CellularConnectivityDiagnostics)
     GeoPoints = Lwm2mResourcePathHelper.from_rid_object(
         RID.GeoPoints, oid=OID.GeoPoints, multi_instance=True)
     DownloadDiagnostics = Lwm2mResourcePathHelper.from_rid_object(RID.DownloadDiagnostics,

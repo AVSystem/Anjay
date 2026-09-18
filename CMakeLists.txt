@@ -8,7 +8,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(anjay C)
-set(ANJAY_VERSION "3.14.1" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "3.15.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -77,11 +77,6 @@ if(WITH_LIBRARY_SHARED)
 endif()
 
 ################# TUNABLES #####################################################
-
-set(MAX_PK_OR_IDENTITY_SIZE 2048 CACHE STRING
-    "Maximum supported size (in bytes) of 'PK or Identity' Resource in Security object.")
-set(MAX_SECRET_KEY_SIZE 256 CACHE STRING
-    "Maximum supported size (in bytes) of 'Secret Key' Resource in Security object.")
 
 # Following options refer to the payload of plaintext-encoded CoAP packets.
 set(MAX_DOUBLE_STRING_SIZE 512 CACHE STRING
@@ -293,6 +288,8 @@ option(WITHOUT_QUEUE_MODE_AUTOCLOSE "Disable automatic closing of server connect
 
 cmake_dependent_option(WITH_OBSERVATION_STATUS "Enable support for anjay_resource_observation_status() API" ON "WITH_OBSERVE" OFF)
 cmake_dependent_option(WITH_COAP_DOWNLOAD "Enable support for CoAP(S) downloads" ON WITH_DOWNLOADER OFF)
+
+option(WITH_UNSECURE_CONNECTIONS "Allow the library to use unsecured connections for management, bootstrap, and firmware update operations. Intended for development use only." OFF)
 
 cmake_dependent_option(WITH_ANJAY_LOGS "Enable logging support" ON WITH_AVS_LOG OFF)
 cmake_dependent_option(WITH_ANJAY_TRACE_LOGS "Enable logging support" ON "WITH_ANJAY_LOGS;NOT EXTERNAL_LOG_LEVELS_HEADER" OFF)
@@ -553,6 +550,7 @@ set(ANJAY_WITH_DISCOVER "${WITH_DISCOVER}")
 set(ANJAY_WITH_DOWNLOADER "${WITH_DOWNLOADER}")
 set(ANJAY_WITH_HTTP_DOWNLOAD "${WITH_HTTP_DOWNLOAD}")
 set(ANJAY_WITH_LEGACY_CONTENT_FORMAT_SUPPORT "${WITH_LEGACY_CONTENT_FORMAT_SUPPORT}")
+set(ANJAY_WITH_UNSECURE_CONNECTIONS "${WITH_UNSECURE_CONNECTIONS}")
 set(ANJAY_WITH_LOGS "${WITH_ANJAY_LOGS}")
 set(ANJAY_WITH_LWM2M_JSON "${WITH_LWM2M_JSON}")
 set(ANJAY_WITHOUT_TLV "${WITHOUT_TLV}")
@@ -822,54 +820,54 @@ endif()
 
 ################# STATIC ANALYSIS ##############################################
 
-if(APPLE)
-    execute_process(
-        COMMAND brew --prefix llvm
-        OUTPUT_VARIABLE HOMEBREW_LLVM_PREFIX
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET)
-endif()
 
-if(NOT SCAN_BUILD_BINARY)
-    # Let CMake auto-enable static analysis only when scan-build is available.
-    # On macOS, also check Homebrew LLVM installs outside PATH.
-    find_program(SCAN_BUILD_BINARY scan-build
-                 HINTS "${HOMEBREW_LLVM_PREFIX}/bin")
-endif()
-if(NOT SCAN_BUILD_BINARY)
-    # some systems only have scan-build-x.y, where x.y is the version of LLVM
-    # let's try that
-    find_program(CLANG_BINARY clang)
-    if(CLANG_BINARY)
-        avs_temp_name(_fname)
-        file(WRITE ${_fname} "__clang_major__ __clang_minor__")
-        execute_process(COMMAND "${CLANG_BINARY}" -E -P -x c ${_fname}
-                        OUTPUT_VARIABLE CLANG_VERSION_OUTPUT
-                        OUTPUT_STRIP_TRAILING_WHITESPACE)
-        file(REMOVE ${_fname})
-        string(REPLACE " " "." CLANG_VERSION_OUTPUT "${CLANG_VERSION_OUTPUT}")
-        find_program(SCAN_BUILD_BINARY "scan-build-${CLANG_VERSION_OUTPUT}")
+option(WITH_STATIC_ANALYSIS
+       "Perform CodeChecker standard analysis"
+       OFF)
+
+find_program(CODECHECKER_BINARY CodeChecker)
+find_program(CLANG_BINARY clang-20)
+find_program(CLANG_TIDY_BINARY clang-tidy-20)
+find_program(GCC_BINARY gcc)
+find_program(INFER_BINARY infer)
+find_program(CPPCHECK_BINARY cppcheck)
+
+function(require_static_analysis_tool VARIABLE DESCRIPTION)
+    set(_tool_path "${${VARIABLE}}")
+    if(NOT _tool_path OR NOT EXISTS "${_tool_path}")
+        message(FATAL_ERROR
+                "${DESCRIPTION} not found; install it, specify path with -D${VARIABLE}=<path>, or disable the relevant analysis option")
     endif()
-endif()
+endfunction()
 
-if(SCAN_BUILD_BINARY)
-    set(WITH_STATIC_ANALYSIS_DEFAULT ON)
-else()
-    set(WITH_STATIC_ANALYSIS_DEFAULT OFF)
-endif()
-cmake_dependent_option(WITH_STATIC_ANALYSIS
-                       "Perform static analysis of the codebase on `make check`"
-                       "${WITH_STATIC_ANALYSIS_DEFAULT}" WITH_TEST OFF)
 if(WITH_STATIC_ANALYSIS)
-    if(NOT SCAN_BUILD_BINARY)
-        message(FATAL_ERROR "scan-build not found; specify path with -DSCAN_BUILD_BINARY or disable static analysis with -DWITH_STATIC_ANALYSIS=OFF")
-    else()
-        add_custom_target(analyze
-                          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tools/analyze"
-                                  --output-dir "${CMAKE_CURRENT_BINARY_DIR}/static-analysis"
-                                  --scan-build "${SCAN_BUILD_BINARY}")
-        add_dependencies(check analyze)
+    if(WITH_NESTED_FUNCTION_MUTEX_LOCKS)
+        message(FATAL_ERROR
+                "WITH_STATIC_ANALYSIS is not possible with WITH_NESTED_FUNCTION_MUTEX_LOCKS; disable WITH_NESTED_FUNCTION_MUTEX_LOCKS")
     endif()
+
+    if(WITH_TEST)
+        message(WARNING
+                "WITH_STATIC_ANALYSIS is not recommended with WITH_TEST; disable WITH_TEST")
+    endif()
+    require_static_analysis_tool(CODECHECKER_BINARY "CodeChecker")
+    require_static_analysis_tool(CLANG_BINARY "clang-20")
+    require_static_analysis_tool(CLANG_TIDY_BINARY "clang-tidy-20")
+    require_static_analysis_tool(GCC_BINARY "gcc")
+    require_static_analysis_tool(INFER_BINARY "infer")
+    require_static_analysis_tool(CPPCHECK_BINARY "cppcheck")
+
+    add_custom_target(analyze
+                      COMMAND python3
+                              "${CMAKE_CURRENT_SOURCE_DIR}/tools/codechecker/static_analyze.py"
+                              analyze
+                      WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+    add_custom_target(cppcheck_analyze
+                      COMMAND python3
+                              "${CMAKE_CURRENT_SOURCE_DIR}/tools/codechecker/static_analyze.py"
+                              analyze --analyzer cppcheck
+                      WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 endif()
 
 cmake_dependent_option(WITH_FIND_UNUSED_CODE "Check for unused symbols on `make check`" ON "WITH_TEST;UNIX;NOT APPLE" OFF)

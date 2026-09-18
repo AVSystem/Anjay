@@ -130,3 +130,18 @@ below (or above) that threshold before the notification message is constructed,
 the server will receive a notification containing the new value that itself would
 not have caused the notification to be triggered. This applies to all value-based 
 attributes: **lt**, **gt**, **st** and **edge**.
+
+Write Replace operation on object instance level for LwM2M version 1.1 and earlier
+----------------------------------------------------------------------------------
+
+For LwM2M version 1.1 and earlier, in the case of a Write-Replace operation at
+the object instance level, the specification requires all resources marked as
+mandatory to be included in the payload, while omitted optional resources must
+be removed. There is no guarantee that internal object implementations follow
+these rules; however, some of them do so on a best-effort basis.
+
+However, user-defined object implementations are free to handle this differently,
+and the library allows them to be implemented in a way that satisfies the rules
+mentioned above. It is also worth noting that version 1.2 of the specification is
+more permissive in this regard, and the implementation of Anjay's internal
+objects is correct with respect to that version.

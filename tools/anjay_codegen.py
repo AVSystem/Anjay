@@ -1589,6 +1589,12 @@ class ResourceDef(collections.namedtuple('ResourceDef', ['rid', 'name', 'operati
     def kind_enum(self) -> str:
         if self.operations not in {'R', 'W', 'RW', 'E', 'BS_RW'}:
             raise AssertionError('unexpected operations: ' + self.operations)
+
+        # ANJAY_DM_RES_BS_RW is also used for Multiple Resources. Unlike the
+        # regular R/W/RW kinds, it has no separate "M" variant.
+        if self.operations == 'BS_RW':
+            return 'ANJAY_DM_RES_BS_RW'
+
         result = 'ANJAY_DM_RES_' + self.operations
         if self.multiple:
             if 'E' in self.operations:

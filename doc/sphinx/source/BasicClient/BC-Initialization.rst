@@ -71,11 +71,12 @@ Create a ``main.c`` file in the ``src/`` directory with the following content:
             return -1;
         }
 
+        size_t msg_cache_size = 4000;
         const anjay_configuration_t CONFIG = {
             .endpoint_name = argv[1],
             .in_buffer_size = 4000,
             .out_buffer_size = 4000,
-            .msg_cache_size = 4000
+            .msg_cache_size = &msg_cache_size
         };
 
         anjay_t *anjay = anjay_new(&CONFIG);
@@ -126,7 +127,7 @@ The example code above configures the basic values that are most essential:
   client to work, but it is used to internally cache responses so that
   retransmitted packets are properly handled as duplicates. The bigger this
   buffer, the older packets the library will be able to detect as
-  retransmissions.
+  retransmissions. Leaving this pointer to NULL will result in using the default value of 4000 bytes.
 
 After initializing the library, `anjay_event_loop_run()
 <../api/api_generated/function_core_8h_1a95c229caf3ee8ce7de556256f4307507.html>`_ is called. This

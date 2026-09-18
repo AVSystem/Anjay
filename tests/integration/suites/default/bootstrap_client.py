@@ -324,12 +324,19 @@ class BootstrapRequestRejectLogsClientErrorResponse(BootstrapTest.Test):
     def runTest(self):
         def check(code: coap.Code, trigger_bootstrap=False):
             if trigger_bootstrap:
-                self.communicate('enable-server 65535')
+                self.communicate('reconnect')
 
             self.assertDemoRequestsBootstrap(respond_with_error_code=code)
 
             assert_server_communication_error_logs(
                 self, self.BOOTSTRAP_REJECTED_REGEX, 65535, code)
+
+            # The communication-error callback is invoked before Anjay finishes
+            # disabling the Bootstrap Server. Wait for its terminal state so the
+            # next reconnect cannot race with the previous request.
+            self.assertIsNotNone(self.read_log_until_match(
+                rb'Current status of the server with SSID 65535 is: ERROR',
+                timeout_s=2))
 
         # check all possible client (4.xx) errors
         for detail in range(16):

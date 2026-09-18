@@ -18,6 +18,7 @@ Advanced topics
    AdvancedTopics/AT-AttributeStorage
    AdvancedTopics/AT-Certificates
    AdvancedTopics/AT-CertificateUsage
+   AdvancedTopics/AT-BootstrapCertificatesRollover
    AdvancedTopics/AT-CustomObjects
    AdvancedTopics/AT-NetworkErrorHandling
    AdvancedTopics/AT-OtherFeatures

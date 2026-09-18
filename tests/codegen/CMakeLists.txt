@@ -9,6 +9,8 @@ set(CODEGEN "${CMAKE_CURRENT_SOURCE_DIR}/../../tools/anjay_codegen.py")
 set(CODEGEN_TEST_INPUT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/input")
 set(CODEGEN_TEST_PREFIX "test_codegen_")
 
+# This includes both synthetic codegen fixtures and OMA object
+# definitions stored under input/oma/.
 file(GLOB_RECURSE CODEGEN_INPUTS RELATIVE ${CODEGEN_TEST_INPUT_ROOT} "${CODEGEN_TEST_INPUT_ROOT}/*.xml")
 
 set(CODEGEN_CHECK_TARGETS)
@@ -48,12 +50,5 @@ set_target_properties(codegen_check_cxx PROPERTIES
                       COMPILE_FLAGS "-Wno-missing-declarations -Wno-unused-variable -Wno-unused-parameter")
 target_include_directories(codegen_check_cxx PRIVATE
                            $<TARGET_PROPERTY:anjay,INTERFACE_INCLUDE_DIRECTORIES>)
-
-add_custom_target(codegen_check_with_object_registry COMMAND
-                  "${CMAKE_CURRENT_SOURCE_DIR}/check_with_object_registry.sh" 0 1 2 3 4 5 17 18 22)
-add_custom_target(codegen_check_cxx_with_object_registry COMMAND
-                  "${CMAKE_CURRENT_SOURCE_DIR}/check_with_object_registry.sh" "--c++" 0 1 2 3 4 5 17 18 22)
-add_dependencies(codegen_check codegen_check_with_object_registry)
-add_dependencies(codegen_check_cxx codegen_check_cxx_with_object_registry)
 
 add_dependencies(check codegen_check codegen_check_cxx)

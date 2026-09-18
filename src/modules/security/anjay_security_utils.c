@@ -22,6 +22,10 @@ VISIBILITY_SOURCE_BEGIN
 int _anjay_sec_validate_security_mode(int32_t security_mode) {
     switch (security_mode) {
     case ANJAY_SECURITY_NOSEC:
+#    ifndef ANJAY_WITH_UNSECURE_CONNECTIONS
+        security_log(ERROR, _("nosec connection not supported"));
+        return ANJAY_ERR_NOT_IMPLEMENTED;
+#    endif // ANJAY_WITH_UNSECURE_CONNECTIONS
     case ANJAY_SECURITY_PSK:
     case ANJAY_SECURITY_CERTIFICATE:
     case ANJAY_SECURITY_EST:

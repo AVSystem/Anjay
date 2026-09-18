@@ -306,11 +306,24 @@ static avs_error_t init_cert_security(anjay_unlocked_t *anjay,
         security->dane_tlsa_record = cache->dane_tlsa_record;
     }
 
+#ifndef ANJAY_WITH_UNSECURE_CONNECTIONS
+    /**
+     * Helper flags to check if we have either server cert or trust store
+     * available.
+     */
+    bool has_server_cert = cache->dane_tlsa_record != NULL;
+    bool has_trust_store = false;
+#endif // ANJAY_WITH_UNSECURE_CONNECTIONS
+
 #ifdef ANJAY_WITH_LWM2M11
     const anjay_trust_store_t *trust_store =
             _anjay_get_trust_store(anjay, ssid, security_mode);
     if (trust_store) {
-        // Enforce validation of peer certificate chain
+#    ifndef ANJAY_WITH_UNSECURE_CONNECTIONS
+        has_trust_store =
+                trust_store->use_system_wide || trust_store->certs != NULL;
+#    endif // ANJAY_WITH_UNSECURE_CONNECTIONS
+           // Enforce validation of peer certificate chain
         certificate_info.server_cert_validation = true;
         certificate_info.ignore_system_trust_store =
                 !trust_store->use_system_wide;
@@ -335,6 +348,14 @@ static avs_error_t init_cert_security(anjay_unlocked_t *anjay,
 #endif // ANJAY_WITH_LWM2M11
     (void) ssid;
     (void) security_mode;
+#ifndef ANJAY_WITH_UNSECURE_CONNECTIONS
+    if (!has_server_cert && !has_trust_store) {
+        anjay_log(ERROR,
+                  _("certificate security configured, but neither Server Public"
+                    " Key nor trust store is available"));
+        return avs_errno(AVS_EPROTO);
+    }
+#endif // ANJAY_WITH_UNSECURE_CONNECTIONS
 
     security->security_info =
             avs_net_security_info_from_certificates(certificate_info);
@@ -443,7 +464,7 @@ avs_error_t _anjay_connection_security_generic_get_config(
                   inout_info->security_iid,
                   anjay->default_tls_ciphersuites.num_ids > 0
                           ? "anjay_configuration_t"
-                          : "TLS backend");
+                          : "Anjay");
     } else {
         out_config->tls_ciphersuites = cache->ciphersuites;
     }

@@ -24,8 +24,12 @@ Introduction
 This tutorial builds up on :doc:`the previous one <NetworkingAPI-Bind>` and adds
 support for the "get remote hostname" and "shutdown" operations.
 
-These operations will allow suspending and resuming CoAP downloads when using
-the "offline mode" functionality.
+The "get remote hostname" operation is used when resuming CoAP downloads after
+using the "offline mode" functionality.
+
+The "shutdown" operation is optional and is not used by Anjay itself. However,
+it may be useful in custom networking configurations, especially when a custom
+(D)TLS layer is used together with a custom networking layer.
 
 Get remote hostname operation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

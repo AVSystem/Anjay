@@ -13,7 +13,7 @@
 #include <anjay_modules/anjay_servers.h>
 
 #if !(defined(ANJAY_SERVERS_INTERNALS) || defined(ANJAY_LWM2M_SEND_SOURCE) \
-      || defined(ANJAY_TEST))
+      || defined(ANJAY_BOOTSTRAP_SOURCE) || defined(ANJAY_TEST))
 #    error "Headers from servers/ are not meant to be included from outside"
 #endif
 

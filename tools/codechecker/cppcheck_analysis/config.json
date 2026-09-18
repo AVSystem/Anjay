@@ -1,0 +1,27 @@
+{
+  "analyze": [
+    "--analyzers",
+    "cppcheck",
+    "--skip",
+    "tools/codechecker/cppcheck_analysis/excluded",
+    "--review-status-config",
+    "tools/codechecker/suppressions.yaml",
+    "--enable",
+    "guideline:memory-safety",
+    "--enable",
+    "profile:extreme"
+
+  ],
+  "check": [
+    "--analyzers",
+    "cppcheck",
+    "--skip",
+    "tools/codechecker/cppcheck_analysis/excluded",
+    "--review-status-config",
+    "tools/codechecker/suppressions.yaml",
+    "--enable",
+    "guideline:memory-safety",
+    "--enable",
+    "profile:extreme"
+  ]
+}

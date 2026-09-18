@@ -155,15 +155,23 @@ int Socket::bio_recv(void *self,
                 auto recv_host_port =
                         host_port_to_std_tuple(peer_host_port_tuple);
 
+                int cid_negotiated = 0;
+                // Buf_copy is needed becuase mbedtls_ssl_check_record zeroing
+                // buffer after processing
+                auto buf_copy = std::make_unique<unsigned char[]>(bytes_received);
+                std::memcpy(buf_copy.get(), buf, bytes_received);
                 if (socket->client_host_and_port_ != recv_host_port) {
+#if defined(MBEDTLS_SSL_DTLS_CONNECTION_ID)
                     if (!socket->in_handshake_
-                            && socket->context_->connection_id().size()) {
-                        // The message may still originate from an endpoint that
-                        // we know, but we cannot verify it at this stage,
-                        // because no TLS record parsing has been made. We need
-                        // to delay it till mbedtls_ssl_read() finishes.
-                        socket->last_recv_host_and_port_ = recv_host_port;
-                    } else {
+                            && mbedtls_ssl_check_record(&socket->mbedtls_context_,
+                                buf_copy.get(), bytes_received) == 0
+                            && mbedtls_ssl_get_peer_cid(&socket->mbedtls_context_,
+                                &cid_negotiated, NULL, NULL) == 0 && cid_negotiated) {
+                        // Change the port to the one from which recent message was received
+                        socket->client_host_and_port_ = recv_host_port;
+                    } else
+#endif // MBEDTLS_SSL_DTLS_CONNECTION_ID
+                    {
                         // ignore this message.
                         continue;
                     }
@@ -237,8 +245,7 @@ Socket::Socket(shared_ptr<Context> context,
           py_socket_(py_socket),
           in_handshake_(false),
           exception_capturer_(nullptr),
-          client_host_and_port_(),
-          last_recv_host_and_port_() {
+          client_host_and_port_() {
     mbedtls_ssl_init(&mbedtls_context_);
     // Zeroize cookie context. This prevents issue
     // https://github.com/ARMmbed/mbedtls/issues/843.
@@ -335,7 +342,7 @@ void Socket::perform_handshake(py::tuple host_port,
         call_method<void>(py_socket_, "connect", host_port);
     }
 
-    last_recv_host_and_port_ = client_host_and_port_ = host_port_to_std_tuple(
+    client_host_and_port_ = host_port_to_std_tuple(
             call_method<py::tuple>(py_socket_, "getpeername"));
 
     if (!handshake_timeouts_s_.is_none()) {
@@ -428,14 +435,6 @@ py::bytes Socket::recv(int) {
     }
     if (captured_exception) {
         throw runtime_error("Expected no Python exception to rethrow");
-    }
-
-    if (last_recv_host_and_port_ != client_host_and_port_) {
-        // During Socket::_recv(), there had to be a message from a (host, port)
-        // we weren't sure about, but enabled connection_id verified it is the
-        // same client but from the different address. Let's adjust.
-        client_host_and_port_ = last_recv_host_and_port_;
-        call_method<void>(py_socket_, "connect", client_host_and_port_);
     }
 
     return py::bytes(reinterpret_cast<const char *>(buffer), result);

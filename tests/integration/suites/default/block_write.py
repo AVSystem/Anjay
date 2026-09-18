@@ -124,6 +124,9 @@ class Block:
 
 
 class BlockIncompleteTest(Block.Test):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--cache-size', '0'])
+
     def runTest(self):
         # incomplete BLOCK should be rejected
         chunks = list(equal_chunk_splitter(1024)(A_LOT_OF_STUFF))
@@ -297,6 +300,9 @@ class BlockNonFirstTest(Block.Test):
 
 
 class BlockBrokenStreamTest(Block.Test):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--cache-size', '0'])
+
     def runTest(self):
 
         data = A_LOT_OF_STUFF

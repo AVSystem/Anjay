@@ -98,3 +98,10 @@ def setup(app: Sphinx):
     app.add_directive('snippet-source', SnippetSourceDirective)
 
     HighlightLanguageVisitor.visit_SnippetSourceNode = HighlightLanguageVisitor.visit_literal_block
+
+    # The extension only registers directive and node classes; it keeps no
+    # document-specific state, so Sphinx may safely process documents in parallel.
+    return {
+        'parallel_read_safe': True,
+        'parallel_write_safe': True,
+    }

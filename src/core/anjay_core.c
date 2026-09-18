@@ -50,7 +50,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "3.14.1"
+#    define ANJAY_VERSION "3.15.0"
 #endif // ANJAY_VERSION
 
 #ifdef ANJAY_WITH_LWM2M11
@@ -180,9 +180,15 @@ static int init_anjay(anjay_unlocked_t *anjay,
                 (avs_coap_udp_tx_params_t) ANJAY_COAP_DEFAULT_UDP_TX_PARAMS;
     }
     anjay->udp_exchange_timeout = AVS_COAP_DEFAULT_EXCHANGE_MAX_TIME;
+
+    size_t msg_cache_size = ANJAY_DEFAULT_MESSAGE_CACHE_SIZE;
     if (config->msg_cache_size) {
+        msg_cache_size = *config->msg_cache_size;
+    }
+
+    if (msg_cache_size) {
         anjay->udp_response_cache =
-                avs_coap_udp_response_cache_create(config->msg_cache_size);
+                avs_coap_udp_response_cache_create(msg_cache_size);
         if (!anjay->udp_response_cache) {
             _anjay_log_oom();
             return -1;
@@ -204,8 +210,9 @@ static int init_anjay(anjay_unlocked_t *anjay,
                 ANJAY_DTLS_DEFAULT_UDP_HS_TX_PARAMS;
     }
 
-    if (_anjay_copy_tls_ciphersuites(&anjay->default_tls_ciphersuites,
-                                     &config->default_tls_ciphersuites)) {
+    if (_anjay_copy_default_tls_ciphersuites(
+                &anjay->default_tls_ciphersuites,
+                &config->default_tls_ciphersuites)) {
         return -1;
     }
 
@@ -715,10 +722,8 @@ static const char *action_to_string(anjay_request_action_t action) {
     switch (action) {
     case ANJAY_ACTION_READ:
         return "Read";
-#ifdef ANJAY_WITH_LWM2M11
     case ANJAY_ACTION_READ_COMPOSITE:
         return "Read Composite";
-#endif // ANJAY_WITH_LWM2M11
     case ANJAY_ACTION_DISCOVER:
         return "Discover";
     case ANJAY_ACTION_WRITE:
@@ -727,10 +732,8 @@ static const char *action_to_string(anjay_request_action_t action) {
         return "Write (Update)";
     case ANJAY_ACTION_WRITE_ATTRIBUTES:
         return "Write Attributes";
-#ifdef ANJAY_WITH_LWM2M11
     case ANJAY_ACTION_WRITE_COMPOSITE:
         return "Write Composite";
-#endif // ANJAY_WITH_LWM2M11
     case ANJAY_ACTION_EXECUTE:
         return "Execute";
     case ANJAY_ACTION_CREATE:
@@ -782,14 +785,12 @@ static int code_to_action(uint8_t code,
     case AVS_COAP_CODE_DELETE:
         *out_action = ANJAY_ACTION_DELETE;
         return 0;
-#ifdef ANJAY_WITH_LWM2M11
     case AVS_COAP_CODE_FETCH:
         *out_action = ANJAY_ACTION_READ_COMPOSITE;
         return 0;
     case AVS_COAP_CODE_IPATCH:
         *out_action = ANJAY_ACTION_WRITE_COMPOSITE;
         return 0;
-#endif // ANJAY_WITH_LWM2M11
     default:
         anjay_log(DEBUG, _("unrecognized CoAP method: ") "%s",
                   AVS_COAP_CODE_STRING(code));

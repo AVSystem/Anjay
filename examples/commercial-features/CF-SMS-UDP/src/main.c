@@ -75,7 +75,6 @@ int main(int argc, char *argv[]) {
         .endpoint_name = argv[1],
         .in_buffer_size = 4000,
         .out_buffer_size = 4000,
-        .msg_cache_size = 4000,
         .sms_driver = anjay_at_sms_create(argv[2]),
         .local_msisdn = "14155550125"
     };

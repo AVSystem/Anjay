@@ -23,9 +23,12 @@
 #define CM_RES_CELL_ID 8                  /* int */
 #define CM_RES_SMNC 9                     /* int */
 #define CM_RES_SMCC 10                    /* int */
+#define CM_RES_LAC 12                     /* int */
 
 typedef struct {
     const anjay_dm_object_def_t *def;
+    int32_t network_bearer;
+    int32_t location_area_code;
 } conn_monitoring_repr_t;
 
 static inline conn_monitoring_repr_t *
@@ -73,6 +76,7 @@ static int cm_list_resources(anjay_t *anjay,
             ctx, CM_RES_CELL_ID, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT);
     anjay_dm_emit_res(ctx, CM_RES_SMNC, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT);
     anjay_dm_emit_res(ctx, CM_RES_SMCC, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, CM_RES_LAC, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT);
     return 0;
 }
 
@@ -105,9 +109,11 @@ static int cm_resource_read(anjay_t *anjay,
     };
 
     switch (rid) {
-    case CM_RES_NETWORK_BEARER:
+    case CM_RES_NETWORK_BEARER: {
         assert(riid == ANJAY_ID_INVALID);
-        return anjay_ret_i32(ctx, NB_CELLULAR_WCDMA);
+        conn_monitoring_repr_t *cm = get_cm(obj_ptr);
+        return anjay_ret_i32(ctx, cm->network_bearer);
+    }
     case CM_RES_AVAILABLE_NETWORK_BEARER:
         switch (riid) {
         case 0:
@@ -152,6 +158,11 @@ static int cm_resource_read(anjay_t *anjay,
     case CM_RES_SMCC:
         assert(riid == ANJAY_ID_INVALID);
         return anjay_ret_i32(ctx, 0);
+    case CM_RES_LAC: {
+        assert(riid == ANJAY_ID_INVALID);
+        conn_monitoring_repr_t *cm = get_cm(obj_ptr);
+        return anjay_ret_i32(ctx, cm->location_area_code);
+    }
     default:
         AVS_UNREACHABLE(
                 "Read handler called on unknown or non-readable resource");
@@ -199,7 +210,8 @@ static const anjay_dm_object_def_t CONN_MONITORING = {
     }
 };
 
-const anjay_dm_object_def_t **cm_object_create(void) {
+const anjay_dm_object_def_t **cm_object_create(int32_t network_bearer,
+                                               int32_t location_area_code) {
     conn_monitoring_repr_t *repr = (conn_monitoring_repr_t *) avs_calloc(
             1, sizeof(conn_monitoring_repr_t));
     if (!repr) {
@@ -207,6 +219,8 @@ const anjay_dm_object_def_t **cm_object_create(void) {
     }
 
     repr->def = &CONN_MONITORING;
+    repr->network_bearer = network_bearer;
+    repr->location_area_code = location_area_code;
 
     return &repr->def;
 }

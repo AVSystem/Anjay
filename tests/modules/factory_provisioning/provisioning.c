@@ -35,7 +35,7 @@ AVS_UNIT_TEST(factory_provisioning, fail_rollback) {
                                             "\x02\x07"; // value: 7
     AVS_UNIT_ASSERT_SUCCESS(avs_stream_write(stream, PROVISIONING_DATA,
                                              sizeof(PROVISIONING_DATA) - 1));
-    avs_unit_mocksock_expect_shutdown(mocksocks[0]);
+    avs_unit_mocksock_expect_mid_close(mocksocks[0]);
     // Implicit DELETE /
     _anjay_mock_dm_expect_list_instances(
             anjay, &FAKE_SERVER, 0, (const anjay_iid_t[]) { ANJAY_ID_INVALID });

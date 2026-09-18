@@ -517,7 +517,6 @@ recreate_socket(anjay_unlocked_t *anjay,
                                 anjay, connection, &socket_config,
                                 security_config.dane_tlsa_record, inout_info)))
                 && connection->conn_socket_) {
-            avs_net_socket_shutdown(connection->conn_socket_);
             avs_net_socket_close(connection->conn_socket_);
         }
     }
@@ -743,11 +742,12 @@ void _anjay_server_update_last_ssl_alert_code(const anjay_server_info_t *info,
 
 bool _anjay_socket_transport_supported(anjay_unlocked_t *anjay,
                                        anjay_socket_transport_t type) {
+    (void) anjay;
+
     if (get_connection_type_def(type) == NULL) {
         return false;
     }
 
-    (void) anjay;
     return true;
 }
 

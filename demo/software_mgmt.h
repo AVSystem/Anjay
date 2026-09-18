@@ -39,7 +39,9 @@ typedef struct {
     anjay_t *anjay;
     const char *persistence_file;
     avs_net_security_info_t *security_info;
+#ifdef ANJAY_WITH_COAP_DOWNLOAD
     avs_coap_udp_tx_params_t *coap_tx_params;
+#endif // ANJAY_WITH_COAP_DOWNLOAD
     avs_time_duration_t *tcp_request_timeout;
     bool auto_suspend;
     bool terminate_after_downloading;
@@ -58,7 +60,9 @@ int sw_mgmt_install(anjay_t *anjay,
 #ifdef ANJAY_WITH_DOWNLOADER
                     ,
                     avs_net_security_info_t *security_info,
+#    ifdef ANJAY_WITH_COAP_DOWNLOAD
                     avs_coap_udp_tx_params_t *tx_params,
+#    endif // ANJAY_WITH_COAP_DOWNLOAD
                     avs_time_duration_t *tcp_request_timeout,
                     bool auto_suspend
 #endif // ANJAY_WITH_DOWNLOADER

@@ -90,6 +90,21 @@ AVS_UNIT_TEST(server_object_api, set_lifetime) {
             anjay_server_object_set_lifetime(env->anjay, iid, 1234));
 }
 
+AVS_UNIT_TEST(server_object_api, set_lifetime_zero) {
+    SCOPED_SERVER_TEST_ENV(env);
+    anjay_iid_t iid = 1;
+    AVS_UNIT_ASSERT_SUCCESS(
+            anjay_server_object_add_instance(env->anjay, &instance1, &iid));
+    AVS_UNIT_ASSERT_FAILED(
+            anjay_server_object_set_lifetime(env->anjay, iid, 0));
+}
+
+AVS_UNIT_TEST(server_object_api, set_lifetime_no_instances) {
+    SCOPED_SERVER_TEST_ENV(env);
+    AVS_UNIT_ASSERT_FAILED(
+            anjay_server_object_set_lifetime(env->anjay, 1, 1234));
+}
+
 static const anjay_server_instance_t instance_lifetime_zero = {
     .ssid = 1,
     .lifetime = 0,
@@ -105,4 +120,30 @@ AVS_UNIT_TEST(server_object_api, add_instances_with_inifinite_lifetime) {
     anjay_iid_t iid = 1;
     AVS_UNIT_ASSERT_SUCCESS(anjay_server_object_add_instance(
             env->anjay, &instance_lifetime_zero, &iid));
+}
+
+AVS_UNIT_TEST(server_object_api, get_ssids_two_instances) {
+    SCOPED_SERVER_TEST_ENV(env);
+    anjay_iid_t iid = 1;
+    AVS_UNIT_ASSERT_SUCCESS(
+            anjay_server_object_add_instance(env->anjay, &instance1, &iid));
+    iid = 2;
+    AVS_UNIT_ASSERT_SUCCESS(
+            anjay_server_object_add_instance(env->anjay, &instance2, &iid));
+
+    AVS_LIST(const anjay_ssid_t) ssids = anjay_server_get_ssids(env->anjay);
+
+    anjay_ssid_t expected_ssids_arr[2] = { 1, 2 };
+    size_t i = 0;
+    const anjay_ssid_t *ssid_ptr;
+    AVS_LIST_FOREACH(ssid_ptr, ssids) {
+        AVS_UNIT_ASSERT_EQUAL(*ssid_ptr, expected_ssids_arr[i]);
+        ++i;
+    }
+}
+
+AVS_UNIT_TEST(server_object_api, get_ssids_no_instances) {
+    SCOPED_SERVER_TEST_ENV(env);
+    AVS_LIST(const anjay_ssid_t) ssids = anjay_server_get_ssids(env->anjay);
+    AVS_UNIT_ASSERT_NULL(ssids);
 }

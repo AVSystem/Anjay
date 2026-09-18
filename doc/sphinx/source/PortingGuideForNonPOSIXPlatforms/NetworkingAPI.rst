@@ -100,7 +100,8 @@ If POSIX socket API is not available:
     - ``get_local_port`` - used to keep the bound port stable if possible
     - ``get_remote_host`` - required for CoAP message cache to work
     - ``get_remote_port`` - required for CoAP message cache to work
-    - ``shutdown`` - required for ability to suspend CoAP downloads
+    - ``shutdown`` - optional and not used by Anjay itself. It may be useful when
+      implementing a custom networking layer together with a custom (D)TLS layer
 
   - ``_avs_net_create_tcp_socket`` - only required if the ``fw_update`` module
     should support HTTP/HTTPS transfers, or if support for CoAP over TCP is

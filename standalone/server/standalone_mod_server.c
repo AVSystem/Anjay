@@ -736,11 +736,15 @@ void standalone_server_object_purge(
 AVS_LIST(const anjay_ssid_t)
 standalone_server_get_ssids(const anjay_dm_object_def_t *const *obj_ptr) {
     AVS_LIST(server_instance_t) source = NULL;
-    server_repr_t *repr = _standalone_serv_get(obj_ptr);
-    if (repr->in_transaction) {
-        source = repr->saved_instances;
+    server_repr_t *repr = obj_ptr ? _standalone_serv_get(obj_ptr) : NULL;
+    if (!repr) {
+        server_log(WARNING, _("Server object is not registered"));
     } else {
-        source = repr->instances;
+        if (repr->in_transaction) {
+            source = repr->saved_instances;
+        } else {
+            source = repr->instances;
+        }
     }
     // We rely on the fact that the "ssid" field is first in server_instance_t,
     // which means that both "source" and "&source->ssid" point to exactly the
@@ -748,6 +752,9 @@ standalone_server_get_ssids(const anjay_dm_object_def_t *const *obj_ptr) {
     // independent from the stored data type, so it's safe to do such "cast".
     AVS_STATIC_ASSERT(offsetof(server_instance_t, ssid) == 0,
                       instance_ssid_is_first_field);
+    if (!source) {
+        return NULL;
+    }
     return &source->ssid;
 }
 
@@ -793,28 +800,34 @@ int standalone_server_object_set_lifetime(
         return -1;
     }
     int result = -1;
-    server_repr_t *repr = _standalone_serv_get(obj_ptr);
-    if (repr->saved_instances) {
-        server_log(ERROR, _("cannot set Lifetime while some transaction is "
-                            "started on the Server Object"));
+    server_repr_t *repr = obj_ptr ? _standalone_serv_get(obj_ptr) : NULL;
+    if (!repr) {
+        server_log(WARNING, _("Server object is not registered"));
+        result = -1;
     } else {
-        AVS_LIST(server_instance_t) it;
-        AVS_LIST_FOREACH(it, repr->instances) {
-            if (it->iid >= iid) {
-                break;
+        if (repr->saved_instances) {
+            server_log(ERROR, _("cannot set Lifetime while some transaction is "
+                                "started on the Server Object"));
+        } else {
+            AVS_LIST(server_instance_t) it;
+            AVS_LIST_FOREACH(it, repr->instances) {
+                if (it->iid >= iid) {
+                    break;
+                }
             }
-        }
 
-        if (!it || it->iid != iid) {
-            server_log(ERROR, _("instance ") "%" PRIu16 _(" not found"), iid);
-        } else if (it->lifetime != lifetime) {
-            if (anjay_notify_changed(repr->anjay, ANJAY_DM_OID_SERVER, it->iid,
-                                     SERV_RES_LIFETIME)) {
-                server_log(WARNING, _("could not notify lifetime change"));
+            if (!it || it->iid != iid) {
+                server_log(ERROR, _("instance ") "%" PRIu16 _(" not found"),
+                           iid);
+            } else if (it->lifetime != lifetime) {
+                if (anjay_notify_changed(repr->anjay, ANJAY_DM_OID_SERVER,
+                                         it->iid, SERV_RES_LIFETIME)) {
+                    server_log(WARNING, _("could not notify lifetime change"));
+                }
+                repr->modified_since_persist = true;
+                it->lifetime = lifetime;
+                result = 0;
             }
-            repr->modified_since_persist = true;
-            it->lifetime = lifetime;
-            result = 0;
         }
     }
     return result;

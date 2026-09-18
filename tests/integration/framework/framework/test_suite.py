@@ -446,26 +446,8 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                        afu_original_img_file_path=None,
                        sw_mgmt_persistence_file=None,
                        tls_version='TLSv1.2',
-                       ciphersuites=(0x1305, 0x1301, 0xC030, 0xC0A8, 0xC0AE),
-                       forced_client_security_mode=None):
-        """
-        Helper method for easy generation of demo executable arguments.
-        """
-        # LwM2M 1.2 doesn't specify any TLS 1.3 ciphersuites, but
-        # draft-ietf-uta-tls13-iot-profile-09, section 17 suggests:
-        # 0x1305 = TLS_AES_128_CCM_8_SHA256 - although compatible with CoAP,
-        #          prone to other issues - see the referenced document
-
-        # Additionally, to support ssl Python library (used in tests that use
-        # ssl.SSLContext API):
-        # 0x1301 = TLS_AES_128_GCM_SHA256 - supported by default if TLS 1.3 is
-        #          available
-        # 0xC030 = TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 - compatible with
-        #          shortened list of default TLS 1.2 ciphersuites (Python 3.10)
-
-        # Default ciphersuites mandated by LwM2M:
-        # 0xC0A8 = TLS_PSK_WITH_AES_128_CCM_8
-        # 0xC0AE = TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8
+                       forced_client_security_mode=None,
+                       ciphersuites=None):
 
         if forced_client_security_mode == None:
             security_modes = set(serv.security_mode() for serv in servers)

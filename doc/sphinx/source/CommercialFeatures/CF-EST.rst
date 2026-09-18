@@ -270,7 +270,6 @@ subsystem:
         .endpoint_name = argv[1],
         .in_buffer_size = 4000,
         .out_buffer_size = 4000,
-        .msg_cache_size = 4000,
 
         .trust_store_certs = avs_crypto_certificate_chain_info_from_file(
                 "/etc/ssl/certs/ca-certificates.crt"),
@@ -350,7 +349,6 @@ engine specifies additional fields in the ``anjay_configuration_t`` structure:
         .endpoint_name = argv[1],
         .in_buffer_size = 4000,
         .out_buffer_size = 4000,
-        .msg_cache_size = 4000,
 
         .trust_store_certs = avs_crypto_certificate_chain_info_from_file(
                 "/etc/ssl/certs/ca-certificates.crt"),

@@ -78,7 +78,6 @@ int main(int argc, char *argv[]) {
         .endpoint_name = argv[1],
         .in_buffer_size = 4000,
         .out_buffer_size = 4000,
-        .msg_cache_size = 4000,
         .nidd_driver = *demo_nidd_driver
     };
 

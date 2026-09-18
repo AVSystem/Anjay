@@ -176,7 +176,12 @@ There are also archived, not actively maintained Anjay demos and integrations:
     -   C++ compiler with C++11 support,
     -   [Python 3.5+](https://www.python.org/),
     -   [pybind11](https://github.com/pybind/pybind11) - included in the repository as a subproject,
-    -   [scan-build](https://clang-analyzer.llvm.org/scan-build.html) - for static analysis,
+-   Optional dependencies (required for static analysis):
+    -   LLVM 20 (`clang-20`, `clang-tools-20`, and `clang-tidy-20`),
+    -   [cppcheck](https://cppcheck.sourceforge.io/),
+    -   [CodeChecker](tools/codechecker/README.md) version 6.28.0,
+    -   [Infer](https://fbinfer.com/docs/getting-started/),
+    -   see the [CodeChecker README](tools/codechecker/README.md) for more information.
 -   Optional dependencies (required for building documentation - more information in "Contributing" section):
     -   [Doxygen](http://www.doxygen.nl/),
     -   [Sphinx](https://www.sphinx-doc.org/en/master/).

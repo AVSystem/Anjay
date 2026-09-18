@@ -380,6 +380,7 @@ _anjay_coap_add_string_options(avs_coap_options_t *opts,
 }
 
 static const anjay_transport_info_t TRANSPORTS[] = {
+#ifdef ANJAY_WITH_UNSECURE_CONNECTIONS
     {
         .transport = ANJAY_SOCKET_TRANSPORT_UDP,
         .socket_type = &(const avs_net_socket_type_t) { AVS_NET_UDP_SOCKET },
@@ -387,6 +388,7 @@ static const anjay_transport_info_t TRANSPORTS[] = {
         .default_port = "5683",
         .security = ANJAY_TRANSPORT_NOSEC
     },
+#endif // ANJAY_WITH_UNSECURE_CONNECTIONS
     {
         .transport = ANJAY_SOCKET_TRANSPORT_UDP,
         .socket_type = &(const avs_net_socket_type_t) { AVS_NET_DTLS_SOCKET },
@@ -394,6 +396,7 @@ static const anjay_transport_info_t TRANSPORTS[] = {
         .default_port = "5684",
         .security = ANJAY_TRANSPORT_ENCRYPTED
     },
+#ifdef ANJAY_WITH_UNSECURE_CONNECTIONS
     {
         .transport = ANJAY_SOCKET_TRANSPORT_TCP,
         .socket_type = &(const avs_net_socket_type_t) { AVS_NET_TCP_SOCKET },
@@ -401,6 +404,7 @@ static const anjay_transport_info_t TRANSPORTS[] = {
         .default_port = "5683",
         .security = ANJAY_TRANSPORT_NOSEC
     },
+#endif // ANJAY_WITH_UNSECURE_CONNECTIONS
     {
         .transport = ANJAY_SOCKET_TRANSPORT_TCP,
         .socket_type = &(const avs_net_socket_type_t) { AVS_NET_SSL_SOCKET },
@@ -416,6 +420,7 @@ static const anjay_transport_info_t TRANSPORTS[] = {
         .security = ANJAY_TRANSPORT_SECURITY_UNDEFINED
     },
 #ifdef ANJAY_WITH_LWM2M11
+#    ifdef ANJAY_WITH_UNSECURE_CONNECTIONS
     {
         .transport = ANJAY_SOCKET_TRANSPORT_NIDD,
         .socket_type = NULL,
@@ -423,6 +428,7 @@ static const anjay_transport_info_t TRANSPORTS[] = {
         .default_port = "",
         .security = ANJAY_TRANSPORT_NOSEC
     },
+#    endif // ANJAY_WITH_UNSECURE_CONNECTIONS
     {
         .transport = ANJAY_SOCKET_TRANSPORT_NIDD,
         .socket_type = NULL,
@@ -468,6 +474,66 @@ int _anjay_copy_tls_ciphersuites(avs_net_socket_tls_ciphersuites_t *dest,
     }
     dest->num_ids = src->num_ids;
     return 0;
+}
+
+static const uint32_t ANJAY_DEFAULT_TLS_CIPHERSUITE_IDS[] = {
+    /*
+     * ECDSA and RSA based TLS/DTLS 1.2 ciphersuites.
+     *
+     * AEAD ciphersuites are preferred.
+     */
+    0xC0AE, // TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8
+    0xC0AC, // TLS_ECDHE_ECDSA_WITH_AES_128_CCM
+    0xC02B, // TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+    0xC02C, // TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+    0xC02F, // TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    0xC030, // TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+    0xC0AD, // TLS_ECDHE_ECDSA_WITH_AES_256_CCM
+    0xC0AF, // TLS_ECDHE_ECDSA_WITH_AES_256_CCM_8
+    /*
+     * CBC-based ciphersuites are not preferred because of their history of
+     * padding-oracle and timing attacks. This ciphersuite is retained for
+     * compatibility with deployments following the LwM2M transport
+     * specification. Applications that do not require it should disable its
+     * support in the TLS backend configuration.
+     */
+    0xC023, // TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256
+    /*
+     * PSK-based TLS/DTLS 1.2 ciphersuites.
+     */
+    0xC0A8, // TLS_PSK_WITH_AES_128_CCM_8
+    0xC0A4, // TLS_PSK_WITH_AES_128_CCM
+    0x00A8, // TLS_PSK_WITH_AES_128_GCM_SHA256
+    0x00A9, // TLS_PSK_WITH_AES_256_GCM_SHA384
+    /*
+     * TLS 1.3 ciphersuites.
+     */
+    0x1301, // TLS_AES_128_GCM_SHA256
+    0x1302, // TLS_AES_256_GCM_SHA384
+    0x1304, // TLS_AES_128_CCM_SHA256
+    0x1305, // TLS_AES_128_CCM_8_SHA256
+};
+
+static int
+copy_builtin_default_tls_ciphersuites(avs_net_socket_tls_ciphersuites_t *out) {
+    out->num_ids = AVS_ARRAY_SIZE(ANJAY_DEFAULT_TLS_CIPHERSUITE_IDS);
+    out->ids = (uint32_t *) avs_calloc(out->num_ids, sizeof(*out->ids));
+    if (!out->ids) {
+        _anjay_log_oom();
+        return -1;
+    }
+    memcpy(out->ids, ANJAY_DEFAULT_TLS_CIPHERSUITE_IDS,
+           out->num_ids * sizeof(*out->ids));
+    return 0;
+}
+
+int _anjay_copy_default_tls_ciphersuites(
+        avs_net_socket_tls_ciphersuites_t *out,
+        const avs_net_socket_tls_ciphersuites_t *configured) {
+    if (configured->num_ids == 0) {
+        return copy_builtin_default_tls_ciphersuites(out);
+    }
+    return _anjay_copy_tls_ciphersuites(out, configured);
 }
 
 #define DEFAULT_COAPS_PORT "5684"
@@ -558,7 +624,7 @@ try_security_instance_read_security(anjay_unlocked_t *anjay,
                   ANJAY_DM_OID_SECURITY, security_iid);
     } else if (!has_valid_keys(&new_result.security_info)
                && !new_result.dane_tlsa_record) {
-        anjay_log(DEBUG,
+        anjay_log(WARNING,
                   _("Server ") "/%" PRIu16
                                "/%" PRIu16 _(" does not use encrypted "
                                              "connection, ignoring"),

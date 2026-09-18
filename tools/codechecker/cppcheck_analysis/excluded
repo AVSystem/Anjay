@@ -1,0 +1,3 @@
+-*/tests/*
+-*/demo/*
+-*/deps/avs_commons/src/crypto/avs_crypto_pkcs11_common.c

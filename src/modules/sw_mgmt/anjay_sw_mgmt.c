@@ -528,9 +528,11 @@ static int package_push_download(anjay_unlocked_t *anjay,
 static anjay_transport_security_t
 transport_security_from_protocol(const char *protocol) {
 #            ifdef ANJAY_WITH_HTTP_DOWNLOAD
+#                ifdef ANJAY_WITH_UNSECURE_CONNECTIONS
     if (avs_strcasecmp(protocol, "http") == 0) {
         return ANJAY_TRANSPORT_NOSEC;
     }
+#                endif // ANJAY_WITH_UNSECURE_CONNECTIONS
     if (avs_strcasecmp(protocol, "https") == 0) {
         return ANJAY_TRANSPORT_ENCRYPTED;
     }
@@ -601,6 +603,7 @@ static int get_security_config(anjay_unlocked_t *anjay,
     }
 }
 
+#        ifdef ANJAY_WITH_COAP_DOWNLOAD
 static int get_coap_tx_params(anjay_unlocked_t *anjay,
                               sw_mgmt_object_t *obj,
                               sw_mgmt_instance_t *inst,
@@ -617,6 +620,7 @@ static int get_coap_tx_params(anjay_unlocked_t *anjay,
     }
     return -1;
 }
+#        endif // ANJAY_WITH_COAP_DOWNLOAD
 
 static avs_time_duration_t get_tcp_request_timeout(anjay_unlocked_t *anjay,
                                                    sw_mgmt_object_t *obj,

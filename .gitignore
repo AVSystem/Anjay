@@ -88,3 +88,9 @@ mbedtls
 # needed in case of submodule inlining
 !deps/
 !deps/**
+
+# codechecker local results
+tools/codechecker/standard_analysis/reports/*
+tools/codechecker/standard_analysis/diff_*
+tools/codechecker/cppcheck_analysis/reports/*
+tools/codechecker/cppcheck_analysis/diff_*

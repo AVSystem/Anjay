@@ -26,7 +26,8 @@ class HierarchicalCborEncodingTest:
     class Test(test_suite.Lwm2mSingleServerTest,
                test_suite.Lwm2mDmOperations):
         def setUp(self):
-            super().setUp()
+            # read composite requires LwM2M in at least version 1.1
+            super().setUp(minimum_version='1.1', maximum_version='1.1')
             self.create_instance(self.serv, oid=OID.Test, iid=IID)
 
 

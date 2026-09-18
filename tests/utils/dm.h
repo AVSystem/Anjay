@@ -116,11 +116,12 @@ static const anjay_dm_object_def_t *const FAKE_SERVER =
             .handlers = { ANJAY_MOCK_DM_HANDLERS }
         };
 
-#define DM_TEST_CONFIGURATION(...)                \
-    &(anjay_configuration_t) {                    \
-        .endpoint_name = "urn:dev:os:anjay-test", \
-        .in_buffer_size = 4096,                   \
-        .out_buffer_size = 4096, __VA_ARGS__      \
+#define DM_TEST_CONFIGURATION(...)                     \
+    &(anjay_configuration_t) {                         \
+        .endpoint_name = "urn:dev:os:anjay-test",      \
+        .in_buffer_size = 4096,                        \
+        .out_buffer_size = 4096,                       \
+        .msg_cache_size = &(size_t) { 0 }, __VA_ARGS__ \
     }
 
 #define DM_TEST_INIT_OBJECTS__(ObjDefs, ...)                        \

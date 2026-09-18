@@ -64,8 +64,10 @@ Cache size
 ----------
 
 The size of the cache is specified at Anjay instantiation time by setting
-``anjay_configuration_t::msg_cache_size`` to a non-zero value (zero disables
-any caching). This limits the number of bytes used to store cached responses.
+``anjay_configuration_t::msg_cache_size`` pointer to a variable with a 
+non-zero value (zero disables any caching). Leaving the pointer to NULL will result 
+in using the default value of 4000 bytes. 
+This limits the number of bytes used to store cached responses.
 
 .. note::
     The cache size limit is global for all Servers - i.e. all responses,

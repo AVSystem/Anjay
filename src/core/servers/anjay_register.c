@@ -503,7 +503,7 @@ setup_register_request_options(avs_coap_options_t *opts,
 }
 
 static anjay_registration_result_t
-check_register_response(const anjay_server_info_t *server,
+check_register_response(anjay_server_info_t *server,
                         const avs_coap_response_header_t *response,
                         AVS_LIST(const anjay_string_t) *out_endpoint_path) {
     if (response->code != AVS_COAP_CODE_CREATED) {
@@ -538,6 +538,9 @@ check_register_response(const anjay_server_info_t *server,
     anjay_log(INFO, _("registration successful, location = ") "%s",
               assemble_endpoint_path(location_buf, sizeof(location_buf),
                                      *out_endpoint_path));
+#if defined(ANJAY_WITH_COMMUNICATION_TIMESTAMP_API)
+    server->registration_info.last_registration_time = avs_time_real_now();
+#endif // defined(ANJAY_WITH_COMMUNICATION_TIMESTAMP_API)
     return ANJAY_REGISTRATION_SUCCESS;
 }
 
@@ -599,6 +602,10 @@ handle_register_response(anjay_server_info_t *server,
         }
     }
     if (result != ANJAY_REGISTRATION_ERROR_FALLBACK_REQUESTED) {
+        /* We don't update last_registration_time here as it's already
+         * updated in check_register_response() if the registration was
+         * successful.
+         */
         _anjay_server_on_updated_registration(server, result, err);
     }
 }
@@ -914,6 +921,9 @@ on_registration_update_result(anjay_server_info_t *server,
                 should_use_queue_mode(server, old_info->lwm2m_version),
                 move_params);
         update_parameters_cleanup(move_params);
+#if defined(ANJAY_WITH_COMMUNICATION_TIMESTAMP_API)
+        server->registration_info.last_registration_time = avs_time_real_now();
+#endif // defined(ANJAY_WITH_COMMUNICATION_TIMESTAMP_API)
         _anjay_server_on_updated_registration(server, result, err);
         break;
     }
@@ -1138,6 +1148,10 @@ void _anjay_server_ensure_valid_registration(anjay_server_info_t *server) {
         } else if (!needs_update) {
             update_parameters_cleanup(&new_params);
             if (!registration_or_update_in_progress) {
+                /* We don't want to update last_registration_time here becasue
+                 * we are restoring the previous connection and no actuall
+                 * packages were sent to the server
+                 */
                 _anjay_server_on_updated_registration(
                         server, ANJAY_REGISTRATION_SUCCESS, AVS_OK);
 #ifndef ANJAY_WITHOUT_QUEUE_MODE_AUTOCLOSE

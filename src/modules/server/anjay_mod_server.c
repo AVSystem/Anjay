@@ -746,11 +746,15 @@ AVS_LIST(const anjay_ssid_t) anjay_server_get_ssids(anjay_t *anjay_locked) {
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *server_obj =
             _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay), SERVER.oid);
-    server_repr_t *repr = _anjay_serv_get(*server_obj);
-    if (_anjay_dm_transaction_object_included(anjay, server_obj)) {
-        source = repr->saved_instances;
+    server_repr_t *repr = server_obj ? _anjay_serv_get(*server_obj) : NULL;
+    if (!repr) {
+        server_log(WARNING, _("Server object is not registered"));
     } else {
-        source = repr->instances;
+        if (_anjay_dm_transaction_object_included(anjay, server_obj)) {
+            source = repr->saved_instances;
+        } else {
+            source = repr->instances;
+        }
     }
     ANJAY_MUTEX_UNLOCK(anjay_locked);
     // We rely on the fact that the "ssid" field is first in server_instance_t,
@@ -759,6 +763,9 @@ AVS_LIST(const anjay_ssid_t) anjay_server_get_ssids(anjay_t *anjay_locked) {
     // independent from the stored data type, so it's safe to do such "cast".
     AVS_STATIC_ASSERT(offsetof(server_instance_t, ssid) == 0,
                       instance_ssid_is_first_field);
+    if (!source) {
+        return NULL;
+    }
     return &source->ssid;
 }
 
@@ -824,29 +831,35 @@ int anjay_server_object_set_lifetime(anjay_t *anjay_locked,
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const anjay_dm_installed_object_t *server_obj =
             _anjay_dm_find_object_by_oid(_anjay_get_dm(anjay), SERVER.oid);
-    server_repr_t *repr = _anjay_serv_get(*server_obj);
-    if (repr->saved_instances) {
-        server_log(ERROR, _("cannot set Lifetime while some transaction is "
-                            "started on the Server Object"));
+    server_repr_t *repr = server_obj ? _anjay_serv_get(*server_obj) : NULL;
+    if (!repr) {
+        server_log(WARNING, _("Server object is not registered"));
+        result = -1;
     } else {
-        AVS_LIST(server_instance_t) it;
-        AVS_LIST_FOREACH(it, repr->instances) {
-            if (it->iid >= iid) {
-                break;
+        if (repr->saved_instances) {
+            server_log(ERROR, _("cannot set Lifetime while some transaction is "
+                                "started on the Server Object"));
+        } else {
+            AVS_LIST(server_instance_t) it;
+            AVS_LIST_FOREACH(it, repr->instances) {
+                if (it->iid >= iid) {
+                    break;
+                }
             }
-        }
 
-        if (!it || it->iid != iid) {
-            server_log(ERROR, _("instance ") "%" PRIu16 _(" not found"), iid);
-        } else if (it->lifetime != lifetime) {
-            if (_anjay_notify_changed_unlocked(anjay, ANJAY_DM_OID_SERVER,
-                                               it->iid,
-                                               ANJAY_DM_RID_SERVER_LIFETIME)) {
-                server_log(WARNING, _("could not notify lifetime change"));
+            if (!it || it->iid != iid) {
+                server_log(ERROR, _("instance ") "%" PRIu16 _(" not found"),
+                           iid);
+            } else if (it->lifetime != lifetime) {
+                if (_anjay_notify_changed_unlocked(
+                            anjay, ANJAY_DM_OID_SERVER, it->iid,
+                            ANJAY_DM_RID_SERVER_LIFETIME)) {
+                    server_log(WARNING, _("could not notify lifetime change"));
+                }
+                repr->modified_since_persist = true;
+                it->lifetime = lifetime;
+                result = 0;
             }
-            repr->modified_since_persist = true;
-            it->lifetime = lifetime;
-            result = 0;
         }
     }
     ANJAY_MUTEX_UNLOCK(anjay_locked);

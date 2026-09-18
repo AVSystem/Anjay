@@ -258,7 +258,6 @@ Please note that the ``notify_job_args_t`` has additionally been renamed to
             .endpoint_name = argv[1],
             .in_buffer_size = 4000,
             .out_buffer_size = 4000,
-            .msg_cache_size = 4000
         };
 
         anjay_t *anjay = anjay_new(&CONFIG);

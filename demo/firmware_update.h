@@ -35,7 +35,9 @@ typedef struct {
     const char *persistence_file;
     FILE *stream;
     avs_net_security_info_t security_info;
+#ifdef ANJAY_WITH_COAP_DOWNLOAD
     avs_coap_udp_tx_params_t coap_tx_params;
+#endif // ANJAY_WITH_COAP_DOWNLOAD
     avs_time_duration_t tcp_request_timeout;
     bool auto_suspend;
 } fw_update_logic_t;
@@ -44,7 +46,9 @@ int firmware_update_install(anjay_t *anjay,
                             fw_update_logic_t *fw,
                             const char *persistence_file,
                             const avs_net_security_info_t *security_info,
+#ifdef ANJAY_WITH_COAP_DOWNLOAD
                             const avs_coap_udp_tx_params_t *tx_params,
+#endif // ANJAY_WITH_COAP_DOWNLOAD
                             avs_time_duration_t tcp_request_timeout,
                             anjay_fw_update_result_t delayed_result,
                             bool prefer_same_socket_downloads,

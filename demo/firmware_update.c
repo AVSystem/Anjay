@@ -601,6 +601,7 @@ static int fw_get_security_config(void *fw_,
     return 0;
 }
 
+#ifdef ANJAY_WITH_COAP_DOWNLOAD
 static avs_coap_udp_tx_params_t
 fw_get_coap_tx_params(void *fw_, const char *download_uri) {
     fw_update_logic_t *fw = (fw_update_logic_t *) fw_;
@@ -610,6 +611,7 @@ fw_get_coap_tx_params(void *fw_, const char *download_uri) {
     }
     return fw->coap_tx_params;
 }
+#endif // ANJAY_WITH_COAP_DOWNLOAD
 
 static avs_time_duration_t
 fw_get_tcp_request_timeout(void *fw_, const char *download_uri) {
@@ -742,7 +744,9 @@ int firmware_update_install(anjay_t *anjay,
                             fw_update_logic_t *fw,
                             const char *persistence_file,
                             const avs_net_security_info_t *security_info,
+#ifdef ANJAY_WITH_COAP_DOWNLOAD
                             const avs_coap_udp_tx_params_t *tx_params,
+#endif // ANJAY_WITH_COAP_DOWNLOAD
                             avs_time_duration_t tcp_request_timeout,
                             anjay_fw_update_result_t delayed_result,
                             bool prefer_same_socket_downloads,
@@ -761,17 +765,20 @@ int firmware_update_install(anjay_t *anjay,
         FW_UPDATE_HANDLERS.get_security_config = NULL;
     }
 
+#ifdef ANJAY_WITH_COAP_DOWNLOAD
     if (tx_params || auto_suspend) {
         if (tx_params) {
             fw->coap_tx_params = *tx_params;
         } else {
             fw->coap_tx_params = AVS_COAP_DEFAULT_UDP_TX_PARAMS;
         }
-        fw->auto_suspend = auto_suspend;
         FW_UPDATE_HANDLERS.get_coap_tx_params = fw_get_coap_tx_params;
     } else {
         FW_UPDATE_HANDLERS.get_coap_tx_params = NULL;
     }
+#endif // ANJAY_WITH_COAP_DOWNLOAD
+
+    fw->auto_suspend = auto_suspend;
 
     if (avs_time_duration_valid(tcp_request_timeout)) {
         fw->tcp_request_timeout = tcp_request_timeout;

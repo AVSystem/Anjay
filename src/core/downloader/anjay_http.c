@@ -40,6 +40,7 @@ typedef struct {
     avs_url_t *parsed_url;
     avs_stream_t *stream;
     avs_sched_handle_t next_action_job;
+    avs_sched_handle_t reconnect_job_handle;
 
     // State related to download resumption:
     anjay_etag_t *etag;
@@ -373,6 +374,7 @@ static void cleanup_http_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
     anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(ctx->common.dl);
 
     avs_sched_del(&ctx->next_action_job);
+    avs_sched_del(&ctx->reconnect_job_handle);
     AVS_LIST(anjay_download_ctx_t) detached_ctx = AVS_LIST_DETACH(ctx_ptr);
     /**
      * HACK: this is necessary, because the download might be aborted from
@@ -391,6 +393,7 @@ static void cleanup_http_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
 static void suspend_http_transfer(anjay_download_ctx_t *ctx_) {
     anjay_http_download_ctx_t *ctx = (anjay_http_download_ctx_t *) ctx_;
     avs_sched_del(&ctx->next_action_job);
+    avs_sched_del(&ctx->reconnect_job_handle);
     avs_stream_cleanup(&ctx->stream);
 }
 
@@ -405,6 +408,15 @@ reconnect_http_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
         return avs_errno(AVS_ENOMEM);
     }
     return AVS_OK;
+}
+
+static int schedule_http_reconnect(anjay_download_ctx_t *ctx_,
+                                   avs_time_monotonic_t instant) {
+    anjay_http_download_ctx_t *ctx = (anjay_http_download_ctx_t *) ctx_;
+    anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(ctx->common.dl);
+    return AVS_SCHED_AT(anjay->sched, &ctx->reconnect_job_handle, instant,
+                        _anjay_downloader_reconnect_job, &ctx->common.id,
+                        sizeof(ctx->common.id));
 }
 
 static avs_error_t set_next_http_block_offset(anjay_download_ctx_t *ctx_,
@@ -563,6 +575,7 @@ _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
         .cleanup = cleanup_http_transfer,
         .suspend = suspend_http_transfer,
         .reconnect = reconnect_http_transfer,
+        .schedule_reconnect = schedule_http_reconnect,
         .set_next_block_offset = set_next_http_block_offset,
         .is_socket_online_or_retry_in_progress =
                 is_socket_online_or_retry_in_progress

@@ -42,6 +42,7 @@ typedef struct anjay_demo_struct anjay_demo_t;
 #define DEMO_OID_CELL_CONNECTIVITY 10
 #define DEMO_OID_APN_CONN_PROFILE 11
 #define DEMO_OID_EVENT_LOG 20
+#define DEMO_OID_CELL_CONNECTIVITY_DIAGNOSTICS 10511
 #define DEMO_OID_TEST 33605
 #define DEMO_OID_EXT_DEV_INFO 33606
 #define DEMO_OID_IP_PING 33607
@@ -98,6 +99,18 @@ typedef struct {
     size_t server_public_key_size;
 } server_connection_args_t;
 
+typedef struct {
+    int32_t mcc;
+    int32_t mnc;
+    int32_t serving_cell_id;
+    const char *operator_name;
+    bool roaming_status;
+    double rsrp;
+    double rsrq;
+    double rssi;
+    double sinr;
+} cell_connectivity_diagnostics_args_t;
+
 #define DEMO_FOREACH_SERVER_ENTRY(It, ConnArgs)                 \
     for ((It) = &(ConnArgs)->servers[0];                        \
          (It) < &(ConnArgs)->servers[MAX_SERVERS] && (It)->uri; \
@@ -112,7 +125,8 @@ int test_get_instances(const anjay_dm_object_def_t **def,
 void test_notify_time_dependent(anjay_t *anjay,
                                 const anjay_dm_object_def_t **def);
 
-const anjay_dm_object_def_t **cm_object_create(void);
+const anjay_dm_object_def_t **cm_object_create(int32_t network_bearer,
+                                               int32_t location_area_code);
 void cm_object_release(const anjay_dm_object_def_t **def);
 void cm_notify_time_dependent(anjay_t *anjay,
                               const anjay_dm_object_def_t **def);
@@ -143,16 +157,14 @@ const anjay_dm_object_def_t **
 cell_connectivity_object_create(anjay_demo_t *demo);
 void cell_connectivity_object_release(const anjay_dm_object_def_t **def);
 
-const anjay_dm_object_def_t **location_object_create(void);
+const anjay_dm_object_def_t **location_object_create(
+        double latitude, double longitude, bool location_values_provided);
 void location_object_release(const anjay_dm_object_def_t **def);
 void location_notify_time_dependent(anjay_t *anjay,
                                     const anjay_dm_object_def_t **def);
 void location_get(const anjay_dm_object_def_t **def,
                   double *out_latitude,
                   double *out_longitude);
-int location_open_csv(const anjay_dm_object_def_t **def,
-                      const char *file_name,
-                      time_t frequency_s);
 
 const anjay_dm_object_def_t **geopoints_object_create(anjay_demo_t *demo);
 void geopoints_object_release(const anjay_dm_object_def_t **def);
@@ -195,5 +207,10 @@ void accelerometer_add_instance(anjay_t *anjay, anjay_iid_t iid);
 void accelerometer_remove_instance(anjay_t *anjay, anjay_iid_t iid);
 
 int install_push_button_object(anjay_t *anjay);
+
+const anjay_dm_object_def_t **cell_connectivity_diagnostics_object_create(
+        cell_connectivity_diagnostics_args_t *args);
+void cell_connectivity_diagnostics_object_release(
+        const anjay_dm_object_def_t **def);
 
 #endif // DEMO_OBJECTS_H

@@ -5,6 +5,10 @@
 int _standalone_sec_validate_security_mode(int32_t security_mode) {
     switch (security_mode) {
     case ANJAY_SECURITY_NOSEC:
+#ifndef ANJAY_WITH_UNSECURE_CONNECTIONS
+        security_log(ERROR, _("nosec connection not supported"));
+        return ANJAY_ERR_NOT_IMPLEMENTED;
+#endif // ANJAY_WITH_UNSECURE_CONNECTIONS
     case ANJAY_SECURITY_PSK:
     case ANJAY_SECURITY_CERTIFICATE:
     case ANJAY_SECURITY_EST:
@@ -34,8 +38,12 @@ int _standalone_sec_fetch_security_mode(anjay_input_ctx_t *ctx,
 #ifdef ANJAY_WITH_SMS
 int _standalone_sec_validate_sms_security_mode(int32_t security_mode) {
     switch (security_mode) {
-    case ANJAY_SMS_SECURITY_DTLS_PSK:
     case ANJAY_SMS_SECURITY_NOSEC:
+#    ifndef ANJAY_WITH_UNSECURE_CONNECTIONS
+        security_log(ERROR, _("nosec connection not supported"));
+        return ANJAY_ERR_NOT_IMPLEMENTED;
+#    endif // ANJAY_WITH_UNSECURE_CONNECTIONS
+    case ANJAY_SMS_SECURITY_DTLS_PSK:
         return 0;
     case ANJAY_SMS_SECURITY_SECURE_PACKET:
         security_log(DEBUG, _("Secure Packet mode not supported"));

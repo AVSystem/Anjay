@@ -15,7 +15,7 @@ from . import block_write as bw
 class Test:
     class ReadComposite(test_suite.Lwm2mSingleServerTest,
                         test_suite.Lwm2mDmOperations):
-        def setUp(self, inbuf_size=None, outbuf_size=None, extra_cmdline_args=None, **kwargs):
+        def setUp(self, inbuf_size=None, outbuf_size=None, extra_cmdline_args=None, maximum_version='1.1', **kwargs):
             extra_args = extra_cmdline_args
             if extra_args is None:
                 extra_args = []
@@ -24,7 +24,7 @@ class Test:
             if outbuf_size is not None:
                 extra_args += ['-O', str(outbuf_size)]
 
-            super().setUp(maximum_version='1.1', extra_cmdline_args=extra_args, **kwargs)
+            super().setUp(maximum_version=maximum_version, extra_cmdline_args=extra_args, **kwargs)
 
 
 class ReadCompositeSupportedFormats(Test.ReadComposite):
@@ -189,3 +189,11 @@ class ReadCompositeRootPath(Test.ReadComposite):
                                         has_more=False,
                                         block_size=block2.block_size())
             self.serv.send(Lwm2mReadComposite(token=req.token, paths=[], options=[block2]))
+
+class ReadCompositeLwM2M10Rejected(Test.ReadComposite):
+    def setUp(self):
+        super().setUp(maximum_version='1.0')
+
+    def runTest(self):
+        self.read_composite(self.serv, [ResPath.Device.Manufacturer],
+                        expect_error_code=coap.Code.RES_METHOD_NOT_ALLOWED)

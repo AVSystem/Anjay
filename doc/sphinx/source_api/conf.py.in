@@ -291,7 +291,7 @@ breathe_default_project = "Anjay"
 # -- Options for Exhale ----------------------------------------------------
 exhale_args = {
     # Where Exhale should generate the .rst files (inside source_api)
-    "containmentFolder":     "@ANJAY_DOC_SOURCE_API@/api_generated",
+    "containmentFolder":     os.path.realpath("@ANJAY_DOC_SOURCE_API@/api_generated"),
     
     # Name of the main file that serves as the API root
     "rootFileName":          "library_root.rst",
@@ -306,7 +306,7 @@ exhale_args = {
     "createTreeView":        True,
     
     # Important: Tells Exhale what to "strip" from paths to ensure cleaner names
-    "doxygenStripFromPath":  "@DOXYGEN_INPUT_PATHS@/include_public",
+    "doxygenStripFromPath":  os.path.realpath("@DOXYGEN_INPUT_PATHS@/include_public"),
     
     # Section layout configuration
     "exhaleExecutesDoxygen": False, # Set to False because CMake handles Doxygen execution

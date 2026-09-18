@@ -30,6 +30,7 @@ add_custom_command(TARGET tutorial_examples
                         -DWITH_MODULE_advanced_fw_update=ON
                         -DWITH_LWM2M_GATEWAY=ON
                         -DCMAKE_BUILD_TYPE=Debug
+                        -DWITH_UNSECURE_CONNECTIONS=ON
                    COMMAND ${CMAKE_COMMAND} --build . --target install -- -j${NPROC}
                    WORKING_DIRECTORY ${ANJAY_TUTORIALS_ANJAY_BUILD_DIR})
 
@@ -40,6 +41,7 @@ add_custom_command(TARGET tutorial_examples
                         -DCMAKE_PREFIX_PATH="${ANJAY_TUTORIALS_ANJAY_INSTALL_DIR}"
                         -DCMAKE_RUNTIME_OUTPUT_DIRECTORY="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/examples"
                         -DCMAKE_BUILD_TYPE=Debug
+                        -DWITH_UNSECURE_CONNECTIONS=ON
                    COMMAND ${CMAKE_COMMAND} --build . -- -j${NPROC}
                    WORKING_DIRECTORY "${ANJAY_TUTORIALS_BUILD_DIR}")
 
@@ -68,6 +70,7 @@ add_custom_command(TARGET custom_network_examples
                         -DWITH_POSIX_AVS_SOCKET=OFF
                         -DWITHOUT_IP_STICKINESS=ON
                         -DCMAKE_BUILD_TYPE=Debug
+                        -DWITH_UNSECURE_CONNECTIONS=ON
                    COMMAND ${CMAKE_COMMAND} --build . --target install -- -j${NPROC}
                    WORKING_DIRECTORY ${ANJAY_CUSTOM_NETWORK_ANJAY_BUILD_DIR})
 
@@ -78,6 +81,7 @@ add_custom_command(TARGET custom_network_examples
                         -DCMAKE_PREFIX_PATH="${ANJAY_CUSTOM_NETWORK_ANJAY_INSTALL_DIR}"
                         -DCMAKE_RUNTIME_OUTPUT_DIRECTORY="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/examples"
                         -DCMAKE_BUILD_TYPE=Debug
+                        -DWITH_UNSECURE_CONNECTIONS=ON
                    COMMAND ${CMAKE_COMMAND} --build . -- -j${NPROC}
                    WORKING_DIRECTORY "${ANJAY_CUSTOM_NETWORK_BUILD_DIR}")
 
@@ -104,6 +108,7 @@ add_custom_command(TARGET custom_network_ip_stickiness_example
                         -DWITH_DEMO=OFF
                         -DWITH_POSIX_AVS_SOCKET=OFF
                         -DCMAKE_BUILD_TYPE=Debug
+                        -DWITH_UNSECURE_CONNECTIONS=ON
                    COMMAND ${CMAKE_COMMAND} --build . --target install -- -j${NPROC}
                    WORKING_DIRECTORY ${ANJAY_CUSTOM_NETWORK_IP_STICKINESS_ANJAY_BUILD_DIR})
 
@@ -114,6 +119,7 @@ add_custom_command(TARGET custom_network_ip_stickiness_example
                         -DCMAKE_PREFIX_PATH="${ANJAY_CUSTOM_NETWORK_IP_STICKINESS_ANJAY_INSTALL_DIR}"
                         -DCMAKE_RUNTIME_OUTPUT_DIRECTORY="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/examples"
                         -DCMAKE_BUILD_TYPE=Debug
+                        -DWITH_UNSECURE_CONNECTIONS=ON
                    COMMAND ${CMAKE_COMMAND} --build . -- -j${NPROC}
                    WORKING_DIRECTORY "${ANJAY_CUSTOM_NETWORK_IP_STICKINESS_BUILD_DIR}")
 
@@ -145,6 +151,7 @@ if(OPENSSL_FOUND AND NOT OPENSSL_VERSION VERSION_LESS 1.1.0)
                             -DWITH_EVENT_LOOP=ON
                             -DWITH_HTTP_DOWNLOAD=ON
                             -DCMAKE_BUILD_TYPE=Debug
+                            -DWITH_UNSECURE_CONNECTIONS=ON
                        COMMAND ${CMAKE_COMMAND} --build . --target install -- -j${NPROC}
                        WORKING_DIRECTORY ${ANJAY_CUSTOM_TLS_ANJAY_BUILD_DIR})
 
@@ -155,6 +162,7 @@ if(OPENSSL_FOUND AND NOT OPENSSL_VERSION VERSION_LESS 1.1.0)
                             -DCMAKE_PREFIX_PATH="${ANJAY_CUSTOM_TLS_ANJAY_INSTALL_DIR}"
                             -DCMAKE_RUNTIME_OUTPUT_DIRECTORY="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/examples"
                             -DCMAKE_BUILD_TYPE=Debug
+                            -DWITH_UNSECURE_CONNECTIONS=ON
                        COMMAND ${CMAKE_COMMAND} --build . -- -j${NPROC}
                        WORKING_DIRECTORY "${ANJAY_CUSTOM_TLS_BUILD_DIR}")
 

@@ -115,6 +115,15 @@ static inline bool _anjay_was_connection_id_resumed(avs_net_socket_t *socket) {
     return connection_id_resumed.flag;
 }
 
+/*
+ * If the user did not configure default TLS ciphersuites explicitly, use the
+ * built-in Anjay allowlist instead of passing an empty list down to the TLS
+ * backend, where it would mean "use all backend defaults".
+ */
+int _anjay_copy_default_tls_ciphersuites(
+        avs_net_socket_tls_ciphersuites_t *out,
+        const avs_net_socket_tls_ciphersuites_t *configured);
+
 int _anjay_copy_tls_ciphersuites(avs_net_socket_tls_ciphersuites_t *dest,
                                  const avs_net_socket_tls_ciphersuites_t *src);
 

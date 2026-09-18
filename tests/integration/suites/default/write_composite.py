@@ -265,3 +265,17 @@ class WriteCompositeJsonNull(Test.WriteCompositeNull):
             }
         ]
         self.assertEqual(response, expected_response)
+
+class WriteCompositeLwM2M10Rejected(Test.WriteComposite):
+    def setUp(self):
+        super().setUp(maximum_version='1.0')
+
+    def runTest(self):
+        request = [
+            {
+                SenmlLabel.NAME: ResPath.Test[IID].ResInt,
+                SenmlLabel.VALUE: 42
+            }
+        ]
+        self.write_composite(self.serv, content=CBOR.serialize(request),
+                        expect_error_code=coap.Code.RES_METHOD_NOT_ALLOWED)

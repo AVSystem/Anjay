@@ -16,7 +16,6 @@
 #define SCOPED_PTR(Type, Deleter) __attribute__((__cleanup__(Deleter))) Type *
 
 static inline void _anjay_mocksock_expect_stats_zero(avs_net_socket_t *socket) {
-    avs_unit_mocksock_expect_shutdown(socket);
     avs_unit_mocksock_expect_get_opt(socket, AVS_NET_SOCKET_OPT_BYTES_SENT,
                                      (avs_net_socket_opt_value_t) {
                                          .bytes_sent = 0

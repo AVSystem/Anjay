@@ -69,11 +69,6 @@ class Socket {
     // is used and we received a packet from a different endpoint but the
     // connection_id matched.
     std::tuple<std::string, int> client_host_and_port_;
-    // Updated whenever we receive a packet from an endpoint we don't recognize.
-    // It must be there, because at the time of performing recv() we haven't
-    // parsed the packet as TLS record, and we cannot extract the connection_id
-    // (if any) to see if the packet is indeed valid and should be handled.
-    std::tuple<std::string, int> last_recv_host_and_port_;
 
     static int
     bio_send(void *self, const unsigned char *buf, size_t len) noexcept;

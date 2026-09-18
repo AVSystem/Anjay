@@ -564,8 +564,7 @@ AVS_UNIT_TEST(anjay_send, offline_mode) {
     anjay_unlocked->servers->registration_info.lwm2m_version =
             ANJAY_LWM2M_VERSION_1_1;
 
-    avs_unit_mocksock_expect_shutdown(mocksocks[0]);
-    avs_net_socket_shutdown(mocksocks[0]);
+    avs_unit_mocksock_expect_mid_close(mocksocks[0]);
     avs_net_socket_close(mocksocks[0]);
     // Mark UDP transport as offline - otherwise the server entry would be
     // considered suspended for queue mode and the Send would be deferred.

@@ -1006,7 +1006,7 @@ AVS_UNIT_TEST(queue_mode, change) {
     ASSERT_NOT_NULL(connection->queue_mode_close_socket_clb);
 
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
-    avs_unit_mocksock_expect_shutdown(mocksocks[0]);
+    avs_unit_mocksock_expect_mid_close(mocksocks[0]);
     anjay_sched_run(anjay);
 
     ASSERT_NULL(anjay_get_sockets(anjay));
@@ -1208,7 +1208,7 @@ AVS_UNIT_TEST(reconnect_after_update, test) {
     force_update(anjay, mocksocks[0]);
 
     AVS_UNIT_ASSERT_SUCCESS(anjay_schedule_registration_update(anjay, 1));
-    avs_unit_mocksock_expect_shutdown(mocksocks[0]);
+    avs_unit_mocksock_expect_mid_close(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(
             anjay_transport_schedule_reconnect(anjay, ANJAY_TRANSPORT_SET_ALL));
 
@@ -1298,7 +1298,6 @@ static void make_server_inactive(anjay_t *anjay,
     _anjay_mock_dm_expect_list_instances(anjay, &FAKE_SERVER, -1,
                                          (const anjay_iid_t[]) {
                                                  ANJAY_ID_INVALID });
-    avs_unit_mocksock_expect_shutdown(mocksock);
 #ifdef ANJAY_WITH_NET_STATS
     avs_unit_mocksock_expect_get_opt(mocksock, AVS_NET_SOCKET_OPT_BYTES_SENT,
                                      (avs_net_socket_opt_value_t) {
@@ -1335,7 +1334,7 @@ AVS_UNIT_TEST(reconnect_server, failures) {
 
 AVS_UNIT_TEST(reconnect_server, fresh_session) {
     DM_REGISTER_TEST_INIT_WITH_SSIDS(1);
-    avs_unit_mocksock_expect_shutdown(mocksocks[0]);
+    avs_unit_mocksock_expect_mid_close(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_server_schedule_reconnect(anjay, 1));
     expect_refresh_server(anjay,
                           .with_reconnect = RECONNECT_SUSPENDED);
@@ -1361,7 +1360,7 @@ AVS_UNIT_TEST(reconnect_server, fresh_session) {
 
 AVS_UNIT_TEST(reconnect_server, resumed_session) {
     DM_REGISTER_TEST_INIT_WITH_SSIDS(1);
-    avs_unit_mocksock_expect_shutdown(mocksocks[0]);
+    avs_unit_mocksock_expect_mid_close(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_server_schedule_reconnect(anjay, 1));
     expect_refresh_server(anjay);
     avs_unit_mocksock_expect_connect(mocksocks[0], "", "");
@@ -1402,7 +1401,7 @@ AVS_UNIT_TEST(schedule_register, active_server) {
 
 AVS_UNIT_TEST(schedule_register, reconnect_and_register) {
     DM_REGISTER_TEST_INIT_WITH_SSIDS(1);
-    avs_unit_mocksock_expect_shutdown(mocksocks[0]);
+    avs_unit_mocksock_expect_mid_close(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_server_schedule_reconnect(anjay, 1));
     AVS_UNIT_ASSERT_SUCCESS(anjay_schedule_register(anjay, 1));
     expect_refresh_server(anjay);
@@ -1429,7 +1428,7 @@ AVS_UNIT_TEST(schedule_register, reconnect_and_register) {
 AVS_UNIT_TEST(schedule_register, register_and_reconnect) {
     DM_REGISTER_TEST_INIT_WITH_SSIDS(1);
     AVS_UNIT_ASSERT_SUCCESS(anjay_schedule_register(anjay, 1));
-    avs_unit_mocksock_expect_shutdown(mocksocks[0]);
+    avs_unit_mocksock_expect_mid_close(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_server_schedule_reconnect(anjay, 1));
     expect_refresh_server(anjay);
     avs_unit_mocksock_expect_connect(mocksocks[0], "", "");

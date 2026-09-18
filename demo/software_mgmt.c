@@ -832,7 +832,9 @@ int sw_mgmt_install(anjay_t *anjay,
 #ifdef ANJAY_WITH_DOWNLOADER
                     ,
                     avs_net_security_info_t *security_info,
+#    ifdef ANJAY_WITH_COAP_DOWNLOAD
                     avs_coap_udp_tx_params_t *tx_params,
+#    endif // ANJAY_WITH_COAP_DOWNLOAD
                     avs_time_duration_t *tcp_request_timeout,
                     bool auto_suspend
 #endif // ANJAY_WITH_DOWNLOADER
@@ -853,13 +855,16 @@ int sw_mgmt_install(anjay_t *anjay,
         g_handlers.get_security_config = NULL;
     }
 
+#    ifdef ANJAY_WITH_COAP_DOWNLOAD
     if (tx_params || auto_suspend) {
-        sw_mgmt_common->auto_suspend = auto_suspend;
         sw_mgmt_common->coap_tx_params = tx_params;
         g_handlers.get_coap_tx_params = sw_mgmt_get_coap_tx_params;
     } else {
         g_handlers.get_coap_tx_params = NULL;
     }
+#    endif // ANJAY_WITH_COAP_DOWNLOAD
+
+    sw_mgmt_common->auto_suspend = auto_suspend;
 
     if (tcp_request_timeout && avs_time_duration_valid(*tcp_request_timeout)) {
         sw_mgmt_common->tcp_request_timeout = tcp_request_timeout;

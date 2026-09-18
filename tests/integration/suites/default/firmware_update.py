@@ -571,6 +571,24 @@ class FirmwareUpdate:
                                    str(fw_max_retransmit)]
             super().setUp(extra_cmdline_args=extra_cmdline_args)
 
+        def wait_for_retry(self, attempt_number, timeout_s=10):
+            self.assertIsNotNone(self.read_log_until_match(
+                regex=re.escape(
+                    ('retrying download 1, attempt number %d, with delay %s'
+                     % (attempt_number, self.coap_downloader_retry_delay)).encode()),
+                timeout_s=timeout_s))
+            return time.monotonic() + self.coap_downloader_retry_delay
+
+        def assert_no_download_packets(self, server, timeout_s):
+            raw_socket = server._raw_udp_socket
+            timeout = raw_socket.gettimeout()
+            try:
+                raw_socket.settimeout(timeout_s)
+                with self.assertRaises(socket.timeout):
+                    raw_socket.recv(65536, socket.MSG_PEEK)
+            finally:
+                raw_socket.settimeout(timeout)
+
     class CoapsDownloaderRetry(
             CoapDownloaderRetryMixIn,
             TestWithPartialCoapsDownloadAndRestart):
@@ -2040,6 +2058,149 @@ class FirmwareUpdateCoapsResumptionScheduledForceReconnect(
             1 > self.coap_downloader_retry_delay)
 
 
+class FirmwareUpdateCoapsRepeatedReconnectDuringPendingRetry(
+        FirmwareUpdate.CoapsDownloaderRetry):
+    RETRY_COUNT = 2
+
+    def setUp(self):
+        super().setUp(retry_count=self.RETRY_COUNT, retry_delay=5,
+                      extra_cmdline_args=['--fwu-ack-timeout', '1',
+                                          '--fwu-ack-random-factor', '1'])
+
+    def force_reconnects(self, retry_deadline):
+        # Keep a deadline shift observable with the one-second timing tolerance.
+        time.sleep(2)
+        # Failed API reconnects must not consume the pending retry, even if
+        # they outnumber the retry budget.
+        for _ in range(self.RETRY_COUNT + 1):
+            self.assertIsNotNone(self.communicate(
+                'fw-update-reconnect', timeout=3,
+                match_regex='could not connect socket for download id = 1'))
+            self.assertEqual(UpdateState.DOWNLOADING, self.read_state())
+            self.assertEqual(UpdateResult.INITIAL, self.read_update_result())
+        self.assertLess(time.monotonic(), retry_deadline - 1)
+
+    def runTest(self):
+        self.write_firmware_uri_expect_success(self.fw_uri)
+        self.wait_for_half_download()
+
+        with self.file_server as file_server:
+            # Keep the port reserved while making the server unreachable via ICMP.
+            with file_server._server.fake_close():
+                retry_deadline = self.wait_for_retry(1)
+                self.force_reconnects(retry_deadline)
+
+            # Let the original retry recover the download without another API call.
+            file_server._server.reset()
+            raw_socket = file_server._server._raw_udp_socket
+            timeout = raw_socket.gettimeout()
+            try:
+                raw_socket.settimeout(self.coap_downloader_retry_delay + 1)
+                self.assertPktIsDtlsClientHello(
+                    raw_socket.recv(65536, socket.MSG_PEEK))
+                self.assertAlmostEqual(time.monotonic(), retry_deadline, delta=1)
+            finally:
+                raw_socket.settimeout(timeout)
+
+        self.wait_for_download()
+        self.assertEqual(UpdateResult.INITIAL, self.read_update_result())
+        with open(self.fw_file_name, 'rb') as firmware:
+            self.assertEqual(firmware.read(), self.FIRMWARE_SCRIPT_CONTENT)
+
+    def tearDown(self):
+        # Check the firmware in runTest so a failure still cleans up the demo.
+        super().tearDown(check_fw_file=False)
+
+
+class FirmwareUpdateCoapsRepeatedReconnectDuringPendingRetryExhaustsBudget(
+        FirmwareUpdateCoapsRepeatedReconnectDuringPendingRetry):
+    def runTest(self):
+        self.write_firmware_uri_expect_success(self.fw_uri)
+        self.wait_for_half_download()
+
+        with self.file_server as file_server:
+            with file_server._server.fake_close():
+                retry_deadline = self.wait_for_retry(1)
+                self.force_reconnects(retry_deadline)
+
+                # Stop forcing reconnects. Only the remaining automatic attempts
+                # may run; reconnect must not have reset or increased the budget.
+                next_deadline = self.wait_for_retry(
+                    2, timeout_s=self.coap_downloader_retry_delay + 1)
+                self.assertAlmostEqual(
+                    next_deadline - self.coap_downloader_retry_delay,
+                    retry_deadline, delta=1)
+                self.assertEqual(UpdateState.DOWNLOADING, self.read_state())
+                self.assertEqual(UpdateResult.INITIAL, self.read_update_result())
+
+                self.wait_until_state_is(
+                    UpdateState.IDLE, timeout_s=self.coap_downloader_retry_delay + 2)
+                self.assertAlmostEqual(time.monotonic(), next_deadline, delta=1)
+                self.assertEqual(UpdateResult.CONNECTION_LOST, self.read_update_result())
+            file_server._server.reset()
+            self.assert_no_download_packets(
+                file_server._server, self.coap_downloader_retry_delay + 1)
+
+
+class FirmwareUpdateCoapsSuspendDuringInterruptedRetry(
+        FirmwareUpdate.CoapsDownloaderRetry):
+    CANCEL_DOWNLOAD = False
+
+    def setUp(self):
+        super().setUp(retry_count=2, retry_delay=5,
+                      extra_cmdline_args=['--fwu-ack-timeout', '1',
+                                          '--fwu-ack-random-factor', '1'])
+
+    def runTest(self):
+        self.write_firmware_uri_expect_success(self.fw_uri)
+        self.wait_for_half_download()
+
+        with self.file_server as file_server:
+            with file_server._server.fake_close():
+                retry_deadline = self.wait_for_retry(1)
+
+            file_server._server.reset()
+            self.assertIsNotNone(self.communicate('fw-update-reconnect'))
+            file_server._server.listen(timeout_s=5)
+            request = file_server._server.recv(timeout_s=5)
+            self.assertEqual(coap.Code.REQ_GET, request.code)
+            self.assertEqual(self.PATH, request.get_uri_path())
+            self.assertGreater(request.get_options(coap.Option.BLOCK2)[0].seq_num(), 0)
+
+            # The handshake succeeded, but GET is unanswered, so the interrupted
+            # retry is still saved when suspend/cancel is requested.
+            if self.CANCEL_DOWNLOAD:
+                self.write_firmware_uri_expect_success('')
+                expected_state = UpdateState.IDLE
+            else:
+                self.assertIsNotNone(self.communicate('fw-update-suspend'))
+                expected_state = UpdateState.DOWNLOADING
+            self.assertEqual(expected_state, self.read_state())
+            self.assertEqual(UpdateResult.INITIAL, self.read_update_result())
+            self.assertLess(time.monotonic(), retry_deadline)
+
+            # Reset DTLS to detect traffic even if a stale job opens a new socket.
+            file_server._server.reset()
+            self.assert_no_download_packets(
+                file_server._server, retry_deadline - time.monotonic() + 1)
+            self.assertEqual(expected_state, self.read_state())
+            self.assertEqual(UpdateResult.INITIAL, self.read_update_result())
+
+        if not self.CANCEL_DOWNLOAD:
+            self.assertIsNotNone(self.communicate('fw-update-reconnect'))
+            self.wait_for_download()
+            with open(self.fw_file_name, 'rb') as firmware:
+                self.assertEqual(firmware.read(), self.FIRMWARE_SCRIPT_CONTENT)
+
+    def tearDown(self):
+        super().tearDown(check_fw_file=False)
+
+
+class FirmwareUpdateCoapsCancelDuringInterruptedRetry(
+        FirmwareUpdateCoapsSuspendDuringInterruptedRetry):
+    CANCEL_DOWNLOAD = True
+
+
 class FirmwareUpdateCoapsResumptionScheduledOfflineModeDifferentTransportTest(
         FirmwareUpdate.CoapsDownloaderRetry):
     def runTest(self):
@@ -3496,6 +3657,51 @@ class FirmwareDownloadSameSocketResumptionTimeoutSocket(
         self.handle_get(dl_req_get)
 
         self.assertEqual(self.read_state(), UpdateState.DOWNLOADED)
+
+
+class FirmwareDownloadSameSocketRepeatedReconnectDuringPendingRetry(
+        FirmwareUpdate.CoapDownloaderRetryMixIn,
+        SameSocketDownload.Test):
+    ACK_TIMEOUT = 1
+    DEF_MAX_RETRANSMIT = 0
+    RETRY_COUNT = 2
+
+    def setUp(self):
+        # Allow three one-second GET timeouts plus time for LwM2M reads.
+        super().setUp(retry_count=self.RETRY_COUNT, retry_delay=8,
+                      extra_cmdline_args=[])
+
+    def runTest(self):
+        self.start_download()
+        self.handle_get()
+        expected_get = CoapGet(FIRMWARE_PATH, options=[
+            coap.Option.BLOCK2(seq_num=1, has_more=False, block_size=self.BLK_SZ)])
+        request = self.serv.recv()
+        self.assertMsgEqual(expected_get, request)
+        retry_deadline = self.wait_for_retry(1)
+
+        # Keep the shared DTLS connection and LwM2M server available, but ignore
+        # firmware GETs. Failures must reach the downloader response callback.
+        for _ in range(self.RETRY_COUNT + 1):
+            self.assertIsNotNone(self.communicate('fw-update-reconnect'))
+            next_request = self.serv.recv(timeout_s=3)
+            self.assertMsgEqual(expected_get, next_request)
+            self.assertNotEqual(next_request.token, request.token)
+            request = next_request
+            self.assertIsNotNone(self.read_log_until_match(
+                regex=re.escape(b'download failed: timeout'), timeout_s=3))
+            self.assertEqual(UpdateState.DOWNLOADING, self.read_state())
+            self.assertEqual(UpdateResult.INITIAL, self.read_result())
+        self.assertLess(time.monotonic(), retry_deadline - 1)
+
+        request = self.serv.recv(timeout_s=retry_deadline - time.monotonic() + 1)
+        self.assertAlmostEqual(time.monotonic(), retry_deadline, delta=1)
+        self.assertMsgEqual(expected_get, request)
+        self.handle_get(request)
+        for _ in range(2, self.num_blocks()):
+            self.handle_get()
+        self.assertEqual(UpdateState.DOWNLOADED, self.read_state())
+        self.assertEqual(UpdateResult.INITIAL, self.read_result())
 
 
 class FirmwareDownloadSameSocketResumptionDownloadAbortInduceByOtherOperation(

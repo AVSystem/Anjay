@@ -36,7 +36,7 @@ fi
 rm -rf "$PROJECT_ROOT/build/coverage"
 mkdir -p "$PROJECT_ROOT/build/coverage"
 pushd "$PROJECT_ROOT/build/coverage"
-    "$PROJECT_ROOT/devconfig" --without-analysis --without-memcheck --no-examples -DCMAKE_C_FLAGS="-std=c99 -D_POSIX_C_SOURCE=200809L -g -O0 --coverage" -DCMAKE_EXE_LINKER_FLAGS="--coverage" "$@"
+    "$PROJECT_ROOT/devconfig" --without-memcheck --no-examples -DCMAKE_C_FLAGS="-std=c99 -D_POSIX_C_SOURCE=200809L -g -O0 --coverage" -DCMAKE_EXE_LINKER_FLAGS="--coverage" "$@"
     make anjay_check -j$(num_processors)
     mkdir -p "$PROJECT_ROOT/coverage"
     lcov $LCOV_ADDITIONAL_OPTS -c -d . -o coverage.info --gcov-tool /usr/bin/gcov-$GCC_MAJOR_VERSION

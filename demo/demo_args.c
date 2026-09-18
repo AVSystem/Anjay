@@ -60,11 +60,25 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
         .lifetime = 86400,
         .security_mode = ANJAY_SECURITY_NOSEC
     },
-    .location_csv = NULL,
-    .location_update_frequency_s = 1,
+    .latitude = 0.0,
+    .longitude = 0.0,
+    .location_values_provided = false,
+    .cell_connectivity_diagnostics_args = {
+        .mcc = 0,
+        .mnc = 0,
+        .serving_cell_id = 0,
+        .operator_name = NULL,
+        .roaming_status = false,
+        .rsrp = 0.0,
+        .rsrq = 0.0,
+        .rssi = 0.0,
+        .sinr = 0.0
+    },
+    .network_bearer = 0,
+    .location_area_code = 0,
     .inbuf_size = 4000,
     .outbuf_size = 4000,
-    .msg_cache_size = 0,
+    .msg_cache_size = 4000,
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
 #    if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
             && defined(AVS_COMMONS_STREAM_WITH_FILE)
@@ -506,8 +520,6 @@ static void print_help_full(const struct option *options) {
         { 'L', "MAX_NOTIFICATIONS", "0",
           "set limit of queued notifications in queue/offline mode. 0: "
           "unlimited; >0: keep that much newest ones" },
-        { 'c', "CSV_FILE", NULL, "file to load location CSV from" },
-        { 'f', "SECONDS", "1", "location update frequency in seconds" },
         { 'p', "PORT", NULL, "bind all sockets to the specified UDP port." },
         { 'i', "PSK identity (psk mode) or Public Certificate (cert mode)",
           NULL, "Both are specified as hexlified strings" },
@@ -625,7 +637,7 @@ static void print_help_full(const struct option *options) {
           "server." },
 #endif // ANJAY_WITH_LWM2M11
         { 277, NULL, NULL, "Enables DTLS connection_id extension." },
-        { 278, "CIPHERSUITE[,CIPHERSUITE...]", "TLS library defaults",
+        { 278, "CIPHERSUITE[,CIPHERSUITE...]", "Anjay defaults",
           "Sets the ciphersuites to be used by default for (D)TLS "
           "connections." },
 #ifdef ANJAY_WITH_LWM2M11
@@ -837,6 +849,40 @@ static void print_help_full(const struct option *options) {
           "Configures Initial Registration Delay Timer for the last "
           "configured server" },
 #endif // ANJAY_WITH_LWM2M11
+        { 360, "LATITUDE", "0.0", "Initial latitude" },
+        { 361, "LONGITUDE", "0.0", "Initial longitude" },
+        { 362, "MCC", "0",
+          "Initial MCC, reported by Cellular Connectivity Diagnostics object" },
+        { 363, "MNC", "0",
+          "Initial MNC, reported by Cellular Connectivity Diagnostics object" },
+        { 364, "SERVING CELL ID", "0",
+          "Initial Serving Cell ID, reported by Cellular Connectivity "
+          "Diagnostics object" },
+        { 365, "Operator Name", NULL,
+          "Initial Operator Name, reported by Cellular Connectivity "
+          "Diagnostics "
+          "object" },
+        { 366, "ROAMING STATUS", "0",
+          "Initial Roaming status, reported by Cellular Connectivity "
+          "Diagnostics object" },
+        { 367, "RSRP", "0.0",
+          "Initial RSRP, reported by Cellular Connectivity Diagnostics "
+          "object" },
+        { 368, "RSRQ", "0.0",
+          "Initial RSRQ, reported by Cellular Connectivity Diagnostics "
+          "object" },
+        { 369, "RSSI", "0.0",
+          "Initial RSSI, reported by Cellular Connectivity Diagnostics "
+          "object" },
+        { 370, "SINR", "0.0",
+          "Initial SINR, reported by Cellular Connectivity Diagnostics "
+          "object" },
+        { 371, "LAC", "0",
+          "Initial Location Area Code, reported by Connectivity Monitoring "
+          "object" },
+        { 372, "NETWORK BEARER", "0",
+          "Initial Network Bearer, reported by Connectivity Monitoring "
+          "object" },
     };
 
     const size_t screen_width = get_screen_width();
@@ -1117,8 +1163,6 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
 #endif // _WIN32
         { "lifetime",                      required_argument, 0, 'l' },
         { "stored-notification-limit",     required_argument, 0, 'L' },
-        { "location-csv",                  required_argument, 0, 'c' },
-        { "location-update-freq-s",        required_argument, 0, 'f' },
         { "port",                          required_argument, 0, 'p' },
         { "identity",                      required_argument, 0, 'i' },
         { "client-cert-file",              required_argument, 0, 'C' },
@@ -1265,6 +1309,19 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
 #ifdef ANJAY_WITH_LWM2M11
         { "initial-registration-delay-timer", required_argument, 0, 358 },
 #endif // ANJAY_WITH_LWM2M11
+        { "latitude", required_argument, 0, 360 },
+        { "longitude", required_argument, 0, 361 },
+        { "mcc", required_argument, 0, 362 },
+        { "mnc", required_argument, 0, 363 },
+        { "serving-cell-id", required_argument, 0, 364 },
+        { "operator-name", required_argument, 0, 365 },
+        { "roaming-status", required_argument, 0, 366 },
+        { "rsrp", required_argument, 0, 367 },
+        { "rsrq", required_argument, 0, 368 },
+        { "rssi", required_argument, 0, 369 },
+        { "sinr", required_argument, 0, 370 },
+        { "lac", required_argument, 0, 371 },
+        { "network-bearer", required_argument, 0, 372 },
         { 0, 0, 0, 0 }
         // clang-format on
     };
@@ -1401,21 +1458,6 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                 goto finish;
             }
             break;
-        case 'c':
-            parsed_args->location_csv = optarg;
-            break;
-        case 'f': {
-            long freq;
-            if (demo_parse_long(optarg, &freq) || freq <= 0
-                    || freq > INT32_MAX) {
-                demo_log(ERROR, "invalid location update frequency: %s",
-                         optarg);
-                goto finish;
-            }
-
-            parsed_args->location_update_frequency_s = (time_t) freq;
-            break;
-        }
         case 'p': {
             long port;
             if (demo_parse_long(optarg, &port) || port <= 0
@@ -1547,8 +1589,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             }
             break;
         case '$':
-            if (parse_i32(optarg, &parsed_args->msg_cache_size)
-                    || parsed_args->msg_cache_size < 0) {
+            if (parse_size(optarg, &parsed_args->msg_cache_size)) {
                 goto finish;
             }
             break;
@@ -2350,6 +2391,121 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             break;
         }
 #endif // ANJAY_WITH_LWM2M11
+        case 360: {
+            if (parse_double(optarg, &parsed_args->latitude)) {
+                demo_log(ERROR,
+                         "Expected LATITUDE to be a floating point number");
+                goto finish;
+            }
+            parsed_args->location_values_provided = true;
+            break;
+        }
+        case 361: {
+            if (parse_double(optarg, &parsed_args->longitude)) {
+                demo_log(ERROR,
+                         "Expected LONGITUDE to be a floating point number");
+                goto finish;
+            }
+            parsed_args->location_values_provided = true;
+            break;
+        }
+        case 362: {
+            if (parse_i32(
+                        optarg,
+                        &parsed_args->cell_connectivity_diagnostics_args.mcc)) {
+                demo_log(ERROR, "Expected MCC to be an integer");
+                goto finish;
+            }
+            break;
+        }
+        case 363: {
+            if (parse_i32(
+                        optarg,
+                        &parsed_args->cell_connectivity_diagnostics_args.mnc)) {
+                demo_log(ERROR, "Expected MNC to be an integer");
+                goto finish;
+            }
+            break;
+        }
+        case 364: {
+            if (parse_i32(optarg,
+                          &parsed_args->cell_connectivity_diagnostics_args
+                                   .serving_cell_id)) {
+                demo_log(ERROR, "Expected Serving Cell ID to be an integer");
+                goto finish;
+            }
+            break;
+        }
+        case 365: {
+            if (!optarg || !*optarg) {
+                demo_log(ERROR,
+                         "Expected Operator Name to be a non-empty string");
+                goto finish;
+            }
+            parsed_args->cell_connectivity_diagnostics_args.operator_name =
+                    optarg;
+            break;
+        }
+        case 366: {
+            int32_t roaming_status;
+            if (parse_i32(optarg, &roaming_status)) {
+                demo_log(ERROR, "Expected Roaming Status to be an integer");
+                goto finish;
+            }
+            parsed_args->cell_connectivity_diagnostics_args.roaming_status =
+                    (bool) roaming_status;
+            break;
+        }
+        case 367: {
+            if (parse_double(optarg,
+                             &parsed_args->cell_connectivity_diagnostics_args
+                                      .rsrp)) {
+                demo_log(ERROR, "Expected RSRP to be a number");
+                goto finish;
+            }
+            break;
+        }
+        case 368: {
+            if (parse_double(optarg,
+                             &parsed_args->cell_connectivity_diagnostics_args
+                                      .rsrq)) {
+                demo_log(ERROR, "Expected RSRQ to be a number");
+                goto finish;
+            }
+            break;
+        }
+        case 369: {
+            if (parse_double(optarg,
+                             &parsed_args->cell_connectivity_diagnostics_args
+                                      .rssi)) {
+                demo_log(ERROR, "Expected RSSI to be a number");
+                goto finish;
+            }
+            break;
+        }
+        case 370: {
+            if (parse_double(optarg,
+                             &parsed_args->cell_connectivity_diagnostics_args
+                                      .sinr)) {
+                demo_log(ERROR, "Expected SINR to be a number");
+                goto finish;
+            }
+            break;
+        }
+        case 371: {
+            if (parse_i32(optarg, &parsed_args->location_area_code)) {
+                demo_log(ERROR, "Expected Location Area Code to be an integer");
+                goto finish;
+            }
+            break;
+        }
+        case 372: {
+            if (parse_i32(optarg, &parsed_args->network_bearer)) {
+                demo_log(ERROR, "Expected Network Bearer to be an integer");
+                goto finish;
+            }
+            break;
+        }
         case 0:
             goto process;
         }

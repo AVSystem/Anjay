@@ -61,9 +61,8 @@ the TLS/DTLS handshake, depending on this setting, Anjay behaves as follows:
 
         If the "Server Public Key" **is empty**, Anjay falls back to PKIX
         verification if a trust store is available. If neither the DM key nor a trust
-        store is provided, Anjay **does not validate** the server certificate for
-        Certificate Usage 2 and will connect to the server. Consider the security
-        impact before relying on this mode.
+        store is provided, Anjay **will not allow** establishing connection with
+        the server.
 
 - DANE-EE (3 – Domain-issued certificate)
     Anjay skips PKIX chain building and compares the handshake leaf directly to
@@ -76,9 +75,8 @@ the TLS/DTLS handshake, depending on this setting, Anjay behaves as follows:
 
         If the "Server Public Key" **is empty**, Anjay falls back to PKIX when
         verification if a trust store is available. If neither the DM key nor a trust
-        store is provided, Anjay **does not validate** the server certificate for
-        Certificate Usage 3 and will connect to the server. Consider the security
-        impact before relying on this mode.
+        store is provided, Anjay **will not allow** establishing connection with
+        the server.
 
 .. important:: 
 
@@ -101,6 +99,4 @@ When the "Server Public Key" resource is empty, Anjay behaves as follows:
 
 - No trust store:
 
-    - Usage 0/1: Reject the connection (PKIX cannot be performed).
-
-    - Usage 2/3: Accept the connection without server certificate validation (as exercised in tests). Carefully assess the security risks of operating in this mode.
+    - Anjay doesn't try to establish connection with the server.

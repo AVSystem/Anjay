@@ -1342,6 +1342,11 @@ AVS_UNIT_TEST(dm_write, multiple_resource_second_instance_not_found) {
 #ifdef ANJAY_WITH_LWM2M11
 AVS_UNIT_TEST(dm_write_composite, write_to_resource_of_nonexistent_instance) {
     DM_TEST_INIT;
+    // force lwm2m version 1.1 to allow write-composite operation to be tested
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    anjay_unlocked->servers->registration_info.lwm2m_version =
+            ANJAY_LWM2M_VERSION_1_1;
+    ANJAY_MUTEX_UNLOCK(anjay);
     static const char PAYLOAD[] = "\x81\xa2\x00\x67"
                                   "/42/1/2"
                                   "\x02\x18\x2a";
@@ -4384,3 +4389,57 @@ AVS_UNIT_TEST(dm_res_read, u64_array_multiple_elements) {
     DM_TEST_FINISH;
 }
 #endif // ANJAY_WITH_LWM2M11
+
+// LwM2M 1.1 is enabled but 1.0 is negotiated, Anjay recognizes the operation
+// but responds with METHOD_NOT_ALLOWED.
+AVS_UNIT_TEST(dm_composite, read_without_lwm2m11) {
+    DM_TEST_INIT;
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    anjay_unlocked->servers->registration_info.lwm2m_version =
+            ANJAY_LWM2M_VERSION_1_0;
+    ANJAY_MUTEX_UNLOCK(anjay);
+    DM_TEST_REQUEST(mocksocks[0], CON, FETCH, ID(0xFA3E),
+                    CONTENT_FORMAT(SENML_CBOR),
+                    PAYLOAD("\x81\xa1\x00\x68"
+                            "/42/69/4"));
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, METHOD_NOT_ALLOWED, ID(0xFA3E),
+                            NO_PAYLOAD);
+    expect_has_buffered_data_check(mocksocks[0], false);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(dm_composite, write_without_lwm2m11) {
+    DM_TEST_INIT;
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    anjay_unlocked->servers->registration_info.lwm2m_version =
+            ANJAY_LWM2M_VERSION_1_0;
+    ANJAY_MUTEX_UNLOCK(anjay);
+    DM_TEST_REQUEST(mocksocks[0], CON, IPATCH, ID(0xFA3E),
+                    CONTENT_FORMAT(SENML_CBOR),
+                    PAYLOAD("\x81\xa2\x00\x68"
+                            "/42/69/4"
+                            "\x02\x18\x2a"));
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, METHOD_NOT_ALLOWED, ID(0xFA3E),
+                            NO_PAYLOAD);
+    expect_has_buffered_data_check(mocksocks[0], false);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(dm_composite, observe_without_lwm2m11) {
+    DM_TEST_INIT;
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    anjay_unlocked->servers->registration_info.lwm2m_version =
+            ANJAY_LWM2M_VERSION_1_0;
+    ANJAY_MUTEX_UNLOCK(anjay);
+    DM_TEST_REQUEST(mocksocks[0], CON, FETCH, ID_TOKEN(0xFA3E, "composit"),
+                    OBSERVE(0), CONTENT_FORMAT(SENML_CBOR),
+                    PAYLOAD("\x81\xa1\x00\x68"
+                            "/42/69/4"));
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, METHOD_NOT_ALLOWED,
+                            ID_TOKEN(0xFA3E, "composit"), NO_PAYLOAD);
+    expect_has_buffered_data_check(mocksocks[0], false);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+    DM_TEST_FINISH;
+}

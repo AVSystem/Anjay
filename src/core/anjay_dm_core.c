@@ -855,6 +855,18 @@ static int invoke_action(anjay_connection_ref_t connection,
 
 int _anjay_dm_perform_action(anjay_connection_ref_t connection,
                              const anjay_request_t *request) {
+    // Reject composite operation if negotiated LwM2M version is lower than 1.1.
+    if ((request->action == ANJAY_ACTION_READ_COMPOSITE
+         || request->action == ANJAY_ACTION_WRITE_COMPOSITE)
+#ifdef ANJAY_WITH_LWM2M11
+            && _anjay_server_registration_info(connection.server)->lwm2m_version
+                           < ANJAY_LWM2M_VERSION_1_1
+#endif // ANJAY_WITH_LWM2M11
+    ) {
+        dm_log(ERROR, _("Composite operations require LwM2M 1.1 or later"));
+        return ANJAY_ERR_METHOD_NOT_ALLOWED;
+    }
+
     const anjay_dm_installed_object_t *obj = NULL;
 
     if (_anjay_uri_path_has(&request->uri, ANJAY_ID_OID)) {
@@ -875,7 +887,7 @@ int _anjay_dm_perform_action(anjay_connection_ref_t connection,
 
         if (!(obj = _anjay_dm_find_object_by_oid(
                       dm, request->uri.ids[ANJAY_ID_OID]))) {
-            dm_log(DEBUG, _("Object not found: ") DM_LOG_PREFIX "/%u",
+            dm_log(ERROR, _("Object not found: ") DM_LOG_PREFIX "/%u",
                    DM_LOG_PREFIX_ARG(request->uri.prefix)
                            request->uri.ids[ANJAY_ID_OID]);
             return ANJAY_ERR_NOT_FOUND;
@@ -886,7 +898,7 @@ int _anjay_dm_perform_action(anjay_connection_ref_t connection,
                 && request->action != ANJAY_ACTION_WRITE_COMPOSITE)
 #endif // ANJAY_WITH_LWM2M11
     {
-        dm_log(DEBUG, _("at least Object ID must be present in Uri-Path"));
+        dm_log(ERROR, _("at least Object ID must be present in Uri-Path"));
         return ANJAY_ERR_BAD_REQUEST;
     }
 

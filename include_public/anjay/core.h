@@ -358,6 +358,13 @@ typedef void anjay_ssl_error_cb_t(void *arg,
 #endif // ANJAY_WITH_SSL_ERROR_API
 
 /**
+ * Default size of the message cache for incoming UDP CoAP messages.
+ * This limit is combined for all servers, and is used if the @ref
+ * anjay_configuration_t::msg_cache_size is set to NULL.
+ */
+#define ANJAY_DEFAULT_MESSAGE_CACHE_SIZE 4000
+
+/**
  * @experimental This is experimental SSL error callback API. This API
  *               can change in future versions without any notice.
  *
@@ -419,14 +426,18 @@ typedef struct anjay_configuration {
     size_t out_buffer_size;
 
     /**
-     * Number of bytes reserved for caching CoAP responses. If not 0,
-     * the library looks up recently generated responses and reuses them
-     * to handle retransmitted packets (ones with identical CoAP message ID).
+     * Pointer to the number of bytes reserved for caching CoAP responses.
+     * It must be either NULL or point to a valid size_t variable. If NULL,
+     * the library sets the default value of 4000 bytes.
+     *
+     * If NULL or pointed value is not 0, the library looks up recently
+     * generated responses and reuses them to handle retransmitted packets (ones
+     * with identical CoAP message ID).
      *
      * NOTE: while a single cache is used for all LwM2M servers, cached
      * responses are tied to a particular server and not reused for other ones.
      */
-    size_t msg_cache_size;
+    size_t *msg_cache_size;
 
     /**
      * Socket configuration to use when creating TCP/UDP sockets.
@@ -581,8 +592,11 @@ typedef struct anjay_configuration {
      * (D)TLS ciphersuites to use if the "DTLS/TLS Ciphersuite" Resource
      * (/0/x/16) is not available or empty.
      *
-     * Passing a value with <c>num_ids == 0</c> (default) will cause defaults of
-     * the TLS backend library to be used.
+     * Passing a value with <c>num_ids == 0</c> (default) and lack of the
+     * /0/x/16 Resource will cause Anjay to use its built-in default ciphersuite
+     * list. This list contains only ciphersuites considered suitable for
+     * general use by Anjay. It may be narrower than the set of ciphersuites
+     * supported by the TLS backend library.
      *
      * Contents of the <c>ids</c> array are copied, so it is safe to free the
      * passed array after the call to @ref anjay_new.
@@ -1207,8 +1221,8 @@ int anjay_event_loop_run(anjay_t *anjay, avs_time_duration_t max_wait_time);
 
 /**
  * Act same as @ref anjay_event_loop_run, but when none of the configured
- * servers could be reached, try to reconnect using function @ref
- * anjay_transport_schedule_reconnect.
+ * servers could be reached, try to reconnect each Server Object instance using
+ * function @ref anjay_server_schedule_reconnect.
  *
  * @param anjay         Anjay object to operate on.
  * @param max_wait_time Maximum time to spend in each single call to
@@ -1383,7 +1397,7 @@ int anjay_schedule_bootstrap_request(anjay_t *anjay);
  * @param ssid  Short Server ID of the server to put in a disabled state.
  *              NOTE: disabling a server requires a Server Object Instance
  *              to be present for given @p ssid . Because the Bootstrap Server
- *              does not have one, this function does nothing when called with
+ *              does not have one, this function fails when called with
  *              @ref ANJAY_SSID_BOOTSTRAP .
  *
  * @returns 0 on success, a negative value in case of error.
@@ -1411,7 +1425,8 @@ int anjay_disable_server(anjay_t *anjay, anjay_ssid_t ssid);
  * @param timeout Disable timeout. If set to @c AVS_TIME_DURATION_INVALID,
  *                the server will remain disabled until explicit call to
  *                @ref anjay_enable_server . Otherwise, the server will get
- *                enabled automatically after @p timeout .
+ *                enabled automatically after @p timeout . This function fails
+ *                when called with @ref ANJAY_SSID_BOOTSTRAP .
  *
  * @returns 0 on success, a negative value in case of error.
  */
@@ -1423,6 +1438,9 @@ int anjay_disable_server_with_timeout(anjay_t *anjay,
  * Schedules a job for re-enabling a previously disabled (with a call to
  * @ref anjay_disable_server_with_timeout ) server. The server will be enabled
  * during next @ref anjay_sched_run call.
+ *
+ * This function fails when called with ssid == @ref ANJAY_SSID_BOOTSTRAP .
+ * Use @ref anjay_schedule_bootstrap_request instead.
  *
  * @param anjay Anjay object to operate on.
  * @param ssid  Short Server ID of the server to enable.
@@ -1444,6 +1462,9 @@ int anjay_enable_server(anjay_t *anjay, anjay_ssid_t ssid);
  *
  * If the server is in a disabled state, an error will be returned. Use
  * @ref anjay_enable_server if you want to re-enable such a server.
+ *
+ * This function fails when called with ssid == @ref ANJAY_SSID_BOOTSTRAP .
+ * Use @ref anjay_schedule_bootstrap_request instead.
  *
  * @param anjay Anjay object to operate on.
  * @param ssid  Short Server ID of the server to reconnect.
@@ -2123,6 +2144,7 @@ bool anjay_has_unsent_notifications(anjay_t *anjay, anjay_ssid_t ssid);
 bool anjay_transport_has_unsent_notifications(
         anjay_t *anjay, anjay_transport_set_t transport_set);
 
+#ifdef WITH_AVS_COAP_UDP
 /**
  * Changes transmission parameters for given transports.
  *
@@ -2140,6 +2162,7 @@ avs_error_t
 anjay_update_transport_tx_params(anjay_t *anjay,
                                  anjay_transport_set_t transport_set,
                                  const avs_coap_udp_tx_params_t *tx_params);
+#endif // WITH_AVS_COAP_UDP
 
 /**
  * Changes the CoAP exchange update timeout for given transports.
@@ -2174,8 +2197,8 @@ avs_error_t anjay_update_dtls_handshake_timeouts(
 
 #ifdef ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
 /**
- * Gets the time at which the client has registered successfully to a given
- * LwM2M server for the last time.
+ * Gets the time at which the client most recently completed a successful
+ * registration or registration update operation with a given LwM2M Server.
  *
  * @param anjay         Anjay object to operate on.
  *

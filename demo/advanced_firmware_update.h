@@ -72,7 +72,9 @@ struct advanced_fw_update_logic {
     const char *persistence_file;
     FILE *stream;
     avs_net_security_info_t security_info;
+#ifdef ANJAY_WITH_COAP_DOWNLOAD
     avs_coap_udp_tx_params_t coap_tx_params;
+#endif // ANJAY_WITH_COAP_DOWNLOAD
     avs_time_duration_t tcp_request_timeout;
     bool auto_suspend;
     int (*check_yourself)(struct advanced_fw_update_logic *);
@@ -86,7 +88,9 @@ int advanced_firmware_update_application_install(
         advanced_fw_update_logic_t *fw_logic,
         anjay_advanced_fw_update_initial_state_t *init_state,
         const avs_net_security_info_t *security_info,
+#ifdef ANJAY_WITH_COAP_DOWNLOAD
         const avs_coap_udp_tx_params_t *tx_params,
+#endif // ANJAY_WITH_COAP_DOWNLOAD
         avs_time_duration_t tcp_request_timeout,
         bool auto_suspend);
 int advanced_firmware_update_app_perform(advanced_fw_update_logic_t *fw);
@@ -115,7 +119,9 @@ int advanced_firmware_update_install(
         advanced_fw_update_logic_t *fw_table,
         const char *persistence_file,
         const avs_net_security_info_t *security_info,
+#ifdef ANJAY_WITH_COAP_DOWNLOAD
         const avs_coap_udp_tx_params_t *tx_params,
+#endif // ANJAY_WITH_COAP_DOWNLOAD
         avs_time_duration_t tcp_request_timeout,
         anjay_advanced_fw_update_result_t delayed_result,
         bool prefer_same_socket_downloads,

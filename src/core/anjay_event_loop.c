@@ -26,6 +26,8 @@
 
 #    include <anjay_init.h>
 
+#    include <anjay/server.h>
+
 #    include "anjay_core.h"
 
 VISIBILITY_SOURCE_BEGIN
@@ -264,8 +266,12 @@ static int event_loop_run_with_error_handling(anjay_t *anjay_locked,
 
             if (enable_error_handling) {
                 if (anjay_all_connections_failed(anjay_locked)) {
-                    anjay_transport_schedule_reconnect(anjay_locked,
-                                                       ANJAY_TRANSPORT_SET_ALL);
+                    AVS_LIST(const anjay_ssid_t) ssids =
+                            anjay_server_get_ssids(anjay_locked);
+                    const anjay_ssid_t *ssid;
+                    AVS_LIST_FOREACH(ssid, ssids) {
+                        anjay_server_schedule_reconnect(anjay_locked, *ssid);
+                    }
                 }
             }
         }

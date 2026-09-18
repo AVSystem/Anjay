@@ -34,21 +34,25 @@ typedef struct {
 } standalone_transport_info_t;
 
 static const standalone_transport_info_t TRANSPORTS[] = {
+#ifdef ANJAY_WITH_UNSECURE_CONNECTIONS
     {
         .transport = ANJAY_SOCKET_TRANSPORT_UDP,
         .uri_scheme = "coap",
         .security = STANDALONE_TRANSPORT_NOSEC
     },
+#endif // ANJAY_WITH_UNSECURE_CONNECTIONS
     {
         .transport = ANJAY_SOCKET_TRANSPORT_UDP,
         .uri_scheme = "coaps",
         .security = STANDALONE_TRANSPORT_ENCRYPTED
     },
+#ifdef ANJAY_WITH_UNSECURE_CONNECTIONS
     {
         .transport = ANJAY_SOCKET_TRANSPORT_TCP,
         .uri_scheme = "coap+tcp",
         .security = STANDALONE_TRANSPORT_NOSEC
     },
+#endif // ANJAY_WITH_UNSECURE_CONNECTIONS
     {
         .transport = ANJAY_SOCKET_TRANSPORT_TCP,
         .uri_scheme = "coaps+tcp",
@@ -60,11 +64,13 @@ static const standalone_transport_info_t TRANSPORTS[] = {
         .security = STANDALONE_TRANSPORT_SECURITY_UNDEFINED
     },
 #ifdef ANJAY_WITH_LWM2M11
+#    ifdef ANJAY_WITH_UNSECURE_CONNECTIONS
     {
         .transport = ANJAY_SOCKET_TRANSPORT_NIDD,
         .uri_scheme = "coap+nidd",
         .security = STANDALONE_TRANSPORT_NOSEC
     },
+#    endif // ANJAY_WITH_UNSECURE_CONNECTIONS
     {
         .transport = ANJAY_SOCKET_TRANSPORT_NIDD,
         .uri_scheme = "coaps+nidd",

@@ -285,28 +285,6 @@ static void cmd_sw_mgmt_reconnect(anjay_demo_t *demo, const char *args_string) {
 }
 #endif // ANJAY_WITH_MODULE_SW_MGMT
 
-static void cmd_open_location_csv(anjay_demo_t *demo, const char *args_string) {
-    const anjay_dm_object_def_t **location_obj =
-            demo_find_object(demo, DEMO_OID_LOCATION);
-    if (!location_obj) {
-        demo_log(ERROR, "Location object not registered");
-        return;
-    }
-
-    char *filename = (char *) avs_malloc(strlen(args_string) + 1);
-    if (!filename) {
-        demo_log(ERROR, "Out of memory");
-        return;
-    }
-    filename[0] = '\0';
-    unsigned long frequency_s = 1;
-    sscanf(args_string, "%s %lu", filename, &frequency_s);
-    if (!location_open_csv(location_obj, filename, (time_t) frequency_s)) {
-        demo_log(INFO, "Successfully opened CSV file");
-    }
-    avs_free(filename);
-}
-
 static size_t count_servers(const server_connection_args_t *args) {
     size_t num_servers = 0;
     const server_entry_t *server;
@@ -1440,6 +1418,7 @@ static void cmd_push_button_release(anjay_demo_t *demo,
     anjay_ipso_button_update(demo->anjay, iid, false);
 }
 
+#ifdef ANJAY_WITH_COAP_DOWNLOAD
 static void cmd_set_tx_params(anjay_demo_t *demo, const char *args_string) {
     avs_coap_udp_tx_params_t tx_params;
     double ack_timeout_s;
@@ -1462,6 +1441,7 @@ static void cmd_set_tx_params(anjay_demo_t *demo, const char *args_string) {
 
     anjay_update_transport_tx_params(demo->anjay, transport_set, &tx_params);
 }
+#endif // ANJAY_WITH_COAP_DOWNLOAD
 
 static void cmd_set_coap_exchange_timeout(anjay_demo_t *demo,
                                           const char *args_string) {
@@ -1716,9 +1696,6 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 "Reconnects any ongoing PULL-mode downloads in the Software Management module"
                 "and if PULL-mode downloads are suspended, resumes normal operation"),
 #endif // ANJAY_WITH_MODULE_SW_MGMT
-    CMD_HANDLER("open-location-csv", "filename frequency=1",
-                cmd_open_location_csv,
-                "Opens a CSV file and starts using it for location information"),
     CMD_HANDLER("add-server", "uri",
                 cmd_add_server, "Adds another LwM2M Server to connect to"),
     CMD_HANDLER("trim-servers", "number",
@@ -1880,10 +1857,12 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 "postponed to be sent later for any server (if no arguments "
                 "specified), a given server (if numeric SSID argument given) "
                 "or a given set of transports (if transport names given)"),
+#ifdef ANJAY_WITH_COAP_DOWNLOAD
     CMD_HANDLER("set-tx-param", "transport ack_timeout ack_random_factor "
                 "max_retransmit nstart", cmd_set_tx_params,
                 "Sets transmission parameters for a given transport. Available "
                 "transports are sms, udp and nidd."),
+#endif // ANJAY_WITH_COAP_DOWNLOAD
     CMD_HANDLER("set-coap-exchange-timeout", "transport timeout",
                 cmd_set_coap_exchange_timeout,
                 "Sets maximal length of the CoAP exchange."),
@@ -1892,9 +1871,9 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
 #ifdef ANJAY_WITH_COMMUNICATION_TIMESTAMP_API
     CMD_HANDLER("last-registration-time", "[SSID]",
                 cmd_last_registration_time,
-                "Displays time of the last registration operation with any "
-                "server (if no argument specified) or a given server (if "
-                "numeric SSID argument given)."),
+                "Displays time of the last registration or registration update "
+                "operation with any server (if no argument specified) or a "
+                "given server (if numeric SSID argument given)."),
     CMD_HANDLER("next-update-time", "[SSID]",
                 cmd_next_update_time,
                 "Displays time when next update operation is scheduled for "

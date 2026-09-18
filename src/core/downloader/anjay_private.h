@@ -28,6 +28,8 @@ typedef struct {
     void (*cleanup)(AVS_LIST(anjay_download_ctx_t) *ctx_ptr);
     void (*suspend)(anjay_download_ctx_t *ctx);
     avs_error_t (*reconnect)(AVS_LIST(anjay_download_ctx_t) *ctx_ptr);
+    int (*schedule_reconnect)(anjay_download_ctx_t *ctx,
+                              avs_time_monotonic_t instant);
     avs_error_t (*set_next_block_offset)(anjay_download_ctx_t *ctx,
                                          size_t next_block_offset);
     bool (*is_socket_online_or_retry_in_progress)(
@@ -39,7 +41,6 @@ typedef struct {
 
     anjay_downloader_t *dl;
     uintptr_t id;
-    avs_sched_handle_t reconnect_job_handle;
 
     anjay_download_next_block_handler_t *on_next_block;
     anjay_download_finished_handler_t *on_download_finished;
@@ -62,8 +63,6 @@ void _anjay_downloader_abort_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr,
                                       anjay_download_status_t status);
 
 void _anjay_downloader_reconnect_job(avs_sched_t *sched, const void *id_ptr);
-
-int _anjay_downloader_sched_reconnect_ctx(anjay_download_ctx_t *ctx);
 
 avs_error_t
 _anjay_downloader_call_on_next_block(anjay_download_ctx_common_t *ctx,

@@ -9,9 +9,22 @@
 
 from framework_tools.lwm2m.tlv import TLV
 from framework.lwm2m_test import *
+from suites.default import security
 
 
 class BootstrapHoldoff:
+    def read_bootstrap_schedule_time(self, holdoff, jitter_random_factor):
+        match = self.read_log_until_match(rb'Scheduling bootstrap in (\d+\.\d+)', timeout_s=1.0)
+        if match is None:
+            raise self.failureException(
+                f'Bootstrap not scheduled with holdoff {holdoff}-{holdoff * jitter_random_factor} sec')
+        scheduled_time = float(match.group(1))
+
+        self.assertGreaterEqual(scheduled_time, holdoff)
+        self.assertLessEqual(scheduled_time, holdoff * jitter_random_factor)
+
+        return scheduled_time
+
     class Test(test_suite.Lwm2mTest):
         # Write for just a Security object but without Server Object
         BS_WRITE = Lwm2mWrite('/%d/42' % (OID.Security,),
@@ -92,17 +105,8 @@ class BootstrapHoldoff:
                                 self.bootstrap_server.recv())
         
         def verify_bootstrap_schedule_time(self, holdoff, jitter_random_factor):
-            match = self.read_log_until_match(rb'Scheduling bootstrap in (\d+\.\d+)', timeout_s=1.0)
-            if match is None:
-                raise self.failureException(
-                    f'Bootstrap not scheduled with holdoff {holdoff}-{holdoff * jitter_random_factor} sec')
-            scheduled_time = float(match.group(1))
-
-            self.assertGreaterEqual(scheduled_time, holdoff)
-            self.assertLessEqual(scheduled_time, holdoff * jitter_random_factor)
-
+            scheduled_time = BootstrapHoldoff.read_bootstrap_schedule_time(self, holdoff, jitter_random_factor)
             self.receive_bs_req(scheduled_time)
-
 
 class BootstrapInitialHoldOffTimeToBig(BootstrapHoldoff.Test):
     def setUp(self):
@@ -258,3 +262,5 @@ class BootstrapWrongURISchemeIsRejected(BootstrapHoldoff.Test):
         self.send_bs_finish(coap.Code.RES_NOT_ACCEPTABLE)
 
         self.request_demo_shutdown()
+
+

@@ -32,6 +32,7 @@ set(SOURCES
     objects/ipso_objects.c
     objects/location.c
     objects/portfolio.c
+    objects/cell_connectivity_diagnostics.c
     objects/test.c)
 
 if(WITH_DEMO_USE_STANDALONE_OBJECTS)

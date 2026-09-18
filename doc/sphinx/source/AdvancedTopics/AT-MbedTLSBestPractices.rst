@@ -44,7 +44,7 @@ If CID enabling succeeds, Anjay will print a message like the following during t
 
 .. code-block:: none
 
-    DEBUG [avs_net] [../anj_mbedtls_socket.c]: negotiated CID = 0011223344556677
+    DEBUG [avs_net] [../avs_mbedtls_socket.c]: negotiated CID = 0011223344556677
 
 RNG source
 ^^^^^^^^^^
@@ -84,9 +84,15 @@ Cipher Suites
 The list of cipher suites used during the TLS handshake can be configured using 
 ``anjay_configuration_t::default_tls_ciphersuites`` field. They must be specified as an array of
 16-bit integers in big-endian order. For example, ``TLS_PSK_WITH_AES_128_CCM_8``
-is represented as ``0xC0A8``. If Mbed TLS configuration does not include the corresponding cipher suite,
-it will be ignored. ``default_tls_ciphersuites`` is used only when the ``DTLS/TLS Ciphersuite`` Resource
-(``/0/x/16``) is not available or empty.
+is represented as ``0xC0A8``.
+
+If Mbed TLS configuration does not include the corresponding cipher suite,
+it will be ignored. ``default_tls_ciphersuites`` is used only when the
+``DTLS/TLS Ciphersuite`` Resource (``/0/x/16``) is not available or empty.
+If neither ``/0/x/16`` nor ``default_tls_ciphersuites`` is configured, Anjay uses its
+built-in default cipher suite list. This list is intentionally limited to cipher
+suites considered suitable for LwM2M deployments, and may be narrower than the set of
+cipher suites supported by the Mbed TLS build.
 
 As a best practice, configure only cipher suites that are considered secure and
 are required by the target LwM2M Server. Avoid offering every cipher suite

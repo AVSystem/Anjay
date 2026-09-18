@@ -493,19 +493,25 @@ static int fw_list_resources(anjay_unlocked_t *anjay,
 
 static const int32_t SUPPORTED_PROTOCOLS[] = {
 #    ifdef WITH_AVS_COAP_UDP
-    0, /* CoAP */
+#        ifdef ANJAY_WITH_UNSECURE_CONNECTIONS
+    0,         /* CoAP */
+#        endif // ANJAY_WITH_UNSECURE_CONNECTIONS
 #        ifndef AVS_COMMONS_WITHOUT_TLS
     1,         /* CoAPS */
 #        endif // AVS_COMMONS_WITHOUT_TLS
 #    endif     // WITH_AVS_COAP_UDP
 #    ifdef ANJAY_WITH_HTTP_DOWNLOAD
-    2, /* HTTP 1.1 */
+#        ifdef ANJAY_WITH_UNSECURE_CONNECTIONS
+    2,         /* HTTP 1.1 */
+#        endif // ANJAY_WITH_UNSECURE_CONNECTIONS
 #        ifndef AVS_COMMONS_WITHOUT_TLS
     3,         /* HTTPS 1.1 */
 #        endif // AVS_COMMONS_WITHOUT_TLS
 #    endif     // ANJAY_WITH_HTTP_DOWNLOAD
 #    ifdef WITH_AVS_COAP_TCP
-    4, /* CoAP over TCP */
+#        ifdef ANJAY_WITH_UNSECURE_CONNECTIONS
+    4,         /* CoAP over TCP */
+#        endif // ANJAY_WITH_UNSECURE_CONNECTIONS
 #        ifndef AVS_COMMONS_WITHOUT_TLS
     5,         /* CoAP over TLS */
 #        endif // AVS_COMMONS_WITHOUT_TLS
@@ -593,9 +599,11 @@ transport_security_from_protocol(const char *protocol) {
 #        endif // ANJAY_WITH_COAP_DOWNLOAD
 
 #        ifdef ANJAY_WITH_HTTP_DOWNLOAD
+#            ifdef ANJAY_WITH_UNSECURE_CONNECTIONS
     if (avs_strcasecmp(protocol, "http") == 0) {
         return ANJAY_TRANSPORT_NOSEC;
     }
+#            endif // ANJAY_WITH_UNSECURE_CONNECTIONS
     if (avs_strcasecmp(protocol, "https") == 0) {
         return ANJAY_TRANSPORT_ENCRYPTED;
     }

@@ -191,7 +191,6 @@ We invoke it in ``main.c`` by performing two (highlighted) modifications:
             .endpoint_name = ENDPOINT_NAME,
             .in_buffer_size = 4000,
             .out_buffer_size = 4000,
-            .msg_cache_size = 4000
         };
 
         anjay_t *anjay = anjay_new(&CONFIG);
