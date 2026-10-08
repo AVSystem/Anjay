@@ -1220,9 +1220,9 @@ void anjay_sched_run(anjay_t *anjay);
 int anjay_event_loop_run(anjay_t *anjay, avs_time_duration_t max_wait_time);
 
 /**
- * Act same as @ref anjay_event_loop_run, but when none of the configured
- * servers could be reached, try to reconnect each Server Object instance using
- * function @ref anjay_server_schedule_reconnect.
+ * Acts like @ref anjay_event_loop_run, but schedules new activation attempts
+ * when all configured LwM2M server connections have failed. Dedicated download
+ * sockets are not reconnected by this recovery mechanism.
  *
  * @param anjay         Anjay object to operate on.
  * @param max_wait_time Maximum time to spend in each single call to
@@ -1285,12 +1285,12 @@ int anjay_event_loop_interrupt(anjay_t *anjay);
  * This is intended as a building block for custom event loops. In particular,
  * this code:
  *
- * <code>
+ * @code
  * while (true) {
  *     anjay_serve_any(anjay, max_wait_time);
  *     anjay_sched_run(anjay);
  * }
- * </code>
+ * @endcode
  *
  * is equivalent to <c>anjay_event_loop_run(anjay, max_wait_time)</c>, as long
  * as @ref anjay_event_loop_interrupt is never called.
@@ -1614,18 +1614,19 @@ int anjay_transport_schedule_reconnect(anjay_t *anjay,
                                        anjay_transport_set_t transport_set);
 
 /**
- * Tests if Anjay gave up on any further server connection attempts. It will
- * happen if none of the configured servers could be reached.
+ * Tests whether all configured LwM2M server connections have failed.
  *
- * If this function returns <c>true</c>, it means that Anjay is in an
- * essentially non-operational state. @ref anjay_transport_schedule_reconnect
- * may be called to reset the failure state for the specified transports.
- * Alternatively, @ref anjay_enable_server may be used to retry connection only
- * to a specific server.
+ * If this function returns <c>true</c>,
+ * @ref anjay_transport_schedule_reconnect may be called to retry connections
+ * over the specified transports. Alternatively, @ref anjay_enable_server may
+ * be used to retry connection only to a specific server.
+ * @ref anjay_event_loop_run_with_error_handling also schedules new activation
+ * attempts automatically.
  *
  * @param anjay Anjay object to operate on.
  *
- * @returns 0 on success, a negative value in case of error.
+ * @returns <c>true</c> if all configured server connections have failed,
+ *          <c>false</c> otherwise, including when no servers are configured.
  */
 bool anjay_all_connections_failed(anjay_t *anjay);
 

@@ -287,6 +287,9 @@ breathe_projects = {
     "Anjay": "@ANJAY_SOURCE_DIR@/output/doc/doxygen/xml"
 }
 breathe_default_project = "Anjay"
+# dm.h contains a C designated initializer; other headers expose AVS_LIST<>
+# declarations that Breathe's default C++ parser handles better.
+breathe_domain_by_file_pattern = {"*/anjay/dm.h": "c"}
 
 # -- Options for Exhale ----------------------------------------------------
 exhale_args = {
@@ -304,6 +307,8 @@ exhale_args = {
     
     # Creates a tree-like menu structure (similar to Zephyr documentation)
     "createTreeView":        True,
+    # Keep generated HTML lines below Docutils' reStructuredText line limit.
+    "minifyTreeView":        False,
     
     # Important: Tells Exhale what to "strip" from paths to ensure cleaner names
     "doxygenStripFromPath":  os.path.realpath("@DOXYGEN_INPUT_PATHS@/include_public"),

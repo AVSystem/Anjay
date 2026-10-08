@@ -137,6 +137,8 @@ DocSourceErrors = collections.namedtuple('DocSourceErrors',
 
 class SnippetSourceLintBuilder(DummyBuilder):
     name = 'snippet_source_lint'
+    # write_doc() accumulates errors in this builder for finish() to report.
+    allow_parallel = False
 
     def __init__(self, *args, **kwargs):
         super(SnippetSourceLintBuilder, self).__init__(*args, **kwargs)
@@ -214,3 +216,9 @@ class SnippetSourceLintBuilder(DummyBuilder):
 
 def setup(app):
     app.add_builder(SnippetSourceLintBuilder)
+    # Document reading has no shared state. This builder writes serially, and
+    # registering it does not affect parallel writing by other builders.
+    return {
+        'parallel_read_safe': True,
+        'parallel_write_safe': True,
+    }

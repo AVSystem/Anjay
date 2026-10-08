@@ -1,5 +1,21 @@
 # Changelog
 
+## 3.15.2 (October 8th, 2026)
+
+### Bugfixes
+
+- Fix a faulty flow of restoring persisted EST state that could cause removing
+  HSM objects references
+- Fixed automatic server reactivation in
+  `anjay_event_loop_run_with_error_handling()` after all LwM2M server
+  connections fail.
+
+## 3.15.1 (September 28th, 2026)
+
+### Bugfixes
+- Fix a typo in the source code of one of the commercial features that prevented
+  Anjay from compiling.
+
 ## 3.15.0 (September 18th, 2026)
 
 ### BREAKING CHANGES

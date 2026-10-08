@@ -1319,6 +1319,84 @@ static void make_server_inactive(anjay_t *anjay,
                          >= 1000);
 }
 
+#ifdef ANJAY_WITH_EVENT_LOOP
+typedef struct {
+    anjay_t *anjay;
+    bool reactivation_was_scheduled;
+} event_loop_test_state_t;
+
+static void check_and_interrupt_event_loop_job(avs_sched_t *sched,
+                                               const void *state_ptr) {
+    (void) sched;
+    event_loop_test_state_t *state =
+            *(event_loop_test_state_t *const *) state_ptr;
+    ANJAY_MUTEX_LOCK(anjay_unlocked, state->anjay);
+    anjay_server_info_t *server = _anjay_servers_find(anjay_unlocked, 1);
+    AVS_UNIT_ASSERT_NOT_NULL(server);
+    state->reactivation_was_scheduled = !!server->next_action_handle;
+    if (state->reactivation_was_scheduled) {
+        AVS_UNIT_ASSERT_EQUAL(server->next_action,
+                              ANJAY_SERVER_NEXT_ACTION_REFRESH);
+    }
+    // The test observes the scheduled action without running another refresh.
+    avs_sched_del(&server->next_action_handle);
+    ANJAY_MUTEX_UNLOCK(state->anjay);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_event_loop_interrupt(state->anjay));
+}
+
+static void advance_mock_clock_job(avs_sched_t *sched, const void *unused) {
+    (void) sched;
+    (void) unused;
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_MS));
+}
+
+static void test_event_loop_with_failed_server(bool handle_errors) {
+    DM_REGISTER_TEST_INIT_WITH_SSIDS(1);
+    make_server_inactive(anjay, 1, mocksocks[0]);
+    AVS_UNIT_ASSERT_TRUE(anjay_all_connections_failed(anjay));
+
+    event_loop_test_state_t state = {
+        .anjay = anjay
+    };
+    event_loop_test_state_t *state_ptr = &state;
+    // The first scheduler run only advances the mock clock; the delayed job
+    // can then inspect recovery and interrupt during the next loop pass.
+    // - First scheduler run advances time
+    // - Event loop then schedules error handling for "now" but based on the
+    //   advanced time
+    // - Second scheduler run executes check_and_interrupt_event_loop_job()
+    //   as it was already scheduled by the call below and is first in queue,
+    //   before error handling job
+    AVS_UNIT_ASSERT_SUCCESS(AVS_SCHED_NOW(anjay_get_scheduler(anjay), NULL,
+                                          advance_mock_clock_job, NULL, 0));
+    AVS_UNIT_ASSERT_SUCCESS(AVS_SCHED_DELAYED(
+            anjay_get_scheduler(anjay), NULL,
+            avs_time_duration_from_scalar(1, AVS_TIME_MS),
+            check_and_interrupt_event_loop_job, &state_ptr, sizeof(state_ptr)));
+    if (handle_errors) {
+        AVS_UNIT_ASSERT_SUCCESS(anjay_event_loop_run_with_error_handling(
+                anjay, AVS_TIME_DURATION_ZERO));
+    } else {
+        AVS_UNIT_ASSERT_SUCCESS(
+                anjay_event_loop_run(anjay, AVS_TIME_DURATION_ZERO));
+    }
+
+    // The interrupt job runs in the second pass, after recovery has had a
+    // chance to schedule activation in the first pass.
+    AVS_UNIT_ASSERT_EQUAL(state.reactivation_was_scheduled, handle_errors);
+    AVS_UNIT_ASSERT_EQUAL(anjay_all_connections_failed(anjay), !handle_errors);
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(event_loop, failed_server_without_error_handling) {
+    test_event_loop_with_failed_server(false);
+}
+
+AVS_UNIT_TEST(event_loop, failed_server_with_error_handling) {
+    test_event_loop_with_failed_server(true);
+}
+#endif // ANJAY_WITH_EVENT_LOOP
+
 AVS_UNIT_TEST(reconnect_server, failures) {
     DM_REGISTER_TEST_INIT_WITH_SSIDS(1);
     // ANJAY_SSID_ANY

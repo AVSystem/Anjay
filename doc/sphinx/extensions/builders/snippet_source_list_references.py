@@ -13,6 +13,8 @@ from snippet_source import SnippetSourceNode
 
 class SnippetSourceListReferencesBuilder(DummyBuilder):
     name = 'snippet_source_list_references'
+    # write_doc() accumulates paths in this builder for finish() to print.
+    allow_parallel = False
 
     def __init__(self, *args, **kwargs):
         super(SnippetSourceListReferencesBuilder, self).__init__(*args, **kwargs)
@@ -32,3 +34,9 @@ class SnippetSourceListReferencesBuilder(DummyBuilder):
 
 def setup(app):
     app.add_builder(SnippetSourceListReferencesBuilder)
+    # Document reading has no shared state. This builder writes serially, and
+    # registering it does not affect parallel writing by other builders.
+    return {
+        'parallel_read_safe': True,
+        'parallel_write_safe': True,
+    }

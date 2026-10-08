@@ -1165,7 +1165,7 @@ typedef struct {
  * require active polling by the client application. A naive implementation
  * could look more or less like this (pseudocode):
  *
- * <code>
+ * @code
  * status = anjay_resource_observation_status(anjay, oid, iid, rid);
  * if (status.is_observed
  *         && current_time >= last_check_time + status.min_period) {
@@ -1175,14 +1175,17 @@ typedef struct {
  *     }
  *     last_check_time = current_time;
  * }
- * </code>
+ * @endcode
  *
  * However, please note that such implementation may not be strictly conformant
- * to the LwM2M specification. For example, in the following case:
+ * to the LwM2M specification. The timeline below shows a state change between
+ * resource reads:
  *
- * [time] --|--------|-*------|-->     | - intervals between resource reads
- *          |<------>|                 * - point in time when underlying state
- *          min_period                     actually changes
+ * @verbatim
+[time] --|--------|-*------|-->     | - intervals between resource reads
+         |<------>|                 * - point in time when underlying state
+         min_period                     actually changes
+@endverbatim
  *
  * the specification would require the notification to be sent exactly at the
  * time of the (*) event, but with this naive implementation, will be delayed

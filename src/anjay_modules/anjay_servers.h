@@ -111,6 +111,8 @@ int _anjay_schedule_disable_server_with_explicit_timeout_unlocked(
  */
 int _anjay_enable_server_unlocked(anjay_unlocked_t *anjay, anjay_ssid_t ssid);
 
+int _anjay_schedule_reactivate_all_given_up(anjay_unlocked_t *anjay);
+
 #ifdef ANJAY_WITH_CONN_STATUS_API
 /**
  * Set suspending flag for the server specified by the ssid argument.

@@ -94,3 +94,6 @@ tools/codechecker/standard_analysis/reports/*
 tools/codechecker/standard_analysis/diff_*
 tools/codechecker/cppcheck_analysis/reports/*
 tools/codechecker/cppcheck_analysis/diff_*
+
+# codex skills
+.codex

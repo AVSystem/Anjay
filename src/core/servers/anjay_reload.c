@@ -8,6 +8,7 @@
  */
 
 #include <anjay_init.h>
+#include <anjay_modules/anjay_servers.h>
 
 #include <inttypes.h>
 
@@ -389,7 +390,7 @@ int anjay_transport_schedule_reconnect(anjay_t *anjay_locked,
                 }
             }
         }
-        result = _anjay_servers_sched_reactivate_all_given_up(anjay);
+        result = _anjay_schedule_reactivate_all_given_up(anjay);
 #ifdef ANJAY_WITH_DOWNLOADER
         if (!result) {
             result = _anjay_downloader_sched_reconnect_by_transports(

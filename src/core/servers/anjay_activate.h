@@ -68,8 +68,6 @@ void _anjay_server_on_updated_registration(anjay_server_info_t *server,
  */
 int _anjay_server_sched_activate(anjay_server_info_t *server);
 
-int _anjay_servers_sched_reactivate_all_given_up(anjay_unlocked_t *anjay);
-
 /**
  * Inserts an active server entry into @p servers .
  *

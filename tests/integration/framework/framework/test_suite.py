@@ -563,12 +563,27 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
 
         return demo_executable
 
-    def skipIfFeatureStatus(self, log, message):
+    def _get_demo_config_log(self):
         import subprocess
+
+        if not hasattr(self, '_demo_config_log'):
+            self._demo_config_log = subprocess.run(
+                [self._get_demo_executable(), '-e', 'dummy', '-u', 'invalid'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT
+            ).stdout.decode('utf-8', errors='replace')
+
+        return self._demo_config_log
+
+
+    def isFeatureEnabled(self, feature):
+        output = self._get_demo_config_log()
+        return f'{feature} = ON' in output
+
+    def skipIfFeatureStatus(self, log, message):
         import unittest
-        output = subprocess.run([self._get_demo_executable(), '-e', 'dummy', '-u', 'invalid'],
-                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout.decode('utf-8')
-        if log in output:
+
+        if log in self._get_demo_config_log():
             raise unittest.SkipTest(message)
 
     def _start_demo(self, cmdline_args, timeout_s=60, prepend_args=None):

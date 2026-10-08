@@ -74,7 +74,7 @@ The following features are implemented:
 * Re-enrollment of Clients (``/est/sren``) - the client certificate validity
   time is tracked and the ``/est/sren`` request is issued automatically when the
   certificate is nearing expiration, with the exact amount of time being
-  configurable. If the oepration fails, it is automatically retried with a
+  configurable. If the operation fails, it is automatically retried with a
   configurable amount of attempts.
 * The keys and certificates can be stored in local memory, processed in software
   and persisted to local non-volatile storage, or processed and stored by the
@@ -312,7 +312,7 @@ Here's a quick description of the settings used:
     passeed, whichever comes later
 
 * `est_cacerts_policy
-  <api/structanjay__configuration.html#aa77f9d5291f4bee4d92efaebe02f5a4c>`_
+  <../api/api_generated/structanjay__configuration.html#_CPPv4N19anjay_configuration18est_cacerts_policyE>`_
   allows changing the details on when the ``/est/crts`` request is performed
   and what the provisioned trust store is used for; detailed semantics of each
   available mode is available in the `anjay_est_cacerts_policy_t Enum Reference

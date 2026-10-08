@@ -66,10 +66,11 @@ stability of the system.
 Anjay provides built-in event loop implementations that are suitable for most use cases:
 
 * `anjay_event_loop_run() <../api/api_generated/function_core_8h_1a95c229caf3ee8ce7de556256f4307507.html>`_ -
-  The standard loop that exits when all connections fail and there are no more
-  retries or fallbacks.
+  The standard loop, which keeps running until interrupted or a fatal event
+  loop error occurs, without retrying servers that have given up.
 * `anjay_event_loop_run_with_error_handling() <../api/api_generated/function_core_8h_1ad8fb214939b8c4732d9eab048151d195.html>`_ -
-  A variant that attempts a reconnect when no server could be reached automatically.
+  A variant that schedules new activation attempts after all server connections
+  have failed.
 
 For specialized hardware or specific integration requirements, you may need 
 to implement a :doc:`AT-CustomEventLoop`.

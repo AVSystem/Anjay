@@ -15,3 +15,8 @@ def small_literal_role(name, rawtext, text, lineno, inliner, options={}, content
 
 def setup(app: Sphinx):
     app.add_role('small-literal', small_literal_role)
+    # The role creates a node from its arguments without shared state.
+    return {
+        'parallel_read_safe': True,
+        'parallel_write_safe': True,
+    }

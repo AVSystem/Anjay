@@ -88,8 +88,8 @@ a15a5f066ea6115bee7f9a08b3187709	examples/tutorial/firmware-update/download-resu
 c372f2bc784a9c1b412d38a720da40f4	examples/tutorial/firmware-update/secure-downloads/src/firmware_update.c
 a118f81f6958fd3a36abd4ee8fbc2c99	include_public/anjay/advanced_fw_update.h
 984623e977e831917c046e7d38991ae5	include_public/anjay/attr_storage.h
-17591bd2c47725aa7074690f4e8e3042	include_public/anjay/core.h
-a3af8438fc87e39c66a562d6cb0eae92	include_public/anjay/dm.h
+639e19fd5ea42ae4650597ff7e34df92	include_public/anjay/core.h
+c15bbfd2fbc66c40607316be03972735	include_public/anjay/dm.h
 3967fd6330fe56ca11501de331e12691	include_public/anjay/fw_update.h
 2f3fd1ea45b98a99fc2e9df23b199475	include_public/anjay/io.h
 8b7b0d7bcb2c0322b50813334bcc1a3e	include_public/anjay/security.h

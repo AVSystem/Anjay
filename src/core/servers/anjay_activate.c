@@ -599,7 +599,7 @@ int _anjay_server_sched_activate(anjay_server_info_t *server) {
     }
 }
 
-int _anjay_servers_sched_reactivate_all_given_up(anjay_unlocked_t *anjay) {
+int _anjay_schedule_reactivate_all_given_up(anjay_unlocked_t *anjay) {
     int result = 0;
     bool active_server_exists = false;
     anjay_server_info_t *bootstrap_server = NULL;

@@ -19,8 +19,8 @@ supported.
 
 Users are now required to use one of the supported and actively maintained
 (D)TLS backends, such as Mbed TLS or OpenSSL (via avs_commons abstraction
-layer) or creating there own
-:doc:`Custom (D)TLS layer <../PortingGuideForNonPOSIXPlatforms/CustomTLS>`.
+layer), or to create their own
+:doc:`Custom (D)TLS layer </PortingGuideForNonPOSIXPlatforms/CustomTLS>`.
 
 Changing Server Initiated Bootstrap behavior
 --------------------------------------------

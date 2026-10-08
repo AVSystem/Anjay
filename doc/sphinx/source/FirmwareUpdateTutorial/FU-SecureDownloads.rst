@@ -22,6 +22,7 @@ In this chapter, we will focus on methods of credentials configuration for
 **PULL** mode transfers.
 
 .. _two_ways:
+
 Two ways of security configuration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

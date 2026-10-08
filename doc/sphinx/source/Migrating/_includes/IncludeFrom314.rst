@@ -74,18 +74,19 @@ If you rely on any of these legacy protocol versions, you must enable
 ``AVS_COMMONS_WITH_LEGACY_SSL_VERSIONS``.
 
 Changes in automatic reconnection in the event loop
---------------------------------------------------
+---------------------------------------------------
 
 Previously, ``anjay_event_loop_run_with_error_handling()`` called
 ``anjay_transport_schedule_reconnect(anjay, ANJAY_TRANSPORT_SET_ALL)`` when all
 configured LwM2M servers were unreachable. This also forced reconnection of
 ongoing downloads.
 
-The event loop now schedules reconnects for individual Server Object instances
-using ``anjay_server_schedule_reconnect()``. Ongoing downloads using dedicated
-downloader sockets are no longer reconnected as a side effect of LwM2M server
-connection failures. Downloads that share a socket with a LwM2M server remain
-dependent on that server's connection.
+The event loop now schedules activation retries for failed LwM2M server
+connections. The Bootstrap Server is retried according to the normal Bootstrap
+rules. Ongoing downloads using dedicated downloader sockets are no longer
+reconnected as a side effect of LwM2M server connection failures. Downloads
+that share a socket with a LwM2M server remain dependent on that server's
+connection.
 
 Applications that relied on this side effect to reconnect ongoing downloads
 must now request it explicitly:

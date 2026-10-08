@@ -90,7 +90,7 @@ We invoke it in ``main.c`` by performing two (highlighted) modifications:
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/firmware-update/basic-implementation/src/main.c
-    :emphasize-lines: 6, 112
+    :emphasize-lines: 6, 111
 
     #include <anjay/anjay.h>
     #include <anjay/security.h>
